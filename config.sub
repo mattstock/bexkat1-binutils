@@ -257,6 +257,7 @@ case $basic_machine in
 	| avr | avr32 \
 	| be32 | be64 \
 	| bfin \
+	| bexkat1 \
 	| c4x | c8051 | clipper \
 	| d10v | d30v | dlx | dsp16xx \
 	| epiphany \

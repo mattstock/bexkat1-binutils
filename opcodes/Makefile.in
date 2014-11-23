@@ -378,6 +378,8 @@ TARGET_LIBOPCODES_CFILES = \
 	arm-dis.c \
 	avr-dis.c \
 	bfin-dis.c \
+	bexkat1-dis.c \
+	bexkat1-opc.c \
 	cgen-asm.c \
 	cgen-bitset.c \
 	cgen-dis.c \

@@ -28,6 +28,7 @@
 #define ARCH_arm
 #define ARCH_avr
 #define ARCH_bfin
+#define ARCH_bexkat1
 #define ARCH_cr16
 #define ARCH_cris
 #define ARCH_crx
@@ -145,6 +146,11 @@ disassembler (abfd)
 #ifdef ARCH_bfin
     case bfd_arch_bfin:
       disassemble = print_insn_bfin;
+      break;
+#endif
+#ifdef ARCH_bexkat1
+    case bfd_arch_bexkat1:
+      disassemble = print_insn_bexkat1;
       break;
 #endif
 #ifdef ARCH_cr16

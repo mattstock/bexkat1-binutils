@@ -720,6 +720,10 @@ case "${target}" in
   bfin-*-*)
     noconfigdirs="$noconfigdirs target-boehm-gc"
     ;;
+  bexkat1-*-*)
+    noconfigdirs="$noconfigdirs ${libgcj} gdb sim"
+    noconfigdirs="$noconfigdirs binutils gas ld gprof"
+    ;;
   cris-*-* | crisv32-*-*)
     unsupported_languages="$unsupported_languages java"
     case "${target}" in

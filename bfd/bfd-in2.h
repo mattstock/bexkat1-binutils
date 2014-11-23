@@ -2210,6 +2210,8 @@ enum bfd_architecture
 #define bfd_mach_avrxmega7 107
   bfd_arch_bfin,        /* ADI Blackfin */
 #define bfd_mach_bfin          1
+  bfd_arch_bexkat1,     /* Bexkat1 experimental CPU */
+#define bfd_mach_bexkat1	1
   bfd_arch_cr16,       /* National Semiconductor CompactRISC (ie CR16). */
 #define bfd_mach_cr16          1
   bfd_arch_cr16c,       /* National Semiconductor CompactRISC. */

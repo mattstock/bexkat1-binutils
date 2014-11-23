@@ -95,6 +95,7 @@ alpha*)		 targ_archs=bfd_alpha_arch ;;
 am34*|am33_2.0*) targ_archs=bfd_mn10300_arch ;;
 arm*)		 targ_archs=bfd_arm_arch ;;
 bfin*)		 targ_archs=bfd_bfin_arch ;;
+bexkat1*)	 targ_archs=bfd_bexkat1_arch ;;
 c30*)		 targ_archs=bfd_tic30_arch ;;
 c4x*)		 targ_archs=bfd_tic4x_arch ;;
 c54x*)		 targ_archs=bfd_tic54x_arch ;;
@@ -365,6 +366,9 @@ case "${targ}" in
     targ_underscore=yes
     ;;
 
+  bexkat1-*-*)
+    targ_defvec=bexkat1_elf32_vec
+    ;;
   c30-*-*aout* | tic30-*-*aout*)
     targ_defvec=tic30_aout_vec
     ;;
