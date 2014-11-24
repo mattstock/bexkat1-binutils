@@ -53,6 +53,7 @@ case ${cpu} in
   arm*be|arm*b)		cpu_type=arm endian=big ;;
   arm*)			cpu_type=arm endian=little ;;
   bfin*)		cpu_type=bfin endian=little ;;
+#  bexkat1)		cpu_type=bexkat1 endian=big ;;
   c4x*)			cpu_type=tic4x ;;
   cr16*)		cpu_type=cr16 endian=little ;;
   crisv32)		cpu_type=cris arch=crisv32 ;;
@@ -163,6 +164,8 @@ case ${generic_target} in
   bfin-*-uclinux*)			fmt=elf em=linux ;;
   bfin-*-rtems*)			fmt=elf ;;
   bfin-*elf)				fmt=elf ;;
+
+  bexkat1-*-*)				fmt=elf ;;
 
   cr16-*-elf*)				fmt=elf ;;
 

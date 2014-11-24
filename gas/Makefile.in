@@ -399,6 +399,7 @@ TARGET_CPU_CFILES = \
 	config/tc-arm.c \
 	config/tc-avr.c \
 	config/tc-bfin.c \
+	config/tc-bexkat1.c \
 	config/tc-cr16.c \
 	config/tc-cris.c \
 	config/tc-crx.c \
@@ -471,6 +472,7 @@ TARGET_CPU_HFILES = \
 	config/tc-arm.h \
 	config/tc-avr.h \
 	config/tc-bfin.h \
+	config/tc-bexkat1.h \
 	config/tc-cr16.h \
 	config/tc-cris.h \
 	config/tc-crx.h \
@@ -825,6 +827,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-arm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-avr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-bfin.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-bexkat1.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-cr16.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-cris.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-crx.Po@am__quote@
@@ -1003,6 +1006,20 @@ tc-cr16.o: config/tc-cr16.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-cr16.c' object='tc-cr16.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-cr16.o `test -f 'config/tc-cr16.c' || echo '$(srcdir)/'`config/tc-cr16.c
+
+tc-bexkat1.o: config/tc-bexkat1.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-bfin.o -MD -MP -MF $(DEPDIR)/tc-bexkat1.Tpo -c -o tc-bexkat1.o `test -f 'config/tc-bexkat1.c' || echo '$(srcdir)/'`config/tc-bexkat1.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-bexkat1.Tpo $(DEPDIR)/tc-bexkat1.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-bexkat1.c' object='tc-bexkat1.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-bexkat1.o `test -f 'config/tc-bexkat1.c' || echo '$(srcdir)/'`config/tc-bexkat1.c
+
+tc-bexkat1.obj: config/tc-bexkat1.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-bexkat1.obj -MD -MP -MF $(DEPDIR)/tc-bexkat1.Tpo -c -o tc-bexkat1.obj `if test -f 'config/tc-bexkat1.c'; then $(CYGPATH_W) 'config/tc-bexkat1.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-bexkat1.c'; fi`
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-bexkat1.Tpo $(DEPDIR)/tc-bexkat1.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-bexkat1.c' object='tc-bexkat1.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-bexkat1.obj `if test -f 'config/tc-bexkat1.c'; then $(CYGPATH_W) 'config/tc-bexkat1.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-bexkat1.c'; fi`
 
 tc-cr16.obj: config/tc-cr16.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-cr16.obj -MD -MP -MF $(DEPDIR)/tc-cr16.Tpo -c -o tc-cr16.obj `if test -f 'config/tc-cr16.c'; then $(CYGPATH_W) 'config/tc-cr16.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-cr16.c'; fi`
