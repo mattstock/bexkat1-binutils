@@ -220,6 +220,7 @@ ALL_EMULATION_SOURCES = \
 	eelf32am33lin.c \
 	eelf32bfin.c \
 	eelf32bfinfd.c \
+	eelf32bexkat1.c \
 	eelf32cr16.c \
 	eelf32cr16c.c \
 	eelf32crx.c \
@@ -966,6 +967,9 @@ eelf32bfinfd.c: $(srcdir)/emulparams/elf32bfinfd.sh \
   $(srcdir)/emulparams/elf32bfin.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/bfin.em \
   $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+
+eelf32bexkat1.c: $(srcdir)/emulparams/elf32bexkat1.sh \
+  $(ELF_GEN_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 
 eelf32bmip.c: $(srcdir)/emulparams/elf32bmip.sh $(ELF_DEPS) \
   $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}

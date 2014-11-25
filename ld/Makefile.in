@@ -527,6 +527,7 @@ ALL_EMULATION_SOURCES = \
 	eelf32_tic6x_elf_le.c \
 	eelf32am33lin.c \
 	eelf32bfin.c \
+	eelf32bexkat1.c \
 	eelf32bfinfd.c \
 	eelf32cr16.c \
 	eelf32cr16c.c \
@@ -1126,6 +1127,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32b4300.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bfin.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bfinfd.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bexkat1.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bmip.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bmipn32.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32bsmip.Po@am__quote@
@@ -2407,6 +2409,9 @@ eelf32bfinfd.c: $(srcdir)/emulparams/elf32bfinfd.sh \
   $(srcdir)/emulparams/elf32bfin.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/bfin.em \
   $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+
+eelf32bexkat1.c: $(srcdir)/emulparams/elf32bexkat1.sh \
+  $(ELF_GEN_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 
 eelf32bmip.c: $(srcdir)/emulparams/elf32bmip.sh $(ELF_DEPS) \
   $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
