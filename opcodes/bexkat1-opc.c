@@ -92,6 +92,6 @@ const bexkat1_opc_info_t bexkat1_form3_opc_info[9] =
     { 0x06, BEXKAT1_F3_A_ABSADDR, "xor" },
     { 0x07, BEXKAT1_F3_A_ABSADDR, "ld" },
     { 0x08, BEXKAT1_F3_A_ABSADDR, "st" },
-    { 0x09, BEXKAT1_F3_A_ABSADDR, "jmp" },
-    { 0x0a, BEXKAT1_F3_A_ABSADDR, "jsr" }
+    { 0x09, BEXKAT1_F3_ABSADDR,   "jmp" },
+    { 0x0a, BEXKAT1_F3_ABSADDR,   "jsr" }
   };

@@ -35,13 +35,47 @@ static void *stream;
 /* Prototypes for local functions.  */
 int print_insn_bexkat1 (bfd_vma, struct disassemble_info *);
 
+static const bexkat1_opc_info_t *
+find_opcode(int form, uint8_t opcode) {
+  int max;
+  const bexkat1_opc_info_t *ops;
+
+  switch (form) {
+  case 0:
+    max = BEXKAT1_FORM0_COUNT;
+    ops = bexkat1_form0_opc_info;
+    break;
+  case 1:
+    max = BEXKAT1_FORM1_COUNT;
+    ops = bexkat1_form1_opc_info;
+    break;
+  case 2:
+    max = BEXKAT1_FORM2_COUNT;
+    ops = bexkat1_form2_opc_info;
+    break;
+  case 3:
+    max = BEXKAT1_FORM3_COUNT;
+    ops = bexkat1_form3_opc_info;
+    break;
+  default:
+    return NULL;
+  }
+
+  int i;
+  for (i=0; i < max; i++)
+    if (ops[i].opcode == opcode)
+      return &ops[i];
+  return NULL;
+}
+
+
 /* Disassemble one instruction at address 'memaddr'.  Returns the number
    of bytes used by that instruction.  */
 int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
   int status;
   int length = 2;
   const bexkat1_opc_info_t *opcode;
-  bfd_byte buffer[4];
+  bfd_byte buffer[6];
   unsigned short iword;
 
   stream = info->stream;
@@ -51,11 +85,9 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     goto fail;
   iword = bfd_getb16(buffer);
 
-  fprintf(stderr, "iword = %x, shifted = %x\n", iword, iword >> 14);
-
   switch (iword >> 14) {
   case 0:
-    opcode = &bexkat1_form0_opc_info[(iword >> 5) & 0xff];
+    opcode = find_opcode(0, (iword >> 5) & 0xff);
     switch (opcode->itype) {
     case BEXKAT1_F0_NARG:
       fpr(stream, "%s", opcode->name);
@@ -68,7 +100,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     }
     break;
   case 1:
-    opcode = &bexkat1_form1_opc_info[(iword >> 5) & 0xff];
+    opcode = find_opcode(1, (iword >> 5) & 0xff);
     switch (opcode->itype) {
     case BEXKAT1_F1_AB:
       {
@@ -99,7 +131,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     }
     break;
   case 2:
-    opcode = &bexkat1_form2_opc_info[(iword >> 5) & 0xff];
+    opcode = find_opcode(2, (iword >> 5) & 0xff);
     switch (opcode->itype) {
     case BEXKAT1_F2_A_16V:
       {
@@ -120,13 +152,30 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     }
     break;
   case 3:
-    opcode = &bexkat1_form3_opc_info[(iword >> 5) & 0xff];
+    opcode = find_opcode(3, (iword >> 5) & 0xff);
+    length = 6;
     switch (opcode->itype) {
-    case BEXKAT1_F3_A_32V:
-      fpr(stream, "%s r%d, #hhhhllll", opcode->name, (iword & 0x1f));
+    case BEXKAT1_F3_ABSADDR:
+      {
+	unsigned int addr;
+
+	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	  goto fail;
+	addr = bfd_getb32(buffer);
+	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	    addr);
+      }
       break;
     case BEXKAT1_F3_A_ABSADDR:
-      fpr(stream, "%s r%d, address", opcode->name, (iword & 0x1f));
+      {
+	unsigned int addr;
+	
+	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	  goto fail;
+	addr = bfd_getb32(buffer);
+	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	    addr);
+      }
       break;
     default:
       abort();

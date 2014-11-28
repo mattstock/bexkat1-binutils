@@ -55,19 +55,19 @@ md_begin (void)
   opcode_hash_control = hash_new();
 
   /* Insert names into the hash table */
-  for (count=0, opcode = bexkat1_form0_opc_info; count++ < 6; opcode++) {
+  for (count=0, opcode = bexkat1_form0_opc_info; count++ < BEXKAT1_FORM0_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
     fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
-  for (count=0, opcode = bexkat1_form1_opc_info; count++ < 10; opcode++) {
+  for (count=0, opcode = bexkat1_form1_opc_info; count++ < BEXKAT1_FORM1_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
     fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
-  for (count=0, opcode = bexkat1_form2_opc_info; count++ < 32; opcode++) {
+  for (count=0, opcode = bexkat1_form2_opc_info; count++ < BEXKAT1_FORM2_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
     fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
-  for (count=0, opcode = bexkat1_form3_opc_info; count++ < 9; opcode++) {
+  for (count=0, opcode = bexkat1_form3_opc_info; count++ < BEXKAT1_FORM3_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
     fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
@@ -343,11 +343,63 @@ md_assemble(char *str)
   case BEXKAT1_F2_A_RELADDR:
     iword = 0x8000 | (opcode->opcode << 5);
     break;
-  case BEXKAT1_F3_A_32V:
-    iword = 0xc000 | (opcode->opcode << 5);
-    break;
   case BEXKAT1_F3_A_ABSADDR:
     iword = 0xc000 | (opcode->opcode << 5);
+    {
+      expressionS arg;
+      char *where;
+      int regnum;
+
+      while (ISSPACE(*op_end))
+	op_end++;
+      
+      if (*op_end != 'r') {
+	as_bad("expecting register");
+	ignore_rest_of_line();
+	return;
+      }
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return;
+      
+      iword |= regnum;
+ 
+      while (ISSPACE(*op_end))
+	op_end++;
+      
+      if (*op_end != ',') {
+	as_bad("expecting comma delimited operands");
+	ignore_rest_of_line();
+	return;
+      }
+      op_end++;
+      op_end = parse_exp_save_ilp(op_end, &arg);
+      where = frag_more(4);
+      fix_new_exp(frag_now,
+		  (where - frag_now->fr_literal),
+		  4,
+		  &arg,
+		  0,
+		  BFD_RELOC_32);
+    }
+    break;
+  case BEXKAT1_F3_ABSADDR:
+    iword = 0xc000 | (opcode->opcode << 5);
+    while (ISSPACE (*op_end))
+      op_end++;
+    {
+      expressionS arg;
+      char *where;
+
+      op_end = parse_exp_save_ilp(op_end, &arg);
+      where = frag_more(4);
+      fix_new_exp(frag_now,
+		  (where - frag_now->fr_literal),
+		  4,
+		  &arg,
+		  0,
+		  BFD_RELOC_32);
+    }
     break;
   }
 
@@ -424,14 +476,25 @@ md_apply_fix(fixS *fixP ATTRIBUTE_UNUSED, valueT *valP ATTRIBUTE_UNUSED, segT se
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
   long val = *valP;
   long max, min;
-  // int shift;
 
   max = min = 0;
-  //  shift = 0;
   switch (fixP->fx_r_type) {
   case BFD_RELOC_16:
     *buf++ = val >> 8;
     *buf++ = val >> 0;
+    break;
+  case BFD_RELOC_32:
+    if (target_big_endian) {
+      buf[0] = val >> 24;
+      buf[1] = val >> 16;
+      buf[2] = val >> 8;
+      buf[3] = val >> 0;
+    } else {
+      buf[3] = val >> 24;
+      buf[2] = val >> 16;
+      buf[1] = val >> 8;
+      buf[0] = val >> 0;
+    }
     break;
   default:
     abort();
