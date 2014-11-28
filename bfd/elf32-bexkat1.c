@@ -71,6 +71,11 @@ bexkat1_elf_reloc(bfd *abfd,
     insn += sym_value + reloc_entry->addend;
     bfd_put_16(abfd, (bfd_vma) insn, hit_data);
     break;
+  case R_BEXKAT1_32:
+    insn = bfd_get_32(abfd, hit_data);
+    insn += sym_value + reloc_entry->addend;
+    bfd_put_32(abfd, (bfd_vma) insn, hit_data);
+    break;
   default:
     abort();
     break;
@@ -107,6 +112,19 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE,                  /* partial_inplace */
 	  0xffff,                 /* src_mask */
 	  0xffff,                 /* dst_mask */
+	  FALSE),                 /* pcrel_offset */
+    HOWTO(R_BEXKAT1_32,           /* type */
+	  0,                      /* rightshift */
+	  2,                      /* size */
+	  32,                     /* bitsize */
+	  FALSE,                  /* pc_relative */
+	  0,                      /* bitops */
+	  complain_overflow_bitfield, /* complain_on_overflow */
+	  bexkat1_elf_reloc,      /* special_function */
+	  "R_BEXKAT1_DIR32",      /* name */
+	  FALSE,                  /* partial_inplace */
+	  0xffffffff,             /* src_mask */
+	  0xffffffff,             /* dst_mask */
 	  FALSE)                  /* pcrel_offset */
   };
 
@@ -119,7 +137,8 @@ struct elf_bexkat1_reloc_map
 static const struct elf_bexkat1_reloc_map bexkat1_reloc_map[] =
   {
     { BFD_RELOC_NONE,  R_BEXKAT1_NONE },
-    { BFD_RELOC_16,    R_BEXKAT1_16 }
+    { BFD_RELOC_16,    R_BEXKAT1_16 },
+    { BFD_RELOC_32,    R_BEXKAT1_32 }
   };
 
 static reloc_howto_type *

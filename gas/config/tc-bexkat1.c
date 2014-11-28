@@ -57,19 +57,15 @@ md_begin (void)
   /* Insert names into the hash table */
   for (count=0, opcode = bexkat1_form0_opc_info; count++ < BEXKAT1_FORM0_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-    fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
   for (count=0, opcode = bexkat1_form1_opc_info; count++ < BEXKAT1_FORM1_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-    fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
   for (count=0, opcode = bexkat1_form2_opc_info; count++ < BEXKAT1_FORM2_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-    fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
   for (count=0, opcode = bexkat1_form3_opc_info; count++ < BEXKAT1_FORM3_COUNT; opcode++) {
     hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-    fprintf(stderr, "adding opcode %s (%x)\n", opcode->name, opcode->opcode);
   }
 
   bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
@@ -149,9 +145,6 @@ md_assemble(char *str)
     as_bad(_("unknown opcode %s"), op_start);
     return;
   }
-
-  fprintf(stderr, "assemble string = %s\n", str);
-  fprintf(stderr, "opcode found, opcode = %s (%x)\n", opcode->name, opcode->opcode);
 
   p = frag_more(2);
 
