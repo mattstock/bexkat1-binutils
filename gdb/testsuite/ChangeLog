@@ -1,3 +1,29 @@
+2014-11-28  Simon Marchi  <simon.marchi@ericsson.com>
+
+	* gdb.ada/py_range.exp: Add parentheses to python calls to print.
+	* gdb.dwarf2/symtab-producer.exp: Same.
+	* gdb.gdb/python-interrupts.exp: Same.
+	* gdb.gdb/python-selftest.exp: Same.
+	* gdb.python/py-linetable.exp: Same.
+	* gdb.python/py-type.exp: Same.
+	* gdb.python/py-value-cc.exp: Same.
+	* gdb.python/py-value.exp: Same.
+
+2014-11-28  Yao Qi  <yao@codesourcery.com>
+
+	* gdb.base/break-probes.exp: Match library name prefixed with
+	sysroot.
+
+2014-11-27  Simon Marchi  <simon.marchi@ericsson.com>
+
+	* gdb.python/py-linetable.exp: Escape properly sorted(fset)
+	test expected output.  Add parentheses for the call to print.
+	Remove L suffix from integers.
+
+2014-11-26  Doug Evans  <dje@google.com>
+
+	* gdb.dwarf2/dw2-op-out-param.S: Fix comment.
+
 2014-11-22  Yao Qi  <yao@codesourcery.com>
 
 	* gdb.trace/entry-values.c: Remove asms.
