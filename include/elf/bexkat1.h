@@ -23,8 +23,10 @@
 #include "elf/reloc-macros.h"
 
 /* Relocation types.  */
-START_RELOC_NUMBERS (elf_bexkat11_reloc_type)
+START_RELOC_NUMBERS (elf_bexkat1_reloc_type)
   RELOC_NUMBER (R_BEXKAT1_NONE, 0)
-END_RELOC_NUMBERS (R_M68HC11_max)
+  RELOC_NUMBER (R_BEXKAT1_16, 1)
+  RELOC_NUMBER (R_BEXKAT1_32, 2)
+END_RELOC_NUMBERS (R_BEXKAT1_max)
 
 #endif
