@@ -145,7 +145,15 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
       }
       break;
     case BEXKAT1_F2_A_RELADDR:
-      fpr(stream, "%s reladdr", opcode->name);
+      {
+	short imm;
+	
+	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+	  goto fail;
+	imm = bfd_getb16(buffer);
+	fpr(stream, "%s %d", opcode->name, imm);
+	length = 4;
+      }
       break;
     default:
       abort();

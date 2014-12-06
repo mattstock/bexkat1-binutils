@@ -41,6 +41,7 @@
    11xo oooo oooa aaaa llll llll llll llll hhhh hhhh hhhh hhhh */
 #define BEXKAT1_F3_A_ABSADDR 0x300  /* Form 3 w/reg and absolute address */
 #define BEXKAT1_F3_ABSADDR   0x301  /* Form 3 w/absolute address */
+#define BEXKAT1_F3_A_32V     0x302  /* Form 3 w/32-bit immediate value */
 
 typedef struct bexkat1_opcode
 {
@@ -51,8 +52,8 @@ typedef struct bexkat1_opcode
 
 #define BEXKAT1_FORM0_COUNT 6
 #define BEXKAT1_FORM1_COUNT 10
-#define BEXKAT1_FORM2_COUNT 32
-#define BEXKAT1_FORM3_COUNT 9
+#define BEXKAT1_FORM2_COUNT 0x18
+#define BEXKAT1_FORM3_COUNT 15
 
 extern const bexkat1_opc_info_t bexkat1_form0_opc_info[BEXKAT1_FORM0_COUNT];
 extern const bexkat1_opc_info_t bexkat1_form1_opc_info[BEXKAT1_FORM1_COUNT];

@@ -23,7 +23,7 @@
 #include "ansidecl.h"
 #include "opcode/bexkat1.h"
 
-const bexkat1_opc_info_t bexkat1_form0_opc_info[6] =
+const bexkat1_opc_info_t bexkat1_form0_opc_info[BEXKAT1_FORM0_COUNT] =
   {
     { 0x00, BEXKAT1_F0_NARG, "nop" },
     { 0x01, BEXKAT1_F0_A,    "neg" },
@@ -33,7 +33,7 @@ const bexkat1_opc_info_t bexkat1_form0_opc_info[6] =
     { 0x05, BEXKAT1_F0_A,    "dec" }
   };
 
-const bexkat1_opc_info_t bexkat1_form1_opc_info[10] =
+const bexkat1_opc_info_t bexkat1_form1_opc_info[BEXKAT1_FORM1_COUNT] =
   {
     { 0x00, BEXKAT1_F1_ABC,  "add" },
     { 0x01, BEXKAT1_F1_ABC,  "sub" },
@@ -47,51 +47,49 @@ const bexkat1_opc_info_t bexkat1_form1_opc_info[10] =
     { 0x09, BEXKAT1_F1_AB,   "cmp" }
   };
 
-const bexkat1_opc_info_t bexkat1_form2_opc_info[32] =
+const bexkat1_opc_info_t bexkat1_form2_opc_info[BEXKAT1_FORM2_COUNT] =
   {
-    { 0x00, BEXKAT1_F2_A_16V,     "addi" },
-    { 0x01, BEXKAT1_F2_A_16V,     "subi" },
-    { 0x02, BEXKAT1_F2_A_16V,     "andi" },
-    { 0x03, BEXKAT1_F2_A_16V,     "ori"  },
-    { 0x04, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x05, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x06, BEXKAT1_F2_A_16V,     "xori" },
-    { 0x07, BEXKAT1_F2_A_16V,     "ldi" },
-    { 0x08, BEXKAT1_F2_A_RELADDR, "str" },
-    { 0x09, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0a, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0b, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0c, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0d, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0e, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x0f, BEXKAT1_F2_A_16V,     "bad" },
-    { 0x10, BEXKAT1_F2_A_RELADDR, "bra" },
-    { 0x11, BEXKAT1_F2_A_RELADDR, "beq" },
-    { 0x12, BEXKAT1_F2_A_RELADDR, "bne" },
-    { 0x13, BEXKAT1_F2_A_RELADDR, "bsr" },
-    { 0x14, BEXKAT1_F2_A_RELADDR, "bgt" },
-    { 0x15, BEXKAT1_F2_A_RELADDR, "bge" },
-    { 0x16, BEXKAT1_F2_A_RELADDR, "ble" },
-    { 0x17, BEXKAT1_F2_A_RELADDR, "blt" },
-    { 0x18, BEXKAT1_F2_A_RELADDR, "bhi" },
-    { 0x19, BEXKAT1_F2_A_RELADDR, "bls" },
-    { 0x1a, BEXKAT1_F2_A_RELADDR, "bhs" },
-    { 0x1b, BEXKAT1_F2_A_RELADDR, "blo" },
-    { 0x1c, BEXKAT1_F2_A_RELADDR, "brn" },
-    { 0x1d, BEXKAT1_F2_A_RELADDR, "bmi" },
-    { 0x1e, BEXKAT1_F2_A_RELADDR, "bvs" },
-    { 0x1f, BEXKAT1_F2_A_RELADDR, "bpl" }
+    { 0x00, BEXKAT1_F2_A_16V,     "add.i" },
+    { 0x01, BEXKAT1_F2_A_16V,     "sub.i" },
+    { 0x02, BEXKAT1_F2_A_16V,     "and.i" },
+    { 0x03, BEXKAT1_F2_A_16V,     "or.i"  },
+    { 0x04, BEXKAT1_F2_A_16V,     "xor.i" },
+    { 0x05, BEXKAT1_F2_A_16V,     "ld.i" },
+    { 0x06, BEXKAT1_F2_A_RELADDR, "ld.sp" },
+    { 0x07, BEXKAT1_F2_A_RELADDR, "st.sp" },
+    { 0x08, BEXKAT1_F2_A_RELADDR, "bra" },
+    { 0x09, BEXKAT1_F2_A_RELADDR, "beq" },
+    { 0x0a, BEXKAT1_F2_A_RELADDR, "bne" },
+    { 0x0b, BEXKAT1_F2_A_RELADDR, "bsr" },
+    { 0x0c, BEXKAT1_F2_A_RELADDR, "bgt" },
+    { 0x0d, BEXKAT1_F2_A_RELADDR, "bge" },
+    { 0x0e, BEXKAT1_F2_A_RELADDR, "ble" },
+    { 0x0f, BEXKAT1_F2_A_RELADDR, "blt" },
+    { 0x10, BEXKAT1_F2_A_RELADDR, "bhi" },
+    { 0x11, BEXKAT1_F2_A_RELADDR, "bls" },
+    { 0x12, BEXKAT1_F2_A_RELADDR, "bhs" },
+    { 0x13, BEXKAT1_F2_A_RELADDR, "blo" },
+    { 0x14, BEXKAT1_F2_A_RELADDR, "brn" },
+    { 0x15, BEXKAT1_F2_A_RELADDR, "bmi" },
+    { 0x16, BEXKAT1_F2_A_RELADDR, "bvs" },
+    { 0x17, BEXKAT1_F2_A_RELADDR, "bpl" }
   };
 
-const bexkat1_opc_info_t bexkat1_form3_opc_info[9] =
+const bexkat1_opc_info_t bexkat1_form3_opc_info[BEXKAT1_FORM3_COUNT] =
   {
-    { 0x00, BEXKAT1_F3_A_ABSADDR, "add" },
-    { 0x01, BEXKAT1_F3_A_ABSADDR, "sub" },
-    { 0x02, BEXKAT1_F3_A_ABSADDR, "and" },
-    { 0x03, BEXKAT1_F3_A_ABSADDR, "or"  },
-    { 0x06, BEXKAT1_F3_A_ABSADDR, "xor" },
-    { 0x07, BEXKAT1_F3_A_ABSADDR, "ld" },
-    { 0x08, BEXKAT1_F3_A_ABSADDR, "st" },
-    { 0x09, BEXKAT1_F3_ABSADDR,   "jmp" },
-    { 0x0a, BEXKAT1_F3_ABSADDR,   "jsr" }
+    { 0x00, BEXKAT1_F3_A_ABSADDR, "add.a" },
+    { 0x01, BEXKAT1_F3_A_ABSADDR, "sub.a" },
+    { 0x02, BEXKAT1_F3_A_ABSADDR, "and.a" },
+    { 0x03, BEXKAT1_F3_A_ABSADDR, "or.a"  },
+    { 0x04, BEXKAT1_F3_A_ABSADDR, "xor.a" },
+    { 0x05, BEXKAT1_F3_A_ABSADDR, "ld" },
+    { 0x06, BEXKAT1_F3_A_ABSADDR, "st" },
+    { 0x07, BEXKAT1_F3_ABSADDR,   "jmp" },
+    { 0x08, BEXKAT1_F3_ABSADDR,   "jsr" },
+    { 0x09, BEXKAT1_F3_A_32V,     "ld.l"},
+    { 0x0a, BEXKAT1_F3_A_32V,     "add.l"},
+    { 0x0b, BEXKAT1_F3_A_32V,     "sub.l" },
+    { 0x0c, BEXKAT1_F3_A_32V,     "and.l" },
+    { 0x0d, BEXKAT1_F3_A_32V,     "or.l"  },
+    { 0x0e, BEXKAT1_F3_A_32V,     "xor.l" }
   };

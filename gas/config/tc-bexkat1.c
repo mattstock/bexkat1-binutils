@@ -335,6 +335,22 @@ md_assemble(char *str)
     break;
   case BEXKAT1_F2_A_RELADDR:
     iword = 0x8000 | (opcode->opcode << 5);
+    while (ISSPACE (*op_end))
+      op_end++;
+    {
+      expressionS arg;
+      char *where;
+
+      where = frag_more(2);
+      op_end = parse_exp_save_ilp(op_end, &arg);
+      fix_new_exp(frag_now,
+		  (where - frag_now->fr_literal),
+		  2,
+		  &arg,
+		  TRUE,
+		  BFD_RELOC_16_PCREL);
+    }
+      // We will need to handle ld.sp and st.sp using stack instead of where
     break;
   case BEXKAT1_F3_A_ABSADDR:
     iword = 0xc000 | (opcode->opcode << 5);
@@ -384,6 +400,46 @@ md_assemble(char *str)
       expressionS arg;
       char *where;
 
+      op_end = parse_exp_save_ilp(op_end, &arg);
+      where = frag_more(4);
+      fix_new_exp(frag_now,
+		  (where - frag_now->fr_literal),
+		  4,
+		  &arg,
+		  0,
+		  BFD_RELOC_32);
+    }
+    break;
+  case BEXKAT1_F3_A_32V:
+    iword = 0xc000 | (opcode->opcode << 5);
+    {
+      expressionS arg;
+      char *where;
+      int regnum;
+
+      while (ISSPACE(*op_end))
+	op_end++;
+      
+      if (*op_end != 'r') {
+	as_bad("expecting register");
+	ignore_rest_of_line();
+	return;
+      }
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return;
+      
+      iword |= regnum;
+ 
+      while (ISSPACE(*op_end))
+	op_end++;
+      
+      if (*op_end != ',') {
+	as_bad("expecting comma delimited operands");
+	ignore_rest_of_line();
+	return;
+      }
+      op_end++;
       op_end = parse_exp_save_ilp(op_end, &arg);
       where = frag_more(4);
       fix_new_exp(frag_now,
@@ -469,6 +525,7 @@ md_apply_fix(fixS *fixP ATTRIBUTE_UNUSED, valueT *valP ATTRIBUTE_UNUSED, segT se
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
   long val = *valP;
   long max, min;
+  short sval;
 
   max = min = 0;
   switch (fixP->fx_r_type) {
@@ -488,6 +545,16 @@ md_apply_fix(fixS *fixP ATTRIBUTE_UNUSED, valueT *valP ATTRIBUTE_UNUSED, segT se
       buf[1] = val >> 8;
       buf[0] = val >> 0;
     }
+    break;
+  case BFD_RELOC_16_PCREL:
+    if (!val)
+      break;
+    if (val < -32766 || val > 32767)
+      as_bad_where(fixP->fx_file, fixP->fx_line,
+		   _("pcrel too far BFD_RELOC_16_PCREL"));
+    sval = val >> 1;
+    fprintf(stderr, "pcrel = %ld (%d)\n", val, sval);
+    md_number_to_chars(buf, sval, 2);
     break;
   default:
     abort();
@@ -510,10 +577,8 @@ md_pcrel_from(fixS *fixP)
 {
   valueT addr = fixP->fx_where + fixP->fx_frag->fr_address;
 
-  fprintf(stderr, "md_pcrel_from 0x%d\n", fixP->fx_r_type);
-
   switch (fixP->fx_r_type) {
-  case BFD_RELOC_16:
+  case BFD_RELOC_16_PCREL:
     return addr + 2;
   default:
     abort();
