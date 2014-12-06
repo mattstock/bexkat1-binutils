@@ -2438,6 +2438,77 @@ decode_ARM_machine_flags (unsigned e_flags, char buf[])
 }
 
 static void
+decode_AVR_machine_flags (unsigned e_flags, char buf[], size_t size)
+{
+  --size; /* Leave space for null terminator.  */
+
+  switch (e_flags & EF_AVR_MACH)
+    {
+    case E_AVR_MACH_AVR1:
+      strncat (buf, ", avr:1", size);
+      break;
+    case E_AVR_MACH_AVR2:
+      strncat (buf, ", avr:2", size);
+      break;
+    case E_AVR_MACH_AVR25:
+      strncat (buf, ", avr:25", size);
+      break;
+    case E_AVR_MACH_AVR3:
+      strncat (buf, ", avr:3", size);
+      break;
+    case E_AVR_MACH_AVR31:
+      strncat (buf, ", avr:31", size);
+      break;
+    case E_AVR_MACH_AVR35:
+      strncat (buf, ", avr:35", size);
+      break;
+    case E_AVR_MACH_AVR4:
+      strncat (buf, ", avr:4", size);
+      break;
+    case E_AVR_MACH_AVR5:
+      strncat (buf, ", avr:5", size);
+      break;
+    case E_AVR_MACH_AVR51:
+      strncat (buf, ", avr:51", size);
+      break;
+    case E_AVR_MACH_AVR6:
+      strncat (buf, ", avr:6", size);
+      break;
+    case E_AVR_MACH_AVRTINY:
+      strncat (buf, ", avr:100", size);
+      break;
+    case E_AVR_MACH_XMEGA1:
+      strncat (buf, ", avr:101", size);
+      break;
+    case E_AVR_MACH_XMEGA2:
+      strncat (buf, ", avr:102", size);
+      break;
+    case E_AVR_MACH_XMEGA3:
+      strncat (buf, ", avr:103", size);
+      break;
+    case E_AVR_MACH_XMEGA4:
+      strncat (buf, ", avr:104", size);
+      break;
+    case E_AVR_MACH_XMEGA5:
+      strncat (buf, ", avr:105", size);
+      break;
+    case E_AVR_MACH_XMEGA6:
+      strncat (buf, ", avr:106", size);
+      break;
+    case E_AVR_MACH_XMEGA7:
+      strncat (buf, ", avr:107", size);
+      break;
+    default:
+      strncat (buf, ", avr:<unknown>", size);
+      break;
+    }
+
+  size -= strlen (buf);
+  if (e_flags & EF_AVR_LINKRELAX_PREPARED)
+    strncat (buf, ", link-relax", size);
+}
+
+static void
 decode_NDS32_machine_flags (unsigned e_flags, char buf[], size_t size)
 {
   unsigned abi;
@@ -2657,6 +2728,10 @@ get_machine_flags (unsigned e_flags, unsigned e_machine)
 	case EM_ARM:
 	  decode_ARM_machine_flags (e_flags, buf);
 	  break;
+
+        case EM_AVR:
+          decode_AVR_machine_flags (e_flags, buf, sizeof buf);
+          break;
 
 	case EM_BLACKFIN:
 	  if (e_flags & EF_BFIN_PIC)
@@ -3123,7 +3198,9 @@ get_machine_flags (unsigned e_flags, unsigned e_machine)
                   strcat (buf, ", abort");
                   break;
                 default:
-                  abort ();
+		  warn (_("Unrecognised IA64 VMS Command Code: %x\n"),
+			e_flags & EF_IA_64_VMS_COMCOD);
+		  strcat (buf, ", <unknown>");
                 }
             }
 	  break;
@@ -5086,7 +5163,10 @@ get_elf_section_flags (bfd_vma sh_flags)
 	      if (p != buff + field_size + 4)
 		{
 		  if (size < (10 + 2))
-		    abort ();
+		    {
+		      warn (_("Internal error: not enough buffer room for section flag info"));
+		      return _("<unknown>");
+		    }
 		  size -= 2;
 		  *p++ = ',';
 		  *p++ = ' ';
@@ -5150,7 +5230,10 @@ get_elf_section_flags (bfd_vma sh_flags)
 	  if (p != buff + field_size + 4)
 	    {
 	      if (size < (2 + 1))
-		abort ();
+		{
+		  warn (_("Internal error: not enough buffer room for section flag info"));
+		  return _("<unknown>");
+		}
 	      size -= 2;
 	      *p++ = ',';
 	      *p++ = ' ';
@@ -5165,7 +5248,10 @@ get_elf_section_flags (bfd_vma sh_flags)
 	  if (p != buff + field_size + 4)
 	    {
 	      if (size < (2 + 1))
-		abort ();
+		{
+		  warn (_("Internal error: not enough buffer room for section flag info"));
+		  return _("<unknown>");
+		}
 	      size -= 2;
 	      *p++ = ',';
 	      *p++ = ' ';
@@ -5180,7 +5266,10 @@ get_elf_section_flags (bfd_vma sh_flags)
 	  if (p != buff + field_size + 4)
 	    {
 	      if (size < (2 + 1))
-		abort ();
+		{
+		  warn (_("Internal error: not enough buffer room for section flag info"));
+		  return _("<unknown>");
+		}
 	      size -= 2;
 	      *p++ = ',';
 	      *p++ = ' ';
@@ -9708,7 +9797,9 @@ get_symbol_visibility (unsigned int visibility)
     case STV_INTERNAL:	return "INTERNAL";
     case STV_HIDDEN:	return "HIDDEN";
     case STV_PROTECTED: return "PROTECTED";
-    default: abort ();
+    default:
+      error (_("Unrecognized visibility value: %u"), visibility);
+      return _("<unknown>");
     }
 }
 
@@ -9763,7 +9854,10 @@ get_ia64_symbol_other (unsigned int other)
               strcat (res, " RSV");
               break;
             default:
-              abort ();
+	      warn (_("Unrecognized IA64 VMS ST Function type: %d\n"),
+		    VMS_ST_FUNC_TYPE (other));
+	      strcat (res, " <unknown>");
+	      break;
             }
           break;
         default:
@@ -9784,7 +9878,10 @@ get_ia64_symbol_other (unsigned int other)
           strcat (res, " LNK");
           break;
         default:
-          abort ();
+	  warn (_("Unrecognized IA64 VMS ST Linkage: %d\n"),
+		VMS_ST_LINKAGE (other));
+	  strcat (res, " <unknown>");
+	  break;
         }
 
       if (res[0] != 0)
@@ -10981,9 +11078,16 @@ is_32bit_abs_reloc (unsigned int reloc_type)
     case EM_XTENSA:
       return reloc_type == 1; /* R_XTENSA_32.  */
     default:
-      error (_("Missing knowledge of 32-bit reloc types used in DWARF sections of machine number %d\n"),
-	     elf_header.e_machine);
-      abort ();
+      {
+	static unsigned int prev_warn = 0;
+
+	/* Avoid repeating the same warning multiple times.  */
+	if (prev_warn != elf_header.e_machine)
+	  error (_("Missing knowledge of 32-bit reloc types used in DWARF sections of machine number %d\n"),
+		 elf_header.e_machine);
+	prev_warn = elf_header.e_machine;
+	return FALSE;
+      }
     }
 }
 
@@ -11342,8 +11446,11 @@ apply_relocations (void * file,
 	    reloc_size = 2;
 	  else
 	    {
-	      warn (_("unable to apply unsupported reloc type %d to section %s\n"),
-		    reloc_type, printable_section_name (section));
+	      static unsigned int prev_reloc = 0;
+	      if (reloc_type != prev_reloc)
+		warn (_("unable to apply unsupported reloc type %d to section %s\n"),
+		      reloc_type, printable_section_name (section));
+	      prev_reloc = reloc_type;
 	      continue;
 	    }
 
@@ -11713,6 +11820,7 @@ load_specific_debug_section (enum dwarf_section_display_enum debug,
 
   snprintf (buf, sizeof (buf), _("%s section data"), section->name);
   section->address = sec->sh_addr;
+  section->user_data = NULL;
   section->start = (unsigned char *) get_data (NULL, (FILE *) file,
                                                sec->sh_offset, 1,
                                                sec->sh_size, buf);
@@ -12249,7 +12357,8 @@ display_arm_attribute (unsigned char * p,
 	      break;
 
 	    default:
-	      abort ();
+	      printf (_("<unknown: %d>\n"), tag);
+	      break;
 	    }
 	  return p;
 
@@ -15261,11 +15370,11 @@ process_archive (char * file_name, FILE * file, bfd_boolean is_thin_archive)
 	error (_("%s: unable to dump the index as none was found\n"), file_name);
       else
 	{
-	  unsigned int i, l;
+	  unsigned long i, l;
 	  unsigned long current_pos;
 
-	  printf (_("Index of archive %s: (%ld entries, 0x%lx bytes in the symbol table)\n"),
-		  file_name, (long) arch.index_num, arch.sym_size);
+	  printf (_("Index of archive %s: (%lu entries, 0x%lx bytes in the symbol table)\n"),
+		  file_name, (unsigned long) arch.index_num, arch.sym_size);
 	  current_pos = ftell (file);
 
 	  for (i = l = 0; i < arch.index_num; i++)
@@ -15296,8 +15405,9 @@ process_archive (char * file_name, FILE * file, bfd_boolean is_thin_archive)
 			 file_name);
 		  break;
 		}
-	      printf ("\t%s\n", arch.sym_table + l);
-	      l += strlen (arch.sym_table + l) + 1;
+	      /* PR 17531: file: 0b6630b2.  */
+	      printf ("\t%.*s\n", (int) (arch.sym_size - l), arch.sym_table + l);
+	      l += strnlen (arch.sym_table + l, arch.sym_size - l) + 1;
 	    }
 
 	  if (arch.uses_64bit_indicies)

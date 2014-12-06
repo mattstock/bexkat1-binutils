@@ -1,3 +1,74 @@
+2014-12-05  Yao Qi  <yao@codesourcery.com>
+
+	* gdb.guile/scm-error.exp: Remove the third argument to
+	gdb_remote_download.
+	* gdb.guile/scm-frame-args.exp: Likewise.
+	* gdb.guile/scm-section-script.exp: Likewise.
+
+2014-12-05  Yao Qi  <yao@codesourcery.com>
+
+	* gdb.arch/i386-bp_permanent.exp: Use standard_testfile.
+
+2014-12-04  Doug Evans  <dje@google.com>
+
+	* gdb.python/py-objfile.exp: Add tests for
+	objfile.add_separate_debug_file.
+
+2014-12-04  Doug Evans  <dje@google.com>
+
+	* lib/gdb.exp (get_build_id): New function.
+	(build_id_debug_filename_get): Rewrite to use it.
+	* gdb.python/py-objfile.exp: Add test for objfile.build_id.
+
+2014-12-04  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* gdb.cp/expand-psymtabs-cxx.exp: Accept any address of
+	`method(long)', not just 0x0.
+	* gdb.cp/nsalias.exp: Align code labels to 4.
+	* gdb.dwarf2/dw2-canonicalize-type.S (main): Expand to 4-bytes.
+	* gdb.dwarf2/dw2-empty-pc-range.S (main): Likewise.
+	* gdb.dwarf2/pr11465.S (_ZN1N1cE): Likewise.
+	* gdb.dwarf2/dw2-case-insensitive.c (START_INSNS): New macro.
+	(cu_text_start, FUNC_lang_start): Use `START_INSNS'.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Accept noise in complaints.
+
+2014-12-02  Doug Evans  <dje@google.com>
+
+        PR symtab/17602
+	* gdb.cp/anon-ns.cc: Move guts of this file to ...
+	* gdb.cp/anon-ns-2.cc: ... here.  New file.
+	* gdb.cp/anon-ns.exp: Update.
+
+2014-12-02  Nick Bull  <nicholaspbull@gmail.com>
+
+	* gdb.python/py-events.py (inferior_call_handler): New.
+	(register_changed_handler, memory_changed_handler): New.
+	(test_events.invoke): Register new handlers.
+	* gdb.python/py-events.exp: Add tests for inferior call,
+	memory_changed and register_changed events.
+
+2014-12-02  Andreas Arnez  <arnez@linux.vnet.ibm.com>
+
+	* gdb.base/execl-update-breakpoints.exp: Specify the link address
+	with '-Ttext-segment' instead of '-Ttext'.  Fall back to '-Ttext'
+	if the linker doesn't understand this.
+
+2014-12-01  Simon Marchi  <simon.marchi@ericsson.com>
+
+	* gdb.python/python.exp: Change expected reply to help().
+
+2014-12-01  Yao Qi  <yao@codesourcery.com>
+
+	* configure.ac: Remove AC_ARG_ENABLE for gdbtk.  Don't invoke
+	AC_CONFIG_SUBDIRS(gdb.gdbtk).
+	* configure: Re-generated.
+
+2014-11-28  Siva Chandra Reddy  <sivachandra@google.com>
+
+	* gdb.cp/chained-calls.cc: New file.
+	* gdb.cp/chained-calls.exp: New file.
+	* gdb.cp/smartp.exp: Remove KFAIL for "p c2->inta".
+
 2014-11-28  Simon Marchi  <simon.marchi@ericsson.com>
 
 	* gdb.ada/py_range.exp: Add parentheses to python calls to print.

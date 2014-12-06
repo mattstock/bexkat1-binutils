@@ -1,3 +1,67 @@
+2014-12-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* readelf.c (decode_AVR_machine_flags): New function.
+	(get_machine_flags): Add EM_AVR case.
+
+2014-12-03  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/17512
+	* objdump.c (free_debug_section): Reset the compress_status as
+	well.
+
+2014-12-03  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/17531
+	* readelf.c (get_machine_flags): Replace call to abort with a
+	warning message and a return value.
+	(get_elf_section_flags): Likewise.
+	(get_symbol_visibility): Likewise.
+	(get_ia64_symbol_other): Likewise.
+	(get_ia64_symbol_other): Likewise.
+	(is_32bit_abs_reloc): Likewise.
+	(apply_relocations): Likewise.
+	(display_arm_attribute): Likewise.
+
+2014-12-02  Denis Chertykov  <chertykov@gmail.com>
+
+	* MAINTAINERS: Fix my email address.
+
+2014-12-01  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* dwarf.c (process_cu_tu_index): Properly check for an out of
+	range row index.
+
+2014-12-01  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/17512
+	* dwarf.h (struct dwarf_section): Add user_data field.
+	* dwarf.c (frame_need_space): Check for an over large register
+	number.
+	(display_debug_frames): Check the return value from
+	frame_need_space.  Check for a CFA expression that is so long the
+	start address wraps around.
+	(debug_displays): Initialise the user_data field.
+	* objdump.c (load_specific_debug_section): Save the BFD section
+	pointer in the user_data field of the dwarf_section structure.
+	(free_debug_section): Update BFD section data when freeing section
+	contents.
+	* readelf.c (load_specific_debug_section): Initialise the
+	user_data field.
+
+2014-12-01  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/17531
+	* dwarf.c (process_cu_tu_index): Check for an out of range row
+	index.
+	* elfcomm.c (adjust_relative_path): Change name_len parameter to
+	an unsigned long.  Check for path length overflow.
+	(process_archive_index_and_symbols): Check for invalid header
+	size.
+	(setup_archive): Add checks for invalid archives.
+	(get_archive_member_name): Add range checks.
+	* elfcomm.h (adjust_relative_path): Update prototyoe.
+	* readelf.c (process_archive): Add range checks.
+
 2014-11-28  Alan Modra  <amodra@gmail.com>
 
 	* readelf.c (get_32bit_elf_symbols): Cast bfd_size_type values to

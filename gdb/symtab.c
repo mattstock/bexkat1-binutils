@@ -79,6 +79,11 @@ struct symbol *lookup_local_symbol (const char *name,
 				    const domain_enum domain,
 				    enum language language);
 
+static struct symbol *
+  lookup_symbol_in_objfile_symtabs (struct objfile *objfile,
+				    int block_index, const char *name,
+				    const domain_enum domain);
+
 static
 struct symbol *lookup_symbol_via_quick_fns (struct objfile *objfile,
 					    int block_index,
@@ -473,40 +478,15 @@ gdb_mangle_name (struct type *type, int method_id, int signature_id)
   return (mangled_name);
 }
 
-/* Initialize the cplus_specific structure.  'cplus_specific' should
-   only be allocated for use with cplus symbols.  */
-
-static void
-symbol_init_cplus_specific (struct general_symbol_info *gsymbol,
-			    struct obstack *obstack)
-{
-  /* A language_specific structure should not have been previously
-     initialized.  */
-  gdb_assert (gsymbol->language_specific.cplus_specific == NULL);
-  gdb_assert (obstack != NULL);
-
-  gsymbol->language_specific.cplus_specific =
-    OBSTACK_ZALLOC (obstack, struct cplus_specific);
-}
-
 /* Set the demangled name of GSYMBOL to NAME.  NAME must be already
-   correctly allocated.  For C++ symbols a cplus_specific struct is
-   allocated so OBJFILE must not be NULL.  If this is a non C++ symbol
-   OBJFILE can be NULL.  */
+   correctly allocated.  */
 
 void
 symbol_set_demangled_name (struct general_symbol_info *gsymbol,
                            const char *name,
                            struct obstack *obstack)
 {
-  if (gsymbol->language == language_cplus)
-    {
-      if (gsymbol->language_specific.cplus_specific == NULL)
-	symbol_init_cplus_specific (gsymbol, obstack);
-
-      gsymbol->language_specific.cplus_specific->demangled_name = name;
-    }
-  else if (gsymbol->language == language_ada)
+  if (gsymbol->language == language_ada)
     {
       if (name == NULL)
 	{
@@ -528,14 +508,7 @@ symbol_set_demangled_name (struct general_symbol_info *gsymbol,
 const char *
 symbol_get_demangled_name (const struct general_symbol_info *gsymbol)
 {
-  if (gsymbol->language == language_cplus)
-    {
-      if (gsymbol->language_specific.cplus_specific != NULL)
-	return gsymbol->language_specific.cplus_specific->demangled_name;
-      else
-	return NULL;
-    }
-  else if (gsymbol->language == language_ada)
+  if (gsymbol->language == language_ada)
     {
       if (!gsymbol->ada_mangled)
 	return NULL;
@@ -555,7 +528,8 @@ symbol_set_language (struct general_symbol_info *gsymbol,
 		     struct obstack *obstack)
 {
   gsymbol->language = language;
-  if (gsymbol->language == language_d
+  if (gsymbol->language == language_cplus
+      || gsymbol->language == language_d
       || gsymbol->language == language_go
       || gsymbol->language == language_java
       || gsymbol->language == language_objc
@@ -568,8 +542,6 @@ symbol_set_language (struct general_symbol_info *gsymbol,
       gdb_assert (gsymbol->ada_mangled == 0);
       gsymbol->language_specific.obstack = obstack;
     }
-  else if (gsymbol->language == language_cplus)
-    gsymbol->language_specific.cplus_specific = NULL;
   else
     {
       memset (&gsymbol->language_specific, 0,
@@ -1569,37 +1541,24 @@ lookup_symbol_in_block (const char *name, const struct block *block,
 /* See symtab.h.  */
 
 struct symbol *
-lookup_global_symbol_from_objfile (const struct objfile *main_objfile,
+lookup_global_symbol_from_objfile (struct objfile *main_objfile,
 				   const char *name,
 				   const domain_enum domain)
 {
-  const struct objfile *objfile;
+  struct objfile *objfile;
 
   for (objfile = main_objfile;
        objfile;
        objfile = objfile_separate_debug_iterate (main_objfile, objfile))
     {
-      struct compunit_symtab *cust;
       struct symbol *sym;
+      
+      sym = lookup_symbol_in_objfile_symtabs (objfile, GLOBAL_BLOCK, name,
+					      domain);
+      if (sym != NULL)
+	return sym;
 
-      /* Go through symtabs.  */
-      ALL_OBJFILE_COMPUNITS (objfile, cust)
-	{
-	  const struct blockvector *bv;
-	  const struct block *block;
-
-	  bv = COMPUNIT_BLOCKVECTOR (cust);
-	  block = BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK);
-	  sym = block_lookup_symbol (block, name, domain);
-	  if (sym)
-	    {
-	      block_found = block;
-	      return fixup_symbol_section (sym, (struct objfile *)objfile);
-	    }
-	}
-
-      sym = lookup_symbol_via_quick_fns ((struct objfile *) objfile,
-					 GLOBAL_BLOCK, name, domain);
+      sym = lookup_symbol_via_quick_fns (objfile, GLOBAL_BLOCK, name, domain);
       if (sym)
 	return sym;
     }
@@ -1618,6 +1577,8 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile, int block_index,
 {
   struct compunit_symtab *cust;
 
+  gdb_assert (block_index == GLOBAL_BLOCK || block_index == STATIC_BLOCK);
+
   ALL_OBJFILE_COMPUNITS (objfile, cust)
     {
       const struct blockvector *bv;
@@ -1626,7 +1587,7 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile, int block_index,
 
       bv = COMPUNIT_BLOCKVECTOR (cust);
       block = BLOCKVECTOR_BLOCK (bv, block_index);
-      sym = block_lookup_symbol (block, name, domain);
+      sym = block_lookup_symbol_primary (block, name, domain);
       if (sym)
 	{
 	  block_found = block;
