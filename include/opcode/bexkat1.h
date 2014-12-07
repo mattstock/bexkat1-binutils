@@ -50,10 +50,10 @@ typedef struct bexkat1_opcode
   const char *   name;     /* Op-code name.  */ 
 } bexkat1_opc_info_t;
 
-#define BEXKAT1_FORM0_COUNT 6
+#define BEXKAT1_FORM0_COUNT 5
 #define BEXKAT1_FORM1_COUNT 10
 #define BEXKAT1_FORM2_COUNT 0x18
-#define BEXKAT1_FORM3_COUNT 15
+#define BEXKAT1_FORM3_COUNT 19
 
 extern const bexkat1_opc_info_t bexkat1_form0_opc_info[BEXKAT1_FORM0_COUNT];
 extern const bexkat1_opc_info_t bexkat1_form1_opc_info[BEXKAT1_FORM1_COUNT];

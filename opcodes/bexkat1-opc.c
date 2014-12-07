@@ -25,71 +25,74 @@
 
 const bexkat1_opc_info_t bexkat1_form0_opc_info[BEXKAT1_FORM0_COUNT] =
   {
-    { 0x00, BEXKAT1_F0_NARG, "nop" },
-    { 0x01, BEXKAT1_F0_A,    "neg" },
-    { 0x02, BEXKAT1_F0_NARG, "rts" },
+    { 0x00, BEXKAT1_F0_NARG, "nop" }, // done
+    { 0x02, BEXKAT1_F0_NARG, "rts" }, // done
     { 0x03, BEXKAT1_F0_NARG, "rti" },
-    { 0x04, BEXKAT1_F0_A,    "inc" },
-    { 0x05, BEXKAT1_F0_A,    "dec" }
+    { 0x04, BEXKAT1_F0_A,    "inc" }, // done
+    { 0x05, BEXKAT1_F0_A,    "dec" }  // done
   };
 
 const bexkat1_opc_info_t bexkat1_form1_opc_info[BEXKAT1_FORM1_COUNT] =
   {
-    { 0x00, BEXKAT1_F1_ABC,  "add" },
-    { 0x01, BEXKAT1_F1_ABC,  "sub" },
-    { 0x02, BEXKAT1_F1_ABC,  "and" },
-    { 0x03, BEXKAT1_F1_ABC,  "or"  },
-    { 0x04, BEXKAT1_F1_AB,   "lsl" },
-    { 0x05, BEXKAT1_F1_AB,   "lsr" },
-    { 0x06, BEXKAT1_F1_ABC,  "xor" },
-    { 0x07, BEXKAT1_F1_AB,   "asr" },
-    { 0x08, BEXKAT1_F1_AB,   "mov" },
-    { 0x09, BEXKAT1_F1_AB,   "cmp" }
+    { 0x00, BEXKAT1_F1_ABC,  "and" }, // done
+    { 0x01, BEXKAT1_F1_ABC,  "or"  }, // done
+    { 0x02, BEXKAT1_F1_ABC,  "add" }, // done
+    { 0x03, BEXKAT1_F1_ABC,  "sub" }, // done
+    { 0x04, BEXKAT1_F1_AB,   "lsl" }, // done
+    { 0x05, BEXKAT1_F1_AB,   "asr" }, // done
+    { 0x06, BEXKAT1_F1_ABC,  "lsr" }, // done
+    { 0x07, BEXKAT1_F1_AB,   "xor" }, // done
+    { 0x10, BEXKAT1_F1_AB,   "mov" }, // done
+    { 0x11, BEXKAT1_F1_AB,   "cmp" }  // done
   };
 
 const bexkat1_opc_info_t bexkat1_form2_opc_info[BEXKAT1_FORM2_COUNT] =
   {
-    { 0x00, BEXKAT1_F2_A_16V,     "add.i" },
-    { 0x01, BEXKAT1_F2_A_16V,     "sub.i" },
-    { 0x02, BEXKAT1_F2_A_16V,     "and.i" },
-    { 0x03, BEXKAT1_F2_A_16V,     "or.i"  },
-    { 0x04, BEXKAT1_F2_A_16V,     "xor.i" },
-    { 0x05, BEXKAT1_F2_A_16V,     "ld.i" },
-    { 0x06, BEXKAT1_F2_A_RELADDR, "ld.sp" },
-    { 0x07, BEXKAT1_F2_A_RELADDR, "st.sp" },
-    { 0x08, BEXKAT1_F2_A_RELADDR, "bra" },
-    { 0x09, BEXKAT1_F2_A_RELADDR, "beq" },
-    { 0x0a, BEXKAT1_F2_A_RELADDR, "bne" },
-    { 0x0b, BEXKAT1_F2_A_RELADDR, "bsr" },
-    { 0x0c, BEXKAT1_F2_A_RELADDR, "bgt" },
-    { 0x0d, BEXKAT1_F2_A_RELADDR, "bge" },
-    { 0x0e, BEXKAT1_F2_A_RELADDR, "ble" },
-    { 0x0f, BEXKAT1_F2_A_RELADDR, "blt" },
-    { 0x10, BEXKAT1_F2_A_RELADDR, "bhi" },
-    { 0x11, BEXKAT1_F2_A_RELADDR, "bls" },
-    { 0x12, BEXKAT1_F2_A_RELADDR, "bhs" },
-    { 0x13, BEXKAT1_F2_A_RELADDR, "blo" },
-    { 0x14, BEXKAT1_F2_A_RELADDR, "brn" },
-    { 0x15, BEXKAT1_F2_A_RELADDR, "bmi" },
-    { 0x16, BEXKAT1_F2_A_RELADDR, "bvs" },
-    { 0x17, BEXKAT1_F2_A_RELADDR, "bpl" }
+    { 0x00, BEXKAT1_F2_A_16V,     "and.i" }, // done
+    { 0x01, BEXKAT1_F2_A_16V,     "or.i"  }, // done
+    { 0x02, BEXKAT1_F2_A_16V,     "add.i" }, // done
+    { 0x03, BEXKAT1_F2_A_16V,     "sub.i" }, // done
+    { 0x07, BEXKAT1_F2_A_16V,     "xor.i" }, // done
+    { 0x10, BEXKAT1_F2_A_16V,     "ld.i"  }, // done
+    { 0x11, BEXKAT1_F2_A_RELADDR, "ld.sp" }, 
+    { 0x12, BEXKAT1_F2_A_RELADDR, "st.sp" },
+    { 0x20, BEXKAT1_F2_A_RELADDR, "bra" },   // done
+    { 0x21, BEXKAT1_F2_A_RELADDR, "beq" },   // done
+    { 0x22, BEXKAT1_F2_A_RELADDR, "bne" },   // done
+    { 0x23, BEXKAT1_F2_A_RELADDR, "bsr" },
+    { 0x24, BEXKAT1_F2_A_RELADDR, "bgt" },   // done
+    { 0x25, BEXKAT1_F2_A_RELADDR, "bge" },   // done
+    { 0x26, BEXKAT1_F2_A_RELADDR, "ble" },   // done
+    { 0x27, BEXKAT1_F2_A_RELADDR, "blt" },   // done
+    { 0x28, BEXKAT1_F2_A_RELADDR, "bhi" },
+    { 0x29, BEXKAT1_F2_A_RELADDR, "bls" },
+    { 0x2a, BEXKAT1_F2_A_RELADDR, "bhs" },
+    { 0x2b, BEXKAT1_F2_A_RELADDR, "blo" },
+    { 0x2c, BEXKAT1_F2_A_RELADDR, "brn" },
+    { 0x2d, BEXKAT1_F2_A_RELADDR, "bmi" },
+    { 0x2e, BEXKAT1_F2_A_RELADDR, "bvs" },
+    { 0x2f, BEXKAT1_F2_A_RELADDR, "bpl" }
   };
 
 const bexkat1_opc_info_t bexkat1_form3_opc_info[BEXKAT1_FORM3_COUNT] =
   {
-    { 0x00, BEXKAT1_F3_A_ABSADDR, "add.a" },
-    { 0x01, BEXKAT1_F3_A_ABSADDR, "sub.a" },
-    { 0x02, BEXKAT1_F3_A_ABSADDR, "and.a" },
-    { 0x03, BEXKAT1_F3_A_ABSADDR, "or.a"  },
-    { 0x04, BEXKAT1_F3_A_ABSADDR, "xor.a" },
-    { 0x05, BEXKAT1_F3_A_ABSADDR, "ld" },
-    { 0x06, BEXKAT1_F3_A_ABSADDR, "st" },
-    { 0x07, BEXKAT1_F3_ABSADDR,   "jmp" },
-    { 0x08, BEXKAT1_F3_ABSADDR,   "jsr" },
-    { 0x09, BEXKAT1_F3_A_32V,     "ld.l"},
-    { 0x0a, BEXKAT1_F3_A_32V,     "add.l"},
-    { 0x0b, BEXKAT1_F3_A_32V,     "sub.l" },
-    { 0x0c, BEXKAT1_F3_A_32V,     "and.l" },
-    { 0x0d, BEXKAT1_F3_A_32V,     "or.l"  },
-    { 0x0e, BEXKAT1_F3_A_32V,     "xor.l" }
+    { 0x00, BEXKAT1_F3_A_ABSADDR, "and.a" },
+    { 0x01, BEXKAT1_F3_A_ABSADDR, "or.a" },
+    { 0x02, BEXKAT1_F3_A_ABSADDR, "add.a" },
+    { 0x03, BEXKAT1_F3_A_ABSADDR, "sub.a"  },
+    { 0x07, BEXKAT1_F3_A_ABSADDR, "xor.a" },
+    { 0x10, BEXKAT1_F3_A_ABSADDR, "ld.la" }, 
+    { 0x11, BEXKAT1_F3_A_ABSADDR, "ld" },    // done
+    { 0x12, BEXKAT1_F3_A_ABSADDR, "ld.ca" }, 
+    { 0x13, BEXKAT1_F3_A_ABSADDR, "st.la" },
+    { 0x14, BEXKAT1_F3_A_ABSADDR, "st" },    // done
+    { 0x15, BEXKAT1_F3_A_ABSADDR, "st.ca" },
+    { 0x16, BEXKAT1_F3_ABSADDR,   "jmp" },  // done
+    { 0x17, BEXKAT1_F3_ABSADDR,   "jsr" },  // done
+    { 0x20, BEXKAT1_F3_A_32V,     "ld.l"},  // done
+    { 0x30, BEXKAT1_F3_A_32V,     "and.l"},
+    { 0x31, BEXKAT1_F3_A_32V,     "or.l" },
+    { 0x32, BEXKAT1_F3_A_32V,     "add.l" },
+    { 0x33, BEXKAT1_F3_A_32V,     "sub.l"  },
+    { 0x37, BEXKAT1_F3_A_32V,     "xor.l" }
   };
