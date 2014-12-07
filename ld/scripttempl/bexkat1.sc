@@ -24,6 +24,12 @@ cat <<EOF
 OUTPUT_FORMAT("${OUTPUT_FORMAT}")
 OUTPUT_ARCH(${ARCH})
 
+MEMORY
+{
+  flash (rx)  : ORIGIN = 0xfe000000, LENGTH = 4M
+  ram (!rx) : ORIGIN = 0x00000000, LENGTH = 512K
+}
+
 SECTIONS
 {
   .text :

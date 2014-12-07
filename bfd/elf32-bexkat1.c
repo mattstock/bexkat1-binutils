@@ -33,68 +33,17 @@
 #define TARGET_BIG_SYM          bexkat1_elf32_vec
 #define TARGET_BIG_NAME		"elf32-bexkat1"
 
-static bfd_reloc_status_type
-bexkat1_elf_reloc(bfd *abfd,
-		  arelent *reloc_entry,
-		  asymbol *symbol_in,
-		  void *data,
-		  asection *input_section,
-		  bfd *output_bfd,
-		  char **error_message ATTRIBUTE_UNUSED)
-{
-  unsigned long insn;
-  bfd_vma sym_value;
-  enum elf_bexkat1_reloc_type r_type;
-  bfd_vma addr = reloc_entry->address;
-  bfd_byte *hit_data = addr + (bfd_byte *) data;
-
-  r_type = (enum elf_bexkat1_reloc_type) reloc_entry->howto->type;
-
-  if (output_bfd != NULL) {
-    reloc_entry->address += input_section->output_offset;
-    return bfd_reloc_ok;
-  }
-
-  if ((symbol_in != NULL) & bfd_is_und_section(symbol_in->section))
-    return bfd_reloc_undefined;
-
-  if (bfd_is_com_section(symbol_in->section))
-    sym_value = 0;
-  else
-    sym_value = (symbol_in->value +
-		 symbol_in->section->output_section->vma +
-		 symbol_in->section->output_offset);
-
-  switch (r_type) {
-  case R_BEXKAT1_16:
-    insn = bfd_get_16(abfd, hit_data);
-    insn += sym_value + reloc_entry->addend;
-    bfd_put_16(abfd, (bfd_vma) insn, hit_data);
-    break;
-  case R_BEXKAT1_32:
-    insn = bfd_get_32(abfd, hit_data);
-    insn += sym_value + reloc_entry->addend;
-    bfd_put_32(abfd, (bfd_vma) insn, hit_data);
-    break;
-  default:
-    abort();
-    break;
-  }
-
-  return bfd_reloc_ok;
-}
-
 static reloc_howto_type bexkat1_elf_howto_table[] =
   {
     /* No relocation */
     HOWTO(R_BEXKAT1_NONE,         /* type */
 	  0,                      /* rightshift */
-	  0,                      /* size */
-	  0,                      /* bitsize */
+	  2,                      /* size */
+	  32,                     /* bitsize */
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_dont, /* complain_on_overflow */
-	  bexkat1_elf_reloc,      /* special_function */
+	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_NONE",       /* name */
 	  FALSE,                  /* partial_inplace */
 	  0,                      /* src_mask */
@@ -107,7 +56,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_bitfield, /* complain_on_overflow */
-	  bexkat1_elf_reloc,      /* special_function */
+	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_DIR16",      /* name */
 	  FALSE,                  /* partial_inplace */
 	  0xffff,                 /* src_mask */
@@ -120,7 +69,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_bitfield, /* complain_on_overflow */
-	  bexkat1_elf_reloc,      /* special_function */
+	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_PCREL_16",   /* name */
 	  FALSE,                  /* partial_inplace */
 	  0xffff,                 /* src_mask */
@@ -133,8 +82,8 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_bitfield, /* complain_on_overflow */
-	  bexkat1_elf_reloc,      /* special_function */
-	  "R_BEXKAT1_DIR32",      /* name */
+	  bfd_elf_generic_reloc,  /* special_function */
+	  "R_BEXKAT1_32",         /* name */
 	  FALSE,                  /* partial_inplace */
 	  0xffffffff,             /* src_mask */
 	  0xffffffff,             /* dst_mask */
