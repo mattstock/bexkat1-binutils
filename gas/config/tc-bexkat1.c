@@ -32,7 +32,6 @@ const char EXP_CHARS[] = "eE";
 const char FLT_CHARS[] = "rRsSfFdDxXpP";
 
 static int pending_reloc;
-static struct hash_control *opcode_hash_control;
 
 const pseudo_typeS md_pseudo_table[] =
   {
@@ -44,30 +43,39 @@ md_operand (expressionS *op __attribute__((unused)))
 {
 }
 
-/* Initialize the assembler.  Create the opcode hash table
-   (sorted on the names) with the opcode table
-   (from opcode library).  */
+static const bexkat1_opc_info_t *
+find_opcode(const char *name) {
+  int i;
+  for (i=0; i < BEXKAT1_OPC_COUNT; i++)
+    if (!strncmp(bexkat1_opc_info[i].name, name, strlen(name)))
+      return &bexkat1_opc_info[i];
+  return NULL;
+}
+
+static const bexkat1_opc_info_t *
+find_opcode_form(const char *name, unsigned form) {
+  int i;
+  for (i=0; i < BEXKAT1_OPC_COUNT; i++)
+    if (bexkat1_opc_info[i].itype == form &&
+	!strncmp(bexkat1_opc_info[i].name, name, strlen(name)))
+      return &bexkat1_opc_info[i];
+  return NULL;
+}
+
+/*
+static const bexkat1_opc_info_t *
+find_opcode_addr(const char *name, unsigned addr) {
+  int i;
+  for (i=0; i < BEXKAT1_OPC_COUNT; i++)
+    if (bexkat1_opc_info[i].addr_mode == addr &&
+	!strncmp(bexkat1_opc_info[i].name, name, strlen(name)))
+      return &bexkat1_opc_info[i];
+  return NULL;
+  } */
+
 void
 md_begin (void)
 {
-  int count;
-  const bexkat1_opc_info_t *opcode;
-  opcode_hash_control = hash_new();
-
-  /* Insert names into the hash table */
-  for (count=0, opcode = bexkat1_form0_opc_info; count++ < BEXKAT1_FORM0_COUNT; opcode++) {
-    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-  }
-  for (count=0, opcode = bexkat1_form1_opc_info; count++ < BEXKAT1_FORM1_COUNT; opcode++) {
-    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-  }
-  for (count=0, opcode = bexkat1_form2_opc_info; count++ < BEXKAT1_FORM2_COUNT; opcode++) {
-    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-  }
-  for (count=0, opcode = bexkat1_form3_opc_info; count++ < BEXKAT1_FORM3_COUNT; opcode++) {
-    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
-  }
-
   bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
 }
 
@@ -94,6 +102,7 @@ parse_regnum(char **ptr)
     ignore_rest_of_line();
     return -1;
   }
+
   if ((reg > 0) || (reg < 4)) {
     int r2 = s[2] - '0';
     if ((r2 >= 0) && (r2 <= 9)) {
@@ -117,339 +126,208 @@ md_assemble(char *str)
 {
   char *op_start;
   char *op_end;
-  bexkat1_opc_info_t *opcode;
+  char op_name[10];
+  const bexkat1_opc_info_t *opcode;
   char *p;
   char pend;
   unsigned short iword = 0;
   int nlen = 0;
-
+  
   while (*str == ' ')
     str++;
-
+  
   op_start = str;
   for (op_end = str;
        *op_end && !is_end_of_line[*op_end & 0xff] && *op_end != ' ';
        op_end++)
     nlen++;
-
+  
   pend = *op_end;
   *op_end = 0;
 
+  strncpy(op_name, op_start, 10);
+
   if (nlen == 0)
     as_bad(_("can't find opcode "));
-
-  opcode = (bexkat1_opc_info_t *) hash_find(opcode_hash_control, op_start);
+  
+  opcode = find_opcode(op_start);
   *op_end = pend;
-
   if (opcode == NULL) {
     as_bad(_("unknown opcode %s"), op_start);
     return;
   }
-
+  
   p = frag_more(2);
-
-  switch (opcode->itype) {
-  case BEXKAT1_F0_NARG:
+  
+  if (opcode->itype == BEXKAT1_F0_NARG) {
     iword = opcode->opcode << 5;
     while (ISSPACE(*op_end))
       op_end++;
     if (*op_end != 0)
       as_warn("extra stuff on line ignored");
-    break;
-  case BEXKAT1_F0_A:
-    iword = opcode->opcode << 5;
+  } else { // need to parse the rest of the line to see address mode
     while (ISSPACE (*op_end))
       op_end++;
-    {
-      int regnum;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      
-      iword |= regnum;
-    }
-    break;
-  case BEXKAT1_F1_AB:
-    iword = 0x4000 | (opcode->opcode << 5);
-    while (ISSPACE (*op_end))
-      op_end++;
-    {
-      int regnum;
+    
+    if (*op_end != 'r') {
+      expressionS arg;
       char *where;
+
+      if (opcode->addr_mode == BEXKAT1_ADDR_PCREL) {
+	opcode = find_opcode_form(op_name, BEXKAT1_F2_RELADDR);
+	if (opcode == NULL) {
+	  as_bad(_("unexpected args F2_RELADDR for %s"), op_start);
+	  return;
+	}
+	where = frag_more(2);
+	op_end = parse_exp_save_ilp(op_end, &arg);
+	fix_new_exp(frag_now,
+		    (where - frag_now->fr_literal),
+		    2,
+		    &arg,
+		    TRUE,
+		    BFD_RELOC_16_PCREL);
+	iword = 0x8000 | (opcode->opcode << 5);
+      } else {
+	opcode = find_opcode_form(op_name, BEXKAT1_F3_ABSADDR);
+	if (opcode == NULL) {
+	  as_bad(_("unexpected args F3_ABSADDR for %s"), op_start);
+	  return;
+	}
+	op_end = parse_exp_save_ilp(op_end, &arg);
+	where = frag_more(4);
+	fix_new_exp(frag_now,
+		    (where - frag_now->fr_literal),
+		    4,
+		    &arg,
+		    0,
+		    BFD_RELOC_32);
+	iword = 0xc000 | (opcode->opcode << 5);      
+      }
+    } else { // first arg is a register
+      int regnum;
       unsigned short w2;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      
-      iword |= regnum;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-
-      w2 = (regnum << 8);
-
-      where = frag_more(2);
-      md_number_to_chars(where, w2, 2);
-    }
-    break;
-  case BEXKAT1_F1_ABC:
-    iword = 0x4000 | (opcode->opcode << 5);
-    while (ISSPACE (*op_end))
-      op_end++;
-    {
-      int regnum;
-      char *where;
-      unsigned short w2;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      
-      iword |= regnum;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-
-      w2 = (regnum << 8);
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-
-      w2 |= regnum;
-      where = frag_more(2);
-      md_number_to_chars(where, w2, 2);
-    }
-    break;
-  case BEXKAT1_F2_A_16V:
-    iword = 0x8000 | (opcode->opcode << 5);
-    while (ISSPACE (*op_end))
-      op_end++;
-    {
       expressionS arg;
       char *where;
-      int regnum;
-
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
 	return;
-      
-      iword |= regnum;
- 
+      iword = regnum;
       while (ISSPACE(*op_end))
 	op_end++;
       
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      where = frag_more(2);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  2,
-		  &arg,
-		  0,
-		  BFD_RELOC_16);
-    }
-    break;
-  case BEXKAT1_F2_A_RELADDR:
-    iword = 0x8000 | (opcode->opcode << 5);
-    while (ISSPACE (*op_end))
-      op_end++;
-    {
-      expressionS arg;
-      char *where;
+      if (*op_end != ',') { // F0_A
+	op_end++;
+	opcode = find_opcode_form(op_name, BEXKAT1_F0_A);
+	if (opcode == NULL) {
+	  as_bad(_("unexpected args F0_A for %s"), op_start);
+	  return;
+	}
+	iword |= (opcode->opcode << 5);
+      } else { // two or more args
+	op_end++; // burn comma
+	while (ISSPACE (*op_end))
+	  op_end++;
+	switch (*op_end) {
+	case 'r':
+	  regnum = parse_regnum(&op_end);
+	  if (regnum == -1)
+	    return;
+	  w2 = (regnum << 8);
+	  
+	  while (ISSPACE(*op_end))
+	    op_end++;
+	  
+	  if (*op_end == ',') { // F1_ABC
+	    op_end++;
+	    while (ISSPACE(*op_end))
+	      op_end++;
 
-      where = frag_more(2);
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  2,
-		  &arg,
-		  TRUE,
-		  BFD_RELOC_16_PCREL);
-    }
-      // We will need to handle ld.sp and st.sp using stack instead of where
-    break;
-  case BEXKAT1_F3_A_ABSADDR:
-    iword = 0xc000 | (opcode->opcode << 5);
-    {
-      expressionS arg;
-      char *where;
-      int regnum;
+	    if (*op_end != 'r') {
+	      as_bad("expecting register");
+	      ignore_rest_of_line();
+	      return;
+	    }
 
-      while (ISSPACE(*op_end))
-	op_end++;
-      
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
+	    regnum = parse_regnum(&op_end);
+	    if (regnum == -1)
+	      return;
+	    w2 |= regnum;
+	    opcode = find_opcode_form(op_name, BEXKAT1_F1_ABC);
+	    if (opcode == NULL) {
+	      as_bad(_("unexpected args for F1_ABC %s"), op_start);
+	      return;
+	    }
+	  } else { // F1_AB
+	    opcode = find_opcode_form(op_name, BEXKAT1_F1_AB);
+	    if (opcode == NULL) {
+	      as_bad(_("unexpected args for F1_AB %s"), op_start);
+	      return;
+	    }
+	    // should make sure there isn't junk on the end of the line
+	  }
+	  
+	  iword = 0x4000 | (opcode->opcode << 5);
+	  where = frag_more(2);
+	  md_number_to_chars(where, w2, 2);
+	  break;
+	case '(':
+	  op_end++; // burn paren
+	  while (ISSPACE(*op_end))
+	    op_end++;
+	  if (*op_end != 'r') {
+	    as_bad("expecting register");
+	    ignore_rest_of_line();
+	    return;
+	  }
+	  regnum = parse_regnum(&op_end);
+	  if (regnum == -1)
+	    return;
+	  if (*op_end != ')') {
+	    as_bad(_("missing close paren"));
+	    ignore_rest_of_line();
+	    return;
+	  }
+	  op_end++;
+	  
+	  w2 = (regnum << 8);
+	  
+	  while (ISSPACE(*op_end))
+	    op_end++;
+	  
+	  where = frag_more(2);
+	  md_number_to_chars(where, w2, 2);
+	  
+	  opcode = find_opcode_form(op_name, BEXKAT1_F1_AB);
+	  if (opcode == NULL) {
+	    as_bad(_("invalid arg for F1_AB %s"), op_start);
+	    return;
+	  }
+	  iword = 0x4000 | (opcode->opcode << 5);
+	  break;
+	default:
+	  opcode = find_opcode_form(op_name, BEXKAT1_F3_A_32V);
+	  if (opcode == NULL) {
+	    opcode = find_opcode_form(op_name, BEXKAT1_F3_A_ABSADDR);
+	    if (opcode == NULL) {
+	      as_bad(_("unexpected args F3_A_* for %s"), op_start);
+	      return;
+	    }
+	  }
+	  while (ISSPACE(*op_end))
+	    op_end++;
+	  op_end = parse_exp_save_ilp(op_end, &arg);
+	  where = frag_more(4);
+	  fix_new_exp(frag_now,
+		      (where - frag_now->fr_literal),
+		      4,
+		      &arg,
+		      0,
+		      BFD_RELOC_32);
+	  iword = 0xc000 | (opcode->opcode << 5);
+	}
       }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      
-      iword |= regnum;
- 
-      while (ISSPACE(*op_end))
-	op_end++;
-      
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      where = frag_more(4);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  4,
-		  &arg,
-		  0,
-		  BFD_RELOC_32);
     }
-    break;
-  case BEXKAT1_F3_ABSADDR:
-    iword = 0xc000 | (opcode->opcode << 5);
-    while (ISSPACE (*op_end))
-      op_end++;
-    {
-      expressionS arg;
-      char *where;
-
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      where = frag_more(4);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  4,
-		  &arg,
-		  0,
-		  BFD_RELOC_32);
-    }
-    break;
-  case BEXKAT1_F3_A_32V:
-    iword = 0xc000 | (opcode->opcode << 5);
-    {
-      expressionS arg;
-      char *where;
-      int regnum;
-
-      while (ISSPACE(*op_end))
-	op_end++;
-      
-      if (*op_end != 'r') {
-	as_bad("expecting register");
-	ignore_rest_of_line();
-	return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      
-      iword |= regnum;
- 
-      while (ISSPACE(*op_end))
-	op_end++;
-      
-      if (*op_end != ',') {
-	as_bad("expecting comma delimited operands");
-	ignore_rest_of_line();
-	return;
-      }
-      op_end++;
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      where = frag_more(4);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  4,
-		  &arg,
-		  0,
-		  BFD_RELOC_32);
-    }
-    break;
   }
 
   md_number_to_chars(p, iword, 2);
@@ -458,7 +336,7 @@ md_assemble(char *str)
     op_end++;
 
   if (*op_end != 0)
-    as_warn("extra stuff on line ignored");
+    as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
 
   if (pending_reloc)
     as_bad("Something forgot to clean up\n");

@@ -36,38 +36,14 @@ static void *stream;
 int print_insn_bexkat1 (bfd_vma, struct disassemble_info *);
 
 static const bexkat1_opc_info_t *
-find_opcode(int form, uint8_t opcode) {
-  int max;
-  const bexkat1_opc_info_t *ops;
-
-  switch (form) {
-  case 0:
-    max = BEXKAT1_FORM0_COUNT;
-    ops = bexkat1_form0_opc_info;
-    break;
-  case 1:
-    max = BEXKAT1_FORM1_COUNT;
-    ops = bexkat1_form1_opc_info;
-    break;
-  case 2:
-    max = BEXKAT1_FORM2_COUNT;
-    ops = bexkat1_form2_opc_info;
-    break;
-  case 3:
-    max = BEXKAT1_FORM3_COUNT;
-    ops = bexkat1_form3_opc_info;
-    break;
-  default:
-    return NULL;
-  }
-
+find_opcode(unsigned form, uint8_t opcode) {
   int i;
-  for (i=0; i < max; i++)
-    if (ops[i].opcode == opcode)
-      return &ops[i];
+  for (i=0; i < BEXKAT1_OPC_COUNT; i++)
+    if ((bexkat1_opc_info[i].itype >> 8) == form &&
+	bexkat1_opc_info[i].opcode == opcode)
+      return &bexkat1_opc_info[i];
   return NULL;
 }
-
 
 /* Disassemble one instruction at address 'memaddr'.  Returns the number
    of bytes used by that instruction.  */
@@ -109,8 +85,12 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
 	  goto fail;
 	op2 = bfd_getb16(buffer);
-	fpr(stream, "%s r%d, r%d", opcode->name, (iword & 0x1f),
-	    (op2 >> 8) & 0x1f);
+	if (opcode->addr_mode == BEXKAT1_ADDR_IND)
+	  fpr(stream, "%s r%d, (r%d)", opcode->name, (iword & 0x1f),
+	      (op2 >> 8) & 0x1f);
+	else
+	  fpr(stream, "%s r%d, r%d", opcode->name, (iword & 0x1f),
+	      (op2 >> 8) & 0x1f);
 	length = 4;
       }
       break;
@@ -144,7 +124,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	length = 4;
       }
       break;
-    case BEXKAT1_F2_A_RELADDR:
+    case BEXKAT1_F2_RELADDR:
       {
 	short imm;
 	
@@ -181,8 +161,18 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	  goto fail;
 	addr = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s r%d, #%08x", opcode->name, (iword & 0x1f),
 	    addr);
+      }
+      break;
+    case BEXKAT1_F3_A_32V:
+      {
+	unsigned int imm;
+	
+	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	  goto fail;
+	imm = bfd_getb32(buffer);
+	fpr(stream, "%s r%d, #%08x", opcode->name, (iword & 0x1f), imm);
       }
       break;
     default:
