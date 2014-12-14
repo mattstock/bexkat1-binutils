@@ -161,7 +161,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	  goto fail;
 	addr = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, #%08x", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
 	    addr);
       }
       break;
@@ -172,7 +172,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	  goto fail;
 	imm = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, #%08x", opcode->name, (iword & 0x1f), imm);
+	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f), imm);
       }
       break;
     default:

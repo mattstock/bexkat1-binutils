@@ -217,7 +217,6 @@ md_assemble(char *str)
 	op_end++;
       
       if (*op_end != ',') { // F0_A
-	op_end++;
 	opcode = find_opcode_form(op_name, BEXKAT1_F0_A);
 	if (opcode == NULL) {
 	  as_bad(_("unexpected args F0_A for %s"), op_start);
@@ -267,7 +266,7 @@ md_assemble(char *str)
 	    // should make sure there isn't junk on the end of the line
 	  }
 	  
-	  iword = 0x4000 | (opcode->opcode << 5);
+	  iword |= 0x4000 | (opcode->opcode << 5);
 	  where = frag_more(2);
 	  md_number_to_chars(where, w2, 2);
 	  break;
@@ -303,7 +302,7 @@ md_assemble(char *str)
 	    as_bad(_("invalid arg for F1_AB %s"), op_start);
 	    return;
 	  }
-	  iword = 0x4000 | (opcode->opcode << 5);
+	  iword |= 0x4000 | (opcode->opcode << 5);
 	  break;
 	default:
 	  opcode = find_opcode_form(op_name, BEXKAT1_F3_A_32V);
@@ -324,7 +323,7 @@ md_assemble(char *str)
 		      &arg,
 		      0,
 		      BFD_RELOC_32);
-	  iword = 0xc000 | (opcode->opcode << 5);
+	  iword |= 0xc000 | (opcode->opcode << 5);
 	}
       }
     }
@@ -408,8 +407,17 @@ md_apply_fix(fixS *fixP ATTRIBUTE_UNUSED, valueT *valP ATTRIBUTE_UNUSED, segT se
   max = min = 0;
   switch (fixP->fx_r_type) {
   case BFD_RELOC_16:
-    *buf++ = val >> 8;
-    *buf++ = val >> 0;
+    if (target_big_endian)
+      {
+	buf[0] = val >> 8;
+	buf[1] = val >> 0;
+      }
+    else
+      {
+	buf[1] = val >> 8;
+	buf[0] = val >> 0;
+      }
+    buf += 2;
     break;
   case BFD_RELOC_32:
     if (target_big_endian) {
@@ -423,6 +431,7 @@ md_apply_fix(fixS *fixP ATTRIBUTE_UNUSED, valueT *valP ATTRIBUTE_UNUSED, segT se
       buf[1] = val >> 8;
       buf[0] = val >> 0;
     }
+    buf += 4;
     break;
   case BFD_RELOC_16_PCREL:
     if (!val)
