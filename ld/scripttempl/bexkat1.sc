@@ -26,6 +26,7 @@ OUTPUT_ARCH(${ARCH})
 
 MEMORY
 {
+  rom   (rx)  : ORIGIN = 0xffc00000, LENGTH = 2K
   flash (rx)  : ORIGIN = 0xfe000000, LENGTH = 4M
   ram (!rx) : ORIGIN = 0x00000000, LENGTH = 512K
 }
@@ -39,13 +40,13 @@ SECTIONS
       .fini : { KEEP (*(.fini)) } =0
     *(.strings)
     ${RELOCATING+ _etext = . ; }
-  } ${RELOCATING+ > ram}
+  } ${RELOCATING+ > rom}
   ${CONSTRUCTING+${TORS}}
   .data :
   {
     *(.data)
     ${RELOCATING+ _edata = . ; }
-  } ${RELOCATING+ > ram}
+  } ${RELOCATING+ > rom}
   .bss :
   {
     ${RELOCATING+ _bss_start = . ; }
