@@ -150,8 +150,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	  goto fail;
 	addr = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
-	    addr);
+	fpr(stream, "%s 0x%08x", opcode->name, addr);
       }
       break;
     case BEXKAT1_F3_A_ABSADDR:
