@@ -24,43 +24,48 @@
 
 #include <stdint.h>
 
-/* Opcode format is determined by the high two bits of the first word
-   Form 0 is in a single 16-bit word:
-   00xo oooo oooa aaaa */
-#define BEXKAT1_F0_NARG      0x000  /* Form 0 no args */
-#define BEXKAT1_F0_A         0x001  /* Form 0 single register */
-/* Form 1 is in two words and has up to 3 registers:
-   01xo oooo oooa aaaa xxxb bbbb xxxc cccc */
-#define BEXKAT1_F1_AB        0x100  /* Form 1 two registers */
-#define BEXKAT1_F1_ABC       0x101  /* Form 1 three register */
-/* Form 2 is in two words and uses an immediate value and/or a register:
-   10xo oooo oooa aaaa iiii iiii iiii iiii */ 
-#define BEXKAT1_F2_A_16V     0x200  /* Form 2 w/16-bit immediate operand */
-#define BEXKAT1_F2_RELADDR   0x201  /* Form 2 w/PC offset */ 
-/* Form 3 is in three words and uses an 32-bit address and/or a register:
-   11xo oooo oooa aaaa llll llll llll llll hhhh hhhh hhhh hhhh */
-#define BEXKAT1_F3_A_ABSADDR 0x300  /* Form 3 w/reg and absolute address */
-#define BEXKAT1_F3_ABSADDR   0x301  /* Form 3 w/absolute address */
-#define BEXKAT1_F3_A_32V     0x302  /* Form 3 w/32-bit immediate value */
+#define BEXKAT1_ADDR_INH    0
+#define BEXKAT1_ADDR_IMM    1
+#define BEXKAT1_ADDR_REGIND 2
+#define BEXKAT1_ADDR_REG    3
+#define BEXKAT1_ADDR_DIR    4
+#define BEXKAT1_ADDR_PCIND  5
 
-#define BEXKAT1_ADDR_INH 0
-#define BEXKAT1_ADDR_IMM 1
-#define BEXKAT1_ADDR_IND 2
-#define BEXKAT1_ADDR_REG 3
-#define BEXKAT1_ADDR_DIR 4
-#define BEXKAT1_ADDR_PCREL 5
+/*
+ * Examples of different addressing modes and syntax:
+ * + Inherent (1 word):         nop
+ * Register direct (1 word):  inc  r5
+ * + Register direct (2 words): mov  r3,  r5
+ * + Register direct (2 words): add  r3,  r5, r18
+ * + Register index (2 words):  st.l r3,  -4(r13)
+ * + PC index (2 words):        bra  0xff30
+ * Immediate (2 words):       add  r3,  0xabcd
+ * + Immediate (3 words):       add  r3,  r4, 0xabcd
+ * + Immediate (3 words):       ldi  r45, 0xabcd0123
+
+ * +Direct (3 words):          jmp  0xabcd1945
+ * + Direct (3 words):          st.l r3,  0xabcd1234
+ *
+ * Format of opcode words:
+ * word 1: aaaoooooooorrrrr (addr mode[15:13], opcode[12:5], regA[4:0])
+ * word 2: 000bbbbb000ccccc (regB[12:8], regC[4:0]) register direct
+ * word 2: vvvvvvvvvvvvvvvv (value[15:0]) 2 word immediate, PC index
+ * word 2: hhhhhhhhhhhhhhhh (high word[15:0]) 3 word immediate, direct
+ * word 2: bbbbbvvvvvvvvvvv (regB[15:11], index[10:0] register index
+ * word 3: llllllllllllllll (low word[15:0]) 3 word immediate, direct 
+ */
+
 
 
 typedef struct bexkat1_opcode
 {
   uint8_t opcode;
-  unsigned itype;
-  unsigned addr_mode;
+  unsigned int size;
+  unsigned int addr_mode;
   const char *name;
 } bexkat1_opc_info_t;
 
-#define BEXKAT1_OPC_COUNT 38
-
-extern const bexkat1_opc_info_t bexkat1_opc_info[BEXKAT1_OPC_COUNT];
+extern const bexkat1_opc_info_t bexkat1_opc_info[];
+extern const int bexkat1_opc_count;
 
 #endif /* _OPCODE_BEXKAT1_H */

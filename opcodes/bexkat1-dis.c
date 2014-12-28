@@ -36,10 +36,10 @@ static void *stream;
 int print_insn_bexkat1 (bfd_vma, struct disassemble_info *);
 
 static const bexkat1_opc_info_t *
-find_opcode(unsigned form, uint8_t opcode) {
+find_opcode(unsigned mode, uint8_t opcode) {
   int i;
-  for (i=0; i < BEXKAT1_OPC_COUNT; i++)
-    if ((bexkat1_opc_info[i].itype >> 8) == form &&
+  for (i=0; i < bexkat1_opc_count; i++)
+    if (bexkat1_opc_info[i].addr_mode == mode &&
 	bexkat1_opc_info[i].opcode == opcode)
       return &bexkat1_opc_info[i];
   return NULL;
@@ -53,6 +53,10 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
   const bexkat1_opc_info_t *opcode;
   bfd_byte buffer[6];
   unsigned short iword;
+  unsigned short op2;
+  short imm;
+  unsigned int addr;
+  int imm32;
 
   stream = info->stream;
   fpr = info->fprintf_func; 
@@ -61,122 +65,96 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     goto fail;
   iword = bfd_getb16(buffer);
 
-  switch (iword >> 14) {
-  case 0:
-    opcode = find_opcode(0, (iword >> 5) & 0xff);
-    switch (opcode->itype) {
-    case BEXKAT1_F0_NARG:
-      fpr(stream, "%s", opcode->name);
-      break;
-    case BEXKAT1_F0_A:
-      fpr(stream, "%s r%d", opcode->name, (iword & 0x1f));
-      break;
-    default:
-      abort();
+  opcode = find_opcode((iword >> 13), (iword >> 5) & 0xff);
+  if (opcode == NULL)
+    abort();
+
+  switch (opcode->addr_mode) {
+  case BEXKAT1_ADDR_INH:
+    fpr(stream, "%s", opcode->name);
+    length = 2;
+    break;
+  case BEXKAT1_ADDR_IMM:
+    if (opcode->size == 2) {
+      if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+	goto fail;
+      imm = bfd_getb16(buffer);
+      fpr(stream, "%s r%d, 0x%x", opcode->name, (iword & 0x1f), imm);
+      length = 4;
+    } else {
+      if (!strcmp("ldi",opcode->name)) {
+	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	  goto fail;
+	imm32 = bfd_getb32(buffer);
+	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	    imm32);
+	length = 6;
+      } else {
+	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+	  goto fail;
+	op2 = bfd_getb16(buffer);
+	if ((status = info->read_memory_func(memaddr+4, buffer, 2, info)))
+	  goto fail;
+	imm = bfd_getb16(buffer);
+	fpr(stream, "%s r%d, r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	    (op2 >> 8) & 0x1f, imm);
+	length = 6;
+      }
     }
     break;
-  case 1:
-    opcode = find_opcode(1, (iword >> 5) & 0xff);
-    switch (opcode->itype) {
-    case BEXKAT1_F1_AB:
-      {
-	unsigned short op2;
-
-	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
-	  goto fail;
-	op2 = bfd_getb16(buffer);
-	if (opcode->addr_mode == BEXKAT1_ADDR_IND)
-	  fpr(stream, "%s r%d, (r%d)", opcode->name, (iword & 0x1f),
-	      (op2 >> 8) & 0x1f);
-	else
-	  fpr(stream, "%s r%d, r%d", opcode->name, (iword & 0x1f),
-	      (op2 >> 8) & 0x1f);
-	length = 4;
-      }
-      break;
-    case BEXKAT1_F1_ABC:
-      {
-	unsigned short op2;
-
-	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
-	  goto fail;
-	op2 = bfd_getb16(buffer);
+  case BEXKAT1_ADDR_REGIND:
+    if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+      goto fail;
+    imm = bfd_getb16(buffer);
+    fpr(stream, "%s r%d, %d(r%d)", opcode->name, (iword & 0x1f),
+	(short)(imm & 0x400 ? 0xf800 | (imm & 0x7ff) : imm & 0x7ff),
+	(imm >> 11) & 0x1f);
+    length = 4;
+    break;
+  case BEXKAT1_ADDR_REG:
+    if (opcode->size == 1) {
+      fpr(stream, "%s r%d", opcode->name, (iword & 0x1f));
+      length = 2;
+    } else {
+      if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+	goto fail;
+      op2 = bfd_getb16(buffer);
+      if (!strcmp("mov", opcode->name) ||
+	  !strcmp("cmp", opcode->name)) {
+	fpr(stream, "%s r%d, r%d", opcode->name, (iword & 0x1f),
+	    (op2 >> 8) & 0x1f);
+      } else {
 	fpr(stream, "%s r%d, r%d, r%d", opcode->name, (iword & 0x1f),
 	    (op2 >> 8) & 0x1f, op2 & 0x1f);
-	length = 4;
       }
-      break;
-    default:
-      abort();
+      length = 4;
     }
     break;
-  case 2:
-    opcode = find_opcode(2, (iword >> 5) & 0xff);
-    switch (opcode->itype) {
-    case BEXKAT1_F2_A_16V:
-      {
-	unsigned imm;
-	
-	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
-	  goto fail;
-	imm = bfd_getb16(buffer);
-	fpr(stream, "%s r%d, 0x%x", opcode->name, (iword & 0x1f), imm);
-	length = 4;
-      }
-      break;
-    case BEXKAT1_F2_RELADDR:
-      {
-	short imm;
-	
-	if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
-	  goto fail;
-	imm = bfd_getb16(buffer);
-	fpr(stream, "%s %d", opcode->name, imm);
-	length = 4;
-      }
-      break;
-    default:
-      abort();
+  case BEXKAT1_ADDR_DIR:
+    if (!strcmp("jmp", opcode->name) ||
+	!strcmp("jsr", opcode->name)) {
+      if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	goto fail;
+      addr = bfd_getb32(buffer);
+      fpr(stream, "%s 0x%08x", opcode->name, addr);
+      length = 6;
+    } else {
+      if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
+	goto fail;
+      imm32 = bfd_getb32(buffer);
+      fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f), imm32);
+      length = 6;
     }
     break;
-  case 3:
-    opcode = find_opcode(3, (iword >> 5) & 0xff);
-    length = 6;
-    switch (opcode->itype) {
-    case BEXKAT1_F3_ABSADDR:
-      {
-	unsigned int addr;
-
-	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
-	  goto fail;
-	addr = bfd_getb32(buffer);
-	fpr(stream, "%s 0x%08x", opcode->name, addr);
-      }
-      break;
-    case BEXKAT1_F3_A_ABSADDR:
-      {
-	unsigned int addr;
-	
-	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
-	  goto fail;
-	addr = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
-	    addr);
-      }
-      break;
-    case BEXKAT1_F3_A_32V:
-      {
-	unsigned int imm;
-	
-	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
-	  goto fail;
-	imm = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f), imm);
-      }
-      break;
-    default:
-      abort();
-    }
+  case BEXKAT1_ADDR_PCIND:
+    if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
+      goto fail;
+    imm = bfd_getb16(buffer);
+    fpr(stream, "%s %d", opcode->name, imm);
+    length = 4;
+    break;
+  default:
+    abort();
     break;
   }
 
