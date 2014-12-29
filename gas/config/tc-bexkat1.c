@@ -92,7 +92,7 @@ parse_regnum(char **ptr)
   char *s = *ptr;
   reg = s[1] - '0';
   if ((reg < 0) || (reg > 9)) {
-    as_bad(_("illegal register number 1"));
+    as_bad(_("illegal register number 1 %s"), s);
     ignore_rest_of_line();
     return -1;
   }
@@ -167,7 +167,7 @@ md_assemble(char *str)
   }
 
   // PCIND or DIR?
-  if (*op_end != 'r') {
+  if (*op_end != '%') {
     op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_PCIND);
     if (op_idx != -1) {
       opcode = &(bexkat1_opc_info[op_idx]);
@@ -251,7 +251,7 @@ md_assemble(char *str)
     op_end++;
 
   // See if we have a 2nd reg
-  if (*op_end == 'r') {
+  if (*op_end == '%') {
     where = frag_more(2);
     regnum = parse_regnum(&op_end);
     if (regnum == -1)
@@ -294,7 +294,7 @@ md_assemble(char *str)
       op_end++;
       
     // 3 reg opcode
-    if (*op_end == 'r') {
+    if (*op_end == '%') {
       op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REG);
       if (op_idx == -1) {
 	as_bad(_("unexpected args for %s"), op_start);
@@ -387,7 +387,7 @@ md_assemble(char *str)
     op_end++; // burn paren
     while (ISSPACE(*op_end))
       op_end++;
-    if (*op_end != 'r') {
+    if (*op_end != '%') {
       as_bad("expecting register");
       ignore_rest_of_line();
       return;
@@ -533,7 +533,6 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 {
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
   long val = *valP;
-  short sval;
 
   switch (fixP->fx_r_type) {
   case BFD_RELOC_BEXKAT_11:
@@ -554,7 +553,6 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	buf[1] = val >> 8;
 	buf[0] = val >> 0;
       }
-    buf += 2;
     break;
   case BFD_RELOC_32:
     if (target_big_endian) {
@@ -568,7 +566,6 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
       buf[1] = val >> 8;
       buf[0] = val >> 0;
     }
-    buf += 4;
     break;
   case BFD_RELOC_16_PCREL:
     if (!val)
@@ -576,9 +573,8 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     if (val < -32766 || val > 32767)
       as_bad_where(fixP->fx_file, fixP->fx_line,
 		   _("pcrel too far BFD_RELOC_16_PCREL"));
-    sval = val >> 1;
-    fprintf(stderr, "pcrel = %ld (%d)\n", val, sval);
-    md_number_to_chars(buf, sval, 2);
+    fprintf(stderr, "pcrel = %ld (%0lx)\n", val, val);
+    md_number_to_chars(buf, (short)val, 2);
     break;
   default:
     as_fatal (_("Line %d: unknown relocation type: 0x%x."),

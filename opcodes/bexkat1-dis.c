@@ -79,14 +79,14 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
       if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
 	goto fail;
       imm = bfd_getb16(buffer);
-      fpr(stream, "%s r%d, 0x%x", opcode->name, (iword & 0x1f), imm);
+      fpr(stream, "%s %%%d, 0x%x", opcode->name, (iword & 0x1f), imm);
       length = 4;
     } else {
       if (!strcmp("ldi",opcode->name)) {
 	if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	  goto fail;
 	imm32 = bfd_getb32(buffer);
-	fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s %%%d, 0x%08x", opcode->name, (iword & 0x1f),
 	    imm32);
 	length = 6;
       } else {
@@ -96,7 +96,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
 	if ((status = info->read_memory_func(memaddr+4, buffer, 2, info)))
 	  goto fail;
 	imm = bfd_getb16(buffer);
-	fpr(stream, "%s r%d, r%d, 0x%08x", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s %%%d, %%%d, 0x%08x", opcode->name, (iword & 0x1f),
 	    (op2 >> 8) & 0x1f, imm);
 	length = 6;
       }
@@ -106,14 +106,14 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
       goto fail;
     imm = bfd_getb16(buffer);
-    fpr(stream, "%s r%d, %d(r%d)", opcode->name, (iword & 0x1f),
+    fpr(stream, "%s %%%d, %d(%%%d)", opcode->name, (iword & 0x1f),
 	(short)(imm & 0x400 ? 0xf800 | (imm & 0x7ff) : imm & 0x7ff),
 	(imm >> 11) & 0x1f);
     length = 4;
     break;
   case BEXKAT1_ADDR_REG:
     if (opcode->size == 1) {
-      fpr(stream, "%s r%d", opcode->name, (iword & 0x1f));
+      fpr(stream, "%s %%%d", opcode->name, (iword & 0x1f));
       length = 2;
     } else {
       if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
@@ -121,10 +121,10 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
       op2 = bfd_getb16(buffer);
       if (!strcmp("mov", opcode->name) ||
 	  !strcmp("cmp", opcode->name)) {
-	fpr(stream, "%s r%d, r%d", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s %%%d, %%%d", opcode->name, (iword & 0x1f),
 	    (op2 >> 8) & 0x1f);
       } else {
-	fpr(stream, "%s r%d, r%d, r%d", opcode->name, (iword & 0x1f),
+	fpr(stream, "%s %%%d, %%%d, %%%d", opcode->name, (iword & 0x1f),
 	    (op2 >> 8) & 0x1f, op2 & 0x1f);
       }
       length = 4;
@@ -142,7 +142,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
       if ((status = info->read_memory_func(memaddr+2, buffer, 4, info)))
 	goto fail;
       imm32 = bfd_getb32(buffer);
-      fpr(stream, "%s r%d, 0x%08x", opcode->name, (iword & 0x1f), imm32);
+      fpr(stream, "%s %%%d, 0x%08x", opcode->name, (iword & 0x1f), imm32);
       length = 6;
     }
     break;
