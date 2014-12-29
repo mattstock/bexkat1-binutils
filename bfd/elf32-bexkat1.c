@@ -72,7 +72,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_DIR16",      /* name */
 	  FALSE,                  /* partial_inplace */
-	  0xffff,                 /* src_mask */
+	  0,                      /* src_mask */
 	  0xffff,                 /* dst_mask */
 	  FALSE),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_PCREL_16,     /* type */
@@ -85,7 +85,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_PCREL_16",   /* name */
 	  FALSE,                  /* partial_inplace */
-	  0xffff,                 /* src_mask */
+	  0,                      /* src_mask */
 	  0xffff,                 /* dst_mask */
 	  TRUE),                  /* pcrel_offset */
     HOWTO(R_BEXKAT1_32,           /* type */
@@ -98,7 +98,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  bfd_elf_generic_reloc,  /* special_function */
 	  "R_BEXKAT1_32",         /* name */
 	  FALSE,                  /* partial_inplace */
-	  0xffffffff,             /* src_mask */
+	  0,                      /* src_mask */
 	  0xffffffff,             /* dst_mask */
 	  FALSE)                  /* pcrel_offset */
   };
