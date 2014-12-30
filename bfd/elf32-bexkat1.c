@@ -33,6 +33,10 @@
 #define TARGET_BIG_SYM          bexkat1_elf32_vec
 #define TARGET_BIG_NAME		"elf32-bexkat1"
 
+static bfd_reloc_status_type
+bexkat1_reloc (bfd *, arelent *, asymbol *, void *,
+			asection *, bfd *, char **);
+
 static reloc_howto_type bexkat1_elf_howto_table[] =
   {
     /* No relocation */
@@ -95,7 +99,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_bitfield, /* complain_on_overflow */
-	  bfd_elf_generic_reloc,  /* special_function */
+	  bexkat1_reloc,          /* special_function */
 	  "R_BEXKAT1_32",         /* name */
 	  FALSE,                  /* partial_inplace */
 	  0,                      /* src_mask */
@@ -147,6 +151,23 @@ bexkat1_elf_reloc_name_lookup(bfd *abfd ATTRIBUTE_UNUSED,
       return &bexkat1_elf_howto_table[i];
 
   return NULL;
+}
+
+bfd_reloc_status_type
+bexkat1_reloc (bfd *abfd ATTRIBUTE_UNUSED,
+		       arelent *reloc_entry,
+		       asymbol *symbol,
+		       void *data ATTRIBUTE_UNUSED,
+		       asection *input_section ATTRIBUTE_UNUSED,
+		       bfd *output_bfd,
+		       char **error_message ATTRIBUTE_UNUSED)
+{
+    if (output_bfd != NULL
+      && (symbol->flags & BSF_SECTION_SYM) == 0
+      && (! reloc_entry->howto->partial_inplace
+	  || reloc_entry->addend == 0))
+      return bfd_reloc_ok;
+    return bfd_reloc_continue;
 }
 
 static void

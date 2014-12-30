@@ -573,7 +573,6 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     if (val < -32766 || val > 32767)
       as_bad_where(fixP->fx_file, fixP->fx_line,
 		   _("pcrel too far BFD_RELOC_16_PCREL"));
-    fprintf(stderr, "pcrel = %ld (%0lx)\n", val, val);
     md_number_to_chars(buf, (short)val, 2);
     break;
   default:
@@ -617,7 +616,7 @@ tc_gen_reloc(asection *section ATTRIBUTE_UNUSED, fixS *fixp)
   rel->address = fixp->fx_frag->fr_address + fixp->fx_where;
 
   r_type = fixp->fx_r_type;
-  rel->addend = fixp->fx_addnumber;
+  rel->addend = fixp->fx_offset; 
   rel->howto = bfd_reloc_type_lookup(stdoutput, r_type);
 
   if (rel->howto == NULL) {
@@ -627,6 +626,12 @@ tc_gen_reloc(asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     rel->howto = bfd_reloc_type_lookup(stdoutput, BFD_RELOC_32);
     gas_assert(rel->howto != NULL);
   }
+
+  /* Since we use Rel instead of Rela, encode the vtable entry to be
+     used in the relocation's section offset.  */
+  if (fixp->fx_r_type == BFD_RELOC_VTABLE_INHERIT
+      || fixp->fx_r_type == BFD_RELOC_VTABLE_ENTRY)
+    rel->address = fixp->fx_offset;
 
   return rel;
 }
