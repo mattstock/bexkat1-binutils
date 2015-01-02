@@ -49,7 +49,7 @@ find_opcode_full(const char *name, const unsigned int mode,
 {
   int i;
   for (i=0; i < bexkat1_opc_count; i++)
-    if (!strncmp(bexkat1_opc_info[i].name, name, strlen(name)) &&
+    if (!strcmp(bexkat1_opc_info[i].name, name) &&
 	bexkat1_opc_info[i].addr_mode == mode &&
 	bexkat1_opc_info[i].size == size)
       return i;
@@ -61,7 +61,7 @@ find_opcode_mode(const char *name, const unsigned int mode)
 {
   int i;
   for (i=0; i < bexkat1_opc_count; i++)
-    if (!strncmp(bexkat1_opc_info[i].name, name, strlen(name)) &&
+    if (!strcmp(bexkat1_opc_info[i].name, name) &&
 	bexkat1_opc_info[i].addr_mode == mode)
       return i;
   return -1;
