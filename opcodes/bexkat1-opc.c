@@ -45,6 +45,8 @@ const bexkat1_opc_info_t bexkat1_opc_info[] =
     { 0x16, 2, BEXKAT1_ADDR_IMM,    "lsr" },
     { 0x17, 2, BEXKAT1_ADDR_IMM,    "xor" }, 
     { 0x20, 3, BEXKAT1_ADDR_IMM,    "ldi" },
+    { 0x21, 2, BEXKAT1_ADDR_IMM,    "lds" },
+    { 0x22, 2, BEXKAT1_ADDR_IMM,    "ldu" },
     { 0x00, 2, BEXKAT1_ADDR_REG,    "and" },
     { 0x01, 2, BEXKAT1_ADDR_REG,    "or"  },
     { 0x02, 2, BEXKAT1_ADDR_REG,    "add" },
