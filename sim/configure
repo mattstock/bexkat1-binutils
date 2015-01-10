@@ -3647,8 +3647,10 @@ subdirs="$subdirs arm"
 
   sim_arch=bexkat1
   subdirs="$subdirs bexkat1"
-  sim_testsuite=yes
-	;;
+
+
+       sim_testsuite=yes
+       ;;
    bfin-*-*)
 
   sim_arch=bfin

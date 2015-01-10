@@ -1,0 +1,15 @@
+## COMMON_PRE_CONFIG_FRAG
+
+SIM_OBJS = interp.o
+
+SIM_EXTRA_LIBS = -lm
+SIM_EXTRA_CLEAN = bexkat1-clean
+SIM_EXTRA_INSTALL = install-dtb
+
+## COMMON_POST_CONFIG_FRAG
+
+all: interp.o
+
+interp.o: interp.c
+
+bexkat1-clean:
