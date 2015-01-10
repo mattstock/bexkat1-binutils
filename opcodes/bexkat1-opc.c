@@ -80,6 +80,7 @@ const bexkat1_opc_info_t bexkat1_opc_info[] =
     { 0x14, 1, BEXKAT1_ADDR_REG,    "dec" },
     { 0x15, 1, BEXKAT1_ADDR_REG,    "push" },
     { 0x16, 1, BEXKAT1_ADDR_REG,    "pop" },
+    { 0x17, 2, BEXKAT1_ADDR_REG,    "com" },
     { 0x20, 2, BEXKAT1_ADDR_PCIND,  "bra" },  
     { 0x21, 2, BEXKAT1_ADDR_PCIND,  "beq" },  
     { 0x22, 2, BEXKAT1_ADDR_PCIND,  "bne" },  

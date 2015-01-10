@@ -121,6 +121,7 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
       op2 = bfd_getb16(buffer);
       if (!strcmp("mov", opcode->name) ||
 	  !strcmp("cmp", opcode->name) ||
+	  !strcmp("com", opcode->name) ||
 	  !strcmp("neg", opcode->name)) {
 	fpr(stream, "%s %%%d, %%%d", opcode->name, (iword & 0x1f),
 	    (op2 >> 8) & 0x1f);
