@@ -721,7 +721,7 @@ case "${target}" in
     noconfigdirs="$noconfigdirs target-boehm-gc"
     ;;
   bexkat1-*-*)
-    noconfigdirs="$noconfigdirs ${libgcj} gdb sim"
+    noconfigdirs="$noconfigdirs ${libgcj} gdb"
     noconfigdirs="$noconfigdirs gprof"
     ;;
   cris-*-* | crisv32-*-*)

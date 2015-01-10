@@ -636,6 +636,7 @@ LIBS
 CPPFLAGS'
 ac_subdirs_all='arm
 avr
+bexkat1
 bfin
 cr16
 cris
@@ -3642,6 +3643,12 @@ subdirs="$subdirs arm"
 
 
        ;;
+   bexkat1-*-*)
+
+  sim_arch=bexkat1
+  subdirs="$subdirs bexkat1"
+  sim_testsuite=yes
+	;;
    bfin-*-*)
 
   sim_arch=bfin

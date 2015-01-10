@@ -23,6 +23,10 @@ case "${target}" in
    avr*-*-*)
        SIM_ARCH(avr)
        ;;
+   bexkat1-*-*)
+       SIM_ARCH(bexkat1)
+       sim_testsuite=yes
+       ;;
    bfin-*-*)
        SIM_ARCH(bfin)
        sim_testsuite=yes
