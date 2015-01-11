@@ -166,7 +166,7 @@ md_assemble(char *str)
     return;
   }
 
-  // PCIND or DIR?
+  // PCIND, DIR, or REGIND version of jmp/jsr?
   if (*op_end != '%') {
     op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_PCIND);
     if (op_idx != -1) {
@@ -190,30 +190,70 @@ md_assemble(char *str)
       return;
     }
 
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_DIR);
-    if (op_idx != -1) {
-      opcode = &(bexkat1_opc_info[op_idx]);
-      iword = (BEXKAT1_ADDR_DIR << 13) | (opcode->opcode << 5);      
-      md_number_to_chars(p, iword, 2);
-      op_end = parse_exp_save_ilp(op_end, &arg);
-      where = frag_more(4);
-      fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
-		  4,
-		  &arg,
-		  0,
-		  BFD_RELOC_32);
-      while (ISSPACE(*op_end))
-	op_end++;
-      if (*op_end != 0)
-	as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-      if (pending_reloc)
-	as_bad("Something forgot to clean up\n");
-      return;
-    } else {
-      as_bad(_("unexpected args or invalid opcode %s"), op_start);
-      return;
+    // Need to determine if this is REGIND or DIR
+    op_end = parse_exp_save_ilp(op_end, &arg);
+    while (ISSPACE(*op_end))
+      op_end++;
+    if (*op_end == 0) { // DIR
+      op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_DIR);
+      if (op_idx != -1) {
+        opcode = &(bexkat1_opc_info[op_idx]);
+        iword = (BEXKAT1_ADDR_DIR << 13) | (opcode->opcode << 5);      
+        md_number_to_chars(p, iword, 2);
+        where = frag_more(4);
+        fix_new_exp(frag_now,
+                    (where - frag_now->fr_literal),
+		      4,
+		      &arg,
+		      0,
+		      BFD_RELOC_32);
+      } else {
+        as_bad(_("unexpected args or invalid opcode %s"), op_name);
+        return;
+      }
     }
+    if (*op_end == '(') { // REGIND
+      op_end++; // burn paren
+      while (ISSPACE(*op_end))
+        op_end++;
+      if (*op_end != '%') {
+        as_bad("expecting register");
+        ignore_rest_of_line();
+        return;
+      }
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+        return;
+      if (*op_end != ')') {
+        as_bad(_("missing close paren"));
+        ignore_rest_of_line();
+        return;
+      }
+      op_end++;
+      op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REGIND);
+      if (op_idx != -1) {
+        opcode = &(bexkat1_opc_info[op_idx]);
+        iword = (BEXKAT1_ADDR_REGIND << 13) | (opcode->opcode << 5);      
+        md_number_to_chars(p, iword, 2);
+        iword2 = (regnum << 11);
+        where = frag_more(2);
+        fix_new_exp(frag_now,
+	      (where - frag_now->fr_literal),
+	      2,
+	      &arg,
+	      0,
+	      BFD_RELOC_BEXKAT_11);
+        md_number_to_chars(where, iword2, 2);
+      } else {
+        as_bad(_("unexpected args or invalid opcode %s"), op_name);
+        return;
+      }
+    }
+    if (*op_end != 0)
+      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
+    if (pending_reloc)
+      as_bad("Something forgot to clean up\n");
+    return;
   }
 
   // We have a register as the first arg

@@ -106,9 +106,16 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     if ((status = info->read_memory_func(memaddr+2, buffer, 2, info)))
       goto fail;
     imm = bfd_getb16(buffer);
-    fpr(stream, "%s %%%d, %d(%%%d)", opcode->name, (iword & 0x1f),
-	(short)(imm & 0x400 ? 0xf800 | (imm & 0x7ff) : imm & 0x7ff),
-	(imm >> 11) & 0x1f);
+    if (!strcmp("jsr", opcode->name) ||
+        !strcmp("jmp", opcode->name)) {
+      fpr(stream, "%s %d(%%%d)", opcode->name,
+  	  (short)(imm & 0x400 ? 0xf800 | (imm & 0x7ff) : imm & 0x7ff),
+	  (imm >> 11) & 0x1f);
+    } else {
+      fpr(stream, "%s %%%d, %d(%%%d)", opcode->name, (iword & 0x1f),
+  	  (short)(imm & 0x400 ? 0xf800 | (imm & 0x7ff) : imm & 0x7ff),
+	  (imm >> 11) & 0x1f);
+    }
     length = 4;
     break;
   case BEXKAT1_ADDR_REG:

@@ -99,6 +99,8 @@ const bexkat1_opc_info_t bexkat1_opc_info[] =
     { 0x31, 2, BEXKAT1_ADDR_REGIND, "ld" },
     { 0x40, 2, BEXKAT1_ADDR_REGIND, "st.b" },
     { 0x41, 2, BEXKAT1_ADDR_REGIND, "ld.b" },
+    { 0x50, 2, BEXKAT1_ADDR_REGIND, "jmp" },
+    { 0x51, 2, BEXKAT1_ADDR_REGIND, "jsr" },
     { 0x20, 3, BEXKAT1_ADDR_DIR,    "st.l" },
     { 0x21, 3, BEXKAT1_ADDR_DIR,    "ld.l" }, 
     { 0x30, 3, BEXKAT1_ADDR_DIR,    "st" }, 
