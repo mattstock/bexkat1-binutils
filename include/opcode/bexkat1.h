@@ -24,44 +24,31 @@
 
 #include <stdint.h>
 
-#define BEXKAT1_ADDR_INH    0
-#define BEXKAT1_ADDR_IMM    1
-#define BEXKAT1_ADDR_REGIND 2
-#define BEXKAT1_ADDR_REG    3
-#define BEXKAT1_ADDR_DIR    4
-#define BEXKAT1_ADDR_PCIND  5
+#define BEXKAT1_INH2   0
+#define BEXKAT1_IMM3   1
+#define BEXKAT1_REGIND 2
+#define BEXKAT1_REG    3
+#define BEXKAT1_INH    4
+#define BEXKAT1_IMM2   5
+#define BEXKAT1_DIR    6
+#define BEXKAT1_IMM3a  7
 
 /*
- * Examples of different addressing modes and syntax:
- * + Inherent (1 word):         nop
- * Register direct (1 word):  inc  r5
- * + Register direct (2 words): mov  r3,  r5
- * + Register direct (2 words): add  r3,  r5, r18
- * + Register index (2 words):  st.l r3,  -4(r13)
- * + PC index (2 words):        bra  0xff30
- * Immediate (2 words):       add  r3,  0xabcd
- * + Immediate (3 words):       add  r3,  r4, 0xabcd
- * + Immediate (3 words):       ldi  r45, 0xabcd0123
-
- * +Direct (3 words):          jmp  0xabcd1945
- * + Direct (3 words):          st.l r3,  0xabcd1234
- *
- * Format of opcode words:
- * word 1: aaaoooooooorrrrr (addr mode[15:13], opcode[12:5], regA[4:0])
- * word 2: 000bbbbb000ccccc (regB[12:8], regC[4:0]) register direct
- * word 2: vvvvvvvvvvvvvvvv (value[15:0]) 2 word immediate, PC index
- * word 2: hhhhhhhhhhhhhhhh (high word[15:0]) 3 word immediate, direct
- * word 2: bbbbbvvvvvvvvvvv (regB[15:11], index[10:0] register index
- * word 3: llllllllllllllll (low word[15:0]) 3 word immediate, direct 
+ * INH2:   000ooobbbbbaaaaa ooooo00000000000
+ * IMM3:   001ooobbbbbaaaaa ooooo00000000000 vvvvvvvvvvvvvvvv
+ * REGIND: 010ooobbbbbaaaaa ooooovvvvvvvvvvv
+ * REG:    011ooobbbbbaaaaa ooooo000000ccccc
+ * INH:    100ooobbbbbaaaaa
+ * IMM2:   101ooooooooaaaaa vvvvvvvvvvvvvvvv
+ * DIR:    110ooooooooaaaaa hhhhhhhhhhhhhhhh llllllllllllllll
+ * IMM3a:  111ooooooooaaaaa hhhhhhhhhhhhhhhh llllllllllllllll
  */
-
-
 
 typedef struct bexkat1_opcode
 {
   uint8_t opcode;
-  unsigned int size;
-  unsigned int addr_mode;
+  unsigned int args;
+  unsigned int mode;
   const char *name;
 } bexkat1_opc_info_t;
 

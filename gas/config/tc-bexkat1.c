@@ -24,14 +24,15 @@
 #include "subsegs.h"
 #include "opcode/bexkat1.h"
 
-const char comment_chars[] = ";!";
-const char line_comment_chars[] = "#*";
-const char line_separator_chars[] = "";
+const char comment_chars[] = "#";
+const char line_comment_chars[] = "#";
+const char line_separator_chars[] = ";";
 
 const char EXP_CHARS[] = "eE";
 const char FLT_CHARS[] = "rRsSfFdDxXpP";
 
 static int pending_reloc;
+static struct hash_control *opcode_hash_control;
 
 const pseudo_typeS md_pseudo_table[] =
   {
@@ -43,34 +44,19 @@ md_operand (expressionS *op __attribute__((unused)))
 {
 }
 
-static int
-find_opcode_full(const char *name, const unsigned int mode, 
-		 const unsigned int size)
-{
-  int i;
-  for (i=0; i < bexkat1_opc_count; i++)
-    if (!strcmp(bexkat1_opc_info[i].name, name) &&
-	bexkat1_opc_info[i].addr_mode == mode &&
-	bexkat1_opc_info[i].size == size)
-      return i;
-  return -1;
-}
-
-static int
-find_opcode_mode(const char *name, const unsigned int mode)
-{
-  int i;
-  for (i=0; i < bexkat1_opc_count; i++)
-    if (!strcmp(bexkat1_opc_info[i].name, name) &&
-	bexkat1_opc_info[i].addr_mode == mode)
-      return i;
-  return -1;
-}
-
 void
 md_begin (void)
 {
   bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
+  int count;
+  const bexkat1_opc_info_t *opcode;
+  opcode_hash_control = hash_new();
+
+  opcode = bexkat1_opc_info;
+  for (count=0; count < bexkat1_opc_count; count++) {
+    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
+    opcode++;
+  }
 }
 
 static char *
@@ -90,6 +76,12 @@ parse_regnum(char **ptr)
 {
   int reg;
   char *s = *ptr;
+
+  if (s[0] != '%') {
+    as_bad(_("not a register: %s"), s);
+    return -1;
+  }
+
   reg = s[1] - '0';
   if ((reg < 0) || (reg > 9)) {
     as_bad(_("illegal register number 1 %s"), s);
@@ -121,7 +113,6 @@ md_assemble(char *str)
   char *op_start;
   char *op_end;
   char op_name[10];
-  int op_idx;
   const bexkat1_opc_info_t *opcode;
   char *p, *where;
   char pend;
@@ -150,306 +141,183 @@ md_assemble(char *str)
   
   while (ISSPACE(*op_end))
     op_end++;
-
-  p = frag_more(2);  
-
-  // INH addressing mode opcodes
-  if (*op_end == 0) { // it must be INH
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_INH);
-    if (op_idx == -1) {
-      as_bad(_("unexpected args or invalid opcode %s"), op_start);
-      return;
-    }
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword = (BEXKAT1_ADDR_INH << 13) | opcode->opcode << 5;
-    md_number_to_chars(p, iword, 2);
+  
+  opcode = (bexkat1_opc_info_t *) hash_find(opcode_hash_control, op_name);
+  if (opcode == NULL) {
+    as_bad(_("unknown opcode %s"), op_name);
     return;
   }
 
-  // PCIND, DIR, or REGIND version of jmp/jsr?
-  if (*op_end != '%') {
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_PCIND);
-    if (op_idx != -1) {
-      opcode = &(bexkat1_opc_info[op_idx]);
-      iword = (BEXKAT1_ADDR_PCIND << 13) | (opcode->opcode << 5);
-      md_number_to_chars(p, iword, 2);
-      where = frag_more(2);
-      op_end = parse_exp_save_ilp(op_end, &arg);
+
+  switch (opcode->mode) {
+  case BEXKAT1_INH:
+    iword = (BEXKAT1_INH << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+    if (opcode->args > 0) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      iword |= (regnum & 0x1f);
+    }
+    if (opcode->args > 1) {
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
+      op_end++;
+      while (ISSPACE(*op_end))
+	op_end++;
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return;
+      iword |= ((regnum & 0x1f) << 5);
+    }
+    p = frag_more(2);  
+    md_number_to_chars(p, iword, 2);
+    break;
+  case BEXKAT1_INH2:
+    iword = (BEXKAT1_INH2 << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+    iword2 = (opcode->opcode & 0x1f) << 11;
+    if (opcode->args > 0) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
+      op_end++;
+      while (ISSPACE(*op_end))
+	op_end++;
+      iword |= (regnum & 0x1f);
+    }
+    if (opcode->args > 1) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      iword |= ((regnum & 0x1f) << 5);
+    }
+    p = frag_more(2);
+    md_number_to_chars(p, iword, 2);
+    p = frag_more(2);
+    md_number_to_chars(p, iword2, 2);
+    break;
+  case BEXKAT1_IMM2:
+    iword = (BEXKAT1_IMM2 << 13) | (opcode->opcode << 5);
+    if (opcode->args == 2) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
+      op_end++;
+      while (ISSPACE(*op_end))
+	op_end++;
+      iword |= (regnum & 0x1f);
+    }
+    p = frag_more(2);
+    md_number_to_chars(p, iword, 2);
+    where = frag_more(2);
+    op_end = parse_exp_save_ilp(op_end, &arg);
+    if (opcode->opcode & 0x10) // a non-PC relative reloc
+      fix_new_exp(frag_now,
+		  (where - frag_now->fr_literal),
+		  2,
+		  &arg,
+		  0,
+		  BFD_RELOC_16);
+    else
       fix_new_exp(frag_now,
 		  (where - frag_now->fr_literal),
 		  2,
 		  &arg,
 		  TRUE,
 		  BFD_RELOC_16_PCREL);
-      while (ISSPACE(*op_end))
-	op_end++;
-      if (*op_end != 0)
-	as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-      if (pending_reloc)
-	as_bad("Something forgot to clean up\n");
-      return;
-    }
-
-    // Need to determine if this is REGIND or DIR
-    op_end = parse_exp_save_ilp(op_end, &arg);
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end == 0) { // DIR
-      op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_DIR);
-      if (op_idx != -1) {
-        opcode = &(bexkat1_opc_info[op_idx]);
-        iword = (BEXKAT1_ADDR_DIR << 13) | (opcode->opcode << 5);      
-        md_number_to_chars(p, iword, 2);
-        where = frag_more(4);
-        fix_new_exp(frag_now,
-                    (where - frag_now->fr_literal),
-		      4,
-		      &arg,
-		      0,
-		      BFD_RELOC_32);
-      } else {
-        as_bad(_("unexpected args or invalid opcode %s"), op_name);
-        return;
-      }
-    }
-    if (*op_end == '(') { // REGIND
-      op_end++; // burn paren
-      while (ISSPACE(*op_end))
-        op_end++;
-      if (*op_end != '%') {
-        as_bad("expecting register");
-        ignore_rest_of_line();
-        return;
-      }
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-        return;
-      if (*op_end != ')') {
-        as_bad(_("missing close paren"));
-        ignore_rest_of_line();
-        return;
-      }
-      op_end++;
-      op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REGIND);
-      if (op_idx != -1) {
-        opcode = &(bexkat1_opc_info[op_idx]);
-        iword = (BEXKAT1_ADDR_REGIND << 13) | (opcode->opcode << 5);      
-        md_number_to_chars(p, iword, 2);
-        iword2 = (regnum << 11);
-        where = frag_more(2);
-        fix_new_exp(frag_now,
-	      (where - frag_now->fr_literal),
-	      2,
-	      &arg,
-	      0,
-	      BFD_RELOC_BEXKAT_11);
-        md_number_to_chars(where, iword2, 2);
-      } else {
-        as_bad(_("unexpected args or invalid opcode %s"), op_name);
-        return;
-      }
-    }
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;
-  }
-
-  // We have a register as the first arg
-  regnum = parse_regnum(&op_end);
-  if (regnum == -1)
-    return;
-  iword = regnum;
-
-  while (ISSPACE(*op_end))
-    op_end++;
-
-  // See if this is REG
-  if (*op_end != ',') {
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REG);
-    if (op_idx == -1) {
-      as_bad(_("unexpected args for %s"), op_start);
-      ignore_rest_of_line();
-      return;
-    }
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_REG << 13) | (opcode->opcode << 5);
-    md_number_to_chars(p, iword, 2);
-
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;
-  }
-
-  op_end++; // burn comma
-  while (ISSPACE (*op_end))
-    op_end++;
-
-  // See if we have a 2nd reg
-  if (*op_end == '%') {
-    where = frag_more(2);
+    break;
+  case BEXKAT1_REG:
+    iword = (BEXKAT1_REG << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+    iword2 = (opcode->opcode & 0x1f) << 11;
     regnum = parse_regnum(&op_end);
     if (regnum == -1)
-      return;
-    iword2 = (regnum << 8);
-
+      return; 
     while (ISSPACE(*op_end))
       op_end++;
-
-    if (*op_end == 0) { // two reg varient
-      op_idx = find_opcode_full(op_name, BEXKAT1_ADDR_REG, 2);
-      if (op_idx == -1) {
-	as_bad(_("unexpected args for %s"), op_start);
-	ignore_rest_of_line();
-	return;
-      }
-      opcode = &(bexkat1_opc_info[op_idx]);
-      iword |= (BEXKAT1_ADDR_REG << 13) | (opcode->opcode << 5);
-      md_number_to_chars(p, iword, 2);
-      md_number_to_chars(where, iword2, 2);
-      
-      while (ISSPACE(*op_end))
-	op_end++;
-      if (*op_end != 0)
-	as_warn(_("extra stuff on line ignored %s %c\n"), op_start, *op_end);
-      if (pending_reloc)
-	as_bad("Something forgot to clean up\n");
-      return;
-    }
-
     if (*op_end != ',') {
-      as_bad(_("expecting comma after %s"), op_start);
-      ignore_rest_of_line();
+      as_bad(_("missing comma: %s"), op_end);
       return;
     }
-
-    // three args, either REG or IMM
     op_end++;
     while (ISSPACE(*op_end))
       op_end++;
-      
-    // 3 reg opcode
-    if (*op_end == '%') {
-      op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REG);
-      if (op_idx == -1) {
-	as_bad(_("unexpected args for %s"), op_start);
-	ignore_rest_of_line();
-	return;
-      }
-      opcode = &(bexkat1_opc_info[op_idx]);
-      iword |= (BEXKAT1_ADDR_REG << 13) | (opcode->opcode << 5);
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return;
-      iword2 |= regnum;
-      md_number_to_chars(p, iword, 2);
-      md_number_to_chars(where, iword2, 2);
-      
-      while (ISSPACE(*op_end))
-	op_end++;
-      if (*op_end != 0)
-	as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-      if (pending_reloc)
-	as_bad("Something forgot to clean up\n");
+    iword |= (regnum & 0x1f);
+    regnum = parse_regnum(&op_end);
+    if (regnum == -1)
+      return; 
+    while (ISSPACE(*op_end))
+      op_end++;
+    if (*op_end != ',') {
+      as_bad(_("missing comma: %s"), op_end);
       return;
     }
-
-    // 3 word IMM
-    op_idx = find_opcode_full(op_name, BEXKAT1_ADDR_IMM, 3);
-    if (op_idx == -1) {
-      as_bad(_("unexpected args for %s"), op_start);
+    op_end++;
+    while (ISSPACE(*op_end))
+      op_end++;
+    iword |= ((regnum & 0x1f) << 5);
+    regnum = parse_regnum(&op_end);
+    if (regnum == -1)
+      return; 
+    iword2 |= (regnum & 0x1f);
+    p = frag_more(2);
+    md_number_to_chars(p, iword, 2);
+    p = frag_more(2);
+    md_number_to_chars(p, iword2, 2);
+    break;
+  case BEXKAT1_REGIND:
+    iword = (BEXKAT1_REGIND << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+    iword2 = (opcode->opcode & 0x1f) << 11;
+    if (opcode->args == 3) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
+      op_end++;
+      while (ISSPACE(*op_end))
+	op_end++;
+      iword |= (regnum & 0x1f);
+    }
+    op_end = parse_exp_save_ilp(op_end, &arg);
+    if (*op_end != '(') {
+      as_bad(_("missing open paren: %s"), op_end);
       ignore_rest_of_line();
       return;
     }
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_IMM << 13) | (opcode->opcode << 5);
-    md_number_to_chars(p, iword, 2);
-    md_number_to_chars(where, iword2, 2);
-
-    op_end = parse_exp_save_ilp(op_end, &arg);
-    where = frag_more(2);
-    fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
-		2,
-		&arg,
-		0,
-		BFD_RELOC_16);
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;  
-  }
-
-  // 2nd arg is non-register
-  
-  // Things get interesting here, since there are some ambiguities in
-  // the ISA here.  For example, there are two add IMM opcodes, depending on
-  // the size of the constant.
-
-  // parse expression
-  // handle ldi as a special case
-  // check for paren
-  // check for IMM vs DIR
-  op_end = parse_exp_save_ilp(op_end, &arg);
-  if (!strcmp("ldi", op_name)) {
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_IMM);
-    if (op_idx == -1) {
-      as_bad(_("unexpected args or invalid opcode %s"), op_start);
-      return;
-    }
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_IMM << 13) | (opcode->opcode << 5);
-    md_number_to_chars(p, iword, 2);
-    where = frag_more(4);
-    fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
-		4,
-		&arg,
-		0,
-		BFD_RELOC_32);
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;  
-  }
-  if (*op_end == '(') { // REGIND
     op_end++; // burn paren
     while (ISSPACE(*op_end))
       op_end++;
-    if (*op_end != '%') {
-      as_bad("expecting register");
-      ignore_rest_of_line();
-      return;
-    }
     regnum = parse_regnum(&op_end);
     if (regnum == -1)
       return;
     if (*op_end != ')') {
-      as_bad(_("missing close paren"));
+      as_bad(_("missing close paren: %s"), op_end);
       ignore_rest_of_line();
       return;
     }
     op_end++;
-    op_idx = find_opcode_mode(op_name, BEXKAT1_ADDR_REGIND);
-    if (op_idx == -1) {
-      as_bad(_("unexpected args or invalid opcode %s"), op_start);
-      return;
-    }
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_REGIND << 13) | (opcode->opcode << 5);
+    iword |= ((regnum & 0x1f) << 5);
+    p = frag_more(2);
     md_number_to_chars(p, iword, 2);
-    iword2 = (regnum << 11);
     where = frag_more(2);
     fix_new_exp(frag_now,
 		(where - frag_now->fr_literal),
@@ -458,41 +326,67 @@ md_assemble(char *str)
 		0,
 		BFD_RELOC_BEXKAT_11);
     md_number_to_chars(where, iword2, 2);
+    break;
+  case BEXKAT1_IMM3:
+    iword = (BEXKAT1_IMM3 << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+    iword2 = (opcode->opcode & 0x1f) << 11;
+    regnum = parse_regnum(&op_end);
+    if (regnum == -1)
+      return; 
     while (ISSPACE(*op_end))
       op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;  
-  }
-
-  op_idx = find_opcode_full(op_name, BEXKAT1_ADDR_IMM, 2);
-  if (op_idx != -1) {
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_IMM << 13) | (opcode->opcode << 5);
+    if (*op_end != ',') {
+      as_bad(_("missing comma: %s"), op_end);
+      return;
+    }
+    op_end++;
+    while (ISSPACE(*op_end))
+      op_end++;
+    iword |= (regnum & 0x1f);
+    regnum = parse_regnum(&op_end);
+    if (regnum == -1)
+      return; 
+    while (ISSPACE(*op_end))
+      op_end++;
+    if (*op_end != ',') {
+      as_bad(_("missing comma: %s"), op_end);
+      return;
+    }
+    op_end++;
+    while (ISSPACE(*op_end))
+      op_end++;
+    iword |= ((regnum & 0x1f) << 5);
+    p = frag_more(2);
     md_number_to_chars(p, iword, 2);
+    p = frag_more(2);
+    md_number_to_chars(p, iword2, 2);
     where = frag_more(2);
+    op_end = parse_exp_save_ilp(op_end, &arg);
     fix_new_exp(frag_now,
 		(where - frag_now->fr_literal),
 		2,
 		&arg,
 		0,
 		BFD_RELOC_16);
+    break;
+  case BEXKAT1_IMM3a:
+    iword = (BEXKAT1_IMM3a << 13) | (opcode->opcode << 5);
+    regnum = parse_regnum(&op_end);
+    if (regnum == -1)
+      return; 
     while (ISSPACE(*op_end))
       op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;  
-  }
-
-  op_idx = find_opcode_full(op_name, BEXKAT1_ADDR_DIR, 3);
-  if (op_idx != -1) {
-    opcode = &(bexkat1_opc_info[op_idx]);
-    iword |= (BEXKAT1_ADDR_DIR << 13) | (opcode->opcode << 5);
+    if (*op_end != ',') {
+      as_bad(_("missing comma: %s"), op_end);
+      return;
+    }
+    op_end++;
+    while (ISSPACE(*op_end))
+      op_end++;
+    iword |= (regnum & 0x1f);
+    p = frag_more(2);
     md_number_to_chars(p, iword, 2);
+    op_end = parse_exp_save_ilp(op_end, &arg);
     where = frag_more(4);
     fix_new_exp(frag_now,
 		(where - frag_now->fr_literal),
@@ -500,16 +394,41 @@ md_assemble(char *str)
 		&arg,
 		0,
 		BFD_RELOC_32);
-    while (ISSPACE(*op_end))
+    break;
+  case BEXKAT1_DIR:
+    iword = (BEXKAT1_DIR << 13) | (opcode->opcode << 5);
+    if (opcode->args > 1) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
       op_end++;
-    if (*op_end != 0)
-      as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
-    if (pending_reloc)
-      as_bad("Something forgot to clean up\n");
-    return;  
+      iword |= (regnum & 0x1f);
+    }
+    p = frag_more(2);
+    md_number_to_chars(p, iword, 2);
+    op_end = parse_exp_save_ilp(op_end, &arg);
+    where = frag_more(4);
+    fix_new_exp(frag_now,
+		(where - frag_now->fr_literal),
+		4,
+		&arg,
+		0,
+		BFD_RELOC_32);
+    break;
   }
 
-  as_bad("failed to parse line");
+  while (ISSPACE(*op_end))
+    op_end++;
+  if (*op_end != 0)
+    as_warn("extra stuff on line ignored %s %c", op_start, *op_end);
+  if (pending_reloc)
+    as_bad("Something forgot to clean up\n");
   return;
 }
 
