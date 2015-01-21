@@ -77,20 +77,28 @@ parse_regnum(char **ptr)
   int reg;
   char *s = *ptr;
 
-  if (s[0] != '%') {
+  if (*s != '%') {
     as_bad(_("not a register: %s"), s);
     return -1;
   }
+  s++;
 
-  reg = s[1] - '0';
+  // optional f to mark a floating point register
+  if (*s == 'f') {
+    s++;
+    *ptr += 1;
+  }
+
+  reg = *s - '0';
   if ((reg < 0) || (reg > 9)) {
     as_bad(_("illegal register number 1 %s"), s);
     ignore_rest_of_line();
     return -1;
   }
+  s++;
 
   if ((reg > 0) || (reg < 4)) {
-    int r2 = s[2] - '0';
+    int r2 = *s - '0';
     if ((r2 >= 0) && (r2 <= 9)) {
       reg = reg*10 + r2;
       if (reg > 31) {
