@@ -119,6 +119,7 @@ const bexkat1_opc_info_t bexkat1_opc_info[] =
     { 0x07, 3, BEXKAT1_REGIND,  "ld.s" },
     { 0x08, 3, BEXKAT1_REGIND,  "st.d" },
     { 0x09, 3, BEXKAT1_REGIND,  "ld.d" },
+    { 0x0a, 3, BEXKAT1_REGIND,  "lda" },
     { 0xa0, 2, BEXKAT1_REGIND,  "jmp" },
     { 0xa1, 2, BEXKAT1_REGIND,  "jsr" }
   };
