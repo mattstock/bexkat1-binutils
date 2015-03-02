@@ -127,7 +127,7 @@ The MRI compiler uses this, which is a repeat of type 5:
 
 /* The number of bytes we put on one line during output.  */
 
-#define CHUNK 2
+#define CHUNK 4
 
 /* Macros for converting between hex and binary.  */
 

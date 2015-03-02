@@ -24,24 +24,16 @@
 
 #include <stdint.h>
 
-#define BEXKAT1_INH2   0
-#define BEXKAT1_IMM3   1
-#define BEXKAT1_REGIND 2
-#define BEXKAT1_REG    3
-#define BEXKAT1_INH    4
-#define BEXKAT1_IMM2   5
-#define BEXKAT1_DIR    6
-#define BEXKAT1_IMM3a  7
+#define BEXKAT1_REG    0
+#define BEXKAT1_REGIND 1
+#define BEXKAT1_IMM    2
+#define BEXKAT1_DIR    4
 
 /*
- * INH2:   000ooobbbbbaaaaa ooooo00000000000
- * IMM3:   001ooobbbbbaaaaa ooooo00000000000 vvvvvvvvvvvvvvvv
- * REGIND: 010ooobbbbbaaaaa ooooovvvvvvvvvvv
- * REG:    011ooobbbbbaaaaa ooooo000000ccccc
- * INH:    100ooobbbbbaaaaa
- * IMM2:   101ooooooooaaaaa vvvvvvvvvvvvvvvv
- * DIR:    110ooooooooaaaaa hhhhhhhhhhhhhhhh llllllllllllllll
- * IMM3a:  111ooooooooaaaaa hhhhhhhhhhhhhhhh llllllllllllllll
+ * REG:    000ooooooooaaaaa bbbbbccccc000000
+ * REGIND: 001ooooooooaaaaa bbbbbvvvvvvvvvvv
+ * IMM:    010ooooooooaaaaa vvvvvvvvvvvvvvvv
+ * DIR:    100ooooooooaaaaa bbbbbccccc000000 vvvvvvvvvvvvvvvv vvvvvvvvvvvvvvvv
  */
 
 typedef struct bexkat1_opcode

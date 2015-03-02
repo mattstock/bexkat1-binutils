@@ -24,14 +24,14 @@
 
 const bfd_arch_info_type bfd_bexkat1_arch =
 {
-    16,	/* 16 bits in a word */
+    32,	/* 16 bits in a word */
     32,	/* 32 bits in an address */
     8,	/* 8 bits in a byte */
     bfd_arch_bexkat1,
     bfd_mach_bexkat1,
     "bexkat1",
     "bexkat1",
-    2, /* section alignment power */
+    4, /* section alignment power */
     TRUE,
     bfd_default_compatible,
     bfd_default_scan,

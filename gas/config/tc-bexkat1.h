@@ -1,8 +1,10 @@
 #define TC_BEXKAT1 1
+#ifndef TARGET_BYTES_BIG_ENDIAN
 #define TARGET_BYTES_BIG_ENDIAN 1
+#endif
 #define WORKING_DOT_WORD
 
-#define TARGET_FORMAT "elf32-bexkat1"
+#define TARGET_FORMAT (target_big_endian ? "elf32-bexkat1-be" : "elf32-bexkat1-le")
 
 #define TARGET_ARCH bfd_arch_bexkat1
 

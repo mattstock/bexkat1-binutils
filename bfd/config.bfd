@@ -367,7 +367,8 @@ case "${targ}" in
     ;;
 
   bexkat1-*-*)
-    targ_defvec=bexkat1_elf32_vec
+    targ_defvec=bexkat1_elf32_be_vec
+    targ_selvecs=bexkat1_elf32_le_vec
     ;;
   c30-*-*aout* | tic30-*-*aout*)
     targ_defvec=tic30_aout_vec

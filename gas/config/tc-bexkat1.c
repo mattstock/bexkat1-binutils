@@ -34,6 +34,8 @@ const char FLT_CHARS[] = "rRsSfFdDxXpP";
 static int pending_reloc;
 static struct hash_control *opcode_hash_control;
 
+extern int target_big_endian;
+
 const pseudo_typeS md_pseudo_table[] =
   {
     { 0, 0, 0}
@@ -47,10 +49,11 @@ md_operand (expressionS *op __attribute__((unused)))
 void
 md_begin (void)
 {
-  bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
   int count;
   const bexkat1_opc_info_t *opcode;
   opcode_hash_control = hash_new();
+
+  bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
 
   opcode = bexkat1_opc_info;
   for (count=0; count < bexkat1_opc_count; count++) {
@@ -122,9 +125,9 @@ md_assemble(char *str)
   char *op_end;
   char op_name[10];
   const bexkat1_opc_info_t *opcode;
-  char *p, *where;
+  char *p;
   char pend;
-  unsigned short iword, iword2;
+  unsigned int iword;
   int nlen = 0;
   expressionS arg;
   int regnum;
@@ -156,17 +159,16 @@ md_assemble(char *str)
     return;
   }
 
-
   switch (opcode->mode) {
-  case BEXKAT1_INH:
-    iword = (BEXKAT1_INH << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
+  case BEXKAT1_REG:
+    iword = (BEXKAT1_REG << 29) | (opcode->opcode << 21);
     if (opcode->args > 0) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
 	return; 
       while (ISSPACE(*op_end))
 	op_end++;
-      iword |= (regnum & 0x1f);
+      iword |= (regnum & 0x1f) << 16;
     }
     if (opcode->args > 1) {
       if (*op_end != ',') {
@@ -179,20 +181,9 @@ md_assemble(char *str)
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
 	return;
-      iword |= ((regnum & 0x1f) << 5);
+      iword |= ((regnum & 0x1f) << 11);
     }
-    p = frag_more(2);  
-    md_number_to_chars(p, iword, 2);
-    break;
-  case BEXKAT1_INH2:
-    iword = (BEXKAT1_INH2 << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
-    iword2 = (opcode->opcode & 0x1f) << 11;
-    if (opcode->args > 0) {
-      regnum = parse_regnum(&op_end);
-      if (regnum == -1)
-	return; 
-      while (ISSPACE(*op_end))
-	op_end++;
+    if (opcode->args > 2) {
       if (*op_end != ',') {
 	as_bad(_("missing comma: %s"), op_end);
 	return;
@@ -200,21 +191,18 @@ md_assemble(char *str)
       op_end++;
       while (ISSPACE(*op_end))
 	op_end++;
-      iword |= (regnum & 0x1f);
-    }
-    if (opcode->args > 1) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
-	return; 
-      iword |= ((regnum & 0x1f) << 5);
+	return;
+      iword |= ((regnum & 0x1f) << 6);
     }
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    p = frag_more(2);
-    md_number_to_chars(p, iword2, 2);
+
+    p = frag_more(4);  
+    md_number_to_chars(p, iword, 4);
     break;
-  case BEXKAT1_IMM2:
-    iword = (BEXKAT1_IMM2 << 13) | (opcode->opcode << 5);
+  case BEXKAT1_IMM:
+    iword = (BEXKAT1_IMM << 29) | (opcode->opcode << 21);
+    p = frag_more(4);
     if (opcode->args == 2) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
@@ -229,67 +217,27 @@ md_assemble(char *str)
       while (ISSPACE(*op_end))
 	op_end++;
       iword |= (regnum & 0x1f);
-    }
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    where = frag_more(2);
-    op_end = parse_exp_save_ilp(op_end, &arg);
-    if (opcode->opcode & 0x10) // a non-PC relative reloc
+      op_end = parse_exp_save_ilp(op_end, &arg);
       fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
+		  (p + 2 - frag_now->fr_literal),
 		  2,
 		  &arg,
 		  0,
 		  BFD_RELOC_16);
-    else
+    } else {
+      op_end = parse_exp_save_ilp(op_end, &arg);
       fix_new_exp(frag_now,
-		  (where - frag_now->fr_literal),
+		  (p + 2 - frag_now->fr_literal),
 		  2,
 		  &arg,
 		  TRUE,
 		  BFD_RELOC_16_PCREL);
-    break;
-  case BEXKAT1_REG:
-    iword = (BEXKAT1_REG << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
-    iword2 = (opcode->opcode & 0x1f) << 11;
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != ',') {
-      as_bad(_("missing comma: %s"), op_end);
-      return;
     }
-    op_end++;
-    while (ISSPACE(*op_end))
-      op_end++;
-    iword |= (regnum & 0x1f);
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != ',') {
-      as_bad(_("missing comma: %s"), op_end);
-      return;
-    }
-    op_end++;
-    while (ISSPACE(*op_end))
-      op_end++;
-    iword |= ((regnum & 0x1f) << 5);
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    iword2 |= (regnum & 0x1f);
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    p = frag_more(2);
-    md_number_to_chars(p, iword2, 2);
+    md_number_to_chars(p, iword, 4);
     break;
   case BEXKAT1_REGIND:
-    iword = (BEXKAT1_REGIND << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
-    iword2 = (opcode->opcode & 0x1f) << 11;
+    iword = (BEXKAT1_REGIND << 29) | (opcode->opcode << 21);
+
     if (opcode->args == 3) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
@@ -303,7 +251,7 @@ md_assemble(char *str)
       op_end++;
       while (ISSPACE(*op_end))
 	op_end++;
-      iword |= (regnum & 0x1f);
+      iword |= (regnum & 0x1f) << 16;
     }
     op_end = parse_exp_save_ilp(op_end, &arg);
     if (*op_end != '(') {
@@ -323,88 +271,18 @@ md_assemble(char *str)
       return;
     }
     op_end++;
-    iword |= ((regnum & 0x1f) << 5);
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    where = frag_more(2);
+    iword |= (regnum & 0x1f) << 11;
+    p = frag_more(4);
     fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
+		(p + 2 - frag_now->fr_literal),
 		2,
 		&arg,
 		0,
 		BFD_RELOC_BEXKAT_11);
-    md_number_to_chars(where, iword2, 2);
-    break;
-  case BEXKAT1_IMM3:
-    iword = (BEXKAT1_IMM3 << 13) | (((opcode->opcode >> 5) & 0x07) << 10);
-    iword2 = (opcode->opcode & 0x1f) << 11;
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != ',') {
-      as_bad(_("missing comma: %s"), op_end);
-      return;
-    }
-    op_end++;
-    while (ISSPACE(*op_end))
-      op_end++;
-    iword |= (regnum & 0x1f);
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != ',') {
-      as_bad(_("missing comma: %s"), op_end);
-      return;
-    }
-    op_end++;
-    while (ISSPACE(*op_end))
-      op_end++;
-    iword |= ((regnum & 0x1f) << 5);
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    p = frag_more(2);
-    md_number_to_chars(p, iword2, 2);
-    where = frag_more(2);
-    op_end = parse_exp_save_ilp(op_end, &arg);
-    fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
-		2,
-		&arg,
-		0,
-		BFD_RELOC_16);
-    break;
-  case BEXKAT1_IMM3a:
-    iword = (BEXKAT1_IMM3a << 13) | (opcode->opcode << 5);
-    regnum = parse_regnum(&op_end);
-    if (regnum == -1)
-      return; 
-    while (ISSPACE(*op_end))
-      op_end++;
-    if (*op_end != ',') {
-      as_bad(_("missing comma: %s"), op_end);
-      return;
-    }
-    op_end++;
-    while (ISSPACE(*op_end))
-      op_end++;
-    iword |= (regnum & 0x1f);
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
-    op_end = parse_exp_save_ilp(op_end, &arg);
-    where = frag_more(4);
-    fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
-		4,
-		&arg,
-		0,
-		BFD_RELOC_32);
+    md_number_to_chars(p, iword, 4);
     break;
   case BEXKAT1_DIR:
-    iword = (BEXKAT1_DIR << 13) | (opcode->opcode << 5);
+    iword = (BEXKAT1_DIR << 29) | (opcode->opcode << 21);
     if (opcode->args > 1) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
@@ -416,14 +294,27 @@ md_assemble(char *str)
 	return;
       }
       op_end++;
-      iword |= (regnum & 0x1f);
+      iword |= (regnum & 0x1f) << 16;
     }
-    p = frag_more(2);
-    md_number_to_chars(p, iword, 2);
+    if (opcode->args > 2) {
+      regnum = parse_regnum(&op_end);
+      if (regnum == -1)
+	return; 
+      while (ISSPACE(*op_end))
+	op_end++;
+      if (*op_end != ',') {
+	as_bad(_("missing comma: %s"), op_end);
+	return;
+      }
+      op_end++;
+      iword |= (regnum & 0x1f) << 11;
+    }
+    p = frag_more(4);
+    md_number_to_chars(p, iword, 4);
     op_end = parse_exp_save_ilp(op_end, &arg);
-    where = frag_more(4);
+    p = frag_more(4);
     fix_new_exp(frag_now,
-		(where - frag_now->fr_literal),
+		(p - frag_now->fr_literal),
 		4,
 		&arg,
 		0,
@@ -477,22 +368,42 @@ md_atof(int type, char *litP, int *sizeP)
 
 const char *md_shortopts = "";
 
+enum options {
+  OPTION_EB = OPTION_MD_BASE,
+  OPTION_EL
+};
+
 struct option md_longopts[] =
 {
-  { NULL, no_argument, NULL, 0}
+  { "EB", no_argument, NULL, OPTION_EB},
+  { "EL", no_argument, NULL, OPTION_EL},
+  {  NULL, no_argument, NULL, 0}
 };
 
 size_t md_longopts_size = sizeof(md_longopts);
 
 int
-md_parse_option(int c ATTRIBUTE_UNUSED, char *arg ATTRIBUTE_UNUSED)
+md_parse_option(int c, char *arg ATTRIBUTE_UNUSED)
 {
-  return 0;
+  switch (c) {
+  case OPTION_EB:
+    target_big_endian = 1;
+    break;
+  case OPTION_EL:
+    target_big_endian = 0;
+    break;
+  default:
+    return 0;
+  }
+  return 1;
 }
 
 void
-md_show_usage(FILE *stream ATTRIBUTE_UNUSED)
+md_show_usage(FILE *stream)
 {
+  fprintf(stream, _("\
+    -EB   big endian (default)\n\
+    -EL   little endian\n"));
 }
 
 void
@@ -505,9 +416,14 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
   case BFD_RELOC_BEXKAT_11:
     if (val < -1024 || val > 1024)
       as_bad_where(fixP->fx_file, fixP->fx_line,
-		   _("Constant out of 11 bit range for BFD_RELOC_BEXKAT_10"));
-    buf[0] |= ((val >> 8) & 0x07);
-    buf[1] = (val & 0xff);
+		   _("Constant out of 11 bit range for BFD_RELOC_BEXKAT_11"));
+    if (target_big_endian) {
+      buf[0] |= ((val >> 8) & 0x07);
+      buf[1] = (val & 0xff);
+    } else {
+      buf[1] |= ((val >> 8) & 0x07);
+      buf[0] = (val & 0xff);
+    }
     break;
   case BFD_RELOC_16:
     if (target_big_endian)
@@ -554,7 +470,11 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 void
 md_number_to_chars(char *ptr, valueT use, int nbytes)
 {
-  number_to_chars_bigendian(ptr, use, nbytes);
+  if (target_big_endian) {
+    number_to_chars_bigendian(ptr, use, nbytes);
+  } else {
+    number_to_chars_littleendian(ptr, use, nbytes);
+  }
 }
 
 long
@@ -564,7 +484,7 @@ md_pcrel_from(fixS *fixP)
 
   switch (fixP->fx_r_type) {
   case BFD_RELOC_16_PCREL:
-    return addr + 2;
+    return addr + 4;
   default:
     abort();
   }

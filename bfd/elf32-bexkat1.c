@@ -30,8 +30,10 @@
 #define ELF_MACHINE_CODE	EM_BEXKAT1
 #define ELF_MAXPAGESIZE		0x1000
 
-#define TARGET_BIG_SYM          bexkat1_elf32_vec
-#define TARGET_BIG_NAME		"elf32-bexkat1"
+#define TARGET_BIG_SYM          bexkat1_elf32_be_vec
+#define TARGET_BIG_NAME		"elf32-bexkat1-be"
+#define TARGET_LITTLE_SYM       bexkat1_elf32_le_vec
+#define TARGET_LITTLE_NAME	"elf32-bexkat1-le"
 
 static bfd_reloc_status_type
 bexkat1_reloc (bfd *, arelent *, asymbol *, void *,
