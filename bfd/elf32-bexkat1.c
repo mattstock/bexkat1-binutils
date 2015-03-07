@@ -57,7 +57,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  FALSE),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_11,           /* type */
 	  0,                      /* rightshift */
-	  1,                      /* size */
+	  2,                      /* size */
 	  11,                     /* bitsize */
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
@@ -66,11 +66,11 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  "R_BEXKAT1_DIR11",      /* name */
 	  FALSE,                  /* partial_inplace */
 	  0,                      /* src_mask */
-	  0x7ff,                  /* dst_mask */
+	  0x00007ff,              /* dst_mask */
 	  FALSE),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_16,           /* type */
 	  0,                      /* rightshift */
-	  1,                      /* size */
+	  2,                      /* size */
 	  16,                     /* bitsize */
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
@@ -79,11 +79,11 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  "R_BEXKAT1_DIR16",      /* name */
 	  FALSE,                  /* partial_inplace */
 	  0,                      /* src_mask */
-	  0xffff,                 /* dst_mask */
+	  0x0000ffff,             /* dst_mask */
 	  FALSE),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_PCREL_16,     /* type */
 	  0,                      /* rightshift */
-	  1,                      /* size */
+	  2,                      /* size */
 	  16,                     /* bitsize */
 	  FALSE,                  /* pc_relative */
 	  0,                      /* bitops */
@@ -92,7 +92,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  "R_BEXKAT1_PCREL_16",   /* name */
 	  FALSE,                  /* partial_inplace */
 	  0,                      /* src_mask */
-	  0xffff,                 /* dst_mask */
+	  0x0000ffff,                 /* dst_mask */
 	  TRUE),                  /* pcrel_offset */
     HOWTO(R_BEXKAT1_32,           /* type */
 	  0,                      /* rightshift */

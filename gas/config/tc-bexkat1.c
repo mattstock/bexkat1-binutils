@@ -216,10 +216,10 @@ md_assemble(char *str)
       op_end++;
       while (ISSPACE(*op_end))
 	op_end++;
-      iword |= (regnum & 0x1f);
+      iword |= (regnum & 0x1f) << 16;
       op_end = parse_exp_save_ilp(op_end, &arg);
       fix_new_exp(frag_now,
-		  (p + 2 - frag_now->fr_literal),
+		  (p - frag_now->fr_literal),
 		  2,
 		  &arg,
 		  0,
@@ -227,7 +227,7 @@ md_assemble(char *str)
     } else {
       op_end = parse_exp_save_ilp(op_end, &arg);
       fix_new_exp(frag_now,
-		  (p + 2 - frag_now->fr_literal),
+		  (p - frag_now->fr_literal),
 		  2,
 		  &arg,
 		  TRUE,
@@ -274,8 +274,8 @@ md_assemble(char *str)
     iword |= (regnum & 0x1f) << 11;
     p = frag_more(4);
     fix_new_exp(frag_now,
-		(p + 2 - frag_now->fr_literal),
-		2,
+		(p - frag_now->fr_literal),
+		4,
 		&arg,
 		0,
 		BFD_RELOC_BEXKAT_11);
