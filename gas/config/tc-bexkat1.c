@@ -203,6 +203,7 @@ md_assemble(char *str)
   case BEXKAT1_IMM:
     iword = (BEXKAT1_IMM << 29) | (opcode->opcode << 21);
     p = frag_more(4);
+
     if (opcode->args == 2) {
       regnum = parse_regnum(&op_end);
       if (regnum == -1)
@@ -218,20 +219,36 @@ md_assemble(char *str)
 	op_end++;
       iword |= (regnum & 0x1f) << 16;
       op_end = parse_exp_save_ilp(op_end, &arg);
-      fix_new_exp(frag_now,
-		  (p - frag_now->fr_literal),
-		  2,
-		  &arg,
-		  0,
-		  BFD_RELOC_16);
+      if (target_big_endian)
+	fix_new_exp(frag_now,
+		    (p + 2 - frag_now->fr_literal),
+		    2,
+		    &arg,
+		    0,
+		    BFD_RELOC_16);
+      else
+	fix_new_exp(frag_now,
+		    (p - frag_now->fr_literal),
+		    2,
+		    &arg,
+		    0,
+		    BFD_RELOC_16);
     } else {
       op_end = parse_exp_save_ilp(op_end, &arg);
-      fix_new_exp(frag_now,
-		  (p - frag_now->fr_literal),
-		  2,
-		  &arg,
-		  TRUE,
-		  BFD_RELOC_16_PCREL);
+      if (target_big_endian)
+	fix_new_exp(frag_now,
+		    (p + 2 - frag_now->fr_literal),
+		    2,
+		    &arg,
+		    TRUE,
+		    BFD_RELOC_16_PCREL);
+      else
+	fix_new_exp(frag_now,
+		    (p - frag_now->fr_literal),
+		    2,
+		    &arg,
+		    TRUE,
+		    BFD_RELOC_16_PCREL);
     }
     md_number_to_chars(p, iword, 4);
     break;
@@ -273,12 +290,20 @@ md_assemble(char *str)
     op_end++;
     iword |= (regnum & 0x1f) << 11;
     p = frag_more(4);
-    fix_new_exp(frag_now,
-		(p - frag_now->fr_literal),
-		4,
-		&arg,
-		0,
-		BFD_RELOC_BEXKAT_11);
+    if (target_big_endian)
+      fix_new_exp(frag_now,
+		  (p + 2 - frag_now->fr_literal),
+		  2,
+		  &arg,
+		  0,
+		  BFD_RELOC_BEXKAT_11);
+    else
+      fix_new_exp(frag_now,
+		  (p - frag_now->fr_literal),
+		  2,
+		  &arg,
+		  0,
+		  BFD_RELOC_BEXKAT_11);
     md_number_to_chars(p, iword, 4);
     break;
   case BEXKAT1_DIR:
@@ -385,6 +410,7 @@ size_t md_longopts_size = sizeof(md_longopts);
 int
 md_parse_option(int c, char *arg ATTRIBUTE_UNUSED)
 {
+  target_big_endian = 1;
   switch (c) {
   case OPTION_EB:
     target_big_endian = 1;
@@ -424,18 +450,16 @@ md_apply_fix(fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
       buf[1] |= ((val >> 8) & 0x07);
       buf[0] = (val & 0xff);
     }
+    
     break;
   case BFD_RELOC_16:
-    if (target_big_endian)
-      {
-	buf[0] = val >> 8;
-	buf[1] = val >> 0;
-      }
-    else
-      {
-	buf[1] = val >> 8;
-	buf[0] = val >> 0;
-      }
+    if (target_big_endian) {
+      buf[0] = val >> 8;
+      buf[1] = val >> 0;
+    } else {
+      buf[1] = val >> 8;
+      buf[0] = val >> 0;
+    }
     break;
   case BFD_RELOC_32:
     if (target_big_endian) {
@@ -484,7 +508,10 @@ md_pcrel_from(fixS *fixP)
 
   switch (fixP->fx_r_type) {
   case BFD_RELOC_16_PCREL:
-    return addr + 4;
+    if (target_big_endian)
+      return addr + 2;
+    else
+      return addr + 4;
   default:
     abort();
   }
