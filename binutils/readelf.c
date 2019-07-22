@@ -95,6 +95,7 @@
 #include "elf/arc.h"
 #include "elf/arm.h"
 #include "elf/avr.h"
+#include "elf/bexkat1.h"
 #include "elf/bfin.h"
 #include "elf/cr16.h"
 #include "elf/cris.h"
@@ -804,6 +805,7 @@ guess_is_rela (unsigned int e_machine)
     case EM_ARC_COMPACT2:
     case EM_AVR:
     case EM_AVR_OLD:
+    case EM_BEXKAT1:
     case EM_BLACKFIN:
     case EM_CR16:
     case EM_CRIS:
@@ -1302,6 +1304,10 @@ dump_relocations (Filedata *          filedata,
 	case EM_AVR:
 	case EM_AVR_OLD:
 	  rtype = elf_avr_reloc_type (type);
+	  break;
+
+	case EM_BEXKAT1:
+	  rtype = elf_bexkat1_reloc_type (type);
 	  break;
 
 	case EM_OLD_SPARCV9:

@@ -101,6 +101,8 @@ TARGET_LIBOPCODES_CFILES = \
 	arc-opc.c \
 	arm-dis.c \
 	avr-dis.c \
+	bexkat1-dis.c \
+	bexkat1-opc.c \
 	bfin-dis.c \
 	cgen-asm.c \
 	cgen-bitset.c \

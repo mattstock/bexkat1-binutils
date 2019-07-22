@@ -29,6 +29,7 @@
 #define ARCH_arc
 #define ARCH_arm
 #define ARCH_avr
+#define ARCH_bexkat1
 #define ARCH_bfin
 #define ARCH_cr16
 #define ARCH_cris
@@ -162,6 +163,11 @@ disassembler (enum bfd_architecture a,
 #ifdef ARCH_avr
     case bfd_arch_avr:
       disassemble = print_insn_avr;
+      break;
+#endif
+#ifdef ARCH_bexkat1
+    case bfd_arch_bexkat1:
+      disassemble = print_insn_bexkat1;
       break;
 #endif
 #ifdef ARCH_bfin

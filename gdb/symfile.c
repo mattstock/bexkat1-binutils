@@ -1812,6 +1812,7 @@ find_sym_fns (bfd *abfd)
 
   if (our_flavour == bfd_target_srec_flavour
       || our_flavour == bfd_target_ihex_flavour
+      || our_flavour == bfd_target_mif_flavour
       || our_flavour == bfd_target_tekhex_flavour)
     return NULL;	/* No symbols.  */
 

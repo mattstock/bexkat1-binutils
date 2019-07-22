@@ -67,6 +67,8 @@ DESCRIPTION
 
 .enum bfd_architecture
 .{
+.  bfd_arch_bexkat1,   {* Bexkat 1 experimental *}
+.#define bfd_mach_bexkat1		1
 .  bfd_arch_unknown,   {* File arch not known.  *}
 .  bfd_arch_obscure,   {* Arch known, not one of these.  *}
 .  bfd_arch_m68k,      {* Motorola 68xxx.  *}
@@ -594,6 +596,7 @@ extern const bfd_arch_info_type bfd_alpha_arch;
 extern const bfd_arch_info_type bfd_arc_arch;
 extern const bfd_arch_info_type bfd_arm_arch;
 extern const bfd_arch_info_type bfd_avr_arch;
+extern const bfd_arch_info_type bfd_bexkat1_arch;
 extern const bfd_arch_info_type bfd_bfin_arch;
 extern const bfd_arch_info_type bfd_cr16_arch;
 extern const bfd_arch_info_type bfd_cr16c_arch;
@@ -686,6 +689,7 @@ static const bfd_arch_info_type * const bfd_archures_list[] =
     &bfd_arc_arch,
     &bfd_arm_arch,
     &bfd_avr_arch,
+    &bfd_bexkat1_arch,
     &bfd_bfin_arch,
     &bfd_cr16_arch,
     &bfd_cr16c_arch,

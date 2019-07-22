@@ -133,6 +133,7 @@ TARGET_CPU_CFILES = \
 	config/tc-arc.c \
 	config/tc-arm.c \
 	config/tc-avr.c \
+	config/tc-bexkat1.c \
 	config/tc-bfin.c \
 	config/tc-bpf.c \
 	config/tc-cr16.c \
@@ -209,6 +210,7 @@ TARGET_CPU_HFILES = \
 	config/tc-arc.h \
 	config/tc-arm.h \
 	config/tc-avr.h \
+	config/tc-bexkat1.h \
 	config/tc-bfin.h \
 	config/tc-bpf.h \
 	config/tc-cr16.h \

@@ -169,6 +169,9 @@ arm*-*-fuchsia*)	targ_emul=armelf_fuchsia
 avr-*-*)		targ_emul=avr2
 			targ_extra_emuls="avr1 avr25 avr3 avr31 avr35 avr4 avr5 avr51 avr6 avrxmega1 avrxmega2 avrxmega3 avrxmega4 avrxmega5 avrxmega6 avrxmega7 avrtiny"
 			;;
+bexkat1-*-elf | bexkat1-*-none)
+			targ_emul=elf32bexkat1
+			;;
 bfin-*-elf | bfin-*-rtems*)
 			targ_emul=elf32bfin
 			targ_extra_emuls="elf32bfinfd"

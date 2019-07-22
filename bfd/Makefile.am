@@ -74,7 +74,7 @@ BFD32_LIBS = \
 	coff-bfd.lo compress.lo corefile.lo elf-properties.lo format.lo \
 	hash.lo init.lo libbfd.lo linker.lo merge.lo opncls.lo reloc.lo \
 	section.lo simple.lo stab-syms.lo stabs.lo syms.lo targets.lo \
-	binary.lo ihex.lo srec.lo tekhex.lo verilog.lo
+	binary.lo ihex.lo srec.lo mif.lo tekhex.lo verilog.lo
 
 BFD64_LIBS = archive64.lo
 
@@ -83,7 +83,7 @@ BFD32_LIBS_CFILES = \
 	compress.c corefile.c elf-properties.c format.c hash.c \
 	init.c libbfd.c linker.c merge.c opncls.c reloc.c \
 	section.c simple.c stab-syms.c stabs.c syms.c targets.c \
-	binary.c ihex.c srec.c tekhex.c verilog.c
+	binary.c ihex.c srec.c mif.c tekhex.c verilog.c
 
 BFD64_LIBS_CFILES = archive64.c
 
@@ -95,6 +95,7 @@ ALL_MACHINES = \
 	cpu-arc.lo \
 	cpu-arm.lo \
 	cpu-avr.lo \
+	cpu-bexkat1.lo \
 	cpu-bfin.lo \
 	cpu-bpf.lo \
 	cpu-cr16.lo \
@@ -182,6 +183,7 @@ ALL_MACHINES_CFILES = \
 	cpu-arc.c \
 	cpu-arm.c \
 	cpu-avr.c \
+	cpu-bexkat1.c \
 	cpu-bfin.c \
 	cpu-bpf.c \
 	cpu-cr16.c \
@@ -266,6 +268,7 @@ ALL_MACHINES_CFILES = \
 # The .o files needed by all of the 32 bit vectors that are configured into
 # target_vector in targets.c if configured with --enable-targets=all.
 BFD32_BACKENDS = \
+	elf32-bexkat.lo \
 	aout-cris.lo \
 	aout-ns32k.lo \
 	aout-tic30.lo \
@@ -403,6 +406,7 @@ BFD32_BACKENDS = \
 	xtensa-modules.lo
 
 BFD32_BACKENDS_CFILES = \
+	elf32-bexkat1.c \
 	aout-cris.c \
 	aout-ns32k.c \
 	aout-tic30.c \

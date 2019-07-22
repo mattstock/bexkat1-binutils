@@ -161,6 +161,8 @@ case ${generic_target} in
 
   avr-*-*)				fmt=elf bfd_gas=yes ;;
 
+  bexkat1-*-*)				fmt=elf ;;
+
   bfin-*-linux-uclibc)			fmt=fdpicelf em=linux ;;
   bfin-*-uclinux*)			fmt=elf em=linux ;;
   bfin-*elf)				fmt=elf ;;

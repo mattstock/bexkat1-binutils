@@ -155,6 +155,7 @@ DESCRIPTION
 .  bfd_target_srec_flavour,
 .  bfd_target_verilog_flavour,
 .  bfd_target_ihex_flavour,
+.  bfd_target_mif_flavour,
 .  bfd_target_som_flavour,
 .  bfd_target_os9k_flavour,
 .  bfd_target_versados_flavour,
@@ -622,6 +623,8 @@ extern const bfd_target arm_pei_le_vec;
 extern const bfd_target arm_pei_wince_be_vec;
 extern const bfd_target arm_pei_wince_le_vec;
 extern const bfd_target avr_elf32_vec;
+extern const bfd_target bexkat1_elf32_be_vec;
+extern const bfd_target bexkat1_elf32_le_vec;
 extern const bfd_target bfin_elf32_vec;
 extern const bfd_target bfin_elf32_fdpic_vec;
 extern const bfd_target cr16_elf32_vec;
@@ -870,6 +873,7 @@ extern const bfd_target verilog_vec;
 extern const bfd_target tekhex_vec;
 extern const bfd_target binary_vec;
 extern const bfd_target ihex_vec;
+extern const bfd_target mif_vec;
 
 /* All of the xvecs for core files.  */
 extern const bfd_target core_aix386_vec;
@@ -952,6 +956,9 @@ static const bfd_target * const _bfd_target_vector[] =
 	&arm_pei_wince_le_vec,
 
 	&avr_elf32_vec,
+
+	&bexkat1_elf32_be_vec,
+	&bexkat1_elf32_le_vec,
 
 	&bfin_elf32_vec,
 	&bfin_elf32_fdpic_vec,
@@ -1300,6 +1307,8 @@ static const bfd_target * const _bfd_target_vector[] =
 	&binary_vec,
 /* Likewise for ihex.  */
 	&ihex_vec,
+/* Likewise for mif.  */
+	&mif_vec,
 
 #if BFD_SUPPORTS_PLUGINS
 	&plugin_vec,
@@ -1718,6 +1727,7 @@ bfd_flavour_name (enum bfd_flavour flavour)
     case bfd_target_srec_flavour: return "Srec";
     case bfd_target_verilog_flavour: return "Verilog";
     case bfd_target_ihex_flavour: return "Ihex";
+    case bfd_target_mif_flavour: return "MIF";
     case bfd_target_som_flavour: return "SOM";
     case bfd_target_os9k_flavour: return "OS9K";
     case bfd_target_versados_flavour: return "Versados";

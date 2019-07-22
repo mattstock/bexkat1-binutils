@@ -2009,6 +2009,8 @@ bfd_boolean bfd_generic_discard_group (bfd *abfd, asection *group);
 /* Extracted from archures.c.  */
 enum bfd_architecture
 {
+  bfd_arch_bexkat1,   /* Bexkat 1 experimental */
+#define bfd_mach_bexkat1               1
   bfd_arch_unknown,   /* File arch not known.  */
   bfd_arch_obscure,   /* Arch known, not one of these.  */
   bfd_arch_m68k,      /* Motorola 68xxx.  */
@@ -3211,6 +3213,11 @@ to compensate for the borrow when the low bits are added.  */
 /* MIPS ELF relocations (VxWorks and PLT extensions).  */
   BFD_RELOC_MIPS_COPY,
   BFD_RELOC_MIPS_JUMP_SLOT,
+
+
+/* Bexkat1 ELF relocations.  */
+  BFD_RELOC_BEXKAT1_15,
+  BFD_RELOC_BEXKAT1_15_PCREL,
 
 
 /* Moxie ELF relocations.  */
@@ -7272,6 +7279,7 @@ struct bfd
       struct srec_data_struct *srec_data;
       struct verilog_data_struct *verilog_data;
       struct ihex_data_struct *ihex_data;
+      struct mif_data_struct *mif_data;
       struct tekhex_data_struct *tekhex_data;
       struct elf_obj_tdata *elf_obj_data;
       struct mmo_data_struct *mmo_data;
@@ -7589,6 +7597,7 @@ enum bfd_flavour
   bfd_target_srec_flavour,
   bfd_target_verilog_flavour,
   bfd_target_ihex_flavour,
+  bfd_target_mif_flavour,
   bfd_target_som_flavour,
   bfd_target_os9k_flavour,
   bfd_target_versados_flavour,
