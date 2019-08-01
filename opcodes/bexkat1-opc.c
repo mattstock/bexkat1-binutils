@@ -101,6 +101,7 @@ const bexkat1_opc_info_t bexkat1_opc_info[] =
     { BEXKAT1_BRANCH, 12, 0, 1, "bord" },
     { BEXKAT1_BRANCH, 13, 0, 1, "bunord" },
     { BEXKAT1_BRANCH, 14, 0, 1, "bunle" },
+    { BEXKAT1_BRANCH, 15, 0, 1, "bungt" },    
     { BEXKAT1_JUMP, 0, 1, 1, "jmpd" },
     { BEXKAT1_JUMP, 0, 0, 2, "jmp" },
     { BEXKAT1_LDI, 0, 0, 2, "ldiu" },
