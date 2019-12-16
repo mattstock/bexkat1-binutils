@@ -369,7 +369,7 @@ bexkat1_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
   else
     relocation = symbol->value;
 
-  reloc_target_output_section = bfd_get_output_section (symbol);
+  reloc_target_output_section = bfd_asymbol_section (symbol)->output_section;
 
   /* Here the variable relocation holds the final address of the symbol we
      are relocating against, plus any addend.  */
@@ -469,7 +469,7 @@ bexkat1_elf_relocate_section (bfd *output_bfd,
 
 	  name = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);
-	  name = (name == NULL) ? bfd_section_name (input_bfd, sec) : name;
+	  name = (name == NULL) ? bfd_section_name (sec) : name;
 	}
       else
 	{

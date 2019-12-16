@@ -263,6 +263,7 @@ mif_get_section_contents (bfd *abfd ATTRIBUTE_UNUSED,
 #define mif_bfd_make_debug_symbol                _bfd_nosymbols_bfd_make_debug_symbol
 #define mif_read_minisymbols                     _bfd_nosymbols_read_minisymbols
 #define mif_minisymbol_to_symbol                 _bfd_nosymbols_minisymbol_to_symbol
+#define mif_bfd_group_name                       bfd_generic_group_name
 #define mif_bfd_get_relocated_section_contents   bfd_generic_get_relocated_section_contents
 #define mif_bfd_relax_section                    bfd_generic_relax_section
 #define mif_bfd_gc_sections                      bfd_generic_gc_sections
