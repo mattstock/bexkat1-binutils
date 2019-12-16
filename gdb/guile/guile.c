@@ -36,6 +36,7 @@
 #include "guile-internal.h"
 #endif
 #include <signal.h>
+#include "gdbsupport/block-signals.h"
 
 /* The Guile version we're using.
    We *could* use the macros in libguile/version.h but that would preclude
@@ -71,33 +72,6 @@ static const char *const guile_print_excp_enums[] =
    the default.  */
 const char *gdbscm_print_excp = gdbscm_print_excp_message;
 
-#ifdef HAVE_GUILE
-/* Forward decls, these are defined later.  */
-extern const struct extension_language_script_ops guile_extension_script_ops;
-extern const struct extension_language_ops guile_extension_ops;
-#endif
-
-/* The main struct describing GDB's interface to the Guile
-   extension language.  */
-extern const struct extension_language_defn extension_language_guile =
-{
-  EXT_LANG_GUILE,
-  "guile",
-  "Guile",
-
-  ".scm",
-  "-gdb.scm",
-
-  guile_control,
-
-#ifdef HAVE_GUILE
-  &guile_extension_script_ops,
-  &guile_extension_ops
-#else
-  NULL,
-  NULL
-#endif
-};
 
 #ifdef HAVE_GUILE
 
@@ -126,7 +100,7 @@ static const char boot_scm_filename[] = "boot.scm";
 
 /* The interface between gdb proper and loading of python scripts.  */
 
-const struct extension_language_script_ops guile_extension_script_ops =
+static const struct extension_language_script_ops guile_extension_script_ops =
 {
   gdbscm_source_script,
   gdbscm_source_objfile_script,
@@ -136,7 +110,7 @@ const struct extension_language_script_ops guile_extension_script_ops =
 
 /* The interface between gdb proper and guile scripting.  */
 
-const struct extension_language_ops guile_extension_ops =
+static const struct extension_language_ops guile_extension_ops =
 {
   gdbscm_finish_initialization,
   gdbscm_initialized,
@@ -159,7 +133,31 @@ const struct extension_language_ops guile_extension_ops =
   NULL, /* gdbscm_check_quit_flag, */
   NULL, /* gdbscm_set_quit_flag, */
 };
+#endif
 
+/* The main struct describing GDB's interface to the Guile
+   extension language.  */
+extern const struct extension_language_defn extension_language_guile =
+{
+  EXT_LANG_GUILE,
+  "guile",
+  "Guile",
+
+  ".scm",
+  "-gdb.scm",
+
+  guile_control,
+
+#ifdef HAVE_GUILE
+  &guile_extension_script_ops,
+  &guile_extension_ops
+#else
+  NULL,
+  NULL
+#endif
+};
+
+#ifdef HAVE_GUILE
 /* Implementation of the gdb "guile-repl" command.  */
 
 static void
@@ -325,7 +323,7 @@ gdbscm_execute_gdb_command (SCM command_scm, SCM rest)
 static SCM
 gdbscm_data_directory (void)
 {
-  return gdbscm_scm_from_c_string (gdb_datadir);
+  return gdbscm_scm_from_c_string (gdb_datadir.c_str ());
 }
 
 /* (guile-data-directory) -> string */
@@ -582,7 +580,8 @@ initialize_scheme_side (void)
 {
   char *boot_scm_path;
 
-  guile_datadir = concat (gdb_datadir, SLASH_STRING, "guile", (char *) NULL);
+  guile_datadir = concat (gdb_datadir.c_str (), SLASH_STRING, "guile",
+			  (char *) NULL);
   boot_scm_path = concat (guile_datadir, SLASH_STRING, "gdb",
 			  SLASH_STRING, boot_scm_filename, (char *) NULL);
 
@@ -800,10 +799,6 @@ _initialize_guile (void)
 
 #if HAVE_GUILE
   {
-#ifdef HAVE_SIGPROCMASK
-    sigset_t sigchld_mask, prev_mask;
-#endif
-
     /* The Python support puts the C side in module "_gdb", leaving the Python
        side to define module "gdb" which imports "_gdb".  There is evidently no
        similar convention in Guile so we skip this.  */
@@ -815,25 +810,20 @@ _initialize_guile (void)
     scm_set_automatic_finalization_enabled (0);
 #endif
 
-#ifdef HAVE_SIGPROCMASK
-    /* Before we initialize Guile, block SIGCHLD.
+    /* Before we initialize Guile, block signals needed by gdb
+       (especially SIGCHLD).
        This is done so that all threads created during Guile initialization
        have SIGCHLD blocked.  PR 17247.
        Really libgc and Guile should do this, but we need to work with
        libgc 7.4.x.  */
-    sigemptyset (&sigchld_mask);
-    sigaddset (&sigchld_mask, SIGCHLD);
-    sigprocmask (SIG_BLOCK, &sigchld_mask, &prev_mask);
-#endif
+    {
+      gdb::block_signals blocker;
 
-    /* scm_with_guile is the most portable way to initialize Guile.
-       Plus we need to initialize the Guile support while in Guile mode
-       (e.g., called from within a call to scm_with_guile).  */
-    scm_with_guile (call_initialize_gdb_module, NULL);
-
-#ifdef HAVE_SIGPROCMASK
-    sigprocmask (SIG_SETMASK, &prev_mask, NULL);
-#endif
+      /* scm_with_guile is the most portable way to initialize Guile.
+	 Plus we need to initialize the Guile support while in Guile mode
+	 (e.g., called from within a call to scm_with_guile).  */
+      scm_with_guile (call_initialize_gdb_module, NULL);
+    }
 
     /* Set Guile's backtrace to match the "set guile print-stack" default.
        [N.B. The two settings are still separate.]

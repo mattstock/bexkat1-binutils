@@ -1489,7 +1489,7 @@ decode_line_2 (struct linespec_state *self,
 	       std::vector<symtab_and_line> *result,
 	       const char *select_mode)
 {
-  char *args;
+  const char *args;
   const char *prompt;
   int i;
   std::vector<const char *> filters;
@@ -2066,8 +2066,7 @@ canonicalize_linespec (struct linespec_state *state, const linespec_p ls)
 	  gdb_assert (!ls->labels.function_symbols->empty ()
 		      && (ls->labels.function_symbols->size () == 1));
 	  block_symbol s = ls->labels.function_symbols->front ();
-	  explicit_loc->function_name
-	    = xstrdup (SYMBOL_NATURAL_NAME (s.symbol));
+	  explicit_loc->function_name = xstrdup (s.symbol->natural_name ());
 	}
     }
 
@@ -2195,7 +2194,7 @@ create_sals_line_offset (struct linespec_state *self,
 	      skip_prologue_sal (&intermediate_results[i]);
 	    intermediate_results[i].symbol = sym;
 	    add_sal_to_sals (self, &values, &intermediate_results[i],
-			     sym ? SYMBOL_NATURAL_NAME (sym) : NULL, 0);
+			     sym ? sym->natural_name () : NULL, 0);
 	  }
     }
 
@@ -2250,7 +2249,7 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 	  if (symbol_to_sal (&sal, state->funfirstline, sym.symbol)
 	      && maybe_add_address (state->addr_set, pspace, sal.pc))
 	    add_sal_to_sals (state, &sals, &sal,
-			     SYMBOL_NATURAL_NAME (sym.symbol), 0);
+			     sym.symbol->natural_name (), 0);
 	}
     }
   else if (ls->function_symbols != NULL || ls->minimal_symbols != NULL)
@@ -2315,7 +2314,7 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 		  if (symbol_to_sal (&sal, state->funfirstline, sym.symbol)
 		      && maybe_add_address (state->addr_set, pspace, sal.pc))
 		    add_sal_to_sals (state, &sals, &sal,
-				     SYMBOL_NATURAL_NAME (sym.symbol), 0);
+				     sym.symbol->natural_name (), 0);
 		}
 	    }
 	}
@@ -2903,7 +2902,7 @@ complete_label (completion_tracker &tracker,
     {
       for (const auto &label : *labels)
 	{
-	  char *match = xstrdup (SYMBOL_SEARCH_NAME (label.symbol));
+	  char *match = xstrdup (label.symbol->search_name ());
 	  tracker.add_completion (gdb::unique_xmalloc_ptr<char> (match));
 	}
       delete labels;
@@ -3331,7 +3330,7 @@ decode_line_with_last_displayed (const char *string, int flags)
 
 
 
-/* First, some functions to initialize stuff at the beggining of the
+/* First, some functions to initialize stuff at the beginning of the
    function.  */
 
 static void
@@ -3684,7 +3683,7 @@ find_method (struct linespec_state *self, std::vector<symtab *> *file_symtabs,
       gdb_assert (!pspace->executing_startup);
       set_current_program_space (pspace);
       t = check_typedef (SYMBOL_TYPE (sym));
-      find_methods (t, SYMBOL_LANGUAGE (sym),
+      find_methods (t, sym->language (),
 		    method_name, &result_names, &superclass_vec);
 
       /* Handle all items from a single program space at once; and be
@@ -3697,7 +3696,7 @@ find_method (struct linespec_state *self, std::vector<symtab *> *file_symtabs,
 	     this program space, consider superclasses.  */
 	  if (result_names.size () == last_result_len)
 	    find_superclass_methods (std::move (superclass_vec), method_name,
-				     SYMBOL_LANGUAGE (sym), &result_names);
+				     sym->language (), &result_names);
 
 	  /* We have a list of candidate symbol names, so now we
 	     iterate over the symbol tables looking for all
@@ -3999,9 +3998,9 @@ find_label_symbols_in_block (const struct block *block,
 
       ALL_BLOCK_SYMBOLS (block, iter, sym)
 	{
-	  if (symbol_matches_domain (SYMBOL_LANGUAGE (sym),
+	  if (symbol_matches_domain (sym->language (),
 				     SYMBOL_DOMAIN (sym), LABEL_DOMAIN)
-	      && cmp (SYMBOL_SEARCH_NAME (sym), name, name_len) == 0)
+	      && cmp (sym->search_name (), name, name_len) == 0)
 	    {
 	      result->push_back ({sym, block});
 	      label_funcs_ret->push_back ({fn_sym, block});
@@ -4109,8 +4108,9 @@ decode_digits_list_mode (struct linespec_state *self,
   return values;
 }
 
-/* A helper for create_sals_line_offset that iterates over the symtabs,
-   adding lines to the VEC.  */
+/* A helper for create_sals_line_offset that iterates over the symtabs
+   associated with LS and returns a vector of corresponding symtab_and_line
+   structures.  */
 
 static std::vector<symtab_and_line>
 decode_digits_ordinary (struct linespec_state *self,
@@ -4220,7 +4220,7 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
 
   if (is_function)
     {
-      const char *msym_name = MSYMBOL_LINKAGE_NAME (msymbol);
+      const char *msym_name = msymbol->linkage_name ();
 
       if (MSYMBOL_TYPE (msymbol) == mst_text_gnu_ifunc
 	  || MSYMBOL_TYPE (msymbol) == mst_data_gnu_ifunc)
@@ -4249,7 +4249,7 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
   sal.section = MSYMBOL_OBJ_SECTION (objfile, msymbol);
 
   if (maybe_add_address (self->addr_set, objfile->pspace, sal.pc))
-    add_sal_to_sals (self, result, &sal, MSYMBOL_NATURAL_NAME (msymbol), 0);
+    add_sal_to_sals (self, result, &sal, msymbol->natural_name (), 0);
 }
 
 /* A helper function to classify a minimal_symbol_type according to

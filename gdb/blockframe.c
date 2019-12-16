@@ -209,7 +209,7 @@ clear_pc_function_cache (void)
 
 /* See symtab.h.  */
 
-int
+bool
 find_pc_partial_function (CORE_ADDR pc, const char **name, CORE_ADDR *address,
 			  CORE_ADDR *endaddr, const struct block **block)
 {
@@ -219,7 +219,7 @@ find_pc_partial_function (CORE_ADDR pc, const char **name, CORE_ADDR *address,
   struct compunit_symtab *compunit_symtab = NULL;
   CORE_ADDR mapped_pc;
 
-  /* To ensure that the symbol returned belongs to the correct setion
+  /* To ensure that the symbol returned belongs to the correct section
      (and that the last [random] symbol from the previous section
      isn't returned) try to find the section containing PC.  First try
      the overlay code (which by default returns NULL); and second try
@@ -269,7 +269,7 @@ find_pc_partial_function (CORE_ADDR pc, const char **name, CORE_ADDR *address,
 	{
 	  const struct block *b = SYMBOL_BLOCK_VALUE (f);
 
-	  cache_pc_function_name = SYMBOL_LINKAGE_NAME (f);
+	  cache_pc_function_name = f->linkage_name ();
 	  cache_pc_function_section = section;
 	  cache_pc_function_block = b;
 
@@ -331,11 +331,13 @@ find_pc_partial_function (CORE_ADDR pc, const char **name, CORE_ADDR *address,
 	*address = 0;
       if (endaddr != NULL)
 	*endaddr = 0;
-      return 0;
+      if (block != nullptr)
+	*block = nullptr;
+      return false;
     }
 
   cache_pc_function_low = BMSYMBOL_VALUE_ADDRESS (msymbol);
-  cache_pc_function_name = MSYMBOL_LINKAGE_NAME (msymbol.minsym);
+  cache_pc_function_name = msymbol.minsym->linkage_name ();
   cache_pc_function_section = section;
   cache_pc_function_high = minimal_symbol_upper_bound (msymbol);
   cache_pc_function_block = nullptr;
@@ -372,7 +374,7 @@ find_pc_partial_function (CORE_ADDR pc, const char **name, CORE_ADDR *address,
   if (block != nullptr)
     *block = cache_pc_function_block;
 
-  return 1;
+  return true;
 }
 
 /* See symtab.h.  */

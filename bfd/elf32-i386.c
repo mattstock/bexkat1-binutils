@@ -1575,10 +1575,6 @@ elf_i386_check_relocs (bfd *abfd,
 
 	  /* It is referenced by a non-shared object. */
 	  h->ref_regular = 1;
-
-	  if (h->type == STT_GNU_IFUNC)
-	    elf_tdata (info->output_bfd)->has_gnu_symbols
-	      |= elf_gnu_symbol_ifunc;
 	}
 
       if (r_type == R_386_GOT32X
@@ -1952,7 +1948,7 @@ elf_i386_fake_sections (bfd *abfd ATTRIBUTE_UNUSED,
 {
   const char *name;
 
-  name = bfd_get_section_name (abfd, sec);
+  name = bfd_section_name (sec);
 
   /* This is an ugly, but unfortunately necessary hack that is
      needed when producing EFI binaries on x86. It tells
@@ -3433,7 +3429,7 @@ check_relocation_error:
 	      if (name == NULL)
 		return FALSE;
 	      if (*name == '\0')
-		name = bfd_section_name (input_bfd, sec);
+		name = bfd_section_name (sec);
 	    }
 
 	  if (r == bfd_reloc_overflow)
@@ -4404,10 +4400,11 @@ elf_i386_link_setup_gnu_properties (struct bfd_link_info *info)
    "FreeBSD" label in the ELF header.  So we put this label on all
    executables and (for simplicity) also all other object files.  */
 
-static void
-elf_i386_fbsd_post_process_headers (bfd *abfd, struct bfd_link_info *info)
+static bfd_boolean
+elf_i386_fbsd_init_file_header (bfd *abfd, struct bfd_link_info *info)
 {
-  _bfd_elf_post_process_headers (abfd, info);
+  if (!_bfd_elf_init_file_header (abfd, info))
+    return FALSE;
 
 #ifdef OLD_FREEBSD_ABI_LABEL
   {
@@ -4416,16 +4413,19 @@ elf_i386_fbsd_post_process_headers (bfd *abfd, struct bfd_link_info *info)
     memcpy (&i_ehdrp->e_ident[EI_ABIVERSION], "FreeBSD", 8);
   }
 #endif
+  return TRUE;
 }
 
-#undef	elf_backend_post_process_headers
-#define	elf_backend_post_process_headers	elf_i386_fbsd_post_process_headers
+#undef	elf_backend_init_file_header
+#define	elf_backend_init_file_header	elf_i386_fbsd_init_file_header
 #undef	elf32_bed
 #define	elf32_bed				elf32_i386_fbsd_bed
 
 #undef elf_backend_add_symbol_hook
 
 #include "elf32-target.h"
+
+#undef elf_backend_init_file_header
 
 /* Solaris 2.  */
 
@@ -4441,8 +4441,6 @@ static const struct elf_x86_backend_data elf_i386_solaris_arch_bed =
 
 #undef	elf_backend_arch_data
 #define	elf_backend_arch_data		&elf_i386_solaris_arch_bed
-
-#undef elf_backend_post_process_headers
 
 /* Restore default: we cannot use ELFOSABI_SOLARIS, otherwise ELFOSABI_NONE
    objects won't be recognized.  */
@@ -4611,7 +4609,6 @@ elf32_iamcu_elf_object_p (bfd *abfd)
 #undef	ELF_OSABI
 #undef	elf_backend_want_plt_sym
 #define elf_backend_want_plt_sym	0
-#undef	elf_backend_post_process_headers
 #undef	elf_backend_static_tls_alignment
 
 /* NaCl uses substantially different PLT entries for the same effects.  */
@@ -4778,8 +4775,8 @@ elf32_i386_nacl_elf_object_p (bfd *abfd)
 #define elf_backend_object_p			elf32_i386_nacl_elf_object_p
 #undef	elf_backend_modify_segment_map
 #define	elf_backend_modify_segment_map		nacl_modify_segment_map
-#undef	elf_backend_modify_program_headers
-#define	elf_backend_modify_program_headers	nacl_modify_program_headers
+#undef	elf_backend_modify_headers
+#define	elf_backend_modify_headers		nacl_modify_headers
 #undef	elf_backend_final_write_processing
 #define elf_backend_final_write_processing	nacl_final_write_processing
 
@@ -4788,7 +4785,7 @@ elf32_i386_nacl_elf_object_p (bfd *abfd)
 /* Restore defaults.  */
 #undef	elf_backend_object_p
 #undef	elf_backend_modify_segment_map
-#undef	elf_backend_modify_program_headers
+#undef	elf_backend_modify_headers
 #undef	elf_backend_final_write_processing
 
 /* VxWorks support.  */

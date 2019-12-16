@@ -28,12 +28,14 @@
 #include "registry.h"
 #include "gdb_bfd.h"
 #include "psymtab.h"
+#include <atomic>
 #include <bitset>
 #include <vector>
 #include "gdbsupport/next-iterator.h"
 #include "gdbsupport/safe-iterator.h"
 #include "bcache.h"
 #include "gdbarch.h"
+#include "gdbsupport/refcounted-object.h"
 
 struct htab;
 struct objfile_data;
@@ -69,8 +71,8 @@ struct partial_symbol;
    testcase are broken for some targets.  In this test the functions
    are all implemented as part of one file and the testcase is not
    necessarily linked with a start file (depending on the target).
-   What happens is, that the first frame is printed normaly and
-   following frames are treated as being inside the enttry file then.
+   What happens is, that the first frame is printed normally and
+   following frames are treated as being inside the entry file then.
    This way, only the #0 frame is printed in the backtrace output.''
    Ref "frame.c" "NOTE: vinschen/2003-04-01".
 
@@ -143,14 +145,14 @@ struct obj_section
 
 /* The memory address of section S (vma + offset).  */
 #define obj_section_addr(s)				      		\
-  (bfd_get_section_vma ((s)->objfile->obfd, s->the_bfd_section)		\
+  (bfd_section_vma (s->the_bfd_section)					\
    + obj_section_offset (s))
 
 /* The one-passed-the-end memory address of section S
    (vma + size + offset).  */
 #define obj_section_endaddr(s)						\
-  (bfd_get_section_vma ((s)->objfile->obfd, s->the_bfd_section)		\
-   + bfd_get_section_size ((s)->the_bfd_section)			\
+  (bfd_section_vma (s->the_bfd_section)					\
+   + bfd_section_size ((s)->the_bfd_section)				\
    + obj_section_offset (s))
 
 /* The "objstats" structure provides a place for gdb to record some
@@ -244,11 +246,11 @@ struct objfile_per_bfd_storage
 
   /* Byte cache for file names.  */
 
-  struct bcache filename_cache;
+  gdb::bcache filename_cache;
 
   /* Byte cache for macros.  */
 
-  struct bcache macro_cache;
+  gdb::bcache macro_cache;
 
   /* The gdbarch associated with the BFD.  Note that this gdbarch is
      determined solely from BFD information, without looking at target
@@ -258,10 +260,10 @@ struct objfile_per_bfd_storage
   struct gdbarch *gdbarch = NULL;
 
   /* Hash table for mapping symbol names to demangled names.  Each
-     entry in the hash table is actually two consecutive strings,
-     both null-terminated; the first one is a mangled or linkage
-     name, and the second is the demangled name or just a zero byte
-     if the name doesn't demangle.  */
+     entry in the hash table is a demangled_name_entry struct, storing the
+     language and two consecutive strings, both null-terminated; the first one
+     is a mangled or linkage name, and the second is the demangled name or just
+     a zero byte if the name doesn't demangle.  */
 
   htab_up demangled_names_hash;
 
@@ -305,12 +307,14 @@ struct objfile_per_bfd_storage
 
   bool minsyms_read : 1;
 
-  /* This is a hash table used to index the minimal symbols by name.  */
+  /* This is a hash table used to index the minimal symbols by (mangled)
+     name.  */
 
   minimal_symbol *msymbol_hash[MINIMAL_SYMBOL_HASH_SIZE] {};
 
   /* This hash table is used to index the minimal symbols by their
-     demangled names.  */
+     demangled names.  Uses a language-specific hash function via
+     search_name_hash.  */
 
   minimal_symbol *msymbol_demangled_hash[MINIMAL_SYMBOL_HASH_SIZE] {};
 
@@ -382,12 +386,38 @@ private:
    2.  Additional symbol files added by the add-symbol-file command,
    3.  Shared library objfiles, added by ADD_SOLIB,  4.  symbol files
    for modules that were loaded when GDB attached to a remote system
-   (see remote-vx.c).  */
+   (see remote-vx.c).
+
+   GDB typically reads symbols twice -- first an initial scan which just
+   reads "partial symbols"; these are partial information for the
+   static/global symbols in a symbol file.  When later looking up symbols,
+   objfile->sf->qf->lookup_symbol is used to check if we only have a partial
+   symbol and if so, read and expand the full compunit.  */
 
 struct objfile
 {
+private:
+
+  /* The only way to create an objfile is to call objfile::make.  */
   objfile (bfd *, const char *, objfile_flags);
+
+public:
+
+  /* Normally you should not call delete.  Instead, call 'unlink' to
+     remove it from the program space's list.  In some cases, you may
+     need to hold a reference to an objfile that is independent of its
+     existence on the program space's list; for this case, the
+     destructor must be public so that shared_ptr can reference
+     it.  */
   ~objfile ();
+
+  /* Create an objfile.  */
+  static objfile *make (bfd *bfd_, const char *name_, objfile_flags flags_,
+			objfile *parent = nullptr);
+
+  /* Remove an objfile from the current program space, and free
+     it.  */
+  void unlink ();
 
   DISABLE_COPY_AND_ASSIGN (objfile);
 
@@ -463,19 +493,13 @@ struct objfile
   }
 
 
-  /* All struct objfile's are chained together by their next pointers.
-     The program space field "objfiles"  (frequently referenced via
-     the macro "object_files") points to the first link in this chain.  */
-
-  struct objfile *next = nullptr;
-
   /* The object file's original name as specified by the user,
      made absolute, and tilde-expanded.  However, it is not canonicalized
      (i.e., it has not been passed through gdb_realpath).
      This pointer is never NULL.  This does not have to be freed; it is
      guaranteed to have a lifetime at least as long as the objfile.  */
 
-  char *original_name = nullptr;
+  const char *original_name = nullptr;
 
   CORE_ADDR addr_low = 0;
 
@@ -494,7 +518,7 @@ struct objfile
 
   /* The partial symbol tables.  */
 
-  std::shared_ptr<psymtab_storage> partial_symtabs;
+  std::unique_ptr<psymtab_storage> partial_symtabs;
 
   /* The object file's BFD.  Can be null if the objfile contains only
      minimal symbols, e.g. the run time common symbols for SunOS4.  */
@@ -619,6 +643,20 @@ struct objfile
   htab_up static_links;
 };
 
+/* A deleter for objfile.  */
+
+struct objfile_deleter
+{
+  void operator() (objfile *ptr) const
+  {
+    ptr->unlink ();
+  }
+};
+
+/* A unique pointer that holds an objfile.  */
+
+typedef std::unique_ptr<objfile, objfile_deleter> objfile_up;
+
 /* Declarations for functions defined in objfiles.c */
 
 extern struct gdbarch *get_objfile_arch (const struct objfile *);
@@ -629,15 +667,7 @@ extern CORE_ADDR entry_point_address (void);
 
 extern void build_objfile_section_table (struct objfile *);
 
-extern void put_objfile_before (struct objfile *, struct objfile *);
-
-extern void add_separate_debug_objfile (struct objfile *, struct objfile *);
-
-extern void unlink_objfile (struct objfile *);
-
 extern void free_objfile_separate_debug (struct objfile *);
-
-extern void free_all_objfiles (void);
 
 extern void objfile_relocate (struct objfile *, const struct section_offsets *);
 extern void objfile_rebase (struct objfile *, CORE_ADDR);
@@ -741,10 +771,6 @@ extern void default_iterate_over_objfiles_in_search_order
    want to die here.  Let the users of SECT_OFF_BSS deal with an
    uninitialized section index.  */
 #define SECT_OFF_BSS(objfile) (objfile)->sect_index_bss
-
-/* Answer whether there is more than one object file loaded.  */
-
-#define MULTI_OBJFILE_P() (object_files && object_files->next)
 
 /* Reset the per-BFD storage area on OBJ.  */
 

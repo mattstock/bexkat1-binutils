@@ -262,9 +262,11 @@ list_search (int reg_value, const struct ns32k_option *optionP, char *result)
 static int
 bit_extract (bfd_byte *buffer, int offset, int count)
 {
-  int result;
-  int bit;
+  unsigned int result;
+  unsigned int bit;
 
+  if (offset < 0 || count < 0)
+    return 0;
   buffer += offset >> 3;
   offset &= 7;
   bit = 1;
@@ -289,9 +291,11 @@ bit_extract (bfd_byte *buffer, int offset, int count)
 static int
 bit_extract_simple (bfd_byte *buffer, int offset, int count)
 {
-  int result;
-  int bit;
+  unsigned int result;
+  unsigned int bit;
 
+  if (offset < 0 || count < 0)
+    return 0;
   buffer += offset >> 3;
   offset &= 7;
   bit = 1;
@@ -313,18 +317,18 @@ bit_extract_simple (bfd_byte *buffer, int offset, int count)
 static void
 bit_copy (bfd_byte *buffer, int offset, int count, char *to)
 {
+  if (offset < 0 || count < 0)
+    return;
   for (; count > 8; count -= 8, to++, offset += 8)
     *to = bit_extract (buffer, offset, 8);
   *to = bit_extract (buffer, offset, count);
 }
 
 static int
-sign_extend (int value, int bits)
+sign_extend (unsigned int value, unsigned int bits)
 {
-  value = value & ((1 << bits) - 1);
-  return (value & (1 << (bits - 1))
-	  ? value | (~((1 << bits) - 1))
-	  : value);
+  unsigned int sign = 1u << (bits - 1);
+  return ((value & (sign + sign - 1)) ^ sign) - sign;
 }
 
 static void
@@ -836,8 +840,10 @@ print_insn_ns32k (bfd_vma memaddr, disassemble_info *info)
 				    memaddr, arg_bufs[argnum],
 				    index_offset[whicharg]);
 	  d++;
-	  whicharg++;
+	  if (whicharg++ >= 1)
+	    break;
 	}
+
       for (argnum = 0; argnum <= maxarg; argnum++)
 	{
 	  bfd_vma addr;

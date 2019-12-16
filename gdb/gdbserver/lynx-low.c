@@ -316,7 +316,7 @@ lynx_attach (unsigned long pid)
 
   if (lynx_ptrace (PTRACE_ATTACH, ptid, 0, 0, 0) != 0)
     error ("Cannot attach to process %lu: %s (%d)\n", pid,
-	   strerror (errno), errno);
+	   safe_strerror (errno), errno);
 
   lynx_add_process (pid, 1);
   lynx_add_threads_after_attach (pid);
@@ -753,7 +753,6 @@ static struct target_ops lynx_target_ops = {
   NULL,  /* stopped_data_address */
   NULL,  /* read_offsets */
   NULL,  /* get_tls_address */
-  NULL,  /* qxfer_spu */
   NULL,  /* hostio_last_error */
   NULL,  /* qxfer_osdata */
   NULL,  /* qxfer_siginfo */

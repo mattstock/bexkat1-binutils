@@ -49,8 +49,6 @@ struct pending_block
     struct block *block;
   };
 
-static int compare_line_numbers (const void *ln1p, const void *ln2p);
-
 /* Initial sizes of data structures.  These are realloc'd larger if
    needed, and realloc'd down to the size actually used, when
    completed.  */
@@ -137,7 +135,7 @@ add_symbol_to_list (struct symbol *symbol, struct pending **listhead)
   struct pending *link;
 
   /* If this is an alias for another symbol, don't add it.  */
-  if (symbol->ginfo.name && symbol->ginfo.name[0] == '#')
+  if (symbol->name && symbol->name[0] == '#')
     return;
 
   /* We keep PENDINGSIZE symbols in each link of the list.  If we
@@ -166,7 +164,7 @@ find_symbol_in_list (struct pending *list, char *name, int length)
     {
       for (j = list->nsyms; --j >= 0;)
 	{
-	  pp = SYMBOL_LINKAGE_NAME (list->symbol[j]);
+	  pp = list->symbol[j]->linkage_name ();
 	  if (*pp == *name && strncmp (pp, name, length) == 0
 	      && pp[length] == '\0')
 	    {
@@ -321,7 +319,7 @@ buildsym_compunit::finish_block_internal
 	{
 	  complaint (_("block end address less than block "
 		       "start address in %s (patched it)"),
-		     SYMBOL_PRINT_NAME (symbol));
+		     symbol->print_name ());
 	}
       else
 	{
@@ -358,7 +356,7 @@ buildsym_compunit::finish_block_internal
 	      if (symbol)
 		{
 		  complaint (_("inner block not inside outer block in %s"),
-			     SYMBOL_PRINT_NAME (symbol));
+			     symbol->print_name ());
 		}
 	      else
 		{
@@ -729,23 +727,20 @@ buildsym_compunit::record_line (struct subfile *subfile, int line,
 
 /* Needed in order to sort line tables from IBM xcoff files.  Sigh!  */
 
-static int
-compare_line_numbers (const void *ln1p, const void *ln2p)
+static bool
+lte_is_less_than (const linetable_entry &ln1, const linetable_entry &ln2)
 {
-  struct linetable_entry *ln1 = (struct linetable_entry *) ln1p;
-  struct linetable_entry *ln2 = (struct linetable_entry *) ln2p;
-
   /* Note: this code does not assume that CORE_ADDRs can fit in ints.
      Please keep it that way.  */
-  if (ln1->pc < ln2->pc)
-    return -1;
+  if (ln1.pc < ln2.pc)
+    return true;
 
-  if (ln1->pc > ln2->pc)
-    return 1;
+  if (ln1.pc > ln2.pc)
+    return false;
 
   /* If pc equal, sort by line.  I'm not sure whether this is optimum
      behavior (see comment at struct linetable in symtab.h).  */
-  return ln1->line - ln2->line;
+  return ln1.line < ln2.line;
 }
 
 /* Subroutine of end_symtab to simplify it.  Look for a subfile that
@@ -968,9 +963,10 @@ buildsym_compunit::end_symtab_with_blockvector (struct block *static_block,
 	     scrambled in reordered executables.  Sort it if
 	     OBJF_REORDERED is true.  */
 	  if (m_objfile->flags & OBJF_REORDERED)
-	    qsort (subfile->line_vector->item,
-		   subfile->line_vector->nitems,
-		   sizeof (struct linetable_entry), compare_line_numbers);
+	    std::sort (subfile->line_vector->item,
+		       subfile->line_vector->item
+			 + subfile->line_vector->nitems,
+		       lte_is_less_than);
 	}
 
       /* Allocate a symbol table if necessary.  */
@@ -1031,9 +1027,8 @@ buildsym_compunit::end_symtab_with_blockvector (struct block *static_block,
     {
       /* Reallocate the dirname on the symbol obstack.  */
       const char *comp_dir = m_comp_dir.get ();
-      COMPUNIT_DIRNAME (cu)
-	= (const char *) obstack_copy0 (&m_objfile->objfile_obstack,
-					comp_dir, strlen (comp_dir));
+      COMPUNIT_DIRNAME (cu) = obstack_strdup (&m_objfile->objfile_obstack,
+					      comp_dir);
     }
 
   /* Save the debug format string (if any) in the symtab.  */

@@ -29,7 +29,7 @@
 #include "dis-asm.h"
 #include "sim-regno.h"
 #include "gdb/sim-frv.h"
-#include "../opcodes/frv-desc.h"	/* for the H_SPR_... enums */
+#include "opcodes/frv-desc.h"	/* for the H_SPR_... enums */
 #include "symtab.h"
 #include "elf-bfd.h"
 #include "elf/frv.h"
@@ -524,7 +524,7 @@ frv_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
      J - The register number of GRj in the instruction description.
      K - The register number of GRk in the instruction description.
      I - The register number of GRi.
-     S - a signed imediate offset.
+     S - a signed immediate offset.
      U - an unsigned immediate offset.
 
      The dots below the numbers indicate where hex digit boundaries
@@ -1074,8 +1074,8 @@ frv_skip_main_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
       s = lookup_minimal_symbol_by_pc (call_dest);
 
       if (s.minsym != NULL
-          && MSYMBOL_LINKAGE_NAME (s.minsym) != NULL
-	  && strcmp (MSYMBOL_LINKAGE_NAME (s.minsym), "__main") == 0)
+          && s.minsym->linkage_name () != NULL
+	  && strcmp (s.minsym->linkage_name (), "__main") == 0)
 	{
 	  pc += 4;
 	  return pc;

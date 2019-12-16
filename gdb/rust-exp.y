@@ -40,7 +40,6 @@
 #include "parser-defs.h"
 #include "gdbsupport/selftest.h"
 #include "value.h"
-#include "gdbsupport/vec.h"
 #include "gdbarch.h"
 
 #define GDB_YY_REMAP_PREFIX rust
@@ -1011,7 +1010,7 @@ static const struct token_info operator_tokens[] =
 const char *
 rust_parser::copy_name (const char *name, int len)
 {
-  return (const char *) obstack_copy0 (&obstack, name, len);
+  return obstack_strndup (&obstack, name, len);
 }
 
 /* Helper function to make an stoken from a C string.  */
@@ -2025,7 +2024,7 @@ rust_parser::rust_lookup_type (const char *name, const struct block *block)
       return SYMBOL_TYPE (result.symbol);
     }
 
-  type = lookup_typename (language (), arch (), name, NULL, 1);
+  type = lookup_typename (language (), name, NULL, 1);
   if (type != NULL)
     return type;
 

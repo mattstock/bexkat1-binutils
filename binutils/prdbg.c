@@ -1930,14 +1930,14 @@ find_address_in_section (bfd *abfd, asection *section, void *data)
   if (found)
     return;
 
-  if ((bfd_get_section_flags (abfd, section) & SEC_ALLOC) == 0)
+  if ((bfd_section_flags (section) & SEC_ALLOC) == 0)
     return;
 
-  vma = bfd_get_section_vma (abfd, section);
+  vma = bfd_section_vma (section);
   if (pc < vma)
     return;
 
-  size = bfd_get_section_size (section);
+  size = bfd_section_size (section);
   if (pc >= vma + size)
     return;
 
@@ -2117,6 +2117,7 @@ tg_start_class_type (void *p, const char *tag, unsigned int id,
   struct pr_handle *info = (struct pr_handle *) p;
   char *tv = NULL;
   const char *name;
+  char idbuf[20];
 
   info->indent += 2;
 
@@ -2131,8 +2132,6 @@ tg_start_class_type (void *p, const char *tag, unsigned int id,
     name = tag;
   else
     {
-      char idbuf[20];
-
       sprintf (idbuf, "%%anon%u", id);
       name = idbuf;
     }

@@ -172,7 +172,6 @@ struct gdbarch
 
      */
 
-  int bits_big_endian;
   int short_bit;
   int int_bit;
   int long_bit;
@@ -358,6 +357,7 @@ struct gdbarch
   char ** disassembler_options;
   const disasm_options_and_args_t * valid_disassembler_options;
   gdbarch_type_align_ftype *type_align;
+  gdbarch_get_pc_address_flags_ftype *get_pc_address_flags;
 };
 
 /* Create a new ``struct gdbarch'' based on information provided by
@@ -388,7 +388,6 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->target_desc = info->target_desc;
 
   /* Force the explicit initialization of these.  */
-  gdbarch->bits_big_endian = (gdbarch->byte_order == BFD_ENDIAN_BIG);
   gdbarch->short_bit = 2*TARGET_CHAR_BIT;
   gdbarch->int_bit = 4*TARGET_CHAR_BIT;
   gdbarch->long_bit = 4*TARGET_CHAR_BIT;
@@ -473,6 +472,7 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->gnu_triplet_regexp = default_gnu_triplet_regexp;
   gdbarch->addressable_memory_unit_size = default_addressable_memory_unit_size;
   gdbarch->type_align = default_type_align;
+  gdbarch->get_pc_address_flags = default_get_pc_address_flags;
   /* gdbarch_alloc() */
 
   return gdbarch;
@@ -526,7 +526,6 @@ verify_gdbarch (struct gdbarch *gdbarch)
   if (gdbarch->bfd_arch_info == NULL)
     log.puts ("\n\tbfd_arch_info");
   /* Check those that need to be defined for the given multi-arch level.  */
-  /* Skip verify of bits_big_endian, invalid_p == 0 */
   /* Skip verify of short_bit, invalid_p == 0 */
   /* Skip verify of int_bit, invalid_p == 0 */
   /* Skip verify of long_bit, invalid_p == 0 */
@@ -721,6 +720,7 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of disassembler_options, invalid_p == 0 */
   /* Skip verify of valid_disassembler_options, invalid_p == 0 */
   /* Skip verify of type_align, invalid_p == 0 */
+  /* Skip verify of get_pc_address_flags, invalid_p == 0 */
   if (!log.empty ())
     internal_error (__FILE__, __LINE__,
                     _("verify_gdbarch: the following are invalid ...%s"),
@@ -813,9 +813,6 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: bfd_arch_info = %s\n",
                       gdbarch_bfd_arch_info (gdbarch)->printable_name);
-  fprintf_unfiltered (file,
-                      "gdbarch_dump: bits_big_endian = %s\n",
-                      plongest (gdbarch->bits_big_endian));
   fprintf_unfiltered (file,
                       "gdbarch_dump: breakpoint_from_pc = <%s>\n",
                       host_address_to_string (gdbarch->breakpoint_from_pc));
@@ -1065,6 +1062,9 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: get_longjmp_target = <%s>\n",
                       host_address_to_string (gdbarch->get_longjmp_target));
+  fprintf_unfiltered (file,
+                      "gdbarch_dump: get_pc_address_flags = <%s>\n",
+                      host_address_to_string (gdbarch->get_pc_address_flags));
   fprintf_unfiltered (file,
                       "gdbarch_dump: gdbarch_get_siginfo_type_p() = %d\n",
                       gdbarch_get_siginfo_type_p (gdbarch));
@@ -1556,23 +1556,6 @@ gdbarch_target_desc (struct gdbarch *gdbarch)
   if (gdbarch_debug >= 2)
     fprintf_unfiltered (gdb_stdlog, "gdbarch_target_desc called\n");
   return gdbarch->target_desc;
-}
-
-int
-gdbarch_bits_big_endian (struct gdbarch *gdbarch)
-{
-  gdb_assert (gdbarch != NULL);
-  /* Skip verify of bits_big_endian, invalid_p == 0 */
-  if (gdbarch_debug >= 2)
-    fprintf_unfiltered (gdb_stdlog, "gdbarch_bits_big_endian called\n");
-  return gdbarch->bits_big_endian;
-}
-
-void
-set_gdbarch_bits_big_endian (struct gdbarch *gdbarch,
-                             int bits_big_endian)
-{
-  gdbarch->bits_big_endian = bits_big_endian;
 }
 
 int
@@ -5037,7 +5020,7 @@ set_gdbarch_infcall_munmap (struct gdbarch *gdbarch,
   gdbarch->infcall_munmap = infcall_munmap;
 }
 
-char *
+std::string
 gdbarch_gcc_target_options (struct gdbarch *gdbarch)
 {
   gdb_assert (gdbarch != NULL);
@@ -5154,6 +5137,23 @@ set_gdbarch_type_align (struct gdbarch *gdbarch,
                         gdbarch_type_align_ftype type_align)
 {
   gdbarch->type_align = type_align;
+}
+
+std::string
+gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, frame_info *frame, CORE_ADDR pc)
+{
+  gdb_assert (gdbarch != NULL);
+  gdb_assert (gdbarch->get_pc_address_flags != NULL);
+  if (gdbarch_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "gdbarch_get_pc_address_flags called\n");
+  return gdbarch->get_pc_address_flags (frame, pc);
+}
+
+void
+set_gdbarch_get_pc_address_flags (struct gdbarch *gdbarch,
+                                  gdbarch_get_pc_address_flags_ftype get_pc_address_flags)
+{
+  gdbarch->get_pc_address_flags = get_pc_address_flags;
 }
 
 

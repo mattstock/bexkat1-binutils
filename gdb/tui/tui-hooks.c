@@ -49,11 +49,6 @@
 
 #include "gdb_curses.h"
 
-/* This redefines CTRL if it is not already defined, so it must come
-   after terminal state releated include files like <term.h> and
-   "gdb_curses.h".  */
-#include "readline/readline.h"
-
 static void
 tui_new_objfile_hook (struct objfile* objfile)
 {
@@ -71,6 +66,9 @@ tui_register_changed (struct frame_info *frame, int regno)
 {
   struct frame_info *fi;
 
+  if (!tui_is_window_visible (DATA_WIN))
+    return;
+
   /* The frame of the register that was changed may differ from the selected
      frame, but we only want to show the register values of the selected frame.
      And even if the frames differ a register change made in one can still show
@@ -80,7 +78,7 @@ tui_register_changed (struct frame_info *frame, int regno)
   if (tui_refreshing_registers == 0)
     {
       tui_refreshing_registers = 1;
-      tui_check_register_values (fi);
+      TUI_DATA_WIN->check_register_values (fi);
       tui_refreshing_registers = 0;
     }
 }
@@ -152,7 +150,7 @@ tui_refresh_frame_and_register_information (int registers_too_p)
       && (frame_info_changed_p || registers_too_p))
     {
       tui_refreshing_registers = 1;
-      tui_check_register_values (fi);
+      TUI_DATA_WIN->check_register_values (fi);
       tui_refreshing_registers = 0;
     }
 }
@@ -260,7 +258,6 @@ void
 tui_remove_hooks (void)
 {
   deprecated_print_frame_info_listing_hook = 0;
-  deprecated_query_hook = 0;
 
   /* Remove our observers.  */
   tui_attach_detach_observers (false);

@@ -858,7 +858,7 @@ static int heuristic_fence_post = 0;
    register N.  NOTE: This defines the pseudo register type so need to
    rebuild the architecture vector.  */
 
-static int mips64_transfers_32bit_regs_p = 0;
+static bool mips64_transfers_32bit_regs_p = false;
 
 static void
 set_mips64_transfers_32bit_regs (const char *args, int from_tty,
@@ -3821,8 +3821,8 @@ mips_stub_frame_sniffer (const struct frame_unwind *self,
      stub.  The stub for foo is named ".pic.foo".  */
   msym = lookup_minimal_symbol_by_pc (pc);
   if (msym.minsym != NULL
-      && MSYMBOL_LINKAGE_NAME (msym.minsym) != NULL
-      && startswith (MSYMBOL_LINKAGE_NAME (msym.minsym), ".pic."))
+      && msym.minsym->linkage_name () != NULL
+      && startswith (msym.minsym->linkage_name (), ".pic."))
     return 1;
 
   return 0;
@@ -7818,8 +7818,8 @@ mips_skip_pic_trampoline_code (struct frame_info *frame, CORE_ADDR pc)
   msym = lookup_minimal_symbol_by_pc (pc);
   if (msym.minsym == NULL
       || BMSYMBOL_VALUE_ADDRESS (msym) != pc
-      || MSYMBOL_LINKAGE_NAME (msym.minsym) == NULL
-      || !startswith (MSYMBOL_LINKAGE_NAME (msym.minsym), ".pic."))
+      || msym.minsym->linkage_name () == NULL
+      || !startswith (msym.minsym->linkage_name (), ".pic."))
     return 0;
 
   /* A two-instruction header.  */
@@ -7975,7 +7975,7 @@ static void
 mips_find_abi_section (bfd *abfd, asection *sect, void *obj)
 {
   enum mips_abi *abip = (enum mips_abi *) obj;
-  const char *name = bfd_get_section_name (abfd, sect);
+  const char *name = bfd_section_name (sect);
 
   if (*abip != MIPS_ABI_UNKNOWN)
     return;
@@ -8003,7 +8003,7 @@ static void
 mips_find_long_section (bfd *abfd, asection *sect, void *obj)
 {
   int *lbp = (int *) obj;
-  const char *name = bfd_get_section_name (abfd, sect);
+  const char *name = bfd_section_name (sect);
 
   if (startswith (name, ".gcc_compiled_long32"))
     *lbp = 32;

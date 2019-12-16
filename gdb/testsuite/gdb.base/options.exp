@@ -168,6 +168,7 @@ proc_with_prefix test-print {{prefix ""}} {
 	"-null-stop"
 	"-object"
 	"-pretty"
+	"-raw-values"
 	"-repeats"
 	"-static-members"
 	"-symbol"
@@ -268,6 +269,7 @@ proc_with_prefix test-backtrace {} {
     test_gdb_complete_multiple "backtrace " "-" "" {
 	"-entry-values"
 	"-frame-arguments"
+	"-frame-info"
 	"-full"
 	"-hide"
 	"-no-filters"

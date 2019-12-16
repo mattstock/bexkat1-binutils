@@ -217,7 +217,7 @@ make_a_section_from_file (bfd *abfd,
 	  break;
 	}
       if (new_name != NULL)
-	bfd_rename_section (abfd, return_section, new_name);
+	bfd_rename_section (return_section, new_name);
     }
 
   return result;
@@ -257,14 +257,14 @@ coff_real_object_p (bfd *abfd,
   if ((internal_f->f_flags & F_EXEC) != 0)
     abfd->flags |= D_PAGED;
 
-  bfd_get_symcount (abfd) = internal_f->f_nsyms;
+  abfd->symcount = internal_f->f_nsyms;
   if (internal_f->f_nsyms)
     abfd->flags |= HAS_SYMS;
 
   if (internal_a != (struct internal_aouthdr *) NULL)
-    bfd_get_start_address (abfd) = internal_a->entry;
+    abfd->start_address = internal_a->entry;
   else
-    bfd_get_start_address (abfd) = 0;
+    abfd->start_address = 0;
 
   /* Set up the tdata area.  ECOFF uses its own routine, and overrides
      abfd->flags.  */
@@ -309,7 +309,7 @@ coff_real_object_p (bfd *abfd,
  fail2:
   abfd->tdata.any = tdata_save;
   abfd->flags = oflags;
-  bfd_get_start_address (abfd) = ostart;
+  abfd->start_address = ostart;
   return (const bfd_target *) NULL;
 }
 
@@ -1814,10 +1814,11 @@ coff_get_normalized_symtab (bfd *abfd)
   if (! _bfd_coff_get_external_symbols (abfd))
     return NULL;
 
-  size = obj_raw_syment_count (abfd) * sizeof (combined_entry_type);
+  size = obj_raw_syment_count (abfd);
   /* Check for integer overflow.  */
-  if (size < obj_raw_syment_count (abfd))
+  if (size > (bfd_size_type) -1 / sizeof (combined_entry_type))
     return NULL;
+  size *= sizeof (combined_entry_type);
   internal = (combined_entry_type *) bfd_zalloc (abfd, size);
   if (internal == NULL && size != 0)
     return NULL;
@@ -1844,29 +1845,20 @@ coff_get_normalized_symtab (bfd *abfd)
       symbol_ptr = internal_ptr;
       internal_ptr->is_sym = TRUE;
 
-      /* PR 17512: file: 1353-1166-0.004.  */
-      if (symbol_ptr->u.syment.n_sclass == C_FILE
-	  && symbol_ptr->u.syment.n_numaux > 0
-	  && raw_src + symesz + symbol_ptr->u.syment.n_numaux
-	  * symesz > raw_end)
-	{
-	  bfd_release (abfd, internal);
-	  return NULL;
-	}
-
       for (i = 0;
 	   i < symbol_ptr->u.syment.n_numaux;
 	   i++)
 	{
 	  internal_ptr++;
+	  raw_src += symesz;
+
 	  /* PR 17512: Prevent buffer overrun.  */
-	  if (internal_ptr >= internal_end)
+	  if (raw_src >= raw_end || internal_ptr >= internal_end)
 	    {
 	      bfd_release (abfd, internal);
 	      return NULL;
 	    }
 
-	  raw_src += symesz;
 	  bfd_coff_swap_aux_in (abfd, (void *) raw_src,
 				symbol_ptr->u.syment.n_type,
 				symbol_ptr->u.syment.n_sclass,
@@ -2290,7 +2282,7 @@ coff_find_nearest_line_with_names (bfd *abfd,
   /* Also try examining DWARF2 debugging information.  */
   if (_bfd_dwarf2_find_nearest_line (abfd, symbols, NULL, section, offset,
 				     filename_ptr, functionname_ptr,
-				     line_ptr, NULL, debug_sections, 0,
+				     line_ptr, NULL, debug_sections,
 				     &coff_data(abfd)->dwarf2_find_line_info))
     return TRUE;
 
@@ -2330,7 +2322,7 @@ coff_find_nearest_line_with_names (bfd *abfd,
 	  && _bfd_dwarf2_find_nearest_line (abfd, symbols, NULL, section,
 					    offset + bias,
 					    filename_ptr, functionname_ptr,
-					    line_ptr, NULL, debug_sections, 0,
+					    line_ptr, NULL, debug_sections,
 					    &coff_data(abfd)->dwarf2_find_line_info))
 	return TRUE;
     }
@@ -2366,7 +2358,7 @@ coff_find_nearest_line_with_names (bfd *abfd,
       bfd_vma maxdiff;
 
       /* Look through the C_FILE symbols to find the best one.  */
-      sec_vma = bfd_get_section_vma (abfd, section);
+      sec_vma = bfd_section_vma (section);
       *filename_ptr = (char *) p->u.syment._n._n_n._n_offset;
       maxdiff = (bfd_vma) 0 - (bfd_vma) 1;
       while (1)
@@ -2408,13 +2400,16 @@ coff_find_nearest_line_with_names (bfd *abfd,
 	      maxdiff = offset + sec_vma - p2->u.syment.n_value;
 	    }
 
+	  if (p->u.syment.n_value >= cof->raw_syment_count)
+	    break;
+
 	  /* Avoid endless loops on erroneous files by ensuring that
 	     we always move forward in the file.  */
 	  if (p >= cof->raw_syments + p->u.syment.n_value)
 	    break;
 
 	  p = cof->raw_syments + p->u.syment.n_value;
-	  if (p > pend || p->u.syment.n_sclass != C_FILE)
+	  if (!p->is_sym || p->u.syment.n_sclass != C_FILE)
 	    break;
 	}
     }
@@ -2658,7 +2653,7 @@ _bfd_coff_section_already_linked (bfd *abfd,
   if ((flags & SEC_GROUP) != 0)
     return FALSE;
 
-  name = bfd_get_section_name (abfd, sec);
+  name = bfd_section_name (sec);
   s_comdat = bfd_coff_get_comdat_section (abfd, sec);
 
   if (s_comdat != NULL)
@@ -3154,4 +3149,15 @@ bfd_coff_gc_sections (bfd *abfd ATTRIBUTE_UNUSED, struct bfd_link_info *info)
 
   /* ... and mark SEC_EXCLUDE for those that go.  */
   return coff_gc_sweep (abfd, info);
+}
+
+/* Return name used to identify a comdat group.  */
+
+const char *
+bfd_coff_group_name (bfd *abfd, const asection *sec)
+{
+  struct coff_comdat_info *ci = bfd_coff_get_comdat_section (abfd, sec);
+  if (ci != NULL)
+    return ci->name;
+  return NULL;
 }

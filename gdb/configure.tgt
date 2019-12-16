@@ -14,6 +14,7 @@
 
 case $targ in
  *-*-irix* | \
+ *-*-solaris2.[01] | *-*-solaris2.[2-9]* | *-*-solaris2.10* | \
  alpha*-*-osf* | \
  alpha*-*-freebsd* | \
  alpha*-*-kfreebsd*-gnu | \
@@ -84,7 +85,8 @@ ia64*-*-*)
 	;;
 
 riscv*-*-*)
-	cpu_obs="riscv-tdep.o arch/riscv.o";;
+	cpu_obs="riscv-tdep.o arch/riscv.o \
+	         ravenscar-thread.o riscv-ravenscar-thread.o";;
 
 x86_64-*-*)
 	cpu_obs="${i386_tobjs} ${amd64_tobjs}";;
@@ -452,7 +454,7 @@ mn10300-*-*)
 	gdb_sim=../sim/mn10300/libsim.a
 	;;
 
-msp430*-*-elf)
+msp430-*-elf*)
 	gdb_target_obs="msp430-tdep.o"
 	gdb_sim=../sim/msp430/libsim.a
 	;;
@@ -514,8 +516,7 @@ powerpc-*-aix* | rs6000-*-* | powerpc64-*-aix*)
 powerpc*-*-linux*)
 	# Target: PowerPC running Linux
 	gdb_target_obs="rs6000-tdep.o ppc-linux-tdep.o ppc-sysv-tdep.o \
-			ppc64-tdep.o solib-svr4.o solib-spu.o \
-			spu-multiarch.o \
+			ppc64-tdep.o solib-svr4.o \
 			glibc-tdep.o symfile-mem.o linux-tdep.o \
 			ravenscar-thread.o ppc-ravenscar-thread.o \
 			linux-record.o \
@@ -666,12 +667,6 @@ sparc64-*-*)
 	# Target: UltraSPARC
 	gdb_target_obs="sparc-tdep.o sparc64-tdep.o \
 			ravenscar-thread.o sparc-ravenscar-thread.o"
-	;;
-
-spu*-*-*)
-	# Target: Cell BE SPU
-	gdb_target_obs="spu-tdep.o"
-	build_gdbserver=yes
 	;;
 
 s12z-*-*)

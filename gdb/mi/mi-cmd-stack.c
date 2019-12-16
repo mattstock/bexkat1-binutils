@@ -515,7 +515,7 @@ list_arg_or_local (const struct frame_arg *arg, enum what_to_list what,
 
   string_file stb;
 
-  stb.puts (SYMBOL_PRINT_NAME (arg->sym));
+  stb.puts (arg->sym->print_name ());
   if (arg->entry_kind == print_entry_values_only)
     stb.puts ("@entry");
   uiout->field_stream ("name", stb);
@@ -533,7 +533,7 @@ list_arg_or_local (const struct frame_arg *arg, enum what_to_list what,
   if (arg->val || arg->error)
     {
       if (arg->error)
-	stb.printf (_("<error reading variable: %s>"), arg->error);
+	stb.printf (_("<error reading variable: %s>"), arg->error.get ());
       else
 	{
 	  try
@@ -543,7 +543,7 @@ list_arg_or_local (const struct frame_arg *arg, enum what_to_list what,
 	      get_no_prettyformat_print_options (&opts);
 	      opts.deref_ref = 1;
 	      common_val_print (arg->val, &stb, 0, &opts,
-				language_def (SYMBOL_LANGUAGE (arg->sym)));
+				language_def (arg->sym->language ()));
 	    }
 	  catch (const gdb_exception_error &except)
 	    {
@@ -634,17 +634,15 @@ list_args_or_locals (const frame_print_options &fp_opts,
 	      struct frame_arg arg, entryarg;
 
 	      if (SYMBOL_IS_ARGUMENT (sym))
-		sym2 = lookup_symbol (SYMBOL_LINKAGE_NAME (sym),
+		sym2 = lookup_symbol (sym->linkage_name (),
 				      block, VAR_DOMAIN,
 				      NULL).symbol;
 	      else
 		sym2 = sym;
 	      gdb_assert (sym2 != NULL);
 
-	      memset (&arg, 0, sizeof (arg));
 	      arg.sym = sym2;
 	      arg.entry_kind = print_entry_values_no;
-	      memset (&entryarg, 0, sizeof (entryarg));
 	      entryarg.sym = sym2;
 	      entryarg.entry_kind = print_entry_values_no;
 
@@ -669,8 +667,6 @@ list_args_or_locals (const frame_print_options &fp_opts,
 		list_arg_or_local (&arg, what, values, skip_unavailable);
 	      if (entryarg.entry_kind != print_entry_values_no)
 		list_arg_or_local (&entryarg, what, values, skip_unavailable);
-	      xfree (arg.error);
-	      xfree (entryarg.error);
 	    }
 	}
 

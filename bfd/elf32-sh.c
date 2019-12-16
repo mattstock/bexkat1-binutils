@@ -30,6 +30,9 @@
 #include "libiberty.h"
 #include "../opcodes/sh-opc.h"
 
+/* All users of this file have bfd_octets_per_byte (abfd, sec) == 1.  */
+#define OCTETS_PER_BYTE(ABFD, SEC) 1
+
 static bfd_reloc_status_type sh_elf_reloc
   (bfd *, arelent *, asymbol *, void *, asection *, bfd *, char **);
 static bfd_reloc_status_type sh_elf_ignore_reloc
@@ -229,11 +232,12 @@ sh_elf_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol_in,
 	      void *data, asection *input_section, bfd *output_bfd,
 	      char **error_message ATTRIBUTE_UNUSED)
 {
-  unsigned long insn;
+  bfd_vma insn;
   bfd_vma sym_value;
   enum elf_sh_reloc_type r_type;
   bfd_vma addr = reloc_entry->address;
-  bfd_byte *hit_data = addr + (bfd_byte *) data;
+  bfd_size_type octets = addr * OCTETS_PER_BYTE (abfd, input_section);
+  bfd_byte *hit_data = (bfd_byte *) data + octets;
 
   r_type = (enum elf_sh_reloc_type) reloc_entry->howto->type;
 
@@ -254,7 +258,7 @@ sh_elf_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol_in,
     return bfd_reloc_undefined;
 
   /* PR 17512: file: 9891ca98.  */
-  if (addr * bfd_octets_per_byte (abfd) + bfd_get_reloc_size (reloc_entry->howto)
+  if (octets + bfd_get_reloc_size (reloc_entry->howto)
       > bfd_get_section_limit_octets (abfd, input_section))
     return bfd_reloc_outofrange;
 
@@ -270,7 +274,7 @@ sh_elf_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol_in,
     case R_SH_DIR32:
       insn = bfd_get_32 (abfd, hit_data);
       insn += sym_value + reloc_entry->addend;
-      bfd_put_32 (abfd, (bfd_vma) insn, hit_data);
+      bfd_put_32 (abfd, insn, hit_data);
       break;
     case R_SH_IND12W:
       insn = bfd_get_16 (abfd, hit_data);
@@ -279,12 +283,10 @@ sh_elf_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol_in,
 		    + input_section->output_offset
 		    + addr
 		    + 4);
-      sym_value += (insn & 0xfff) << 1;
-      if (insn & 0x800)
-	sym_value -= 0x1000;
-      insn = (insn & 0xf000) | (sym_value & 0xfff);
-      bfd_put_16 (abfd, (bfd_vma) insn, hit_data);
-      if (sym_value < (bfd_vma) -0x1000 || sym_value >= 0x1000)
+      sym_value += (((insn & 0xfff) ^ 0x800) - 0x800) << 1;
+      insn = (insn & 0xf000) | ((sym_value >> 1) & 0xfff);
+      bfd_put_16 (abfd, insn, hit_data);
+      if (sym_value + 0x1000 >= 0x2000 || (sym_value & 1) != 0)
 	return bfd_reloc_overflow;
       break;
     default:
@@ -2324,7 +2326,7 @@ create_got_section (bfd *dynobj, struct bfd_link_info *info)
 							 | SEC_IN_MEMORY
 							 | SEC_LINKER_CREATED));
   if (htab->sfuncdesc == NULL
-      || ! bfd_set_section_alignment (dynobj, htab->sfuncdesc, 2))
+      || !bfd_set_section_alignment (htab->sfuncdesc, 2))
     return FALSE;
 
   htab->srelfuncdesc = bfd_make_section_anyway_with_flags (dynobj,
@@ -2335,7 +2337,7 @@ create_got_section (bfd *dynobj, struct bfd_link_info *info)
 							    | SEC_LINKER_CREATED
 							    | SEC_READONLY));
   if (htab->srelfuncdesc == NULL
-      || ! bfd_set_section_alignment (dynobj, htab->srelfuncdesc, 2))
+      || !bfd_set_section_alignment (htab->srelfuncdesc, 2))
     return FALSE;
 
   /* Also create .rofixup.  */
@@ -2346,7 +2348,7 @@ create_got_section (bfd *dynobj, struct bfd_link_info *info)
 							| SEC_LINKER_CREATED
 							| SEC_READONLY));
   if (htab->srofixup == NULL
-      || ! bfd_set_section_alignment (dynobj, htab->srofixup, 2))
+      || !bfd_set_section_alignment (htab->srofixup, 2))
     return FALSE;
 
   return TRUE;
@@ -2401,7 +2403,7 @@ sh_elf_create_dynamic_sections (bfd *abfd, struct bfd_link_info *info)
   s = bfd_make_section_anyway_with_flags (abfd, ".plt", pltflags);
   htab->root.splt = s;
   if (s == NULL
-      || ! bfd_set_section_alignment (abfd, s, bed->plt_alignment))
+      || !bfd_set_section_alignment (s, bed->plt_alignment))
     return FALSE;
 
   if (bed->want_plt_sym)
@@ -2433,7 +2435,7 @@ sh_elf_create_dynamic_sections (bfd *abfd, struct bfd_link_info *info)
 					  flags | SEC_READONLY);
   htab->root.srelplt = s;
   if (s == NULL
-      || ! bfd_set_section_alignment (abfd, s, ptralign))
+      || !bfd_set_section_alignment (s, ptralign))
     return FALSE;
 
   if (htab->root.sgot == NULL
@@ -2473,7 +2475,7 @@ sh_elf_create_dynamic_sections (bfd *abfd, struct bfd_link_info *info)
 						  flags | SEC_READONLY);
 	  htab->srelbss = s;
 	  if (s == NULL
-	      || ! bfd_set_section_alignment (abfd, s, ptralign))
+	      || !bfd_set_section_alignment (s, ptralign))
 	    return FALSE;
 	}
     }
@@ -3211,7 +3213,7 @@ sh_elf_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
 	  /* Strip this section if we don't need it; see the
 	     comment below.  */
 	}
-      else if (CONST_STRNEQ (bfd_get_section_name (dynobj, s), ".rela"))
+      else if (CONST_STRNEQ (bfd_section_name (s), ".rela"))
 	{
 	  if (s->size != 0 && s != htab->root.srelplt && s != htab->srelplt2)
 	    relocs = TRUE;
@@ -3619,7 +3621,7 @@ sh_elf_relocate_section (bfd *output_bfd, struct bfd_link_info *info,
 	  symname = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);
 	  if (symname == NULL || *symname == '\0')
-	    symname = bfd_section_name (input_bfd, sec);
+	    symname = bfd_section_name (sec);
 
 	  relocation = (sec->output_section->vma
 			+ sec->output_offset
@@ -5170,7 +5172,7 @@ sh_elf_relocate_section (bfd *output_bfd, struct bfd_link_info *info,
 		    if (name == NULL)
 		      return FALSE;
 		    if (*name == '\0')
-		      name = bfd_section_name (input_bfd, sec);
+		      name = bfd_section_name (sec);
 		  }
 		(*info->callbacks->reloc_overflow)
 		  (info, (h ? &h->root : NULL), name, howto->name,
@@ -6846,8 +6848,6 @@ sh_elf_encode_eh_address (bfd *abfd,
 #define	elf32_bed			elf32_sh_fd_bed
 
 #include "elf32-target.h"
-
-#undef elf_backend_modify_program_headers
 
 /* VxWorks support.  */
 #undef	TARGET_BIG_SYM

@@ -45,6 +45,18 @@ Disassembly of section .text:
 [ 	]*[a-f0-9]+:	c7 00 00 00 00 70    	movl   \$0x70000000,\(%rax\)
 [ 	]*[a-f0-9]+:	49 c7 00 00 00 00 70 	movq   \$0x70000000,\(%r8\)
 [ 	]*[a-f0-9]+:	48 c7 00 00 00 00 70 	movq   \$0x70000000,\(%rax\)
+[ 	]*[a-f0-9]+:	0f b4 08             	lfs    \(%rax\),%ecx
+[ 	]*[a-f0-9]+:	0f b4 01             	lfs    \(%rcx\),%eax
+[ 	]*[a-f0-9]+:	66 0f b4 08          	lfs    \(%rax\),%cx
+[ 	]*[a-f0-9]+:	66 0f b4 01          	lfs    \(%rcx\),%ax
+[ 	]*[a-f0-9]+:	0f b5 11             	lgs    \(%rcx\),%edx
+[ 	]*[a-f0-9]+:	0f b5 0a             	lgs    \(%rdx\),%ecx
+[ 	]*[a-f0-9]+:	66 0f b5 11          	lgs    \(%rcx\),%dx
+[ 	]*[a-f0-9]+:	66 0f b5 0a          	lgs    \(%rdx\),%cx
+[ 	]*[a-f0-9]+:	0f b2 1a             	lss    \(%rdx\),%ebx
+[ 	]*[a-f0-9]+:	0f b2 13             	lss    \(%rbx\),%edx
+[ 	]*[a-f0-9]+:	66 0f b2 1a          	lss    \(%rdx\),%bx
+[ 	]*[a-f0-9]+:	66 0f b2 13          	lss    \(%rbx\),%dx
 [ 	]*[a-f0-9]+:	41 0f c3 00          	movnti %eax,\(%r8\)
 [ 	]*[a-f0-9]+:	0f c3 00             	movnti %eax,\(%rax\)
 [ 	]*[a-f0-9]+:	49 0f c3 00          	movnti %rax,\(%r8\)
@@ -255,12 +267,18 @@ Disassembly of section .text:
 [ 	]*[a-f0-9]+:	41 8f 00             	popq   \(%r8\)
 [ 	]*[a-f0-9]+:	8f 00                	popq   \(%rax\)
 [ 	]*[a-f0-9]+:	0f a1                	popq   %fs
+[ 	]*[a-f0-9]+:	0f a1                	popq   %fs
 [ 	]*[a-f0-9]+:	0f a9                	popq   %gs
+[ 	]*[a-f0-9]+:	0f a9                	popq   %gs
+[ 	]*[a-f0-9]+:	9d                   	popfq  
 [ 	]*[a-f0-9]+:	9d                   	popfq  
 [ 	]*[a-f0-9]+:	41 ff 30             	pushq  \(%r8\)
 [ 	]*[a-f0-9]+:	ff 30                	pushq  \(%rax\)
 [ 	]*[a-f0-9]+:	0f a0                	pushq  %fs
+[ 	]*[a-f0-9]+:	0f a0                	pushq  %fs
 [ 	]*[a-f0-9]+:	0f a8                	pushq  %gs
+[ 	]*[a-f0-9]+:	0f a8                	pushq  %gs
+[ 	]*[a-f0-9]+:	9c                   	pushfq 
 [ 	]*[a-f0-9]+:	9c                   	pushfq 
 [ 	]*[a-f0-9]+:	0f 77                	emms   
 [ 	]*[a-f0-9]+:	0f 0e                	femms  

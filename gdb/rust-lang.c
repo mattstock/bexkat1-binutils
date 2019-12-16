@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include "cli/cli-style.h"
 
 /* See rust-lang.h.  */
 
@@ -473,7 +474,9 @@ rust_print_enum (struct type *type, int embedded_offset,
   if (rust_empty_enum_p (type))
     {
       /* Print the enum type name here to be more clear.  */
-      fprintf_filtered (stream, _("%s {<No data fields>}"), TYPE_NAME (type));
+      fprintf_filtered (stream, _("%s {%p[<No data fields>%p]}"),
+			TYPE_NAME (type),
+			metadata_style.style ().ptr (), nullptr);
       return;
     }
 
@@ -826,9 +829,9 @@ rust_print_typedef (struct type *type,
 		    struct ui_file *stream)
 {
   type = check_typedef (type);
-  fprintf_filtered (stream, "type %s = ", SYMBOL_PRINT_NAME (new_symbol));
+  fprintf_filtered (stream, "type %s = ", new_symbol->print_name ());
   type_print (type, "", stream, 0);
-  fprintf_filtered (stream, ";\n");
+  fprintf_filtered (stream, ";");
 }
 
 /* la_print_type implementation for Rust.  */
@@ -2162,7 +2165,6 @@ extern const struct language_defn rust_language_defn =
   rust_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
-  c_get_string,
   rust_watch_location_expression,
   NULL,				/* la_get_symbol_name_matcher */
   iterate_over_symbols,

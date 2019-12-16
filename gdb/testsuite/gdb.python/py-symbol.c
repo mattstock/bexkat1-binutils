@@ -32,9 +32,18 @@ class SimpleClass
     return i; /* Break in class. */
   }
 };
+
+namespace {
+  int anon = 10;
+};
+#endif
+
+#ifdef USE_TWO_FILES
+extern void function_in_other_file (void);
 #endif
 
 int qq = 72;			/* line of qq */
+static int rr = 42;		/* line of rr */
 
 int func (int arg)
 {
@@ -65,5 +74,10 @@ int main (int argc, char *argv[])
   sclass.seti (42);
   sclass.valueofi ();
 #endif
+
+#ifdef USE_TWO_FILES
+  function_in_other_file ();
+#endif
+
   return 0; /* Break at end.  */
 }

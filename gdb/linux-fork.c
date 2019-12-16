@@ -597,7 +597,7 @@ info_checkpoints_command (const char *arg, int from_tty)
 
 	  msym = lookup_minimal_symbol_by_pc (pc);
 	  if (msym.minsym)
-	    printf_filtered (", <%s>", MSYMBOL_LINKAGE_NAME (msym.minsym));
+	    printf_filtered (", <%s>", msym.minsym->linkage_name ());
 	}
 
       putchar_filtered ('\n');
@@ -765,7 +765,8 @@ Fork a duplicate process (experimental)."));
      process.  */
 
   add_com ("restart", class_obscure, restart_command, _("\
-restart N: restore program context from a checkpoint.\n\
+Restore program context from a checkpoint.\n\
+Usage: restart N\n\
 Argument N is checkpoint ID, as displayed by 'info checkpoints'."));
 
   /* Delete checkpoint command: kill the process and remove it from

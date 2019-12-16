@@ -881,7 +881,7 @@ elf_hppa_fake_sections (bfd *abfd, Elf_Internal_Shdr *hdr, asection *sec)
 {
   const char *name;
 
-  name = bfd_get_section_name (abfd, sec);
+  name = bfd_section_name (sec);
 
   if (strcmp (name, ".PARISC.unwind") == 0)
     {
@@ -923,9 +923,8 @@ elf_hppa_fake_sections (bfd *abfd, Elf_Internal_Shdr *hdr, asection *sec)
   return TRUE;
 }
 
-static void
-elf_hppa_final_write_processing (bfd *abfd,
-				 bfd_boolean linker ATTRIBUTE_UNUSED)
+static bfd_boolean
+elf_hppa_final_write_processing (bfd *abfd)
 {
   int mach = bfd_get_mach (abfd);
 
@@ -948,6 +947,7 @@ elf_hppa_final_write_processing (bfd *abfd,
 					 a step backwards with the ELF
 					 based toolchains.  */
 				      | EF_PARISC_TRAPNIL);
+  return _bfd_elf_final_write_processing (abfd);
 }
 
 /* Comparison function for qsort to sort unwind section during a

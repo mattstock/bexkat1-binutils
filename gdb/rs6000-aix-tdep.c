@@ -141,7 +141,7 @@ aix_sighandle_frame_prev_register (struct frame_info *this_frame,
   return trad_frame_get_register (this_trad_cache, this_frame, regnum);
 }
 
-int
+static int
 aix_sighandle_frame_sniffer (const struct frame_unwind *self,
 			     struct frame_info *this_frame,
 			     void **this_prologue_cache)
@@ -1110,7 +1110,7 @@ rs6000_aix_core_xfer_shared_libraries_aix (struct gdbarch *gdbarch,
   if (ldinfo_sec == NULL)
     error (_("cannot find .ldinfo section from core file: %s"),
 	   bfd_errmsg (bfd_get_error ()));
-  ldinfo_size = bfd_get_section_size (ldinfo_sec);
+  ldinfo_size = bfd_section_size (ldinfo_sec);
 
   gdb::byte_vector ldinfo_buf (ldinfo_size);
 

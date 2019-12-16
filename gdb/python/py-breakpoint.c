@@ -828,13 +828,16 @@ bppy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 		location = new_explicit_location (&explicit_loc);
 	      }
 
+	    const struct breakpoint_ops *ops =
+	      breakpoint_ops_for_event_location (location.get (), false);
+
 	    create_breakpoint (python_gdbarch,
 			       location.get (), NULL, -1, NULL,
 			       0,
 			       temporary_bp, bp_breakpoint,
 			       0,
 			       AUTO_BOOLEAN_TRUE,
-			       &bkpt_breakpoint_ops,
+			       ops,
 			       0, 1, internal_bp, 0);
 	    break;
 	  }
@@ -871,10 +874,9 @@ bppy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 
 
 
-static int
-build_bp_list (struct breakpoint *b, void *arg)
+static bool
+build_bp_list (struct breakpoint *b, PyObject *list)
 {
-  PyObject *list = (PyObject *) arg;
   PyObject *bp = (PyObject *) b->py_bp_object;
   int iserr = 0;
 
@@ -886,9 +888,9 @@ build_bp_list (struct breakpoint *b, void *arg)
     iserr = PyList_Append (list, bp);
 
   if (iserr == -1)
-    return 1;
+    return true;
 
-  return 0;
+  return false;
 }
 
 /* Static function to return a tuple holding all breakpoints.  */
@@ -906,7 +908,11 @@ gdbpy_breakpoints (PyObject *self, PyObject *args)
   /* If iterate_over_breakpoints returns non NULL it signals an error
      condition.  In that case abandon building the list and return
      NULL.  */
-  if (iterate_over_breakpoints (build_bp_list, list.get ()) != NULL)
+  auto callback = [&] (breakpoint *bp)
+    {
+      return build_bp_list(bp, list.get ());
+    };
+  if (iterate_over_breakpoints (callback) != NULL)
     return NULL;
 
   return PyList_AsTuple (list.get ());
@@ -1014,6 +1020,7 @@ gdbpy_breakpoint_created (struct breakpoint *bp)
   if (bppy_pending_object)
     {
       newbp = bppy_pending_object;
+      Py_INCREF (newbp);
       bppy_pending_object = NULL;
     }
   else
@@ -1024,7 +1031,6 @@ gdbpy_breakpoint_created (struct breakpoint *bp)
       newbp->bp = bp;
       newbp->bp->py_bp_object = newbp;
       newbp->is_finish_bp = 0;
-      Py_INCREF (newbp);
       ++bppy_live;
     }
   else

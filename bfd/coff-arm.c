@@ -24,12 +24,17 @@
 #include "libbfd.h"
 #include "coff/arm.h"
 #include "coff/internal.h"
+#include "cpu-arm.h"
+#include "coff-arm.h"
 
 #ifdef COFF_WITH_PE
 #include "coff/pe.h"
 #endif
 
 #include "libcoff.h"
+
+/* All users of this file have bfd_octets_per_byte (abfd, sec) == 1.  */
+#define OCTETS_PER_BYTE(ABFD, SEC) 1
 
 /* Macros for manipulation the bits in the flags field of the coff data
    structure.  */
@@ -94,7 +99,7 @@ coff_arm_reloc (bfd *abfd,
 		arelent *reloc_entry,
 		asymbol *symbol ATTRIBUTE_UNUSED,
 		void * data,
-		asection *input_section ATTRIBUTE_UNUSED,
+		asection *input_section,
 		bfd *output_bfd,
 		char **error_message ATTRIBUTE_UNUSED)
 {
@@ -112,11 +117,11 @@ coff_arm_reloc (bfd *abfd,
   if (diff != 0)
     {
       reloc_howto_type *howto = reloc_entry->howto;
-      unsigned char *addr = (unsigned char *) data + reloc_entry->address;
+      bfd_size_type octets = (reloc_entry->address
+			      * OCTETS_PER_BYTE (abfd, input_section));
+      unsigned char *addr = (unsigned char *) data + octets;
 
-      if (! bfd_reloc_offset_in_range (howto, abfd, input_section,
-				       reloc_entry->address
-				       * bfd_octets_per_byte (abfd)))
+      if (!bfd_reloc_offset_in_range (howto, abfd, input_section, octets))
 	return bfd_reloc_outofrange;
 
       switch (howto->size)
@@ -1989,7 +1994,7 @@ bfd_arm_get_bfd_for_interworking (bfd *			 abfd,
       sec = bfd_make_section_with_flags (abfd, ARM2THUMB_GLUE_SECTION_NAME,
 					 flags);
       if (sec == NULL
-	  || ! bfd_set_section_alignment (abfd, sec, 2))
+	  || !bfd_set_section_alignment (sec, 2))
 	return FALSE;
     }
 
@@ -2003,7 +2008,7 @@ bfd_arm_get_bfd_for_interworking (bfd *			 abfd,
 					 flags);
 
       if (sec == NULL
-	  || ! bfd_set_section_alignment (abfd, sec, 2))
+	  || !bfd_set_section_alignment (sec, 2))
 	return FALSE;
     }
 

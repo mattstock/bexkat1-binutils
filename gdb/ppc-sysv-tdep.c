@@ -55,7 +55,7 @@ ppc_sysv_use_opencl_abi (struct type *ftype)
    are passed in user stack.
 
    If the function is returning a structure, then the return address is passed
-   in r3, then the first 7 words of the parametes can be passed in registers,
+   in r3, then the first 7 words of the parameters can be passed in registers,
    starting from r4.  */
 
 CORE_ADDR
@@ -1043,7 +1043,7 @@ convert_code_addr_to_desc_addr (CORE_ADDR code_addr, CORE_ADDR *desc_addr)
   /* Find the minimal symbol that corresponds to CODE_ADDR (should
      have a name of the form ".FN").  */
   dot_fn = lookup_minimal_symbol_by_pc (code_addr);
-  if (dot_fn.minsym == NULL || MSYMBOL_LINKAGE_NAME (dot_fn.minsym)[0] != '.')
+  if (dot_fn.minsym == NULL || dot_fn.minsym->linkage_name ()[0] != '.')
     return 0;
   /* Get the section that contains CODE_ADDR.  Need this for the
      "objfile" that it contains.  */
@@ -1054,7 +1054,7 @@ convert_code_addr_to_desc_addr (CORE_ADDR code_addr, CORE_ADDR *desc_addr)
      address.  Only look for the minimal symbol in ".FN"'s object file
      - avoids problems when two object files (i.e., shared libraries)
      contain a minimal symbol with the same name.  */
-  fn = lookup_minimal_symbol (MSYMBOL_LINKAGE_NAME (dot_fn.minsym) + 1, NULL,
+  fn = lookup_minimal_symbol (dot_fn.minsym->linkage_name () + 1, NULL,
 			      dot_fn_section->objfile);
   if (fn.minsym == NULL)
     return 0;

@@ -20,8 +20,6 @@
 #ifndef COMMON_GDB_VECS_H
 #define COMMON_GDB_VECS_H
 
-#include "vec.h"
-
 /* Split STR, a list of DELIMITER-separated fields, into a char pointer vector.
 
    You may modify the returned strings.  */
@@ -53,7 +51,8 @@ unordered_remove (std::vector<T> &vec, typename std::vector<T>::iterator it)
   gdb_assert (it >= vec.begin () && it < vec.end ());
 
   T removed = std::move (*it);
-  *it = std::move (vec.back ());
+  if (it != vec.end () - 1)
+    *it = std::move (vec.back ());
   vec.pop_back ();
 
   return removed;

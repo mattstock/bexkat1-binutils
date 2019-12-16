@@ -358,8 +358,8 @@ amd64_skip_main_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 	  call_dest = pc + 5 + extract_signed_integer (buf, 4, byte_order);
  	  s = lookup_minimal_symbol_by_pc (call_dest);
  	  if (s.minsym != NULL
- 	      && MSYMBOL_LINKAGE_NAME (s.minsym) != NULL
- 	      && strcmp (MSYMBOL_LINKAGE_NAME (s.minsym), "__main") == 0)
+ 	      && s.minsym->linkage_name () != NULL
+ 	      && strcmp (s.minsym->linkage_name (), "__main") == 0)
  	    pc += 5;
  	}
     }
@@ -1187,7 +1187,7 @@ amd64_windows_skip_trampoline_code (struct frame_info *frame, CORE_ADDR pc)
 	= (indirect_addr
 	   ? lookup_minimal_symbol_by_pc (indirect_addr).minsym
 	   : NULL);
-      const char *symname = indsym ? MSYMBOL_LINKAGE_NAME (indsym) : NULL;
+      const char *symname = indsym ? indsym->linkage_name () : NULL;
 
       if (symname)
 	{
@@ -1214,7 +1214,7 @@ amd64_windows_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
   /* The dwarf2 unwinder (appended very early by i386_gdbarch_init) is
      preferred over the SEH one.  The reasons are:
-     - binaries without SEH but with dwarf2 debug info are correcly handled
+     - binaries without SEH but with dwarf2 debug info are correctly handled
        (although they aren't ABI compliant, gcc before 4.7 didn't emit SEH
        info).
      - dwarf3 DW_OP_call_frame_cfa is correctly handled (it can only be

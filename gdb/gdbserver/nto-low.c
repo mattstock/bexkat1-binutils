@@ -22,6 +22,7 @@
 #include "gdbthread.h"
 #include "nto-low.h"
 #include "hostio.h"
+#include "debug.h"
 
 #include <limits.h>
 #include <fcntl.h>
@@ -32,7 +33,6 @@
 #include <sys/neutrino.h>
 
 
-extern int using_threads;
 int using_threads = 1;
 
 const struct target_desc *nto_tdesc;
@@ -247,7 +247,7 @@ nto_xfer_memory (off_t memaddr, unsigned char *myaddr, int len,
   if (nbytes == 0)
     {
       int e = errno;
-      TRACE ("Error in %s : errno=%d (%s)\n", __func__, e, strerror (e));
+      TRACE ("Error in %s : errno=%d (%s)\n", __func__, e, safe_strerror (e));
     }
   return nbytes;
 }
@@ -505,7 +505,7 @@ nto_resume (struct thread_resume *resume_info, size_t n)
 
   err = devctl (nto_inferior.ctl_fd, DCMD_PROC_RUN, &run, sizeof (run), 0);
   if (err != EOK)
-    TRACE ("Error: %d \"%s\"\n", err, strerror (err));
+    TRACE ("Error: %d \"%s\"\n", err, safe_strerror (err));
 }
 
 /* Wait for inferior's event.  
@@ -963,7 +963,6 @@ static struct target_ops nto_target_ops = {
   nto_stopped_data_address,
   NULL, /* nto_read_offsets */
   NULL, /* thread_db_set_tls_address */
-  NULL,
   hostio_last_error_from_errno,
   NULL, /* nto_qxfer_osdata */
   NULL, /* xfer_siginfo */

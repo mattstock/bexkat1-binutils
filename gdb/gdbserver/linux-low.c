@@ -50,6 +50,7 @@
 #include "gdbsupport/common-inferior.h"
 #include "nat/fork-inferior.h"
 #include "gdbsupport/environ.h"
+#include "gdbsupport/gdb-sigmask.h"
 #include "gdbsupport/scoped_restore.h"
 #ifndef ELFMAG0
 /* Don't include <linux/elf.h> here.  If it got included by gdb_proc_service.h
@@ -59,10 +60,6 @@
 #include <elf.h>
 #endif
 #include "nat/linux-namespaces.h"
-
-#ifndef SPUFS_MAGIC
-#define SPUFS_MAGIC 0x23c9b64e
-#endif
 
 #ifdef HAVE_PERSONALITY
 # include <sys/personality.h>
@@ -1163,7 +1160,7 @@ attach_proc_task_lwp_callback (ptid_t ptid)
 	    {
 	      debug_printf ("Cannot attach to lwp %d: "
 			    "thread is gone (%d: %s)\n",
-			    lwpid, err, strerror (err));
+			    lwpid, err, safe_strerror (err));
 	    }
 	}
       else if (err != 0)
@@ -1307,7 +1304,7 @@ linux_kill_one_lwp (struct lwp_info *lwp)
 
       debug_printf ("LKL:  kill_lwp (SIGKILL) %s, 0, 0 (%s)\n",
 		    target_pid_to_str (ptid_of (thr)),
-		    save_errno ? strerror (save_errno) : "OK");
+		    save_errno ? safe_strerror (save_errno) : "OK");
     }
 
   errno = 0;
@@ -1318,7 +1315,7 @@ linux_kill_one_lwp (struct lwp_info *lwp)
 
       debug_printf ("LKL:  PTRACE_KILL %s, 0, 0 (%s)\n",
 		    target_pid_to_str (ptid_of (thr)),
-		    save_errno ? strerror (save_errno) : "OK");
+		    save_errno ? safe_strerror (save_errno) : "OK");
     }
 }
 
@@ -1564,7 +1561,7 @@ linux_detach_one_lwp (struct lwp_info *lwp)
 	  if (ret == -1)
 	    {
 	      warning (_("Couldn't reap LWP %d while detaching: %s"),
-		       lwpid, strerror (errno));
+		       lwpid, safe_strerror (errno));
 	    }
 	  else if (!WIFEXITED (status) && !WIFSIGNALED (status))
 	    {
@@ -1577,7 +1574,7 @@ linux_detach_one_lwp (struct lwp_info *lwp)
 	{
 	  error (_("Can't detach %s: %s"),
 		 target_pid_to_str (ptid_of (thread)),
-		 strerror (save_errno));
+		 safe_strerror (save_errno));
 	}
     }
   else if (debug_threads)
@@ -1617,7 +1614,7 @@ linux_detach (process_info *process)
   complete_ongoing_step_over ();
 
   /* Stop all threads before detaching.  First, ptrace requires that
-     the thread is stopped to sucessfully detach.  Second, thread_db
+     the thread is stopped to successfully detach.  Second, thread_db
      may need to uninstall thread event breakpoints from memory, which
      only works with a stopped process anyway.  */
   stop_all_lwps (0, NULL);
@@ -2693,7 +2690,7 @@ linux_wait_for_event_filtered (ptid_t wait_ptid, ptid_t filter_ptid,
   /* Make sure SIGCHLD is blocked until the sigsuspend below.  Block
      all signals while here.  */
   sigfillset (&block_mask);
-  sigprocmask (SIG_BLOCK, &block_mask, &prev_mask);
+  gdb_sigmask (SIG_BLOCK, &block_mask, &prev_mask);
 
   /* Always pull all events out of the kernel.  We'll randomly select
      an event LWP out of all that have events, to prevent
@@ -2719,7 +2716,7 @@ linux_wait_for_event_filtered (ptid_t wait_ptid, ptid_t filter_ptid,
 
       if (debug_threads)
 	debug_printf ("LWFE: waitpid(-1, ...) returned %d, %s\n",
-		      ret, errno ? strerror (errno) : "ERRNO-OK");
+		      ret, errno ? safe_strerror (errno) : "ERRNO-OK");
 
       if (ret > 0)
 	{
@@ -2779,7 +2776,7 @@ linux_wait_for_event_filtered (ptid_t wait_ptid, ptid_t filter_ptid,
 	{
 	  if (debug_threads)
 	    debug_printf ("LLW: exit (no unwaited-for LWP)\n");
-	  sigprocmask (SIG_SETMASK, &prev_mask, NULL);
+	  gdb_sigmask (SIG_SETMASK, &prev_mask, NULL);
 	  return -1;
 	}
 
@@ -2789,7 +2786,7 @@ linux_wait_for_event_filtered (ptid_t wait_ptid, ptid_t filter_ptid,
 	  if (debug_threads)
 	    debug_printf ("WNOHANG set, no event found\n");
 
-	  sigprocmask (SIG_SETMASK, &prev_mask, NULL);
+	  gdb_sigmask (SIG_SETMASK, &prev_mask, NULL);
 	  return 0;
 	}
 
@@ -2798,11 +2795,11 @@ linux_wait_for_event_filtered (ptid_t wait_ptid, ptid_t filter_ptid,
 	debug_printf ("sigsuspend'ing\n");
 
       sigsuspend (&prev_mask);
-      sigprocmask (SIG_SETMASK, &prev_mask, NULL);
+      gdb_sigmask (SIG_SETMASK, &prev_mask, NULL);
       goto retry;
     }
 
-  sigprocmask (SIG_SETMASK, &prev_mask, NULL);
+  gdb_sigmask (SIG_SETMASK, &prev_mask, NULL);
 
   current_thread = event_thread;
 
@@ -5597,7 +5594,7 @@ store_register (const struct usrregs_info *usrregs,
 	    return;
 
 	  if ((*the_low_target.cannot_store_register) (regno) == 0)
-	    error ("writing register %d: %s", regno, strerror (errno));
+	    error ("writing register %d: %s", regno, safe_strerror (errno));
 	}
       regaddr += sizeof (PTRACE_XFER_TYPE);
     }
@@ -6219,7 +6216,7 @@ linux_async (int enable)
       sigemptyset (&mask);
       sigaddset (&mask, SIGCHLD);
 
-      sigprocmask (SIG_BLOCK, &mask, NULL);
+      gdb_sigmask (SIG_BLOCK, &mask, NULL);
 
       if (enable)
 	{
@@ -6227,7 +6224,7 @@ linux_async (int enable)
 	    {
 	      linux_event_pipe[0] = -1;
 	      linux_event_pipe[1] = -1;
-	      sigprocmask (SIG_UNBLOCK, &mask, NULL);
+	      gdb_sigmask (SIG_UNBLOCK, &mask, NULL);
 
 	      warning ("creating event pipe failed.");
 	      return previous;
@@ -6253,7 +6250,7 @@ linux_async (int enable)
 	  linux_event_pipe[1] = -1;
 	}
 
-      sigprocmask (SIG_UNBLOCK, &mask, NULL);
+      gdb_sigmask (SIG_UNBLOCK, &mask, NULL);
     }
 
   return previous;
@@ -6356,99 +6353,6 @@ linux_supports_range_stepping (void)
     return 0;
 
   return (*the_low_target.supports_range_stepping) ();
-}
-
-/* Enumerate spufs IDs for process PID.  */
-static int
-spu_enumerate_spu_ids (long pid, unsigned char *buf, CORE_ADDR offset, int len)
-{
-  int pos = 0;
-  int written = 0;
-  char path[128];
-  DIR *dir;
-  struct dirent *entry;
-
-  sprintf (path, "/proc/%ld/fd", pid);
-  dir = opendir (path);
-  if (!dir)
-    return -1;
-
-  rewinddir (dir);
-  while ((entry = readdir (dir)) != NULL)
-    {
-      struct stat st;
-      struct statfs stfs;
-      int fd;
-
-      fd = atoi (entry->d_name);
-      if (!fd)
-        continue;
-
-      sprintf (path, "/proc/%ld/fd/%d", pid, fd);
-      if (stat (path, &st) != 0)
-        continue;
-      if (!S_ISDIR (st.st_mode))
-        continue;
-
-      if (statfs (path, &stfs) != 0)
-        continue;
-      if (stfs.f_type != SPUFS_MAGIC)
-        continue;
-
-      if (pos >= offset && pos + 4 <= offset + len)
-        {
-          *(unsigned int *)(buf + pos - offset) = fd;
-          written += 4;
-        }
-      pos += 4;
-    }
-
-  closedir (dir);
-  return written;
-}
-
-/* Implements the to_xfer_partial interface for the TARGET_OBJECT_SPU
-   object type, using the /proc file system.  */
-static int
-linux_qxfer_spu (const char *annex, unsigned char *readbuf,
-		 unsigned const char *writebuf,
-		 CORE_ADDR offset, int len)
-{
-  long pid = lwpid_of (current_thread);
-  char buf[128];
-  int fd = 0;
-  int ret = 0;
-
-  if (!writebuf && !readbuf)
-    return -1;
-
-  if (!*annex)
-    {
-      if (!readbuf)
-	return -1;
-      else
-	return spu_enumerate_spu_ids (pid, readbuf, offset, len);
-    }
-
-  sprintf (buf, "/proc/%ld/fd/%s", pid, annex);
-  fd = open (buf, writebuf? O_WRONLY : O_RDONLY);
-  if (fd <= 0)
-    return -1;
-
-  if (offset != 0
-      && lseek (fd, (off_t) offset, SEEK_SET) != (off_t) offset)
-    {
-      close (fd);
-      return 0;
-    }
-
-  if (writebuf)
-    ret = write (fd, writebuf, (size_t) len);
-  else
-    ret = read (fd, readbuf, (size_t) len);
-
-  close (fd);
-  return ret;
 }
 
 #if defined PT_GETDSBT || defined PTRACE_GETFDPIC
@@ -7212,9 +7116,7 @@ linux_low_read_btrace (struct btrace_target_info *tinfo, struct buffer *buffer,
 		       enum btrace_read_type type)
 {
   struct btrace_data btrace;
-  struct btrace_block *block;
   enum btrace_error err;
-  int i;
 
   err = linux_read_btrace (&btrace, tinfo, type);
   if (err != BTRACE_ERR_NONE)
@@ -7237,11 +7139,9 @@ linux_low_read_btrace (struct btrace_target_info *tinfo, struct buffer *buffer,
       buffer_grow_str (buffer, "<!DOCTYPE btrace SYSTEM \"btrace.dtd\">\n");
       buffer_grow_str (buffer, "<btrace version=\"1.0\">\n");
 
-      for (i = 0;
-	   VEC_iterate (btrace_block_s, btrace.variant.bts.blocks, i, block);
-	   i++)
+      for (const btrace_block &block : *btrace.variant.bts.blocks)
 	buffer_xml_printf (buffer, "<block begin=\"0x%s\" end=\"0x%s\"/>\n",
-			   paddress (block->begin), paddress (block->end));
+			   paddress (block.begin), paddress (block.end));
 
       buffer_grow_str0 (buffer, "</btrace>\n");
       break;
@@ -7496,7 +7396,6 @@ static struct target_ops linux_target_ops = {
 #else
   NULL,
 #endif
-  linux_qxfer_spu,
   hostio_last_error_from_errno,
   linux_qxfer_osdata,
   linux_xfer_siginfo,

@@ -192,6 +192,10 @@
 #define bfd_elfNN_bfd_is_group_section bfd_elf_is_group_section
 #endif
 
+#ifndef bfd_elfNN_bfd_group_name
+#define bfd_elfNN_bfd_group_name bfd_elf_group_name
+#endif
+
 #ifndef bfd_elfNN_bfd_discard_group
 #define bfd_elfNN_bfd_discard_group bfd_generic_discard_group
 #endif
@@ -497,7 +501,7 @@
 #define elf_backend_begin_write_processing	0
 #endif
 #ifndef elf_backend_final_write_processing
-#define elf_backend_final_write_processing	0
+#define elf_backend_final_write_processing	_bfd_elf_final_write_processing
 #endif
 #ifndef elf_backend_additional_program_headers
 #define elf_backend_additional_program_headers	0
@@ -505,8 +509,8 @@
 #ifndef elf_backend_modify_segment_map
 #define elf_backend_modify_segment_map	0
 #endif
-#ifndef elf_backend_modify_program_headers
-#define elf_backend_modify_program_headers	0
+#ifndef elf_backend_modify_headers
+#define elf_backend_modify_headers		_bfd_elf_modify_headers
 #endif
 #ifndef elf_backend_allow_non_load_phdr
 #define elf_backend_allow_non_load_phdr	0
@@ -516,6 +520,9 @@
 #endif
 #ifndef elf_backend_bfd_from_remote_memory
 #define elf_backend_bfd_from_remote_memory _bfd_elfNN_bfd_from_remote_memory
+#endif
+#ifndef elf_backend_core_find_build_id
+#define elf_backend_core_find_build_id _bfd_elfNN_core_find_build_id
 #endif
 #ifndef elf_backend_got_header_size
 #define elf_backend_got_header_size	0
@@ -556,8 +563,8 @@
 #ifndef elf_backend_static_tls_alignment
 #define elf_backend_static_tls_alignment	1
 #endif
-#ifndef elf_backend_post_process_headers
-#define elf_backend_post_process_headers	_bfd_elf_post_process_headers
+#ifndef elf_backend_init_file_header
+#define elf_backend_init_file_header		_bfd_elf_init_file_header
 #endif
 #ifndef elf_backend_print_symbol_all
 #define elf_backend_print_symbol_all		NULL
@@ -734,6 +741,10 @@
 #define elf_backend_hash_symbol _bfd_elf_hash_symbol
 #endif
 
+#ifndef elf_backend_record_xhash_symbol
+#define elf_backend_record_xhash_symbol NULL
+#endif
+
 #ifndef elf_backend_is_function_type
 #define elf_backend_is_function_type _bfd_elf_is_function_type
 #endif
@@ -812,13 +823,13 @@ static struct elf_backend_data elfNN_bed =
   elf_backend_final_write_processing,
   elf_backend_additional_program_headers,
   elf_backend_modify_segment_map,
-  elf_backend_modify_program_headers,
+  elf_backend_modify_headers,
   elf_backend_allow_non_load_phdr,
   elf_backend_gc_keep,
   elf_backend_gc_mark_dynamic_ref,
   elf_backend_gc_mark_hook,
   elf_backend_gc_mark_extra_sections,
-  elf_backend_post_process_headers,
+  elf_backend_init_file_header,
   elf_backend_print_symbol_all,
   elf_backend_output_arch_local_syms,
   elf_backend_output_arch_syms,
@@ -852,12 +863,14 @@ static struct elf_backend_data elfNN_bed =
   elf_backend_mips_rtype_to_howto,
   elf_backend_ecoff_debug_swap,
   elf_backend_bfd_from_remote_memory,
+  elf_backend_core_find_build_id,
   elf_backend_plt_sym_val,
   elf_backend_common_definition,
   elf_backend_common_section_index,
   elf_backend_common_section,
   elf_backend_merge_symbol,
   elf_backend_hash_symbol,
+  elf_backend_record_xhash_symbol,
   elf_backend_is_function_type,
   elf_backend_maybe_function_sym,
   elf_backend_get_reloc_section,

@@ -43,6 +43,7 @@
 #include "completer.h"
 #include "gdbsupport/selftest.h"
 #include "gdbsupport/array-view.h"
+#include "cli/cli-style.h"
 
 /* Definition of a user function.  */
 struct internal_function
@@ -272,8 +273,8 @@ struct value
   LONGEST bitsize = 0;
 
   /* Only used for bitfields; position of start of field.  For
-     gdbarch_bits_big_endian=0 targets, it is the position of the LSB.  For
-     gdbarch_bits_big_endian=1 targets, it is the position of the MSB.  */
+     little-endian targets, it is the position of the LSB.  For
+     big-endian targets, it is the position of the MSB.  */
   LONGEST bitpos = 0;
 
   /* The number of references to this value.  When a value is created,
@@ -1977,7 +1978,7 @@ init_if_undefined_command (const char* args, int from_tty)
   intvar = expr->elts[2].internalvar;
 
   /* Only evaluate the expression if the lvalue is void.
-     This may still fail if the expresssion is invalid.  */
+     This may still fail if the expression is invalid.  */
   if (intvar->kind == INTERNALVAR_VOID)
     evaluate_expression (expr.get ());
 }
@@ -2152,7 +2153,7 @@ value_of_internalvar (struct gdbarch *gdbarch, struct internalvar *var)
      on this value go back to affect the original internal variable.
 
      Do not do this for INTERNALVAR_MAKE_VALUE variables, as those have
-     no underlying modifyable state in the internal variable.
+     no underlying modifiable state in the internal variable.
 
      Likewise, if the variable's value is a computed lvalue, we want
      references to it to produce another computed lvalue, where
@@ -2420,33 +2421,43 @@ function_command (const char *command, int from_tty)
   /* Do nothing.  */
 }
 
-/* Clean up if an internal function's command is destroyed.  */
-static void
-function_destroyer (struct cmd_list_element *self, void *ignore)
-{
-  xfree ((char *) self->name);
-  xfree ((char *) self->doc);
-}
+/* Helper function that does the work for add_internal_function.  */
 
-/* Add a new internal function.  NAME is the name of the function; DOC
-   is a documentation string describing the function.  HANDLER is
-   called when the function is invoked.  COOKIE is an arbitrary
-   pointer which is passed to HANDLER and is intended for "user
-   data".  */
-void
-add_internal_function (const char *name, const char *doc,
-		       internal_function_fn handler, void *cookie)
+static struct cmd_list_element *
+do_add_internal_function (const char *name, const char *doc,
+			  internal_function_fn handler, void *cookie)
 {
-  struct cmd_list_element *cmd;
   struct internal_function *ifn;
   struct internalvar *var = lookup_internalvar (name);
 
   ifn = create_internal_function (name, handler, cookie);
   set_internalvar_function (var, ifn);
 
-  cmd = add_cmd (xstrdup (name), no_class, function_command, (char *) doc,
-		 &functionlist);
-  cmd->destroyer = function_destroyer;
+  return add_cmd (name, no_class, function_command, doc, &functionlist);
+}
+
+/* See value.h.  */
+
+void
+add_internal_function (const char *name, const char *doc,
+		       internal_function_fn handler, void *cookie)
+{
+  do_add_internal_function (name, doc, handler, cookie);
+}
+
+/* See value.h.  */
+
+void
+add_internal_function (gdb::unique_xmalloc_ptr<char> &&name,
+		       gdb::unique_xmalloc_ptr<char> &&doc,
+		       internal_function_fn handler, void *cookie)
+{
+  struct cmd_list_element *cmd
+    = do_add_internal_function (name.get (), doc.get (), handler, cookie);
+  doc.release ();
+  cmd->doc_allocated = 1;
+  name.release ();
+  cmd->name_allocated = 1;
 }
 
 /* Update VALUE before discarding OBJFILE.  COPIED_TYPES is used to
@@ -2539,7 +2550,8 @@ show_convenience (const char *ignore, int from_tty)
 	}
       catch (const gdb_exception_error &ex)
 	{
-	  fprintf_filtered (gdb_stdout, _("<error: %s>"), ex.what ());
+	  fprintf_styled (gdb_stdout, metadata_style.style (),
+			  _("<error: %s>"), ex.what ());
 	}
 
       printf_filtered (("\n"));
@@ -2735,7 +2747,7 @@ value_as_address (struct value *val)
 LONGEST
 unpack_long (struct type *type, const gdb_byte *valaddr)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (get_type_arch (type));
+  enum bfd_endian byte_order = type_byte_order (type);
   enum type_code code = TYPE_CODE (type);
   int len = TYPE_LENGTH (type);
   int nosign = TYPE_UNSIGNED (type);
@@ -2751,10 +2763,16 @@ unpack_long (struct type *type, const gdb_byte *valaddr)
     case TYPE_CODE_CHAR:
     case TYPE_CODE_RANGE:
     case TYPE_CODE_MEMBERPTR:
-      if (nosign)
-	return extract_unsigned_integer (valaddr, len, byte_order);
-      else
-	return extract_signed_integer (valaddr, len, byte_order);
+      {
+	LONGEST result;
+	if (nosign)
+	  result = extract_unsigned_integer (valaddr, len, byte_order);
+	else
+	  result = extract_signed_integer (valaddr, len, byte_order);
+	if (code == TYPE_CODE_RANGE)
+	  result += TYPE_RANGE_DATA (type)->bias;
+	return result;
+      }
 
     case TYPE_CODE_FLT:
     case TYPE_CODE_DECFLOAT:
@@ -3092,7 +3110,7 @@ static LONGEST
 unpack_bits_as_long (struct type *field_type, const gdb_byte *valaddr,
 		     LONGEST bitpos, LONGEST bitsize)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (get_type_arch (field_type));
+  enum bfd_endian byte_order = type_byte_order (field_type);
   ULONGEST val;
   ULONGEST valmask;
   int lsbcount;
@@ -3117,7 +3135,7 @@ unpack_bits_as_long (struct type *field_type, const gdb_byte *valaddr,
 
   /* Extract bits.  See comment above.  */
 
-  if (gdbarch_bits_big_endian (get_type_arch (field_type)))
+  if (byte_order == BFD_ENDIAN_BIG)
     lsbcount = (bytes_read * 8 - bitpos % 8 - bitsize);
   else
     lsbcount = (bitpos % 8);
@@ -3201,7 +3219,7 @@ unpack_value_bitfield (struct value *dest_val,
   int dst_bit_offset;
   struct type *field_type = value_type (dest_val);
 
-  byte_order = gdbarch_byte_order (get_type_arch (field_type));
+  byte_order = type_byte_order (field_type);
 
   /* First, unpack and sign extend the bitfield as if it was wholly
      valid.  Optimized out/unavailable bits are read as zero, but
@@ -3261,7 +3279,7 @@ void
 modify_field (struct type *type, gdb_byte *addr,
 	      LONGEST fieldval, LONGEST bitpos, LONGEST bitsize)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (get_type_arch (type));
+  enum bfd_endian byte_order = type_byte_order (type);
   ULONGEST oword;
   ULONGEST mask = (ULONGEST) -1 >> (8 * sizeof (ULONGEST) - bitsize);
   LONGEST bytesize;
@@ -3293,7 +3311,7 @@ modify_field (struct type *type, gdb_byte *addr,
   oword = extract_unsigned_integer (addr, bytesize, byte_order);
 
   /* Shifting for bit field depends on endianness of the target machine.  */
-  if (gdbarch_bits_big_endian (get_type_arch (type)))
+  if (byte_order == BFD_ENDIAN_BIG)
     bitpos = bytesize * 8 - bitpos - bitsize;
 
   oword &= ~(mask << bitpos);
@@ -3307,7 +3325,7 @@ modify_field (struct type *type, gdb_byte *addr,
 void
 pack_long (gdb_byte *buf, struct type *type, LONGEST num)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (get_type_arch (type));
+  enum bfd_endian byte_order = type_byte_order (type);
   LONGEST len;
 
   type = check_typedef (type);
@@ -3315,12 +3333,14 @@ pack_long (gdb_byte *buf, struct type *type, LONGEST num)
 
   switch (TYPE_CODE (type))
     {
+    case TYPE_CODE_RANGE:
+      num -= TYPE_RANGE_DATA (type)->bias;
+      /* Fall through.  */
     case TYPE_CODE_INT:
     case TYPE_CODE_CHAR:
     case TYPE_CODE_ENUM:
     case TYPE_CODE_FLAGS:
     case TYPE_CODE_BOOL:
-    case TYPE_CODE_RANGE:
     case TYPE_CODE_MEMBERPTR:
       store_signed_integer (buf, len, byte_order, num);
       break;
@@ -3353,7 +3373,7 @@ pack_unsigned_long (gdb_byte *buf, struct type *type, ULONGEST num)
 
   type = check_typedef (type);
   len = TYPE_LENGTH (type);
-  byte_order = gdbarch_byte_order (get_type_arch (type));
+  byte_order = type_byte_order (type);
 
   switch (TYPE_CODE (type))
     {
@@ -3927,7 +3947,7 @@ isvoid_internal_fn (struct gdbarch *gdbarch,
   return value_from_longest (builtin_type (gdbarch)->builtin_int, ret);
 }
 
-/* Implementation of the convenience function $_cimag.  Extracts the
+/* Implementation of the convenience function $_creal.  Extracts the
    real part from a complex number.  */
 
 static struct value *

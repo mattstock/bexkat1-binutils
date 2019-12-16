@@ -144,6 +144,7 @@
 #include "objalloc.h"
 #include "elf/aarch64.h"
 #include "elfxx-aarch64.h"
+#include "cpu-aarch64.h"
 
 #define ARCH_SIZE	NN
 
@@ -3004,7 +3005,8 @@ aarch64_relocate (unsigned int r_type, bfd *input_bfd, asection *input_section,
 	   + offset);
 
   r_type = elfNN_aarch64_bfd_reloc_from_type (input_bfd, r_type);
-  value = _bfd_aarch64_elf_resolve_relocation (r_type, place, value, 0, FALSE);
+  value = _bfd_aarch64_elf_resolve_relocation (input_bfd, r_type, place,
+					       value, 0, FALSE);
   return _bfd_aarch64_elf_put_addend (input_bfd,
 				      input_section->contents + offset, r_type,
 				      howto, value) == bfd_reloc_ok;
@@ -5585,7 +5587,8 @@ bad_ifunc_reloc:
 	  /* FALLTHROUGH */
 	case BFD_RELOC_AARCH64_CALL26:
 	case BFD_RELOC_AARCH64_JUMP26:
-	  value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+	  value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						       place, value,
 						       signed_addend,
 						       weak_undef_p);
 	  return _bfd_aarch64_elf_put_addend (input_bfd, hit_data, bfd_r_type,
@@ -5662,7 +5665,8 @@ bad_ifunc_reloc:
 	    addend = (globals->root.sgot->output_section->vma
 		      + globals->root.sgot->output_offset);
 
-	  value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+	  value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						       place, value,
 						       addend, weak_undef_p);
 	  return _bfd_aarch64_elf_put_addend (input_bfd, hit_data, bfd_r_type, howto, value);
 	case BFD_RELOC_AARCH64_ADD_LO12:
@@ -5840,7 +5844,8 @@ bad_ifunc_reloc:
 	    signed_addend = 0;
 	  }
       }
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   signed_addend, weak_undef_p);
       *unresolved_reloc_p = FALSE;
       break;
@@ -5900,7 +5905,8 @@ bad_ifunc_reloc:
     case BFD_RELOC_AARCH64_MOVW_G2_S:
     case BFD_RELOC_AARCH64_MOVW_G3:
     case BFD_RELOC_AARCH64_TSTBR14:
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   signed_addend, weak_undef_p);
       break;
 
@@ -5945,7 +5951,8 @@ bad_ifunc_reloc:
 	  if (aarch64_relocation_aginst_gp_p (bfd_r_type))
 	    addend = (globals->root.sgot->output_section->vma
 		      + globals->root.sgot->output_offset);
-	  value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+	  value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						       place, value,
 						       addend, weak_undef_p);
 	}
       else
@@ -5992,7 +5999,8 @@ bad_ifunc_reloc:
 	if (aarch64_relocation_aginst_gp_p (bfd_r_type))
 	  addend = base_got->output_section->vma + base_got->output_offset;
 
-	value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+	value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						     place, value,
 						     addend, weak_undef_p);
       }
 
@@ -6029,7 +6037,8 @@ bad_ifunc_reloc:
 	       + globals->root.sgot->output_section->vma
 	       + globals->root.sgot->output_offset);
 
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   0, weak_undef_p);
       *unresolved_reloc_p = FALSE;
       break;
@@ -6042,7 +6051,8 @@ bad_ifunc_reloc:
 	return bfd_reloc_notsupported;
 
       value = symbol_got_offset (input_bfd, h, r_symndx);
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   0, weak_undef_p);
       *unresolved_reloc_p = FALSE;
       break;
@@ -6063,10 +6073,26 @@ bad_ifunc_reloc:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G1:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G1_NC:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G2:
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
-						   signed_addend - dtpoff_base (info),
-						   weak_undef_p);
-      break;
+      {
+	if (!(weak_undef_p || elf_hash_table (info)->tls_sec))
+	  {
+	    int howto_index = bfd_r_type - BFD_RELOC_AARCH64_RELOC_START;
+	    _bfd_error_handler
+	      /* xgettext:c-format */
+	      (_("%pB: TLS relocation %s against undefined symbol `%s'"),
+		 input_bfd, elfNN_aarch64_howto_table[howto_index].name,
+		 h->root.root.string);
+	    bfd_set_error (bfd_error_bad_value);
+	    return bfd_reloc_notsupported;
+	  }
+
+	bfd_vma def_value
+	  = weak_undef_p ? 0 : signed_addend - dtpoff_base (info);
+	value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						     place, value,
+						     def_value, weak_undef_p);
+	break;
+      }
 
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12:
@@ -6084,11 +6110,27 @@ bad_ifunc_reloc:
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1:
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1_NC:
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G2:
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
-						   signed_addend - tpoff_base (info),
-						   weak_undef_p);
-      *unresolved_reloc_p = FALSE;
-      break;
+      {
+	if (!(weak_undef_p || elf_hash_table (info)->tls_sec))
+	  {
+	    int howto_index = bfd_r_type - BFD_RELOC_AARCH64_RELOC_START;
+	    _bfd_error_handler
+	      /* xgettext:c-format */
+	      (_("%pB: TLS relocation %s against undefined symbol `%s'"),
+		 input_bfd, elfNN_aarch64_howto_table[howto_index].name,
+		 h->root.root.string);
+	    bfd_set_error (bfd_error_bad_value);
+	    return bfd_reloc_notsupported;
+	  }
+
+	bfd_vma def_value
+	  = weak_undef_p ? 0 : signed_addend - tpoff_base (info);
+	value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						     place, value,
+						     def_value, weak_undef_p);
+        *unresolved_reloc_p = FALSE;
+	break;
+      }
 
     case BFD_RELOC_AARCH64_TLSDESC_ADD_LO12:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21:
@@ -6103,7 +6145,8 @@ bad_ifunc_reloc:
 	       + globals->root.sgotplt->output_offset
 	       + globals->sgotplt_jump_table_size);
 
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   0, weak_undef_p);
       *unresolved_reloc_p = FALSE;
       break;
@@ -6121,7 +6164,8 @@ bad_ifunc_reloc:
       value -= (globals->root.sgot->output_section->vma
 		+ globals->root.sgot->output_offset);
 
-      value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+      value = _bfd_aarch64_elf_resolve_relocation (input_bfd, bfd_r_type,
+						   place, value,
 						   0, weak_undef_p);
       *unresolved_reloc_p = FALSE;
       break;
@@ -6747,7 +6791,7 @@ elfNN_aarch64_relocate_section (bfd *output_bfd,
 	  name = (bfd_elf_string_from_elf_section
 		  (input_bfd, symtab_hdr->sh_link, sym->st_name));
 	  if (name == NULL || *name == '\0')
-	    name = bfd_section_name (input_bfd, sec);
+	    name = bfd_section_name (sec);
 	}
 
       if (r_symndx != 0
@@ -7230,7 +7274,7 @@ elfNN_aarch64_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 
       for (sec = ibfd->sections; sec != NULL; sec = sec->next)
 	{
-	  if ((bfd_get_section_flags (ibfd, sec)
+	  if ((bfd_section_flags (sec)
 	       & (SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS))
 	      == (SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS))
 	    only_data_sections = FALSE;
@@ -7476,13 +7520,13 @@ aarch64_elf_create_got_section (bfd *abfd, struct bfd_link_info *info)
 					  (bed->dynamic_sec_flags
 					   | SEC_READONLY));
   if (s == NULL
-      || ! bfd_set_section_alignment (abfd, s, bed->s->log_file_align))
+      || !bfd_set_section_alignment (s, bed->s->log_file_align))
     return FALSE;
   htab->srelgot = s;
 
   s = bfd_make_section_anyway_with_flags (abfd, ".got", flags);
   if (s == NULL
-      || !bfd_set_section_alignment (abfd, s, bed->s->log_file_align))
+      || !bfd_set_section_alignment (s, bed->s->log_file_align))
     return FALSE;
   htab->sgot = s;
   htab->sgot->size += GOT_ENTRY_SIZE;
@@ -7504,8 +7548,7 @@ aarch64_elf_create_got_section (bfd *abfd, struct bfd_link_info *info)
     {
       s = bfd_make_section_anyway_with_flags (abfd, ".got.plt", flags);
       if (s == NULL
-	  || !bfd_set_section_alignment (abfd, s,
-					 bed->s->log_file_align))
+	  || !bfd_set_section_alignment (s, bed->s->log_file_align))
 	return FALSE;
       htab->sgotplt = s;
     }
@@ -7956,122 +7999,43 @@ elfNN_aarch64_is_target_special_symbol (bfd *abfd ATTRIBUTE_UNUSED,
 					     BFD_AARCH64_SPECIAL_SYM_TYPE_ANY);
 }
 
-/* This is a version of _bfd_elf_find_function() from dwarf2.c except that
-   AArch64 mapping symbols are ignored when looking for function names.  */
+/* If the ELF symbol SYM might be a function in SEC, return the
+   function size and set *CODE_OFF to the function's entry point,
+   otherwise return zero.  */
 
-static bfd_boolean
-aarch64_elf_find_function (bfd *          abfd,
-			   asymbol **     symbols,
-			   asection *     section,
-			   bfd_vma        offset,
-			   const char **  filename_ptr,
-			   const char **  functionname_ptr)
+static bfd_size_type
+elfNN_aarch64_maybe_function_sym (const asymbol *sym, asection *sec,
+				  bfd_vma *code_off)
 {
-  const char *filename = NULL;
-  asymbol *func = NULL;
-  bfd_vma low_func = 0;
-  asymbol **p;
+  bfd_size_type size;
 
-  if (symbols == NULL)
-    return FALSE;
+  if ((sym->flags & (BSF_SECTION_SYM | BSF_FILE | BSF_OBJECT
+		     | BSF_THREAD_LOCAL | BSF_RELC | BSF_SRELC)) != 0
+      || sym->section != sec)
+    return 0;
 
-  if (bfd_get_flavour (abfd) != bfd_target_elf_flavour)
-    return FALSE;
-
-  for (p = symbols; *p != NULL; p++)
-    {
-      elf_symbol_type *q;
-
-      q = (elf_symbol_type *) * p;
-
-      switch (ELF_ST_TYPE (q->internal_elf_sym.st_info))
-	{
-	default:
-	  break;
-	case STT_FILE:
-	  filename = bfd_asymbol_name (&q->symbol);
-	  break;
+  if (!(sym->flags & BSF_SYNTHETIC))
+    switch (ELF_ST_TYPE (((elf_symbol_type *) sym)->internal_elf_sym.st_info))
+      {
 	case STT_FUNC:
 	case STT_NOTYPE:
-	  /* Skip mapping symbols.  */
-	  if ((q->symbol.flags & BSF_LOCAL)
-	      && (bfd_is_aarch64_special_symbol_name
-		  (q->symbol.name, BFD_AARCH64_SPECIAL_SYM_TYPE_ANY)))
-	    continue;
-	  /* Fall through.  */
-	  if (bfd_get_section (&q->symbol) == section
-	      && q->symbol.value >= low_func && q->symbol.value <= offset)
-	    {
-	      func = (asymbol *) q;
-	      low_func = q->symbol.value;
-	    }
 	  break;
-	}
-    }
+	default:
+	  return 0;
+      }
 
-  if (func == NULL)
-    return FALSE;
+  if ((sym->flags & BSF_LOCAL)
+      && bfd_is_aarch64_special_symbol_name (sym->name,
+					     BFD_AARCH64_SPECIAL_SYM_TYPE_ANY))
+    return 0;
 
-  if (filename_ptr)
-    *filename_ptr = filename;
-  if (functionname_ptr)
-    *functionname_ptr = bfd_asymbol_name (func);
-
-  return TRUE;
-}
-
-
-/* Find the nearest line to a particular section and offset, for error
-   reporting.   This code is a duplicate of the code in elf.c, except
-   that it uses aarch64_elf_find_function.  */
-
-static bfd_boolean
-elfNN_aarch64_find_nearest_line (bfd *abfd,
-				 asymbol **symbols,
-				 asection *section,
-				 bfd_vma offset,
-				 const char **filename_ptr,
-				 const char **functionname_ptr,
-				 unsigned int *line_ptr,
-				 unsigned int *discriminator_ptr)
-{
-  bfd_boolean found = FALSE;
-
-  if (_bfd_dwarf2_find_nearest_line (abfd, symbols, NULL, section, offset,
-				     filename_ptr, functionname_ptr,
-				     line_ptr, discriminator_ptr,
-				     dwarf_debug_sections, 0,
-				     &elf_tdata (abfd)->dwarf2_find_line_info))
-    {
-      if (!*functionname_ptr)
-	aarch64_elf_find_function (abfd, symbols, section, offset,
-				   *filename_ptr ? NULL : filename_ptr,
-				   functionname_ptr);
-
-      return TRUE;
-    }
-
-  /* Skip _bfd_dwarf1_find_nearest_line since no known AArch64
-     toolchain uses DWARF1.  */
-
-  if (!_bfd_stab_section_find_nearest_line (abfd, symbols, section, offset,
-					    &found, filename_ptr,
-					    functionname_ptr, line_ptr,
-					    &elf_tdata (abfd)->line_info))
-    return FALSE;
-
-  if (found && (*functionname_ptr || *line_ptr))
-    return TRUE;
-
-  if (symbols == NULL)
-    return FALSE;
-
-  if (!aarch64_elf_find_function (abfd, symbols, section, offset,
-				  filename_ptr, functionname_ptr))
-    return FALSE;
-
-  *line_ptr = 0;
-  return TRUE;
+  *code_off = sym->value;
+  size = 0;
+  if (!(sym->flags & BSF_SYNTHETIC))
+    size = ((elf_symbol_type *) sym)->internal_elf_sym.st_size;
+  if (size == 0)
+    size = 1;
+  return size;
 }
 
 static bfd_boolean
@@ -8088,16 +8052,17 @@ elfNN_aarch64_find_inliner_info (bfd *abfd,
 }
 
 
-static void
-elfNN_aarch64_post_process_headers (bfd *abfd,
-				    struct bfd_link_info *link_info)
+static bfd_boolean
+elfNN_aarch64_init_file_header (bfd *abfd, struct bfd_link_info *link_info)
 {
   Elf_Internal_Ehdr *i_ehdrp;	/* ELF file header, internal form.  */
 
+  if (!_bfd_elf_init_file_header (abfd, link_info))
+    return FALSE;
+
   i_ehdrp = elf_elfheader (abfd);
   i_ehdrp->e_ident[EI_ABIVERSION] = AARCH64_ELF_ABI_VERSION;
-
-  _bfd_elf_post_process_headers (abfd, link_info);
+  return TRUE;
 }
 
 static enum elf_reloc_type_class
@@ -9107,7 +9072,7 @@ elfNN_aarch64_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
 	  /* Strip this section if we don't need it; see the
 	     comment below.  */
 	}
-      else if (CONST_STRNEQ (bfd_get_section_name (dynobj, s), ".rela"))
+      else if (CONST_STRNEQ (bfd_section_name (s), ".rela"))
 	{
 	  if (s->size != 0 && s != htab->root.srelplt)
 	    relocs = TRUE;
@@ -10079,9 +10044,6 @@ const struct elf_size_info elfNN_aarch64_size_info =
 #define bfd_elfNN_find_inliner_info		\
   elfNN_aarch64_find_inliner_info
 
-#define bfd_elfNN_find_nearest_line		\
-  elfNN_aarch64_find_nearest_line
-
 #define bfd_elfNN_get_synthetic_symtab		\
   elfNN_aarch64_get_synthetic_symtab
 
@@ -10126,11 +10088,14 @@ const struct elf_size_info elfNN_aarch64_size_info =
 #define elf_backend_output_arch_local_syms	\
   elfNN_aarch64_output_arch_local_syms
 
+#define elf_backend_maybe_function_sym		\
+  elfNN_aarch64_maybe_function_sym
+
 #define elf_backend_plt_sym_val			\
   elfNN_aarch64_plt_sym_val
 
-#define elf_backend_post_process_headers	\
-  elfNN_aarch64_post_process_headers
+#define elf_backend_init_file_header		\
+  elfNN_aarch64_init_file_header
 
 #define elf_backend_relocate_section		\
   elfNN_aarch64_relocate_section

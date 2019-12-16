@@ -396,6 +396,7 @@ struct opcode16
    %%			%
 
    %c			print condition code (always bits 28-31 in ARM mode)
+   %b			print condition code allowing cp_num == 9
    %q			print shifter argument
    %u			print condition code (unconditional in ARM mode,
                           UNPREDICTABLE if not AL in Thumb)
@@ -1184,38 +1185,7 @@ static const struct sopcode32 coprocessor_opcodes[] =
   {ANY, ARM_FEATURE_COPROC (FPU_VFP_EXT_ARMV8),
     0xfeb80b40, 0xffbc0fd0, "vrint%16-17?mpna%u.f64\t%z1, %z0"},
 
-  /* Generic coprocessor instructions.  */
   {ANY, ARM_FEATURE_CORE_LOW (0), SENTINEL_GENERIC_START, 0, "" },
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5E),
-    0x0c400000, 0x0ff00000, "mcrr%c\t%8-11d, %4-7d, %12-15R, %16-19r, cr%0-3d"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5E),
-    0x0c500000, 0x0ff00000,
-    "mrrc%c\t%8-11d, %4-7d, %12-15Ru, %16-19Ru, cr%0-3d"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0e000000, 0x0f000010,
-    "cdp%c\t%8-11d, %20-23d, cr%12-15d, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0e10f010, 0x0f10f010,
-    "mrc%c\t%8-11d, %21-23d, APSR_nzcv, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0e100010, 0x0f100010,
-    "mrc%c\t%8-11d, %21-23d, %12-15r, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0e000010, 0x0f100010,
-    "mcr%c\t%8-11d, %21-23d, %12-15R, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0c000000, 0x0e100000, "stc%22'l%c\t%8-11d, cr%12-15d, %A"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
-    0x0c100000, 0x0e100000, "ldc%22'l%c\t%8-11d, cr%12-15d, %A"},
-
-  /* V6 coprocessor instructions.  */
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V6),
-    0xfc500000, 0xfff00000,
-    "mrrc2%c\t%8-11d, %4-7d, %12-15Ru, %16-19Ru, cr%0-3d"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V6),
-    0xfc400000, 0xfff00000,
-    "mcrr2%c\t%8-11d, %4-7d, %12-15R, %16-19R, cr%0-3d"},
-
   /* ARMv8.3 AdvSIMD instructions in the space of coprocessor 8.  */
   {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_V8_3A),
     0xfc800800, 0xfeb00f10, "vcadd%c.f16\t%12-15,22V, %16-19,7V, %0-3,5V, #%24?29%24'70"},
@@ -1238,11 +1208,15 @@ static const struct sopcode32 coprocessor_opcodes[] =
   {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_V8_3A),
     0xfea00800, 0xffa00f10, "vcmla%c.f32\t%12-15,22V, %16-19,7V, %0-3,5D[0], #%20?21%20?780"},
 
+  /* BFloat16 instructions.  */
+  {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0x0eb30940, 0x0fbf0f50, "vcvt%7?tb%b.bf16.f32\t%y1, %y0"},
+
   /* Dot Product instructions in the space of coprocessor 13.  */
   {ANY, ARM_FEATURE_COPROC (FPU_NEON_EXT_DOTPROD),
     0xfc200d00, 0xffb00f00, "v%4?usdot.%4?us8\t%12-15,22V, %16-19,7V, %0-3,5V"},
   {ANY, ARM_FEATURE_COPROC (FPU_NEON_EXT_DOTPROD),
-    0xfe000d00, 0xff000f00, "v%4?usdot.%4?us8\t%12-15,22V, %16-19,7V, %0-3D[%5?10]"},
+    0xfe200d00, 0xff200f00, "v%4?usdot.%4?us8\t%12-15,22V, %16-19,7V, %0-3D[%5?10]"},
 
   /* ARMv8.2 FMAC Long instructions in the space of coprocessor 8.  */
   {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_FP16_INST | ARM_EXT2_V8_2A),
@@ -1261,21 +1235,6 @@ static const struct sopcode32 coprocessor_opcodes[] =
     0xfe000850, 0xffb00f50, "vfmal.f16\t%12-15,22Q, d%16-19,7d, d%0-2d[%3,5d]"},
   {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_FP16_INST | ARM_EXT2_V8_2A),
     0xfe100850, 0xffb00f50, "vfmsl.f16\t%12-15,22Q, d%16-19,7d, d%0-2d[%3,5d]"},
-
-  /* V5 coprocessor instructions.  */
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
-    0xfc100000, 0xfe100000, "ldc2%22'l%c\t%8-11d, cr%12-15d, %A"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
-    0xfc000000, 0xfe100000, "stc2%22'l%c\t%8-11d, cr%12-15d, %A"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
-    0xfe000000, 0xff000010,
-    "cdp2%c\t%8-11d, %20-23d, cr%12-15d, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
-    0xfe000010, 0xff100010,
-    "mcr2%c\t%8-11d, %21-23d, %12-15R, cr%16-19d, cr%0-3d, {%5-7d}"},
-  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
-    0xfe100010, 0xff100010,
-    "mrc2%c\t%8-11d, %21-23d, %12-15r, cr%16-19d, cr%0-3d, {%5-7d}"},
 
   /* ARMv8.2 half-precision Floating point coprocessor 9 (VFP) instructions.
      cp_num: bit <11:8> == 0b1001.
@@ -1354,6 +1313,60 @@ static const struct sopcode32 coprocessor_opcodes[] =
   /* ARMv8.3 javascript conversion instruction.  */
   {ANY, ARM_FEATURE_CORE_HIGH (ARM_EXT2_V8_3A),
     0x0eb90bc0, 0x0fbf0fd0, "vjcvt%c.s32.f64\t%y1, %z0"},
+
+  {ANY, ARM_FEATURE_CORE_LOW (0), 0, 0, 0}
+};
+
+/* Generic coprocessor instructions.  These are only matched if a more specific
+   SIMD or co-processor instruction does not match first.  */
+
+static const struct sopcode32 generic_coprocessor_opcodes[] =
+{
+  /* Generic coprocessor instructions.  */
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5E),
+    0x0c400000, 0x0ff00000, "mcrr%c\t%8-11d, %4-7d, %12-15R, %16-19r, cr%0-3d"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5E),
+    0x0c500000, 0x0ff00000,
+    "mrrc%c\t%8-11d, %4-7d, %12-15Ru, %16-19Ru, cr%0-3d"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0e000000, 0x0f000010,
+    "cdp%c\t%8-11d, %20-23d, cr%12-15d, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0e10f010, 0x0f10f010,
+    "mrc%c\t%8-11d, %21-23d, APSR_nzcv, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0e100010, 0x0f100010,
+    "mrc%c\t%8-11d, %21-23d, %12-15r, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0e000010, 0x0f100010,
+    "mcr%c\t%8-11d, %21-23d, %12-15R, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0c000000, 0x0e100000, "stc%22'l%c\t%8-11d, cr%12-15d, %A"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V2),
+    0x0c100000, 0x0e100000, "ldc%22'l%c\t%8-11d, cr%12-15d, %A"},
+
+  /* V6 coprocessor instructions.  */
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V6),
+    0xfc500000, 0xfff00000,
+    "mrrc2%c\t%8-11d, %4-7d, %12-15Ru, %16-19Ru, cr%0-3d"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V6),
+    0xfc400000, 0xfff00000,
+    "mcrr2%c\t%8-11d, %4-7d, %12-15R, %16-19R, cr%0-3d"},
+
+  /* V5 coprocessor instructions.  */
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
+    0xfc100000, 0xfe100000, "ldc2%22'l%c\t%8-11d, cr%12-15d, %A"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
+    0xfc000000, 0xfe100000, "stc2%22'l%c\t%8-11d, cr%12-15d, %A"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
+    0xfe000000, 0xff000010,
+    "cdp2%c\t%8-11d, %20-23d, cr%12-15d, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
+    0xfe000010, 0xff100010,
+    "mcr2%c\t%8-11d, %21-23d, %12-15R, cr%16-19d, cr%0-3d, {%5-7d}"},
+  {ANY, ARM_FEATURE_CORE_LOW (ARM_EXT_V5),
+    0xfe100010, 0xff100010,
+    "mrc2%c\t%8-11d, %21-23d, %12-15r, cr%16-19d, cr%0-3d, {%5-7d}"},
 
   {ANY, ARM_FEATURE_CORE_LOW (0), 0, 0, 0}
 };
@@ -1443,6 +1456,34 @@ static const struct opcode32 neon_opcodes[] =
     0xf2200c10, 0xffb00f10, "vfms%c.f32\t%12-15,22R, %16-19,7R, %0-3,5R"},
   {ARM_FEATURE_CORE_HIGH (ARM_EXT2_FP16_INST),
     0xf2300c10, 0xffb00f10, "vfms%c.f16\t%12-15,22R, %16-19,7R, %0-3,5R"},
+
+  /* BFloat16 instructions.  */
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xfc000d00, 0xffb00f10, "vdot.bf16\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xfe000d00, 0xffb00f10, "vdot.bf16\t%12-15,22R, %16-19,7R, d%0-3d[%5d]"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xfc000c40, 0xffb00f50, "vmmla.bf16\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xf3b60640, 0xffbf0fd0, "vcvt%c.bf16.f32\t%12-15,22D, %0-3,5Q"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xfc300810, 0xffb00f10, "vfma%6?tb.bf16\t%12-15,22Q, %16-19,7Q, %0-3,5Q"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_BF16),
+    0xfe300810, 0xffb00f10, "vfma%6?tb.bf16\t%12-15,22Q, %16-19,7Q, %0-2D[%3,5d]"},
+
+  /* Matrix Multiply instructions.  */
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfc200c40, 0xffb00f50, "vsmmla.s8\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfc200c50, 0xffb00f50, "vummla.u8\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfca00c40, 0xffb00f50, "vusmmla.s8\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfca00d00, 0xffb00f10, "vusdot.s8\t%12-15,22R, %16-19,7R, %0-3,5R"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfe800d00, 0xffb00f10, "vusdot.s8\t%12-15,22R, %16-19,7R, d%0-3d[%5d]"},
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_I8MM),
+    0xfe800d10, 0xffb00f10, "vsudot.u8\t%12-15,22R, %16-19,7R, d%0-3d[%5d]"},
 
   /* Two registers, miscellaneous.  */
   {ARM_FEATURE_COPROC (FPU_NEON_EXT_ARMV8),
@@ -2073,6 +2114,7 @@ static const struct opcode32 neon_opcodes[] =
    %u			print 'U' (unsigned) or 'S' for various mve instructions
    %i			print MVE predicate(s) for vpt and vpst
    %j			print a 5-bit immediate from hw2[14:12,7:6]
+   %k			print 48 if the 7th position bit is set else print 64.
    %m			print rounding mode for vcvt and vrint
    %n			print vector comparison code for predicated instruction
    %s			print size for various vcvt instructions
@@ -2800,10 +2842,15 @@ static const struct mopcode32 mve_opcodes[] =
    "vsri%v.%19-21s\t%13-15,22Q, %1-3,5Q, #%16-18d"},
 
   /* Vector VMOV immediate to vector,
-     cmode == 11x1 -> VMVN which is UNDEFINED
-     for such a cmode.  */
+     undefinded for cmode == 1111 */
   {ARM_FEATURE_COPROC (FPU_MVE),
-   MVE_VMVN_IMM, 0xef800d50, 0xefb81dd0, UNDEFINED_INSTRUCTION},
+   MVE_VMVN_IMM, 0xef800f70, 0xefb81ff0, UNDEFINED_INSTRUCTION},
+
+  /* Vector VMOV immediate to vector,
+     cmode == 1101 */
+  {ARM_FEATURE_COPROC (FPU_MVE),
+   MVE_VMOV_IMM_TO_VEC, 0xef800d50, 0xefb81fd0,
+   "vmov%v.%5,8-11s\t%13-15,22Q, %E"},
 
   /* Vector VMOV immediate to vector.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
@@ -2950,6 +2997,16 @@ static const struct mopcode32 mve_opcodes[] =
    0xef200150, 0xffb11f51,
    "vorr%v\t%13-15,22Q, %17-19,7Q, %1-3,5Q"},
 
+  /* Vector VMOV, vector to vector move. While decoding MVE_VORR_REG if
+     "Qm==Qn", VORR should replaced by its alias VMOV. For that to happen
+     MVE_VMOV_VEC_TO_VEC need to placed after MVE_VORR_REG in this mve_opcodes
+     array.  */
+
+  {ARM_FEATURE_COPROC (FPU_MVE),
+   MVE_VMOV_VEC_TO_VEC,
+   0xef200150, 0xffb11f51,
+   "vmov%v\t%13-15,22Q, %17-19,7Q"},
+
   /* Vector VQDMULL T1 variant.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_VQDMULL_T1,
@@ -3019,25 +3076,25 @@ static const struct mopcode32 mve_opcodes[] =
   /* Vector VQDMLAH.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_VQDMLAH,
-   0xee000e60, 0xef811f70,
+   0xee000e60, 0xff811f70,
    "vqdmlah%v.%u%20-21s\t%13-15,22Q, %17-19,7Q, %0-3r"},
 
   /* Vector VQRDMLAH.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_VQRDMLAH,
-   0xee000e40, 0xef811f70,
+   0xee000e40, 0xff811f70,
    "vqrdmlah%v.%u%20-21s\t%13-15,22Q, %17-19,7Q, %0-3r"},
 
   /* Vector VQDMLASH.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_VQDMLASH,
-   0xee001e60, 0xef811f70,
+   0xee001e60, 0xff811f70,
    "vqdmlash%v.%u%20-21s\t%13-15,22Q, %17-19,7Q, %0-3r"},
 
   /* Vector VQRDMLASH.  */
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_VQRDMLASH,
-   0xee001e40, 0xef811f70,
+   0xee001e40, 0xff811f70,
    "vqrdmlash%v.%u%20-21s\t%13-15,22Q, %17-19,7Q, %0-3r"},
 
   /* Vector VQDMLSDH.  */
@@ -3373,8 +3430,8 @@ static const struct mopcode32 mve_opcodes[] =
 
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_SQRSHRL,
-   0xea51012d, 0xfff101ff,
-   "sqrshrl%c\t%17-19l, %9-11h, %12-15S"},
+   0xea51012d, 0xfff1017f,
+   "sqrshrl%c\t%17-19l, %9-11h, %k, %12-15S"},
 
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_SQRSHR,
@@ -3403,8 +3460,8 @@ static const struct mopcode32 mve_opcodes[] =
 
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_UQRSHLL,
-   0xea51010d, 0xfff101ff,
-   "uqrshll%c\t%17-19l, %9-11h, %12-15S"},
+   0xea51010d, 0xfff1017f,
+   "uqrshll%c\t%17-19l, %9-11h, %k, %12-15S"},
 
   {ARM_FEATURE_COPROC (FPU_MVE),
    MVE_UQRSHL,
@@ -3584,17 +3641,17 @@ static const struct opcode32 arm_opcodes[] =
   {ARM_FEATURE_CORE_LOW (ARM_EXT2_ATOMICS),
     0x01f00c9f, 0x0ff00fff, "ldah%c\t%12-15r, [%16-19R]"},
   /* CRC32 instructions.  */
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1000040, 0xfff00ff0, "crc32b\t%12-15R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1200040, 0xfff00ff0, "crc32h\t%12-15R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1400040, 0xfff00ff0, "crc32w\t%12-15R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1000240, 0xfff00ff0, "crc32cb\t%12-15R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1200240, 0xfff00ff0, "crc32ch\t%12-15R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xe1400240, 0xfff00ff0, "crc32cw\t%12-15R, %16-19R, %0-3R"},
 
   /* Privileged Access Never extension instructions.  */
@@ -4600,17 +4657,17 @@ static const struct opcode32 thumb32_opcodes[] =
     0xe8d000ff, 0xfff000ff, "ldaexd%c\t%12-15r, %8-11r, [%16-19R]"},
 
   /* CRC32 instructions.  */
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfac0f080, 0xfff0f0f0, "crc32b\t%8-11R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfac0f090, 0xfff0f0f0, "crc32h\t%9-11R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfac0f0a0, 0xfff0f0f0, "crc32w\t%8-11R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfad0f080, 0xfff0f0f0, "crc32cb\t%8-11R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfad0f090, 0xfff0f0f0, "crc32ch\t%8-11R, %16-19R, %0-3R"},
-  {ARM_FEATURE_COPROC (CRC_EXT_ARMV8),
+  {ARM_FEATURE_CORE_HIGH (ARM_EXT2_CRC),
     0xfad0f0a0, 0xfff0f0f0, "crc32cw\t%8-11R, %16-19R, %0-3R"},
 
   /* Speculation Barriers.  */
@@ -5612,11 +5669,11 @@ is_mve_encoding_conflict (unsigned long given,
       {
 	unsigned long cmode = arm_decode_field (given, 8, 11);
 
-	if ((cmode & 9) == 1)
+	if (cmode == 0xe)
 	  return TRUE;
-	else if ((cmode & 5) == 1)
+	else if ((cmode & 0x9) == 1)
 	  return TRUE;
-	else if ((cmode & 0xe) == 0xe)
+	else if ((cmode & 0xd) == 9)
 	  return TRUE;
 	else
 	  return FALSE;
@@ -6103,6 +6160,12 @@ is_mve_undefined (unsigned long given, enum mve_instructions matched_insn,
       else
 	return FALSE;
 
+    case MVE_VMOV_VEC_TO_VEC:
+      if ((arm_decode_field (given, 5, 5) == 1)
+	  || (arm_decode_field (given, 22, 22) == 1))
+	  return TRUE;
+      return FALSE;
+
     case MVE_VMOV_IMM_TO_VEC:
       if (arm_decode_field (given, 5, 5) == 0)
       {
@@ -6546,10 +6609,6 @@ is_mve_unpredictable (unsigned long given, enum mve_instructions matched_insn,
 	return FALSE;
       }
 
-    case MVE_VQRDMLADH:
-    case MVE_VQDMLSDH:
-    case MVE_VQRDMLSDH:
-    case MVE_VQDMLADH:
     case MVE_VMULL_INT:
       {
 	unsigned long Qd;
@@ -7874,10 +7933,11 @@ print_vec_condition (struct disassemble_info *info, long given,
    recognised coprocessor instruction.  */
 
 static bfd_boolean
-print_insn_coprocessor (bfd_vma pc,
-			struct disassemble_info *info,
-			long given,
-			bfd_boolean thumb)
+print_insn_coprocessor_1 (const struct sopcode32 *opcodes,
+			  bfd_vma pc,
+			  struct disassemble_info *info,
+			  long given,
+			  bfd_boolean thumb)
 {
   const struct sopcode32 *insn;
   void *stream = info->stream;
@@ -7893,7 +7953,7 @@ print_insn_coprocessor (bfd_vma pc,
 
   allowed_arches = private_data->features;
 
-  for (insn = coprocessor_opcodes; insn->assembler; insn++)
+  for (insn = opcodes; insn->assembler; insn++)
     {
       unsigned long u_reg = 16;
       bfd_boolean is_unpredictable = FALSE;
@@ -8137,6 +8197,8 @@ print_insn_coprocessor (bfd_vma pc,
 		  if (cond != COND_UNCOND && cp_num == 9)
 		    is_unpredictable = TRUE;
 
+		  /* Fall through.  */
+		case 'b':
 		  func (stream, "%s", arm_conditional[cond]);
 		  break;
 
@@ -8609,6 +8671,26 @@ print_insn_coprocessor (bfd_vma pc,
   return FALSE;
 }
 
+static bfd_boolean
+print_insn_coprocessor (bfd_vma pc,
+			struct disassemble_info *info,
+			long given,
+			bfd_boolean thumb)
+{
+  return print_insn_coprocessor_1 (coprocessor_opcodes,
+				   pc, info, given, thumb);
+}
+
+static bfd_boolean
+print_insn_generic_coprocessor (bfd_vma pc,
+				struct disassemble_info *info,
+				long given,
+				bfd_boolean thumb)
+{
+  return print_insn_coprocessor_1 (generic_coprocessor_opcodes,
+				   pc, info, given, thumb);
+}
+
 /* Decodes and prints ARM addressing modes.  Returns the offset
    used in the address, if any, if it is worthwhile printing the
    offset as a hexadecimal value in a comment at the end of the
@@ -8730,6 +8812,10 @@ print_insn_neon (struct disassemble_info *info, long given, bfd_boolean thumb)
 	}
       else if ((given & 0xff000000) == 0xf9000000)
 	given ^= 0xf9000000 ^ 0xf4000000;
+      /* BFloat16 neon instructions without special top byte handling.  */
+      else if ((given & 0xff000000) == 0xfe000000
+	       || (given & 0xff000000) == 0xfc000000)
+	;
       /* vdup is also a valid neon instruction.  */
       else if ((given & 0xff910f5f) != 0xee800b10)
 	return FALSE;
@@ -9217,6 +9303,13 @@ print_insn_mve (struct disassemble_info *info, long given)
 	  if (is_mve_undefined (given, insn->mve_op, &undefined_cond))
 	    is_undefined = TRUE;
 
+	  /* In "VORR Qd, Qm, Qn", if Qm==Qn, VORR is nothing but VMOV,
+	     i.e "VMOV Qd, Qm".  */
+	  if ((insn->mve_op == MVE_VORR_REG)
+	      && (arm_decode_field (given, 1, 3)
+		  == arm_decode_field (given, 17, 19)))
+	    continue;
+
 	  for (c = insn->assembler; *c; c++)
 	    {
 	      if (*c == '%')
@@ -9256,6 +9349,11 @@ print_insn_mve (struct disassemble_info *info, long given)
 			imm5 |= (arm_decode_field (given, 12, 14) << 2);
 			func (stream, "#%u", (imm5 == 0) ? 32 : imm5);
 		      }
+		      break;
+
+		    case 'k':
+		      func (stream, "#%u",
+			    (arm_decode_field (given, 7, 7) == 0) ? 64 : 48);
 		      break;
 
 		    case 'n':
@@ -9625,6 +9723,9 @@ print_insn_arm (bfd_vma pc, struct disassemble_info *info, long given)
     return;
 
   if (print_insn_neon (info, given, FALSE))
+    return;
+
+  if (print_insn_generic_coprocessor (pc, info, given, FALSE))
     return;
 
   for (insn = arm_opcodes; insn->assembler; insn++)
@@ -10462,6 +10563,9 @@ print_insn_thumb32 (bfd_vma pc, struct disassemble_info *info, long given)
     return;
 
   if (is_mve && print_insn_mve (info, given))
+    return;
+
+  if (print_insn_generic_coprocessor (pc, info, given, TRUE))
     return;
 
   for (insn = thumb32_opcodes; insn->assembler; insn++)
@@ -11565,11 +11669,11 @@ select_arm_features (unsigned long mach,
     case bfd_mach_arm_7EM:	 ARM_SET_FEATURES (ARM_ARCH_V7EM); break;
     case bfd_mach_arm_8:
 	{
-	  /* Add bits for extensions that Armv8.5-A recognizes.  */
-	  arm_feature_set armv8_5_ext_fset
+	  /* Add bits for extensions that Armv8.6-A recognizes.  */
+	  arm_feature_set armv8_6_ext_fset
 	    = ARM_FEATURE_CORE_HIGH (ARM_EXT2_FP16_INST);
-	  ARM_SET_FEATURES (ARM_ARCH_V8_5A);
-	  ARM_MERGE_FEATURE_SETS (arch_fset, arch_fset, armv8_5_ext_fset);
+	  ARM_SET_FEATURES (ARM_ARCH_V8_6A);
+	  ARM_MERGE_FEATURE_SETS (arch_fset, arch_fset, armv8_6_ext_fset);
 	  break;
 	}
     case bfd_mach_arm_8R:	 ARM_SET_FEATURES (ARM_ARCH_V8R); break;

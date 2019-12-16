@@ -23,6 +23,10 @@
 #include "gdb_obstack.h"
 #include "bcache.h"
 
+#include <algorithm>
+
+namespace gdb {
+
 /* The type used to hold a single bcache string.  The user data is
    stored in d.data.  Since it can be any type, it needs to have the
    same alignment as the most strict alignment of any type on the host
@@ -49,31 +53,6 @@ struct bstring
   d;
 };
 
-/* The old hash function was stolen from SDBM. This is what DB 3.0
-   uses now, and is better than the old one.  */
-
-unsigned long
-hash(const void *addr, int length)
-{
-  return hash_continue (addr, length, 0);
-}
-
-/* Continue the calculation of the hash H at the given address.  */
-
-unsigned long
-hash_continue (const void *addr, int length, unsigned long h)
-{
-  const unsigned char *k, *e;
-
-  k = (const unsigned char *)addr;
-  e = k+length;
-  for (; k< e;++k)
-    {
-      h *=16777619;
-      h ^= *k;
-    }
-  return (h);
-}
 
 /* Growing the bcache's hash table.  */
 
@@ -311,10 +290,8 @@ bcache::print_statistics (const char *type)
 
     /* To compute the median, we need the set of chain lengths
        sorted.  */
-    qsort (chain_length, m_num_buckets, sizeof (chain_length[0]),
-	   compare_positive_ints);
-    qsort (entry_size, m_unique_count, sizeof (entry_size[0]),
-	   compare_positive_ints);
+    std::sort (chain_length, chain_length + m_num_buckets);
+    std::sort (entry_size, entry_size + m_unique_count);
 
     if (m_num_buckets > 0)
       {
@@ -403,3 +380,5 @@ bcache::memory_used ()
     return 0;
   return obstack_memory_used (&m_cache);
 }
+
+} /* namespace gdb */

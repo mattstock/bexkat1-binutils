@@ -912,9 +912,11 @@ x86_linux_process_qsupported (char **features, int count)
       if (startswith (feature, "xmlRegisters="))
 	{
 	  char *copy = xstrdup (feature + 13);
-	  char *p;
 
-	  for (p = strtok (copy, ","); p != NULL; p = strtok (NULL, ","))
+	  char *saveptr;
+	  for (char *p = strtok_r (copy, ",", &saveptr);
+	       p != NULL;
+	       p = strtok_r (NULL, ",", &saveptr))
 	    {
 	      if (strcmp (p, "i386") == 0)
 		{
@@ -1007,7 +1009,7 @@ x86_supports_tracepoints (void)
 static void
 append_insns (CORE_ADDR *to, size_t len, const unsigned char *buf)
 {
-  write_inferior_memory (*to, buf, len);
+  target_write_memory (*to, buf, len);
   *to += len;
 }
 
@@ -1385,7 +1387,7 @@ i386_install_fast_tracepoint_jump_pad (CORE_ADDR tpoint, CORE_ADDR tpaddr,
       offset = *jump_entry - (*trampoline + sizeof (jump_insn));
       memcpy (buf, jump_insn, sizeof (jump_insn));
       memcpy (buf + 1, &offset, 4);
-      write_inferior_memory (*trampoline, buf, sizeof (jump_insn));
+      target_write_memory (*trampoline, buf, sizeof (jump_insn));
 
       /* Use a 16-bit relative jump instruction to jump to the trampoline.  */
       offset = (*trampoline - (tpaddr + sizeof (small_jump_insn))) & 0xffff;
@@ -1780,7 +1782,7 @@ amd64_write_goto_address (CORE_ADDR from, CORE_ADDR to, int size)
     }
 
   memcpy (buf, &diff, sizeof (int));
-  write_inferior_memory (from, buf, sizeof (int));
+  target_write_memory (from, buf, sizeof (int));
 }
 
 static void
@@ -2398,7 +2400,7 @@ i386_write_goto_address (CORE_ADDR from, CORE_ADDR to, int size)
     }
 
   memcpy (buf, &diff, sizeof (int));
-  write_inferior_memory (from, buf, sizeof (int));
+  target_write_memory (from, buf, sizeof (int));
 }
 
 static void

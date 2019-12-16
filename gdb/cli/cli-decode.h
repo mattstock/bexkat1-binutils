@@ -55,6 +55,7 @@ struct cmd_list_element
 	deprecated_warn_user (0),
 	malloced_replacement (0),
 	doc_allocated (0),
+	name_allocated (0),
 	hook_in (0),
 	allow_unknown (0),
 	abbrev_flag (0),
@@ -69,6 +70,8 @@ struct cmd_list_element
     {
       if (doc && doc_allocated)
 	xfree ((char *) doc);
+      if (name_allocated)
+	xfree ((char *) name);
     }
 
     DISABLE_COPY_AND_ASSIGN (cmd_list_element);
@@ -108,6 +111,10 @@ struct cmd_list_element
     /* Set if the doc field should be xfree'd.  */
 
     unsigned int doc_allocated : 1;
+
+    /* Set if the name field should be xfree'd.  */
+
+    unsigned int name_allocated : 1;
 
     /* Flag that specifies if this command is already running its hook.  */
     /* Prevents the possibility of hook recursion.  */
@@ -258,9 +265,14 @@ extern void apropos_cmd (struct ui_file *, struct cmd_list_element *,
 
 extern void not_just_help_class_command (const char *arg, int from_tty);
 
-/* Exported to cli/cli-setshow.c */
+/* Print only the first line of STR on STREAM.
+   FOR_VALUE_PREFIX true indicates that the first line is output
+   to be a prefix to show a value (see deprecated_show_value_hack):
+   the first character is printed in uppercase, and the trailing
+   dot character is not printed.  */
 
-extern void print_doc_line (struct ui_file *, const char *);
+extern void print_doc_line (struct ui_file *stream, const char *str,
+			    bool for_value_prefix);
 
 /* The enums of boolean commands.  */
 extern const char * const boolean_enums[];

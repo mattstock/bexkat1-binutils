@@ -554,10 +554,10 @@ nios2_print_insn_arg (const char *argptr,
       switch (op->format)
 	{
 	case iw_i_type:
-	  s = (int32_t) (GET_IW_I_IMM16 (opcode) << 16) >> 16;
+	  s = ((GET_IW_I_IMM16 (opcode) & 0xffff) ^ 0x8000) - 0x8000;
 	  break;
 	case iw_F2I16_type:
-	  s = (int32_t) (GET_IW_F2I16_IMM16 (opcode) << 16) >> 16;
+	  s = ((GET_IW_F2I16_IMM16 (opcode) & 0xffff) ^ 0x8000) - 0x8000;
 	  break;
 	default:
 	  bad_opcode (op);
@@ -570,10 +570,10 @@ nios2_print_insn_arg (const char *argptr,
       switch (op->format)
 	{
 	case iw_F2X4I12_type:
-	  s = (int32_t) (GET_IW_F2X4I12_IMM12 (opcode) << 20) >> 20;
+	  s = ((GET_IW_F2X4I12_IMM12 (opcode) & 0xfff) ^ 0x800) - 0x800;
 	  break;
 	case iw_F1X4I12_type:
-	  s = (int32_t) (GET_IW_F1X4I12_IMM12 (opcode) << 20) >> 20;
+	  s = ((GET_IW_F1X4I12_IMM12 (opcode) & 0xfff) ^ 0x800) - 0x800;
 	  break;
 	default:
 	  bad_opcode (op);
@@ -673,10 +673,10 @@ nios2_print_insn_arg (const char *argptr,
       switch (op->format)
 	{
 	case iw_i_type:
-	  o = (int32_t) (GET_IW_I_IMM16 (opcode) << 16) >> 16;
+	  o = ((GET_IW_I_IMM16 (opcode) & 0xffff) ^ 0x8000) - 0x8000;
 	  break;
 	case iw_F2I16_type:
-	  o = (int32_t) (GET_IW_F2I16_IMM16 (opcode) << 16) >> 16;
+	  o = ((GET_IW_F2I16_IMM16 (opcode) & 0xffff) ^ 0x8000) - 0x8000;
 	  break;
 	default:
 	  bad_opcode (op);
@@ -690,7 +690,7 @@ nios2_print_insn_arg (const char *argptr,
       switch (op->format)
 	{
 	case iw_I10_type:
-	  o = (int32_t) (GET_IW_I10_IMM10 (opcode) << 22) >> 21;
+	  o = (((GET_IW_I10_IMM10 (opcode) & 0x3ff) ^ 0x400) - 0x400) << 1;
 	  break;
 	default:
 	  bad_opcode (op);
@@ -704,7 +704,7 @@ nios2_print_insn_arg (const char *argptr,
       switch (op->format)
 	{
 	case iw_T1I7_type:
-	  o = (int32_t) (GET_IW_T1I7_IMM7 (opcode) << 25) >> 24;
+	  o = (((GET_IW_T1I7_IMM7 (opcode) & 0x7f) ^ 0x40) - 0x40) << 1;
 	  break;
 	default:
 	  bad_opcode (op);
@@ -858,7 +858,7 @@ nios2_print_insn_arg (const char *argptr,
 		if (i & (1 << 10))
 		  reglist |= (1 << 28);
 		if (i & (1 << 11))
-		  reglist |= (1 << 31);
+		  reglist |= (1u << 31);
 	      }
 	    else
 	      reglist = i << 2;
@@ -867,7 +867,7 @@ nios2_print_insn_arg (const char *argptr,
 
 	  case iw_L5I4X1_type:
 	    /* Encoding for push.n/pop.n.  */
-	    reglist |= (1 << 31);
+	    reglist |= (1u << 31);
 	    if (GET_IW_L5I4X1_FP (opcode))
 	      reglist |= (1 << 28);
 	    if (GET_IW_L5I4X1_CS (opcode))
@@ -887,7 +887,7 @@ nios2_print_insn_arg (const char *argptr,
 	for (k = (dir == 1 ? 0 : 31);
 	     (dir == 1 && k < 32) || (dir == -1 && k >= 0);
 	     k += dir)
-	  if (reglist & (1 << k))
+	  if (reglist & (1u << k))
 	    {
 	      if (t)
 		(*info->fprintf_func) (info->stream, ",");

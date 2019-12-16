@@ -18,6 +18,9 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
+
+#include "mi-interp.h"
+
 #include "interps.h"
 #include "event-top.h"
 #include "event-loop.h"
@@ -1179,8 +1182,7 @@ mi_memory_changed (struct inferior *inferior, CORE_ADDR memaddr,
       sec = find_pc_section (memaddr);
       if (sec != NULL && sec->objfile != NULL)
 	{
-	  flagword flags = bfd_get_section_flags (sec->objfile->obfd,
-						  sec->the_bfd_section);
+	  flagword flags = bfd_section_flags (sec->the_bfd_section);
 
 	  if (flags & SEC_CODE)
 	    mi_uiout->field_string ("type", "code");

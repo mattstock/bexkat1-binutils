@@ -69,15 +69,15 @@ set saw_registers 0
 set saw_headers 0
 set test "maint print registers"
 gdb_test_multiple $test $test {
-    -re "\[^\r\n\]+Name\[^\r\n\]+Nr\[^\r\n\]+Rel\[^\r\n\]+Offset\[^\r\n\]+Size\[^\r\n\]+Type\[^\r\n\]+\[\r\n\]+" {
+    -re "\[^\r\n\]+Name\[^\r\n\]+Nr\[^\r\n\]+Rel\[^\r\n\]+Offset\[^\r\n\]+Size\[^\r\n\]+Type\[^\r\n\]+\r\n" {
 	set saw_headers 1
 	exp_continue
     }
-    -re "^\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[\r\n\]+" {
+    -re "^\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\[0-9\]+\[^\r\n\]+\r\n" {
         set saw_registers 1
         exp_continue
     }
-    -re "^\\*\[0-9\]+\[^\r\n\]+\[\r\n\]+" {
+    -re "^\\*\[0-9\]+\[^\r\n\]+\r\n" {
         exp_continue
     }
     -re "$gdb_prompt $" {
@@ -109,19 +109,25 @@ if ![runto_main] then {
         perror "tests suppressed"
 }
 
-# If we're using .gdb_index or .debug_names there will be no psymtabs.
-set have_gdb_index 0
-gdb_test_multiple "maint info sections .gdb_index .debug_names" "check for .gdb_index" {
-    -re ": \\.gdb_index .*\r\n$gdb_prompt $" {
-	set have_gdb_index 1
+# Check that 'maint info sections' output looks correct.  When
+# checking the lines for each section we reject section names starting
+# with a '*' character, the internal *COM*, *UND*, *ABS*, and *IND*
+# sections should not be displayed in this output.
+set test "check maint info sections output"
+gdb_test_multiple "maint info sections" $test {
+    -re "Exec file:\r\n\[\t ]+`\[^'\]+', file type \[^.\]+\.\r\n" {
+	exp_continue
     }
-    -re ": \\.debug_names .*\r\n$gdb_prompt $" {
-	set have_gdb_index 1
+    -re "^ \\\[\[0-9\]+\\\]\[\t \]+$hex->$hex at $hex: \[^*\r\]+\r\n" {
+	exp_continue
     }
-    -re ".*$gdb_prompt $" {
-	;# Nothing to do, present to avoid a FAIL.
+    -re "^$gdb_prompt $" {
+	pass $test
     }
 }
+
+# If we're using .gdb_index or .debug_names there will be no psymtabs.
+set have_gdb_index [ exec_has_index_section ${binfile} ]
 
 # There also won't be any psymtabs if we read the index from the index cache.
 # We can detect this by looking if the index-cache is enabled and if the number

@@ -46,7 +46,7 @@ struct inferior *inferior_list = NULL;
 static int highest_inferior_num;
 
 /* See inferior.h.  */
-int print_inferior_events = 1;
+bool print_inferior_events = true;
 
 /* The Current Inferior.  This is a strong reference.  I.e., whenever
    an inferior is the current inferior, its refcount is
@@ -221,14 +221,6 @@ exit_inferior (inferior *inf)
 }
 
 void
-exit_inferior_silent (int pid)
-{
-  struct inferior *inf = find_inferior_pid (pid);
-
-  exit_inferior_1 (inf, 1);
-}
-
-void
 exit_inferior_silent (inferior *inf)
 {
   exit_inferior_1 (inf, 1);
@@ -378,24 +370,22 @@ have_live_inferiors (void)
 void
 prune_inferiors (void)
 {
-  struct inferior *ss, **ss_link;
+  inferior *ss;
 
   ss = inferior_list;
-  ss_link = &inferior_list;
   while (ss)
     {
       if (!ss->deletable ()
 	  || !ss->removable
 	  || ss->pid != 0)
 	{
-	  ss_link = &ss->next;
-	  ss = *ss_link;
+	  ss = ss->next;
 	  continue;
 	}
 
-      *ss_link = ss->next;
+      inferior *ss_next = ss->next;
       delete_inferior (ss);
-      ss = *ss_link;
+      ss = ss_next;
     }
 }
 

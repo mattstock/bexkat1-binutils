@@ -46,10 +46,13 @@ extern void tui_initialize_io (void);
 extern void tui_redisplay_readline (void);
 
 /* Expand TABs into spaces.  */
-extern char *tui_expand_tabs (const char *, int);
+extern gdb::unique_xmalloc_ptr<char> tui_expand_tabs (const char *);
 
 /* Enter/leave reverse video mode.  */
 extern void tui_set_reverse_mode (WINDOW *w, bool reverse);
+
+/* Apply STYLE to the window.  */
+extern void tui_apply_style (WINDOW *w, ui_file_style style);
 
 extern struct ui_out *tui_out;
 extern cli_ui_out *tui_old_uiout;

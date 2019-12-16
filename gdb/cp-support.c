@@ -37,6 +37,10 @@
 #include "gdbsupport/gdb_setjmp.h"
 #include "safe-ctype.h"
 #include "gdbsupport/selftest.h"
+#include "gdbsupport/gdb-sigmask.h"
+#include <atomic>
+#include "event-top.h"
+#include "run-on-main-thread.h"
 
 #define d_left(dc) (dc)->u.s_binary.left
 #define d_right(dc) (dc)->u.s_binary.right
@@ -244,7 +248,7 @@ inspect_type (struct demangle_parse_info *info,
 	    }
 
 	  len = buf.size ();
-	  name = (char *) obstack_copy0 (&info->obstack, buf.c_str (), len);
+	  name = obstack_strdup (&info->obstack, buf.string ());
 
 	  /* Turn the result into a new tree.  Note that this
 	     tree will contain pointers into NAME, so NAME cannot
@@ -315,9 +319,7 @@ replace_typedefs_qualified_name (struct demangle_parse_info *info,
 
 	  buf.write (d_left (comp)->u.s_name.s, d_left (comp)->u.s_name.len);
 	  newobj.type = DEMANGLE_COMPONENT_NAME;
-	  newobj.u.s_name.s
-	    = (char *) obstack_copy0 (&info->obstack,
-				      buf.c_str (), buf.size ());
+	  newobj.u.s_name.s = obstack_strdup (&info->obstack, buf.string ());
 	  newobj.u.s_name.len = buf.size ();
 	  if (inspect_type (info, &newobj, finder, data))
 	    {
@@ -379,9 +381,7 @@ replace_typedefs_qualified_name (struct demangle_parse_info *info,
 	 with a DEMANGLE_COMPONENT_NAME node containing the whole
 	 name.  */
       ret_comp->type = DEMANGLE_COMPONENT_NAME;
-      ret_comp->u.s_name.s
-	= (char *) obstack_copy0 (&info->obstack,
-				  buf.c_str (), buf.size ());
+      ret_comp->u.s_name.s = obstack_strdup (&info->obstack, buf.string ());
       ret_comp->u.s_name.len = buf.size ();
       inspect_type (info, ret_comp, finder, data);
     }
@@ -989,7 +989,7 @@ cp_find_first_component_aux (const char *name, int permissive)
   /* Operator names can show up in unexpected places.  Since these can
      contain parentheses or angle brackets, they can screw up the
      recursion.  But not every string 'operator' is part of an
-     operater name: e.g. you could have a variable 'cooperator'.  So
+     operator name: e.g. you could have a variable 'cooperator'.  So
      this variable tells us whether or not we should treat the string
      'operator' as starting an operator.  */
   int operator_possible = 1;
@@ -1158,13 +1158,12 @@ overload_list_add_symbol (struct symbol *sym,
 
   /* skip any symbols that we've already considered.  */
   for (symbol *listed_sym : *overload_list)
-    if (strcmp (SYMBOL_LINKAGE_NAME (sym),
-		SYMBOL_LINKAGE_NAME (listed_sym)) == 0)
+    if (strcmp (sym->linkage_name (), listed_sym->linkage_name ()) == 0)
       return;
 
   /* Get the demangled name without parameters */
   gdb::unique_xmalloc_ptr<char> sym_name
-    = cp_remove_params (SYMBOL_NATURAL_NAME (sym));
+    = cp_remove_params (sym->natural_name ());
   if (!sym_name)
     return;
 
@@ -1473,18 +1472,18 @@ cp_lookup_rtti_type (const char *name, const struct block *block)
 
 #ifdef HAVE_WORKING_FORK
 
-/* If nonzero, attempt to catch crashes in the demangler and print
+/* If true, attempt to catch crashes in the demangler and print
    useful debugging information.  */
 
-static int catch_demangler_crashes = 1;
+static bool catch_demangler_crashes = true;
 
 /* Stack context and environment for demangler crash recovery.  */
 
-static SIGJMP_BUF gdb_demangle_jmp_buf;
+static thread_local SIGJMP_BUF *gdb_demangle_jmp_buf;
 
-/* If nonzero, attempt to dump core from the signal handler.  */
+/* If true, attempt to dump core from the signal handler.  */
 
-static int gdb_demangle_attempt_core_dump = 1;
+static std::atomic<bool> gdb_demangle_attempt_core_dump;
 
 /* Signal handler for gdb_demangle.  */
 
@@ -1496,10 +1495,46 @@ gdb_demangle_signal_handler (int signo)
       if (fork () == 0)
 	dump_core ();
 
-      gdb_demangle_attempt_core_dump = 0;
+      gdb_demangle_attempt_core_dump = false;
     }
 
-  SIGLONGJMP (gdb_demangle_jmp_buf, signo);
+  SIGLONGJMP (*gdb_demangle_jmp_buf, signo);
+}
+
+/* A helper for gdb_demangle that reports a demangling failure.  */
+
+static void
+report_failed_demangle (const char *name, bool core_dump_allowed,
+			int crash_signal)
+{
+  static bool error_reported = false;
+
+  if (!error_reported)
+    {
+      std::string short_msg
+	= string_printf (_("unable to demangle '%s' "
+			   "(demangler failed with signal %d)"),
+			 name, crash_signal);
+
+      std::string long_msg
+	= string_printf ("%s:%d: %s: %s", __FILE__, __LINE__,
+			 "demangler-warning", short_msg.c_str ());
+
+      target_terminal::scoped_restore_terminal_state term_state;
+      target_terminal::ours_for_output ();
+
+      begin_line ();
+      if (core_dump_allowed)
+	fprintf_unfiltered (gdb_stderr,
+			    _("%s\nAttempting to dump core.\n"),
+			    long_msg.c_str ());
+      else
+	warn_cant_dump_core (long_msg.c_str ());
+
+      demangler_warning (__FILE__, __LINE__, "%s", short_msg.c_str ());
+
+      error_reported = true;
+    }
 }
 
 #endif
@@ -1513,37 +1548,28 @@ gdb_demangle (const char *name, int options)
   int crash_signal = 0;
 
 #ifdef HAVE_WORKING_FORK
-#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
-  struct sigaction sa, old_sa;
-#else
-  sighandler_t ofunc;
-#endif
-  static int core_dump_allowed = -1;
+  scoped_restore restore_segv
+    = make_scoped_restore (&thread_local_segv_handler,
+			   catch_demangler_crashes
+			   ? gdb_demangle_signal_handler
+			   : nullptr);
 
-  if (core_dump_allowed == -1)
-    {
-      core_dump_allowed = can_dump_core (LIMIT_CUR);
-
-      if (!core_dump_allowed)
-	gdb_demangle_attempt_core_dump = 0;
-    }
-
+  bool core_dump_allowed = gdb_demangle_attempt_core_dump;
+  SIGJMP_BUF jmp_buf;
+  scoped_restore restore_jmp_buf
+    = make_scoped_restore (&gdb_demangle_jmp_buf, &jmp_buf);
   if (catch_demangler_crashes)
     {
-#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
-      sa.sa_handler = gdb_demangle_signal_handler;
-      sigemptyset (&sa.sa_mask);
-#ifdef HAVE_SIGALTSTACK
-      sa.sa_flags = SA_ONSTACK;
+      /* The signal handler may keep the signal blocked when we longjmp out
+         of it.  If we have sigprocmask, we can use it to unblock the signal
+	 afterwards and we can avoid the performance overhead of saving the
+	 signal mask just in case the signal gets triggered.  Otherwise, just
+	 tell sigsetjmp to save the mask.  */
+#ifdef HAVE_SIGPROCMASK
+      crash_signal = SIGSETJMP (*gdb_demangle_jmp_buf, 0);
 #else
-      sa.sa_flags = 0;
+      crash_signal = SIGSETJMP (*gdb_demangle_jmp_buf, 1);
 #endif
-      sigaction (SIGSEGV, &sa, &old_sa);
-#else
-      ofunc = signal (SIGSEGV, gdb_demangle_signal_handler);
-#endif
-
-      crash_signal = SIGSETJMP (gdb_demangle_jmp_buf);
     }
 #endif
 
@@ -1553,45 +1579,28 @@ gdb_demangle (const char *name, int options)
 #ifdef HAVE_WORKING_FORK
   if (catch_demangler_crashes)
     {
-#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
-      sigaction (SIGSEGV, &old_sa, NULL);
-#else
-      signal (SIGSEGV, ofunc);
+      if (crash_signal != 0)
+        {
+#ifdef HAVE_SIGPROCMASK
+	  /* If we got the signal, SIGSEGV may still be blocked; restore it.  */
+	  sigset_t segv_sig_set;
+	  sigemptyset (&segv_sig_set);
+	  sigaddset (&segv_sig_set, SIGSEGV);
+	  gdb_sigmask (SIG_UNBLOCK, &segv_sig_set, NULL);
 #endif
 
-      if (crash_signal != 0)
-	{
-	  static int error_reported = 0;
+	  /* If there was a failure, we can't report it here, because
+	     we might be in a background thread.  Instead, arrange for
+	     the reporting to happen on the main thread.  */
+          std::string copy = name;
+          run_on_main_thread ([=] ()
+            {
+              report_failed_demangle (copy.c_str (), core_dump_allowed,
+                                      crash_signal);
+            });
 
-	  if (!error_reported)
-	    {
-	      std::string short_msg
-		= string_printf (_("unable to demangle '%s' "
-				   "(demangler failed with signal %d)"),
-				 name, crash_signal);
-
-	      std::string long_msg
-		= string_printf ("%s:%d: %s: %s", __FILE__, __LINE__,
-				 "demangler-warning", short_msg.c_str ());
-
-	      target_terminal::scoped_restore_terminal_state term_state;
-	      target_terminal::ours_for_output ();
-
-	      begin_line ();
-	      if (core_dump_allowed)
-		fprintf_unfiltered (gdb_stderr,
-				    _("%s\nAttempting to dump core.\n"),
-				    long_msg.c_str ());
-	      else
-		warn_cant_dump_core (long_msg.c_str ());
-
-	      demangler_warning (__FILE__, __LINE__, "%s", short_msg.c_str ());
-
-	      error_reported = 1;
-	    }
-
-	  result = NULL;
-	}
+          result = NULL;
+        }
     }
 #endif
 
@@ -1798,7 +1807,7 @@ cp_get_symbol_name_matcher (const lookup_name_info &lookup_name)
 
 namespace selftests {
 
-void
+static void
 test_cp_symbol_name_matches ()
 {
 #define CHECK_MATCH(SYMBOL, INPUT)					\
@@ -1997,7 +2006,7 @@ static std::string
 quote (const char *str)
 {
   if (str != NULL)
-    return std::string (1, '\"') + str + '\"';
+    return std::string (1, '"') + str + '"';
   else
     return "<null>";
 }
@@ -2190,6 +2199,8 @@ display the offending symbol."),
 			   NULL,
 			   &maintenance_set_cmdlist,
 			   &maintenance_show_cmdlist);
+
+  gdb_demangle_attempt_core_dump = can_dump_core (LIMIT_CUR);
 #endif
 
 #if GDB_SELF_TEST

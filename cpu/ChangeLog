@@ -1,3 +1,26 @@
+2019-12-16  Alan Modra  <amodra@gmail.com>
+
+	* xstormy16.cpu (f-rel12a): Avoid signed overflow.
+
+2019-12-11  Alan Modra  <amodra@gmail.com>
+
+	* epiphany.cpu (f-sdisp11): Don't sign extend with shifts.
+	* lm32.cpu (f-branch, f-vall): Likewise.
+	* m32.cpu (f-lab-8-16): Likewise.
+
+2019-12-11  Alan Modra  <amodra@gmail.com>
+
+	* epiphany.cpu (f-simm8, f-simm24): Use multiply rather than
+	shift left to avoid UB on left shift of negative values.
+
+2019-11-20  Jose E. Marchesi  <jose.marchesi@oracle.com>
+
+	* bpf.cpu: Fix comment describing the 128-bit instruction format.
+
+2019-09-09  Phil Blundell  <pb@pbcl.net>
+
+	binutils 2.33 branch created.
+
 2019-07-19  Jose E. Marchesi  <jose.marchesi@oracle.com>
 
 	* bpf.cpu (h-gpr): when disassembling, use %r0 and %r6 instead of

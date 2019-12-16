@@ -26,7 +26,6 @@
 #include "ui-out.h"
 #include "cli-out.h"
 #include "tui/tui-data.h"
-#include "readline/readline.h"
 #include "tui/tui-win.h"
 #include "tui/tui.h"
 #include "tui/tui-io.h"
@@ -241,8 +240,6 @@ tui_interp::init (bool top_level)
 {
   /* Install exit handler to leave the screen in a good shape.  */
   atexit (tui_exit);
-
-  tui_initialize_static_data ();
 
   tui_initialize_io ();
   tui_initialize_win ();

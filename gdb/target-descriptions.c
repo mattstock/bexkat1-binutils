@@ -26,7 +26,6 @@
 #include "reggroups.h"
 #include "target.h"
 #include "target-descriptions.h"
-#include "gdbsupport/vec.h"
 #include "xml-support.h"
 #include "xml-tdesc.h"
 #include "osabi.h"
@@ -225,7 +224,7 @@ make_gdb_type (struct gdbarch *gdbarch, struct tdesc_type *ttype)
 		 the total size of the structure.  */
 	      bitsize = f.end - f.start + 1;
 	      total_size = e->size * TARGET_CHAR_BIT;
-	      if (gdbarch_bits_big_endian (m_gdbarch))
+	      if (gdbarch_byte_order (m_gdbarch) == BFD_ENDIAN_BIG)
 		SET_FIELD_BITPOS (fld[0], total_size - f.start - bitsize);
 	      else
 		SET_FIELD_BITPOS (fld[0], f.start);
@@ -1748,7 +1747,7 @@ static std::vector<xml_test_tdesc> xml_tdesc;
 
 #if GDB_SELF_TEST
 
-/* See target-descritpions.h.  */
+/* See target-descriptions.h.  */
 
 void
 record_xml_tdesc (const char *xml_file, const struct target_desc *tdesc)
@@ -1759,7 +1758,7 @@ record_xml_tdesc (const char *xml_file, const struct target_desc *tdesc)
 
 }
 
-/* Test the convesion process of a target description to/from xml: Take a target
+/* Test the conversion process of a target description to/from xml: Take a target
    description TDESC, convert to xml, back to a description, and confirm the new
    tdesc is identical to the original.  */
 static bool
@@ -1846,8 +1845,8 @@ Unset target description specific variables."),
   add_setshow_filename_cmd ("filename", class_obscure,
 			    &tdesc_filename_cmd_string,
 			    _("\
-Set the file to read for an XML target description"), _("\
-Show the file to read for an XML target description"), _("\
+Set the file to read for an XML target description."), _("\
+Show the file to read for an XML target description."), _("\
 When set, GDB will read the target description from a local\n\
 file instead of querying the remote target."),
 			    set_tdesc_filename_cmd,
@@ -1855,8 +1854,8 @@ file instead of querying the remote target."),
 			    &tdesc_set_cmdlist, &tdesc_show_cmdlist);
 
   add_cmd ("filename", class_obscure, unset_tdesc_filename_cmd, _("\
-Unset the file to read for an XML target description.  When unset,\n\
-GDB will read the description from the target."),
+Unset the file to read for an XML target description.\n\
+When unset, GDB will read the description from the target."),
 	   &tdesc_unset_cmdlist);
 
   add_cmd ("c-tdesc", class_maintenance, maint_print_c_tdesc_cmd, _("\
@@ -1867,6 +1866,7 @@ Print the current target description as a C source file."),
 
   cmd = add_cmd ("xml-descriptions", class_maintenance,
 		 maintenance_check_xml_descriptions, _("\
+Check equality of GDB target descriptions and XML created descriptions.\n\
 Check the target descriptions created in GDB equal the descriptions\n\
 created from XML files in the directory.\n\
 The parameter is the directory name."),

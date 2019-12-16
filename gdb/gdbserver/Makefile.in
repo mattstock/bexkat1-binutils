@@ -139,9 +139,12 @@ CFLAGS = @CFLAGS@
 CXXFLAGS = @CXXFLAGS@
 CPPFLAGS = @CPPFLAGS@
 
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
+
 # INTERNAL_CFLAGS is the aggregate of all other *CFLAGS macros.
 INTERNAL_CFLAGS_BASE = ${CXXFLAGS} ${GLOBAL_CFLAGS} \
-	${PROFILE_CFLAGS} ${INCLUDE_CFLAGS} ${CPPFLAGS}
+	${PROFILE_CFLAGS} ${INCLUDE_CFLAGS} ${CPPFLAGS} $(PTHREAD_CFLAGS)
 INTERNAL_WARN_CFLAGS = ${INTERNAL_CFLAGS_BASE} $(WARN_CFLAGS)
 INTERNAL_CFLAGS = ${INTERNAL_WARN_CFLAGS} $(WERROR_CFLAGS) -DGDBSERVER
 
@@ -203,6 +206,7 @@ SFILES = \
 	$(srcdir)/gdbsupport/cleanups.c \
 	$(srcdir)/gdbsupport/common-debug.c \
 	$(srcdir)/gdbsupport/common-exceptions.c \
+	$(srcdir)/gdbsupport/common-inferior.c \
 	$(srcdir)/gdbsupport/common-regcache.c \
 	$(srcdir)/gdbsupport/common-utils.c \
 	$(srcdir)/gdbsupport/errors.c \
@@ -210,6 +214,7 @@ SFILES = \
 	$(srcdir)/gdbsupport/fileio.c \
 	$(srcdir)/gdbsupport/filestuff.c \
 	$(srcdir)/gdbsupport/job-control.c \
+	$(srcdir)/gdbsupport/gdb-dlfcn.c \
 	$(srcdir)/gdbsupport/gdb_tilde_expand.c \
 	$(srcdir)/gdbsupport/gdb_vecs.c \
 	$(srcdir)/gdbsupport/netstuff.c \
@@ -218,8 +223,8 @@ SFILES = \
 	$(srcdir)/gdbsupport/print-utils.c \
 	$(srcdir)/gdbsupport/ptid.c \
 	$(srcdir)/gdbsupport/rsp-low.c \
+	$(srcdir)/gdbsupport/safe-strerror.c \
 	$(srcdir)/gdbsupport/tdesc.c \
-	$(srcdir)/gdbsupport/vec.c \
 	$(srcdir)/gdbsupport/xml-utils.c \
 	$(srcdir)/nat/aarch64-sve-linux-ptrace.c \
 	$(srcdir)/nat/linux-btrace.c \
@@ -247,6 +252,7 @@ OBS = \
 	gdbsupport/cleanups.o \
 	gdbsupport/common-debug.o \
 	gdbsupport/common-exceptions.o \
+	gdbsupport/common-inferior.o \
 	gdbsupport/job-control.o \
 	gdbsupport/common-regcache.o \
 	gdbsupport/common-utils.o \
@@ -255,6 +261,7 @@ OBS = \
 	gdbsupport/fileio.o \
 	gdbsupport/filestuff.o \
 	gdbsupport/format.o \
+	gdbsupport/gdb-dlfcn.o \
 	gdbsupport/gdb_tilde_expand.o \
 	gdbsupport/gdb_vecs.o \
 	gdbsupport/netstuff.o \
@@ -263,10 +270,10 @@ OBS = \
 	gdbsupport/print-utils.o \
 	gdbsupport/ptid.o \
 	gdbsupport/rsp-low.o \
+	gdbsupport/safe-strerror.o \
 	gdbsupport/signals.o \
 	gdbsupport/signals-state-save-restore.o \
 	gdbsupport/tdesc.o \
-	gdbsupport/vec.o \
 	gdbsupport/xml-utils.o \
 	debug.o \
 	dll.o \
@@ -297,11 +304,12 @@ GDBREPLAY_OBS = \
 	gdbsupport/errors.o \
 	gdbsupport/netstuff.o \
 	gdbsupport/print-utils.o \
+	gdbsupport/safe-strerror.o \
 	gdbreplay.o \
 	utils.o \
 	version.o
 
-GDBSERVER_LIBS = @GDBSERVER_LIBS@
+GDBSERVER_LIBS = @GDBSERVER_LIBS@ $(PTHREAD_LIBS)
 XM_CLIBS = @LIBS@
 CDEPS = $(srcdir)/proc-service.list
 
@@ -423,8 +431,8 @@ IPA_OBJS = \
 	gdbsupport/format-ipa.o \
 	gdbsupport/print-utils-ipa.o \
 	gdbsupport/rsp-low-ipa.o \
+	gdbsupport/safe-strerror-ipa.o \
 	gdbsupport/tdesc-ipa.o \
-	gdbsupport/vec-ipa.o \
 	regcache-ipa.o \
 	remote-utils-ipa.o \
 	tdesc-ipa.o \
@@ -495,10 +503,10 @@ subdir_do: force
 
 config.h: stamp-h ; @true
 stamp-h: config.in config.status
-	CONFIG_FILES="" CONFIG_HEADERS=config.h:config.in $(SHELL) ./config.status
+	$(SHELL) ./config.status config.h
 
 Makefile: Makefile.in config.status
-	CONFIG_HEADERS="" $(SHELL) ./config.status
+	$(SHELL) ./config.status $@
 
 $(GNULIB_BUILDDIR)/Makefile: $(srcdir)/../../gnulib/Makefile.in config.status
 	  @cd $(GNULIB_BUILDDIR); CONFIG_FILES="Makefile" \
@@ -551,7 +559,7 @@ UST_CFLAGS = $(ustinc) -DCONFIG_UST_GDB_INTEGRATION
 # Undo gnulib replacements for the IPA shared library build.
 # The gnulib headers are still needed, but gnulib is not linked
 # into the IPA lib so replacement apis don't work.
-UNDO_GNULIB_CFLAGS = -Drpl_strerror=strerror
+UNDO_GNULIB_CFLAGS = -Drpl_strerror_r=strerror_r
 
 # Note, we only build the IPA if -fvisibility=hidden is supported in
 # the first place.

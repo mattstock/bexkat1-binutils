@@ -19,7 +19,7 @@ dnl along with this program.  If not, see <http://www.gnu.org/licenses/>.
 dnl Process this file with autoconf to produce a configure script.
 
 AC_INIT(server.c)
-AC_CONFIG_HEADER(config.h:config.in)
+AC_CONFIG_HEADERS(config.h:config.in, [echo > stamp-h])
 
 AM_MAINTAINER_MODE
 
@@ -44,15 +44,6 @@ AC_HEADER_STDC
 
 # Set the 'development' global.
 . $srcdir/../../bfd/development.sh
-
-# Enable -lmcheck by default (it provides cheap-enough memory
-# mangling), but turn it off for releases.
-if $development; then
-  libmcheck_default=yes
-else
-  libmcheck_default=no
-fi
-GDB_AC_LIBMCHECK(${libmcheck_default})
 
 GDB_AC_SELFTEST([
   srv_selftest_objs="gdbsupport/selftest.o"
@@ -167,7 +158,7 @@ LIBS="$old_LIBS"
 
 libiberty_INIT
 
-AC_CHECK_DECLS([strerror, perror, vasprintf, vsnprintf])
+AC_CHECK_DECLS([perror, vasprintf, vsnprintf])
 
 AC_CHECK_MEMBERS([struct stat.st_blocks, struct stat.st_blksize])
 
@@ -253,10 +244,6 @@ got it
 esac
 
 . ${srcdir}/configure.srv
-
-# Add in the common host objects.
-. ${srcdir}/../gdbsupport/common.host
-srv_host_obs="$common_host_obs"
 
 if test "${srv_mingwce}" = "yes"; then
   LIBS="$LIBS -lws2"
@@ -402,7 +389,7 @@ if test "$srv_xmlfiles" != ""; then
   done
 fi
 
-GDBSERVER_DEPFILES="$srv_regobj $srv_tgtobj $srv_hostio_err_objs $srv_thread_depfiles $srv_host_obs $srv_selftest_objs"
+GDBSERVER_DEPFILES="$srv_regobj $srv_tgtobj $srv_hostio_err_objs $srv_thread_depfiles $srv_selftest_objs"
 GDBSERVER_LIBS="$srv_libs"
 
 dnl Check whether the target supports __sync_*_compare_and_swap.
@@ -493,11 +480,6 @@ if test x"$STDINT_H" != x; then
 fi
 AC_SUBST(GNULIB_STDINT_H)
 
-AC_CONFIG_FILES([Makefile],
-[case x$CONFIG_HEADERS in
-xconfig.h:config.in)
-echo > stamp-h ;;
-esac
-])
+AC_CONFIG_FILES([Makefile])
 
 AC_OUTPUT

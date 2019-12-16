@@ -38,7 +38,7 @@
 enum argclass
   {
     literal_piece,
-    int_arg, long_arg, long_long_arg, ptr_arg,
+    int_arg, long_arg, long_long_arg, size_t_arg, ptr_arg,
     string_arg, wide_string_arg, wide_char_arg,
     double_arg, long_double_arg,
     dec32float_arg, dec64float_arg, dec128float_arg
@@ -50,9 +50,10 @@ enum argclass
 
 struct format_piece
 {
-  format_piece (const char *str, enum argclass argc)
+  format_piece (const char *str, enum argclass argc, int n)
     : string (str),
-      argclass (argc)
+      argclass (argc),
+      n_int_args (n)
   {
   }
 
@@ -64,13 +65,17 @@ struct format_piece
 
   const char *string;
   enum argclass argclass;
+  /* Count the number of preceding 'int' arguments that must be passed
+     along.  This is used for a width or precision of '*'.  Note that
+     this feature is only available in "gdb_extensions" mode.  */
+  int n_int_args;
 };
 
 class format_pieces
 {
 public:
 
-  format_pieces (const char **arg);
+  format_pieces (const char **arg, bool gdb_extensions = false);
   ~format_pieces () = default;
 
   DISABLE_COPY_AND_ASSIGN (format_pieces);

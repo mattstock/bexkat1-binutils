@@ -411,7 +411,7 @@ go_sniff_from_mangled_name (const char *mangled, char **demangled)
 char *
 go_symbol_package_name (const struct symbol *sym)
 {
-  const char *mangled_name = SYMBOL_LINKAGE_NAME (sym);
+  const char *mangled_name = sym->linkage_name ();
   const char *package_name;
   const char *object_name;
   const char *method_type_package_name;
@@ -420,7 +420,7 @@ go_symbol_package_name (const struct symbol *sym)
   char *name_buf;
   char *result;
 
-  gdb_assert (SYMBOL_LANGUAGE (sym) == language_go);
+  gdb_assert (sym->language () == language_go);
   name_buf = unpack_mangled_go_symbol (mangled_name,
 				       &package_name, &object_name,
 				       &method_type_package_name,
@@ -615,7 +615,6 @@ extern const struct language_defn go_language_defn =
   go_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
-  c_get_string,
   c_watch_location_expression,
   NULL,				/* la_get_symbol_name_matcher */
   iterate_over_symbols,

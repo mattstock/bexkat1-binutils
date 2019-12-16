@@ -54,9 +54,9 @@ cp_scan_for_anonymous_namespaces (struct buildsym_compunit *compunit,
 				  const struct symbol *const symbol,
 				  struct objfile *const objfile)
 {
-  if (SYMBOL_DEMANGLED_NAME (symbol) != NULL)
+  if (symbol->demangled_name () != NULL)
     {
-      const char *name = SYMBOL_DEMANGLED_NAME (symbol);
+      const char *name = symbol->demangled_name ();
       unsigned int previous_component;
       unsigned int next_component;
 
@@ -278,8 +278,9 @@ cp_search_static_and_baseclasses (const char *name,
 
   /* If the scope is a function/method, then look up NESTED as a local
      static variable.  E.g., "print 'function()::static_var'".  */
-  if (TYPE_CODE (scope_type) == TYPE_CODE_FUNC
-      || TYPE_CODE (scope_type) == TYPE_CODE_METHOD)
+  if ((TYPE_CODE (scope_type) == TYPE_CODE_FUNC
+       || TYPE_CODE (scope_type) == TYPE_CODE_METHOD)
+      && domain == VAR_DOMAIN)
     return lookup_symbol (nested, SYMBOL_BLOCK_VALUE (scope_sym.symbol),
 			  VAR_DOMAIN, NULL);
 
@@ -487,7 +488,7 @@ search_symbol_list (const char *name, int num,
   /* Maybe we should store a dictionary in here instead.  */
   for (i = 0; i < num; ++i)
     {
-      if (strcmp (name, SYMBOL_NATURAL_NAME (syms[i])) == 0)
+      if (strcmp (name, syms[i]->natural_name ()) == 0)
 	return syms[i];
     }
   return NULL;
@@ -515,7 +516,7 @@ cp_lookup_symbol_imports_or_template (const char *scope,
 			  domain_name (domain));
     }
 
-  if (function != NULL && SYMBOL_LANGUAGE (function) == language_cplus)
+  if (function != NULL && function->language () == language_cplus)
     {
       /* Search the function's template parameters.  */
       if (SYMBOL_IS_CPLUS_TEMPLATE_FUNCTION (function))
@@ -541,12 +542,11 @@ cp_lookup_symbol_imports_or_template (const char *scope,
 
       /* Search the template parameters of the function's defining
 	 context.  */
-      if (SYMBOL_NATURAL_NAME (function))
+      if (function->natural_name ())
 	{
 	  struct type *context;
-	  std::string name_copy (SYMBOL_NATURAL_NAME (function));
+	  std::string name_copy (function->natural_name ());
 	  const struct language_defn *lang = language_def (language_cplus);
-	  struct gdbarch *arch = symbol_arch (function);
 	  const struct block *parent = BLOCK_SUPERBLOCK (block);
 	  struct symbol *sym;
 
@@ -560,7 +560,7 @@ cp_lookup_symbol_imports_or_template (const char *scope,
 	      else
 		{
 		  name_copy.erase (prefix_len);
-		  context = lookup_typename (lang, arch,
+		  context = lookup_typename (lang,
 					     name_copy.c_str (),
 					     parent, 1);
 		}

@@ -62,8 +62,8 @@ cmd_types;
 /* Types of "set" or "show" command.  */
 typedef enum var_types
   {
-    /* "on" or "off".  *VAR is an integer which is nonzero for on,
-       zero for off.  */
+    /* "on" or "off".  *VAR is a bool which is true for on,
+       false for off.  */
     var_boolean,
 
     /* "on" / "true" / "enable" or "off" / "false" / "disable" or
@@ -133,7 +133,15 @@ extern struct cli_suppress_notification cli_suppress_notification;
 
 /* API to the manipulation of command lists.  */
 
+/* Return TRUE if NAME is a valid user-defined command name.
+   This is a stricter subset of all gdb commands,
+   see find_command_name_length.  */
+
 extern bool valid_user_defined_cmd_name_p (const char *name);
+
+/* Return TRUE if C is a valid command character.  */
+
+extern bool valid_cmd_char_p (int c);
 
 /* Const-correct variant of the above.  */
 
@@ -331,7 +339,7 @@ extern void add_setshow_auto_boolean_cmd (const char *name,
 extern cmd_list_element *
   add_setshow_boolean_cmd (const char *name,
 			   enum command_class theclass,
-			   int *var,
+			   bool *var,
 			   const char *set_doc, const char *show_doc,
 			   const char *help_doc,
 			   cmd_const_sfunc_ftype *set_func,

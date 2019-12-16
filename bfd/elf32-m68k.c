@@ -25,6 +25,8 @@
 #include "elf-bfd.h"
 #include "elf/m68k.h"
 #include "opcode/m68k.h"
+#include "cpu-m68k.h"
+#include "elf32-m68k.h"
 
 static bfd_boolean
 elf_m68k_discard_copies (struct elf_link_hash_entry *, void *);
@@ -1053,9 +1055,8 @@ elf32_m68k_object_p (bfd *abfd)
 /* Somewhat reverse of elf32_m68k_object_p, this sets the e_flag
    field based on the machine number.  */
 
-static void
-elf_m68k_final_write_processing (bfd *abfd,
-				 bfd_boolean linker ATTRIBUTE_UNUSED)
+static bfd_boolean
+elf_m68k_final_write_processing (bfd *abfd)
 {
   int mach = bfd_get_mach (abfd);
   unsigned long e_flags = elf_elfheader (abfd)->e_flags;
@@ -1108,6 +1109,7 @@ elf_m68k_final_write_processing (bfd *abfd,
 	}
       elf_elfheader (abfd)->e_flags = e_flags;
     }
+  return _bfd_elf_final_write_processing (abfd);
 }
 
 /* Keep m68k-specific flags in the ELF header.  */
@@ -3104,7 +3106,7 @@ elf_m68k_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
 
       /* It's OK to base decisions on the section name, because none
 	 of the dynobj section names depend upon the input files.  */
-      name = bfd_get_section_name (dynobj, s);
+      name = bfd_section_name (s);
 
       if (strcmp (name, ".plt") == 0)
 	{
@@ -3938,7 +3940,7 @@ elf_m68k_relocate_section (bfd *output_bfd,
 		  name = (bfd_elf_string_from_elf_section
 			  (input_bfd, symtab_hdr->sh_link, sym->st_name));
 		  if (name == NULL || *name == '\0')
-		    name = bfd_section_name (input_bfd, sec);
+		    name = bfd_section_name (sec);
 		}
 
 	      _bfd_error_handler
@@ -3973,7 +3975,7 @@ elf_m68k_relocate_section (bfd *output_bfd,
 	      if (name == NULL)
 		return FALSE;
 	      if (*name == '\0')
-		name = bfd_section_name (input_bfd, sec);
+		name = bfd_section_name (sec);
 	    }
 
 	  if (r == bfd_reloc_overflow)

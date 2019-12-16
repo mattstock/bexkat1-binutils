@@ -41,11 +41,11 @@ const char *compile_cplus_instance::m_default_cflags = "-std=gnu++11";
 
 /* Flag to enable internal debugging.  */
 
-static int debug_compile_cplus_types = 0;
+static bool debug_compile_cplus_types = false;
 
 /* Flag to enable internal scope switching debugging.  */
 
-static int debug_compile_cplus_scopes = 0;
+static bool debug_compile_cplus_scopes = false;
 
 /* Forward declarations.  */
 
@@ -112,7 +112,7 @@ debug_print_scope (const compile_scope &scope)
   for (const auto &comp: scope)
     {
       const char *symbol = (comp.bsymbol.symbol != nullptr
-			    ? SYMBOL_NATURAL_NAME (comp.bsymbol.symbol)
+			    ? comp.bsymbol.symbol->natural_name ()
 			    : "<none>");
 
       printf_unfiltered ("\tname = %s, symbol = %s\n", comp.name.c_str (),

@@ -169,9 +169,6 @@ static struct bfd_link_hash_table *elf64_hppa_hash_table_create
 static bfd_boolean elf64_hppa_object_p
   (bfd *);
 
-static void elf64_hppa_post_process_headers
-  (bfd *, struct bfd_link_info *);
-
 static bfd_boolean elf64_hppa_create_dynamic_sections
   (bfd *, struct bfd_link_info *);
 
@@ -422,7 +419,7 @@ get_reloc_section (bfd *abfd,
 						  | SEC_LINKER_CREATED
 						  | SEC_READONLY));
       if (srel == NULL
-	  || !bfd_set_section_alignment (dynobj, srel, 3))
+	  || !bfd_set_section_alignment (srel, 3))
 	return FALSE;
     }
 
@@ -1120,16 +1117,18 @@ allocate_global_data_opd (struct elf_link_hash_entry *eh, void *data)
 /* HP requires the EI_OSABI field to be filled in.  The assignment to
    EI_ABIVERSION may not be strictly necessary.  */
 
-static void
-elf64_hppa_post_process_headers (bfd *abfd,
-			 struct bfd_link_info *link_info ATTRIBUTE_UNUSED)
+static bfd_boolean
+elf64_hppa_init_file_header (bfd *abfd, struct bfd_link_info *info)
 {
-  Elf_Internal_Ehdr * i_ehdrp;
+  Elf_Internal_Ehdr *i_ehdrp;
+
+  if (!_bfd_elf_init_file_header (abfd, info))
+    return FALSE;
 
   i_ehdrp = elf_elfheader (abfd);
-
   i_ehdrp->e_ident[EI_OSABI] = get_elf_backend_data (abfd)->elf_osabi;
   i_ehdrp->e_ident[EI_ABIVERSION] = 1;
+  return TRUE;
 }
 
 /* Create function descriptor section (.opd).  This section is called .opd
@@ -1159,7 +1158,7 @@ get_opd (bfd *abfd,
 						 | SEC_IN_MEMORY
 						 | SEC_LINKER_CREATED));
       if (!opd
-	  || !bfd_set_section_alignment (abfd, opd, 3))
+	  || !bfd_set_section_alignment (opd, 3))
 	{
 	  BFD_ASSERT (0);
 	  return FALSE;
@@ -1195,7 +1194,7 @@ get_plt (bfd *abfd,
 						 | SEC_IN_MEMORY
 						 | SEC_LINKER_CREATED));
       if (!plt
-	  || !bfd_set_section_alignment (abfd, plt, 3))
+	  || !bfd_set_section_alignment (plt, 3))
 	{
 	  BFD_ASSERT (0);
 	  return FALSE;
@@ -1231,7 +1230,7 @@ get_dlt (bfd *abfd,
 						 | SEC_IN_MEMORY
 						 | SEC_LINKER_CREATED));
       if (!dlt
-	  || !bfd_set_section_alignment (abfd, dlt, 3))
+	  || !bfd_set_section_alignment (dlt, 3))
 	{
 	  BFD_ASSERT (0);
 	  return FALSE;
@@ -1267,7 +1266,7 @@ get_stub (bfd *abfd,
 						  | SEC_READONLY
 						  | SEC_LINKER_CREATED));
       if (!stub
-	  || !bfd_set_section_alignment (abfd, stub, 3))
+	  || !bfd_set_section_alignment (stub, 3))
 	{
 	  BFD_ASSERT (0);
 	  return FALSE;
@@ -1347,7 +1346,7 @@ elf64_hppa_create_dynamic_sections (bfd *abfd,
 					   | SEC_READONLY
 					   | SEC_LINKER_CREATED));
   if (s == NULL
-      || !bfd_set_section_alignment (abfd, s, 3))
+      || !bfd_set_section_alignment (s, 3))
     return FALSE;
   hppa_info->dlt_rel_sec = s;
 
@@ -1358,7 +1357,7 @@ elf64_hppa_create_dynamic_sections (bfd *abfd,
 					   | SEC_READONLY
 					   | SEC_LINKER_CREATED));
   if (s == NULL
-      || !bfd_set_section_alignment (abfd, s, 3))
+      || !bfd_set_section_alignment (s, 3))
     return FALSE;
   hppa_info->plt_rel_sec = s;
 
@@ -1369,7 +1368,7 @@ elf64_hppa_create_dynamic_sections (bfd *abfd,
 					   | SEC_READONLY
 					   | SEC_LINKER_CREATED));
   if (s == NULL
-      || !bfd_set_section_alignment (abfd, s, 3))
+      || !bfd_set_section_alignment (s, 3))
     return FALSE;
   hppa_info->other_rel_sec = s;
 
@@ -1380,7 +1379,7 @@ elf64_hppa_create_dynamic_sections (bfd *abfd,
 					   | SEC_READONLY
 					   | SEC_LINKER_CREATED));
   if (s == NULL
-      || !bfd_set_section_alignment (abfd, s, 3))
+      || !bfd_set_section_alignment (s, 3))
     return FALSE;
   hppa_info->opd_rel_sec = s;
 
@@ -1750,7 +1749,7 @@ elf64_hppa_size_dynamic_sections (bfd *output_bfd, struct bfd_link_info *info)
 
       /* It's OK to base decisions on the section name, because none
 	 of the dynobj section names depend upon the input files.  */
-      name = bfd_get_section_name (dynobj, sec);
+      name = bfd_section_name (sec);
 
       if (strcmp (name, ".plt") == 0)
 	{
@@ -1783,8 +1782,7 @@ elf64_hppa_size_dynamic_sections (bfd *output_bfd, struct bfd_link_info *info)
 		     entry.  The entries in the .rela.plt section
 		     really apply to the .got section, which we
 		     created ourselves and so know is not readonly.  */
-		  outname = bfd_get_section_name (output_bfd,
-						  sec->output_section);
+		  outname = bfd_section_name (sec->output_section);
 		  target = bfd_get_section_by_name (output_bfd, outname + 4);
 		  if (target != NULL
 		      && (target->flags & SEC_READONLY) != 0
@@ -3938,7 +3936,7 @@ elf64_hppa_relocate_section (bfd *output_bfd,
 		    if (sym_name == NULL)
 		      return FALSE;
 		    if (*sym_name == '\0')
-		      sym_name = bfd_section_name (input_bfd, sym_sec);
+		      sym_name = bfd_section_name (sym_sec);
 		  }
 
 		(*info->callbacks->reloc_overflow)
@@ -3954,13 +3952,13 @@ elf64_hppa_relocate_section (bfd *output_bfd,
 
 static const struct bfd_elf_special_section elf64_hppa_special_sections[] =
 {
+  { STRING_COMMA_LEN (".tbss"),	 0, SHT_NOBITS, SHF_ALLOC + SHF_WRITE + SHF_HP_TLS },
   { STRING_COMMA_LEN (".fini"),	 0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE },
   { STRING_COMMA_LEN (".init"),	 0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE },
   { STRING_COMMA_LEN (".plt"),	 0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE + SHF_PARISC_SHORT },
   { STRING_COMMA_LEN (".dlt"),	 0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE + SHF_PARISC_SHORT },
   { STRING_COMMA_LEN (".sdata"), 0, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE + SHF_PARISC_SHORT },
   { STRING_COMMA_LEN (".sbss"),	 0, SHT_NOBITS, SHF_ALLOC + SHF_WRITE + SHF_PARISC_SHORT },
-  { STRING_COMMA_LEN (".tbss"),	 0, SHT_NOBITS, SHF_ALLOC + SHF_WRITE + SHF_HP_TLS },
   { NULL,		     0,	 0, 0,		  0 }
 };
 
@@ -4025,7 +4023,7 @@ const struct elf_size_info hppa64_elf_size_info =
 
 #define elf_backend_create_dynamic_sections \
 					elf64_hppa_create_dynamic_sections
-#define elf_backend_post_process_headers	elf64_hppa_post_process_headers
+#define elf_backend_init_file_header	elf64_hppa_init_file_header
 
 #define elf_backend_omit_section_dynsym _bfd_elf_omit_section_dynsym_all
 
@@ -4088,5 +4086,7 @@ const struct elf_size_info hppa64_elf_size_info =
 #define ELF_OSABI			ELFOSABI_GNU
 #undef elf64_bed
 #define elf64_bed			elf64_hppa_linux_bed
+#undef elf_backend_special_sections
+#define elf_backend_special_sections	(elf64_hppa_special_sections + 1)
 
 #include "elf64-target.h"

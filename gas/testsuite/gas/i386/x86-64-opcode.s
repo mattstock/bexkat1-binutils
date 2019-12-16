@@ -50,6 +50,20 @@
 	MOVq $0x70000000,(%r8)	      # --  --  -- 49   C7 00 00 00 00 70		 ; REX for 64-bit operand size. REX to access upper reg.
 	MOVq $0x70000000,(%rax)	      # --  --  -- 48   C7 00 00 00 00 70		 ; REX for 64-bit operand size
 
+	# LFS etc
+	LFS  (%rax), %ecx             # --  --  -- --   0F B4 ..
+	LFSl (%rcx), %eax             # --  --  -- --   0F B4 ..
+	LFS  (%rax), %cx              # 66  --  -- --   0F B4 ..
+	LFSw (%rcx), %ax              # 66  --  -- --   0F B4 ..
+	LGS  (%rcx), %edx             # --  --  -- --   0F B5 ..
+	LGSl (%rdx), %ecx             # --  --  -- --   0F B5 ..
+	LGS  (%rcx), %dx              # 66  --  -- --   0F B5 ..
+	LGSw (%rdx), %cx              # 66  --  -- --   0F B5 ..
+	LSS  (%rdx), %ebx             # --  --  -- --   0F B2 ..
+	LSSl (%rbx), %edx             # --  --  -- --   0F B2 ..
+	LSS  (%rdx), %bx              # 66  --  -- --   0F B2 ..
+	LSSw (%rbx), %dx              # 66  --  -- --   0F B2 ..
+
 	# MOVNTI
 	MOVNTI %eax,(%r8)	      # --  --  -- 41   0f c3 00			 ; REX to access upper reg.
 	MOVNTI %eax,(%rax)	      # --  --  -- --   0f c3 00
@@ -323,15 +337,21 @@
 	POPq (%r8)		      #	 --  --	 -- 41	 8F 00				 ; REX to access upper reg.
 	POPq (%rax)		      #	 --  --	 -- --	 8F 00
 	POP %fs			      #	 --  --	 -- --	 0F A1
+	POPq %fs		      #	 --  --	 -- --	 0F A1
 	POP %gs			      #	 --  --	 -- --	 0F A9
-	POPFQ			      #	 --  --	 -- --	 9D
+	POPq %gs		      #	 --  --	 -- --	 0F A9
+	POPF			      #	 --  --	 -- --	 9D
+	POPFq			      #	 --  --	 -- --	 9D
 
 	# PUSH
 	PUSHq (%r8)		      #	 --  --	 -- 41	 FF 30				 ; REX to access upper reg.
 	PUSHq (%rax)		      #	 --  --	 -- --	 FF 30
 	PUSH %fs		      #	 --  --	 -- --	 0F A0
+	PUSHq %fs		      #	 --  --	 -- --	 0F A0
 	PUSH %gs		      #	 --  --	 -- --	 0F A8
-	PUSHFQ			      #	 --  --	 -- --	 9C
+	PUSHq %gs		      #	 --  --	 -- --	 0F A8
+	PUSHF			      #	 --  --	 -- --	 9C
+	PUSHFq			      #	 --  --	 -- --	 9C
 
 
 

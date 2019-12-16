@@ -77,7 +77,7 @@ do_module_cleanup (void *arg, int registers_valid)
 
 	  addr_value = value_from_pointer (ptr_type, data->out_value_addr);
 
-	  /* SCOPE_DATA would be stale unlesse EXECUTEDP != NULL.  */
+	  /* SCOPE_DATA would be stale unless EXECUTEDP != NULL.  */
 	  compile_print_value (value_ind (addr_value), data->scope_data);
 	}
     }
@@ -86,7 +86,7 @@ do_module_cleanup (void *arg, int registers_valid)
     if ((objfile->flags & OBJF_USERLOADED) == 0
         && (strcmp (objfile_name (objfile), data->objfile_name_string) == 0))
       {
-	delete objfile;
+	objfile->unlink ();
 
 	/* It may be a bit too pervasive in this dummy_frame dtor callback.  */
 	clear_symtab_users (0);

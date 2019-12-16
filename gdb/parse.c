@@ -74,8 +74,8 @@ show_expressiondebug (struct ui_file *file, int from_tty,
 }
 
 
-/* Non-zero if an expression parser should set yydebug.  */
-int parser_debug;
+/* True if an expression parser should set yydebug.  */
+bool parser_debug;
 
 static void
 show_parserdebug (struct ui_file *file, int from_tty,
@@ -181,7 +181,7 @@ write_exp_elt_sym (struct expr_builder *ps, struct symbol *expelt)
   write_exp_elt (ps, &tmp);
 }
 
-void
+static void
 write_exp_elt_msym (struct expr_builder *ps, minimal_symbol *expelt)
 {
   union exp_element tmp;
@@ -1098,7 +1098,7 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
       struct symbol *func = block_linkage_function (block);
 
       if (func != NULL)
-        lang = language_def (SYMBOL_LANGUAGE (func));
+        lang = language_def (func->language ());
       if (lang == NULL || lang->la_language == language_unknown)
         lang = current_language;
     }

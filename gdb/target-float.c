@@ -647,8 +647,8 @@ host_float_ops<T>::from_target (const struct floatformat *fmt,
     {
       double dto;
 
-      floatformat_to_double (fmt->split_half ? fmt->split_half : fmt,
-			     from, &dto);
+      floatformat_to_double	/* ARI: floatformat_to_double */
+	(fmt->split_half ? fmt->split_half : fmt, from, &dto);
       *to = (T) dto;
       return;
     }
@@ -1007,13 +1007,18 @@ host_float_ops<T>::to_longest (const gdb_byte *addr,
 {
   T host_float;
   from_target (type, addr, &host_float);
-  /* Converting an out-of-range value is undefined behavior in C, but we
-     prefer to return a defined value here.  */
-  if (host_float > std::numeric_limits<LONGEST>::max())
-    return std::numeric_limits<LONGEST>::max();
-  if (host_float < std::numeric_limits<LONGEST>::min())
+  T min_possible_range = static_cast<T>(std::numeric_limits<LONGEST>::min());
+  T max_possible_range = -min_possible_range;
+  /* host_float can be converted to an integer as long as it's in
+     the range [min_possible_range, max_possible_range). If not, it is either
+     too large, or too small, or is NaN; in this case return the maximum or
+     minimum possible value.  */
+  if (host_float < max_possible_range && host_float >= min_possible_range)
+    return static_cast<LONGEST> (host_float);
+  if (host_float < min_possible_range)
     return std::numeric_limits<LONGEST>::min();
-  return (LONGEST) host_float;
+  /* This line will be executed if host_float is NaN.  */
+  return std::numeric_limits<LONGEST>::max();
 }
 
 /* Convert signed integer VAL to a target floating-number of type TYPE
@@ -1748,7 +1753,7 @@ match_endianness (const gdb_byte *from, const struct type *type, gdb_byte *to)
 #define OPPOSITE_BYTE_ORDER BFD_ENDIAN_BIG
 #endif
 
-  if (gdbarch_byte_order (get_type_arch (type)) == OPPOSITE_BYTE_ORDER)
+  if (type_byte_order (type) == OPPOSITE_BYTE_ORDER)
     for (i = 0; i < len; i++)
       to[i] = from[len - i - 1];
   else
@@ -2155,8 +2160,8 @@ target_float_same_format_p (const struct type *type1,
 
       case TYPE_CODE_DECFLOAT:
 	return (TYPE_LENGTH (type1) == TYPE_LENGTH (type2)
-		&& (gdbarch_byte_order (get_type_arch (type1))
-		    == gdbarch_byte_order (get_type_arch (type2))));
+		&& (type_byte_order (type1)
+		    == type_byte_order (type2)));
 
       default:
 	gdb_assert_not_reached ("unexpected type code");
@@ -2257,7 +2262,7 @@ get_target_float_ops (enum target_float_ops_kind kind)
 
       /* For binary floating-point formats that do not match any host format,
          use mpfr_t as intermediate format to provide precise target-floating
-         point emulation.  However, if the MPFR library is not availabe,
+         point emulation.  However, if the MPFR library is not available,
          use the largest host floating-point type as intermediate format.  */
       case target_float_ops_kind::binary:
         {

@@ -37,18 +37,6 @@ malloc_failure (long size)
   exit (1);
 }
 
-/* Copy a string into a memory buffer.
-   If malloc fails, this will print a message to stderr and exit.  */
-
-char *
-xstrdup (const char *s)
-{
-  char *ret = strdup (s);
-  if (ret == NULL)
-    malloc_failure (strlen (s) + 1);
-  return ret;
-}
-
 /* Print the system error message for errno, and also mention STRING
    as the file name for which the error was encountered.
    Then return to command level.  */
@@ -59,7 +47,7 @@ perror_with_name (const char *string)
   const char *err;
   char *combined;
 
-  err = strerror (errno);
+  err = safe_strerror (errno);
   if (err == NULL)
     err = "unknown error";
 

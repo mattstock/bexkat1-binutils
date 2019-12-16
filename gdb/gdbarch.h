@@ -146,12 +146,6 @@ extern const struct target_desc * gdbarch_target_desc (struct gdbarch *gdbarch);
 
 /* The following are initialized by the target dependent code.  */
 
-/* The bit byte-order has to do just with numbering of bits in debugging symbols
-   and such.  Conceptually, it's quite separate from byte/word byte order. */
-
-extern int gdbarch_bits_big_endian (struct gdbarch *gdbarch);
-extern void set_gdbarch_bits_big_endian (struct gdbarch *gdbarch, int bits_big_endian);
-
 /* Number of bits in a short or unsigned short for the target machine. */
 
 extern int gdbarch_short_bit (struct gdbarch *gdbarch);
@@ -1596,10 +1590,10 @@ extern void set_gdbarch_infcall_munmap (struct gdbarch *gdbarch, gdbarch_infcall
 /* Return string (caller has to use xfree for it) with options for GCC
    to produce code for this target, typically "-m64", "-m32" or "-m31".
    These options are put before CU's DW_AT_producer compilation options so that
-   they can override it.  Method may also return NULL. */
+   they can override it. */
 
-typedef char * (gdbarch_gcc_target_options_ftype) (struct gdbarch *gdbarch);
-extern char * gdbarch_gcc_target_options (struct gdbarch *gdbarch);
+typedef std::string (gdbarch_gcc_target_options_ftype) (struct gdbarch *gdbarch);
+extern std::string gdbarch_gcc_target_options (struct gdbarch *gdbarch);
 extern void set_gdbarch_gcc_target_options (struct gdbarch *gdbarch, gdbarch_gcc_target_options_ftype *gcc_target_options);
 
 /* Return a regular expression that matches names used by this
@@ -1639,6 +1633,12 @@ extern void set_gdbarch_valid_disassembler_options (struct gdbarch *gdbarch, con
 typedef ULONGEST (gdbarch_type_align_ftype) (struct gdbarch *gdbarch, struct type *type);
 extern ULONGEST gdbarch_type_align (struct gdbarch *gdbarch, struct type *type);
 extern void set_gdbarch_type_align (struct gdbarch *gdbarch, gdbarch_type_align_ftype *type_align);
+
+/* Return a string containing any flags for the given PC in the given FRAME. */
+
+typedef std::string (gdbarch_get_pc_address_flags_ftype) (frame_info *frame, CORE_ADDR pc);
+extern std::string gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, frame_info *frame, CORE_ADDR pc);
+extern void set_gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, gdbarch_get_pc_address_flags_ftype *get_pc_address_flags);
 
 extern struct gdbarch_tdep *gdbarch_tdep (struct gdbarch *gdbarch);
 

@@ -180,7 +180,7 @@ DESCRIPTION
 .typedef struct bfd_target
 .{
 .  {* Identifies the kind of target, e.g., SunOS4, Ultrix, etc.  *}
-.  char *name;
+.  const char *name;
 .
 . {* The "flavour" of a back end is a general indication about
 .    the contents of a file.  *}
@@ -463,6 +463,7 @@ BFD_JUMP_TABLE macros.
 .  NAME##_bfd_lookup_section_flags, \
 .  NAME##_bfd_merge_sections, \
 .  NAME##_bfd_is_group_section, \
+.  NAME##_bfd_group_name, \
 .  NAME##_bfd_discard_group, \
 .  NAME##_section_already_linked, \
 .  NAME##_bfd_define_common_symbol, \
@@ -520,6 +521,9 @@ BFD_JUMP_TABLE macros.
 .
 .  {* Is this section a member of a group?  *}
 .  bfd_boolean (*_bfd_is_group_section) (bfd *, const struct bfd_section *);
+.
+.  {* The group name, if section is a member of a group.  *}
+.  const char *(*_bfd_group_name) (bfd *, const struct bfd_section *);
 .
 .  {* Discard members of a group.  *}
 .  bfd_boolean (*_bfd_discard_group) (bfd *, struct bfd_section *);
@@ -581,6 +585,74 @@ to find an alternative output format that is suitable.
 .
 .} bfd_target;
 .
+.static inline const char *
+.bfd_get_target (const bfd *abfd)
+.{
+.  return abfd->xvec->name;
+.}
+.
+.static inline enum bfd_flavour
+.bfd_get_flavour (const bfd *abfd)
+.{
+.  return abfd->xvec->flavour;
+.}
+.
+.static inline flagword
+.bfd_applicable_file_flags (const bfd *abfd)
+.{
+.  return abfd->xvec->object_flags;
+.}
+.
+.static inline bfd_boolean
+.bfd_family_coff (const bfd *abfd)
+.{
+.  return (bfd_get_flavour (abfd) == bfd_target_coff_flavour
+.          || bfd_get_flavour (abfd) == bfd_target_xcoff_flavour);
+.}
+.
+.static inline bfd_boolean
+.bfd_big_endian (const bfd *abfd)
+.{
+.  return abfd->xvec->byteorder == BFD_ENDIAN_BIG;
+.}
+.static inline bfd_boolean
+.bfd_little_endian (const bfd *abfd)
+.{
+.  return abfd->xvec->byteorder == BFD_ENDIAN_LITTLE;
+.}
+.
+.static inline bfd_boolean
+.bfd_header_big_endian (const bfd *abfd)
+.{
+.  return abfd->xvec->header_byteorder == BFD_ENDIAN_BIG;
+.}
+.
+.static inline bfd_boolean
+.bfd_header_little_endian (const bfd *abfd)
+.{
+.  return abfd->xvec->header_byteorder == BFD_ENDIAN_LITTLE;
+.}
+.
+.static inline flagword
+.bfd_applicable_section_flags (const bfd *abfd)
+.{
+.  return abfd->xvec->section_flags;
+.}
+.
+.static inline char
+.bfd_get_symbol_leading_char (const bfd *abfd)
+.{
+.  return abfd->xvec->symbol_leading_char;
+.}
+.
+.static inline enum bfd_flavour
+.bfd_asymbol_flavour (const asymbol *sy)
+.{
+.  if ((sy->flags & BSF_SYNTHETIC) != 0)
+.    return bfd_target_unknown_flavour;
+.  return sy->the_bfd->xvec->flavour;
+.}
+.
 */
 
 /* All known xvecs (even those that don't compile on all systems).
@@ -628,7 +700,6 @@ extern const bfd_target bexkat1_elf32_le_vec;
 extern const bfd_target bfin_elf32_vec;
 extern const bfd_target bfin_elf32_fdpic_vec;
 extern const bfd_target cr16_elf32_vec;
-extern const bfd_target cr16c_elf32_vec;
 extern const bfd_target cris_aout_vec;
 extern const bfd_target cris_elf32_vec;
 extern const bfd_target cris_elf32_us_vec;
@@ -964,7 +1035,6 @@ static const bfd_target * const _bfd_target_vector[] =
 	&bfin_elf32_fdpic_vec,
 
 	&cr16_elf32_vec,
-	&cr16c_elf32_vec,
 
 	&cris_aout_vec,
 	&cris_elf32_vec,

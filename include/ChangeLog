@@ -1,3 +1,288 @@
+2019-12-16  Alan Modra  <amodra@gmail.com>
+
+	* opcode/crx.h (inst <match>): Make unsigned int.
+
+2019-12-16  Alan Modra  <amodra@gmail.com>
+
+	* opcode/nds32.h (N32_BIT): Define using 1u.
+	(__SEXT): Use __MASK and N32_BIT.
+	(N32_IMMS): Remove duplicate mask.
+
+2019-12-12  Luis Machado  <luis.machado@linaro.org>
+
+	* diagnostics.h (DIAGNOSTIC_IGNORE_UNUSED_FUNCTION). Remove
+	definitions.
+
+2019-12-11  Alan Modra  <amodra@gmail.com>
+
+	* opcode/mmix.h (PUSHGO_INSN_BYTE): Make unsigned.
+	(GO_INSN_BYTE, SETL_INSN_BYTE, INCML_INSN_BYTE, INCMH_INSN_BYTE),
+	(INCH_INSN_BYTE, SWYM_INSN_BYTE, JMP_INSN_BYTE): Likewise.
+
+2019-12-11  Alan Modra  <amodra@gmail.com>
+
+	* dis-asm.h (INSN_HAS_RELOC, DISASSEMBLE_DATA),
+	(USER_SPECIFIED_MACHINE_TYPE, WIDE_OUTPUT): Make unsigned.
+	* opcode/tic80.h (TIC80_OPERAND_*): Likewise.
+
+2019-12-10  Alan Modra  <amodra@gmail.com>
+
+	PR 24960
+	* dis-asm.h (disassemble_free_target): Declare.
+
+2019-12-10  Alan Modra  <amodra@gmail.com>
+
+	* dis-asm.h (struct disassemble_info): Delete insn_sets.
+	(INIT_DISASSEMBLE_INFO_NO_ARCH): Don't define.
+
+2019-12-05  Jan Beulich  <jbeulich@suse.com>
+
+	* opcode/aarch64.h (AARCH64_FEATURE_CRYPTO): Expand to the
+	combination of AES and SHA2.
+
+2019-11-25  Alan Modra  <amodra@gmail.com>
+
+	* coff/ti.h (GET_SCNHDR_SIZE, PUT_SCNHDR_SIZE, GET_SCN_SCNLEN),
+	(PUT_SCN_SCNLEN): Adjust bfd_octets_per_byte calls.
+
+2019-11-22  Mihail Ionescu  <mihail.ionescu@arm.com>
+
+	* opcode/arm.h (ARM_EXT2_CRC): New extension feature
+	to replace CRC_EXT_ARMV8.
+	(CRC_EXT_ARMV8): Remove and mark bit as unused.
+	(ARM_ARCH_V8A_CRC, ARM_ARCH_V8_1A, ARM_ARCH_V8_2A,
+	ARM_ARCH_V8_3A, ARM_ARCH_V8_4A, ARM_ARCH_V8_5A,
+	ARM_ARCH_V8_6A): Redefine using ARM_EXT2_CRC instead of
+	CRC_EXT_ARMV8.
+
+2019-11-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf2.h (DW_CIE_VERSION): Delete.
+
+2019-11-07  Mihail Ionescu  <mihail.ionescu@arm.com>
+
+	* opcode/arm.h (ARM_EXT2_I8MM): New feature macro.
+
+2019-11-07  Mihail Ionescu  <mihail.ionescu@arm.com>
+
+	* opcode/aarch64.h (AARCH64_FEATURE_I8MM): New.
+	(AARCH64_FEATURE_F32MM): New.
+	(AARCH64_FEATURE_F64MM): New.
+	(AARCH64_OPND_SVE_ADDR_RI_S4x32): New.
+	(enum aarch64_insn_class): Add new instruction class "aarch64_misc" for
+	instructions that do not require special handling.
+
+2019-11-07  Mihail Ionescu  <mihail.ionescu@arm.com>
+	    Matthew Malcomson  <matthew.malcomson@arm.com>
+
+	* opcode/arm.h (ARM_EXT2_V8_6A, ARM_AEXT2_V8_6A,
+	ARM_ARCH_V8_6A): New.
+	* opcode/arm.h (ARM_EXT2_BF16): New feature macro.
+	(ARM_AEXT2_V8_6A): Include above macro in definition.
+
+2019-11-07  Mihail Ionescu  <mihail.ionescu@arm.com>
+	    Matthew Malcomson  <matthew.malcomson@arm.com>
+
+	* opcode/aarch64.h (AARCH64_FEATURE_BFLOAT16): New feature macros.
+	(AARCH64_ARCH_V8_6): Include BFloat16 feature macros.
+	(enum aarch64_opnd_qualifier): Introduce new operand qualifier
+	AARCH64_OPND_QLF_S_2H.
+	(enum aarch64_insn_class): Introduce new class "bfloat16".
+	(BFLOAT16_SVE_INSNC): New feature set for bfloat16
+	instructions to support the movprfx constraint.
+
+2019-11-07  Mihail Ionescu  <mihail.ionescu@arm.com>
+	    Matthew Malcomson  <matthew.malcomson@arm.com>
+
+	* opcode/aarch64.h (AARCH64_FEATURE_V8_6): New.
+	(AARCH64_ARCH_V8_6): New.
+
+2019-11-07  Alan Modra  <amodra@gmail.com>
+
+	* elf/cr16c.h: Delete.
+
+2019-10-29  Andrew Eikum  <aeikum@codeweavers.com>
+
+	* coff/internal.h (struct internal_extra_pe_filehdr): Use ints
+	instead of longs to hold dos_message.
+
+2019-10-25  Alan Modra  <amodra@gmail.com>
+
+	PR 4499
+	* elf/internal.h (struct elf_segment_map): Delete header_size.
+	Add no_sort_lma and idx.
+
+2019-10-16  Alan Modra  <amodra@gmail.com>
+
+	PR 13616
+	* bfdlink.h (struct bfd_link_info <big_endian>): New field.
+
+2019-10-07  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* elf/msp430.h: Add enums for MSPABI and GNU object attribute tag
+	names and values.
+
+2019-09-23  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ctf_cuname_set): Can now fail, returning int.
+	(ctf_parent_name_set): Likewise.
+
+2019-08-05  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ECTF_NONREPRESENTABLE): New.
+
+2019-09-23  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h: Note the instability of the ctf_link interfaces.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* bfdlink.h (elf_strtab_hash): New forward.
+	(elf_sym_strtab): Likewise.
+	(struct bfd_link_callbacks <examine_strtab>): New.
+	(struct bfd_link_callbacks <emit_ctf>): Likewise.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (includes): No longer include <sys/param.h>.
+
+2019-07-30  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ctf_link_add_cu_mapping): New.
+	(ctf_link_memb_name_changer_f): New.
+	(ctf_link_set_memb_name_changer): New.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ECTF_INTERNAL): New.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (struct ctf_link_sym): New, a symbol in flight to the
+	libctf linking machinery.
+	(CTF_LINK_SHARE_UNCONFLICTED): New.
+	(CTF_LINK_SHARE_DUPLICATED): New.
+	(ECTF_LINKADDEDLATE): New, replacing ECTF_UNUSED.
+	(ECTF_NOTYET): New, a 'not yet implemented' message.
+	(ctf_link_add_ctf): New, add an input file's CTF to the link.
+	(ctf_link): New, merge the type and string sections.
+	(ctf_link_strtab_string_f): New, callback for feeding strtab info.
+	(ctf_link_iter_symbol_f): New, callback for feeding symtab info.
+	(ctf_link_add_strtab): New, tell the CTF linker about the ELF
+	strtab's strings.
+	(ctf_link_shuffle_syms): New, ask the CTF linker to shuffle its
+	symbols into symtab order.
+	(ctf_link_write): New, ask the CTF linker to write the CTF out.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ctf_arc_write_fd): New.
+	(ctf_write_mem): Likewise.
+	(ctf_gzwrite): Spacing fix.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf.h (CTF_SET_STID): New.
+
+2019-07-13  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ctf_type_all_f): New.
+	(ctf_type_iter_all): New.
+
+2019-07-11  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf.h: Add object index and function index sections.  Describe
+	them. Improve the description of the variable section and clarify
+	the constraints on backward-pointing type nodes.
+	(ctf_header): Add cth_objtidxoff, cth_funcidxoff.
+
+2019-07-06  Nick Alcock  <nick.alcock@oracle.com>
+
+	* ctf-api.h (ctf_cuname): New function.
+	(ctf_cuname_set): Likewise.
+	* ctf.h: Improve comment around upgrading, no longer
+	implying that v2 is the target of upgrades (it is v3 now).
+	(ctf_header_v2_t): New, old-format header for backward
+	compatibility.
+	(ctf_header_t): Add cth_cuname: this is the first of several
+	header changes in format v3.
+
+2019-09-23  Alan Modra  <amodra@gmail.com>
+
+	* bfdlink.h (struct bfd_section_already_linked): Forward declare.
+	(bfd_section_already_linked_table_init),
+	(bfd_section_already_linked_table_free),
+	(_bfd_handle_already_linked, _bfd_nearby_section),
+	(_bfd_fix_excluded_sec_syms): Declare.
+
+2019-09-23  Alan Modra  <amodra@gmail.com>
+
+	* bfdlink.h (enum notice_asneeded_action): Define.
+
+2019-09-17  Maxim Blinov  <maxim.blinov@embecosm.com>
+
+	* opcode/riscv.h (riscv_insn_class): New enum.
+	* opcode/riscv.h (struct riscv_opcode): Change
+	subset field to insn_class field.
+
+2019-09-09  Phil Blundell  <pb@pbcl.net>
+
+	binutils 2.33 branch created.
+
+2019-08-30  Claudiu Zissulescu <claziss@gmail.com>
+
+	* opcode/arc.h (FASTMATH): Move it from insn_class_t to
+	insn_subclass_t enum.
+
+2019-08-22  Alan Modra  <amodra@gmail.com>
+
+	* elf/arm.h (ARM_GET_SYM_CMSE_SPCL, ARM_SET_SYM_CMSE_SPCL): Delete.
+
+2019-08-09  Mihailo Stojanovic  <mihailo.stojanovic@rt-rk.com>
+
+	* elf/mips.h (SHT_GNU_XHASH): New define.
+	(DT_GNU_XHASH): New define.
+
+2019-08-08  Yoshinori Sato  <ysato@users.sourceforge.jp>
+
+	* opcode/h8300.h (EXPAND_UNOP_EXTENDED_B): Add MODEL.
+	(EXPAND_UNOP_EXTENDED_W): Likewise.
+	(EXPAND_UNOP_EXTENDED_L): Likewise.
+	(struct h8_opcode h8_opcodes): Likewise.
+	(struct h8_opcode h8_opcodes): tas / ldm / stm supported H8S or
+	later.
+
+2019-07-24  Claudiu Zissulescu  <claziss@synopsys.com>
+
+	* opcode/arc.h (FASTMATH): Add.
+	(SWITCH): Likewise.
+
+2019-07-24  Alan Modra  <amodra@gmail.com>
+
+	* elf/internal.h (ELF_SECTION_IN_SEGMENT_1): Exclude non-alloc
+	sections in GNU_MBIND segments.
+
+2019-07-23  Omar Majid  <omajid@redhat.com>
+
+	* coff/i386.h (IMAGE_FILE_MACHINE_NATIVE_APPLE_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_FREEBSD_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_LINUX_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_NETBSD_OVERRIDE): Define.
+	(I386_APPLE_MAGIC): Define.
+	(I386_FREEBSD_MAGIC): Define.
+	(I386_LINUX_MAGIC): Define.
+	(I386_NETBSD_MAGIC): Define.
+	(I386BADMAG): Extend macro to allow new magic numbers.
+	* coff/x86_64.h (IMAGE_FILE_MACHINE_NATIVE_APPLE_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_FREEBSD_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_LINUX_OVERRIDE): Define.
+	(IMAGE_FILE_MACHINE_NATIVE_NETBSD_OVERRIDE): Define.
+	(AMD64_APPLE_MAGIC): Define.
+	(AMD64_FREEBSD_MAGIC): Define.
+	(AMD64_LINUX_MAGIC): Define.
+	(AMD64_NETBSD_MAGIC): Define.
+	(AMD64BADMAG): Extend macro to allow new magic numbers.
+
 2019-07-19  Alan Modra  <amodra@gmail.com>
 
 	* elf/ppc64.h (R_PPC64_TPREL34, R_PPC64_DTPREL34),
@@ -21,7 +306,7 @@
 	* opcode/aarch64.h (enum aarch64_insn_class): sve_size_013
 	renamed to sve_size_13.
 
-2019-06-19  Nick Alcock <nick.alcock@oracle.com>
+2019-06-19  Nick Alcock  <nick.alcock@oracle.com>
 
 	* ctf.h (ctf_slice_t): Make cts_offset and cts_bits unsigned
 	short, so following structures are properly aligned.

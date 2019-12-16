@@ -28,6 +28,7 @@
 #include "c-lang.h"
 #include "typeprint.h"
 #include <algorithm>
+#include "cli/cli-style.h"
 
 static struct cp_abi_ops gnu_v3_abi_ops;
 
@@ -327,7 +328,7 @@ gnuv3_rtti_type (struct value *value,
      If we didn't like this approach, we could instead look in the
      type_info object itself to get the class name.  But this way
      should work just as well, and doesn't read target memory.  */
-  vtable_symbol_name = MSYMBOL_DEMANGLED_NAME (vtable_symbol);
+  vtable_symbol_name = vtable_symbol->demangled_name ();
   if (vtable_symbol_name == NULL
       || !startswith (vtable_symbol_name, "vtable for "))
     {
@@ -392,7 +393,7 @@ gnuv3_get_virtual_fn (struct gdbarch *gdbarch, struct value *container,
   /* If this architecture uses function descriptors directly in the vtable,
      then the address of the vtable entry is actually a "function pointer"
      (i.e. points to the descriptor).  We don't need to scale the index
-     by the size of a function descriptor; GCC does that before outputing
+     by the size of a function descriptor; GCC does that before outputting
      debug information.  */
   if (gdbarch_vtable_function_descriptors (gdbarch))
     vfn = value_addr (vfn);
@@ -677,7 +678,7 @@ gnuv3_make_method_ptr (struct type *type, gdb_byte *contents,
 {
   struct gdbarch *gdbarch = get_type_arch (type);
   int size = TYPE_LENGTH (builtin_type (gdbarch)->builtin_data_ptr);
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  enum bfd_endian byte_order = type_byte_order (type);
 
   /* FIXME drow/2006-12-24: The adjustment of "this" is currently
      always zero, since the method pointer is of the correct type.
@@ -912,7 +913,8 @@ print_one_vtable (struct gdbarch *gdbarch, struct value *value,
 	}
       catch (const gdb_exception_error &ex)
 	{
-	  printf_filtered (_("<error: %s>"), ex.what ());
+	  fprintf_styled (gdb_stdout, metadata_style.style (),
+			  _("<error: %s>"), ex.what ());
 	  got_error = 1;
 	}
 
@@ -1146,11 +1148,11 @@ gnuv3_get_typename_from_type_info (struct value *type_info_ptr)
 
 #define TYPEINFO_PREFIX "typeinfo for "
 #define TYPEINFO_PREFIX_LEN (sizeof (TYPEINFO_PREFIX) - 1)
-  symname = MSYMBOL_DEMANGLED_NAME (typeinfo_sym.minsym);
+  symname = typeinfo_sym.minsym->demangled_name ();
   if (symname == NULL || strncmp (symname, TYPEINFO_PREFIX,
 				  TYPEINFO_PREFIX_LEN))
     error (_("typeinfo symbol '%s' has unexpected name"),
-	   MSYMBOL_LINKAGE_NAME (typeinfo_sym.minsym));
+	   typeinfo_sym.minsym->linkage_name ());
   class_name = symname + TYPEINFO_PREFIX_LEN;
 
   /* Strip off @plt and version suffixes.  */
@@ -1200,7 +1202,7 @@ gnuv3_skip_trampoline (struct frame_info *frame, CORE_ADDR stop_pc)
   /* The symbol's demangled name should be something like "virtual
      thunk to FUNCTION", where FUNCTION is the name of the function
      being thunked to.  */
-  thunk_name = MSYMBOL_DEMANGLED_NAME (thunk_sym.minsym);
+  thunk_name = thunk_sym.minsym->demangled_name ();
   if (thunk_name == NULL || strstr (thunk_name, " thunk to ") == NULL)
     return 0;
 

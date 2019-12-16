@@ -54,6 +54,7 @@
 #include "btrace.h"
 #include "gdbsupport/pathstuff.h"
 
+#include <algorithm>
 #include <vector>
 
 /* Keep a registry of per-objfile data-pointers required by other GDB
@@ -166,8 +167,7 @@ set_objfile_main_name (struct objfile *objfile,
   if (objfile->per_bfd->name_of_main == NULL
       || strcmp (objfile->per_bfd->name_of_main, name) != 0)
     objfile->per_bfd->name_of_main
-      = (const char *) obstack_copy0 (&objfile->per_bfd->storage_obstack, name,
-				      strlen (name));
+      = obstack_strdup (&objfile->per_bfd->storage_obstack, name);
   objfile->per_bfd->language_of_main = lang;
 }
 
@@ -272,7 +272,7 @@ add_to_objfile_sections_full (struct bfd *abfd, struct bfd_section *asect,
     {
       flagword aflag;
 
-      aflag = bfd_get_section_flags (abfd, asect);
+      aflag = bfd_section_flags (asect);
       if (!(aflag & SEC_ALLOC))
 	return;
     }
@@ -356,10 +356,7 @@ objfile::objfile (bfd *abfd, const char *name, objfile_flags flags_)
       name_holder = gdb_abspath (name);
       expanded_name = name_holder.get ();
     }
-  original_name
-    = (char *) obstack_copy0 (&objfile_obstack,
-			      expanded_name,
-			      strlen (expanded_name));
+  original_name = obstack_strdup (&objfile_obstack, expanded_name);
 
   /* Update the per-objfile information that comes from the bfd, ensuring
      that any data that is reference is saved in the per-objfile data
@@ -375,23 +372,6 @@ objfile::objfile (bfd *abfd, const char *name, objfile_flags flags_)
     }
 
   per_bfd = get_objfile_bfd_data (this, abfd);
-
-  /* Add this file onto the tail of the linked list of other such files.  */
-
-  if (object_files == NULL)
-    object_files = this;
-  else
-    {
-      struct objfile *last_one;
-
-      for (last_one = object_files;
-	   last_one->next;
-	   last_one = last_one->next);
-      last_one->next = this;
-    }
-
-  /* Rebuild section map next time we need it.  */
-  get_objfile_pspace_data (pspace)->new_objfiles_available = 1;
 }
 
 /* Retrieve the gdbarch associated with OBJFILE.  */
@@ -477,65 +457,9 @@ separate_debug_iterator::operator++ ()
   return *this;
 }
 
-/* Put one object file before a specified on in the global list.
-   This can be used to make sure an object file is destroyed before
-   another when using objfiles_safe to free all objfiles.  */
-void
-put_objfile_before (struct objfile *objfile, struct objfile *before_this)
-{
-  struct objfile **objp;
-
-  unlink_objfile (objfile);
-  
-  for (objp = &object_files; *objp != NULL; objp = &((*objp)->next))
-    {
-      if (*objp == before_this)
-	{
-	  objfile->next = *objp;
-	  *objp = objfile;
-	  return;
-	}
-    }
-  
-  internal_error (__FILE__, __LINE__,
-		  _("put_objfile_before: before objfile not in list"));
-}
-
-/* Unlink OBJFILE from the list of known objfiles, if it is found in the
-   list.
-
-   It is not a bug, or error, to call this function if OBJFILE is not known
-   to be in the current list.  This is done in the case of mapped objfiles,
-   for example, just to ensure that the mapped objfile doesn't appear twice
-   in the list.  Since the list is threaded, linking in a mapped objfile
-   twice would create a circular list.
-
-   If OBJFILE turns out to be in the list, we zap it's NEXT pointer after
-   unlinking it, just to ensure that we have completely severed any linkages
-   between the OBJFILE and the list.  */
-
-void
-unlink_objfile (struct objfile *objfile)
-{
-  struct objfile **objpp;
-
-  for (objpp = &object_files; *objpp != NULL; objpp = &((*objpp)->next))
-    {
-      if (*objpp == objfile)
-	{
-	  *objpp = (*objpp)->next;
-	  objfile->next = NULL;
-	  return;
-	}
-    }
-
-  internal_error (__FILE__, __LINE__,
-		  _("unlink_objfile: objfile already unlinked"));
-}
-
 /* Add OBJFILE as a separate debug objfile of PARENT.  */
 
-void
+static void
 add_separate_debug_objfile (struct objfile *objfile, struct objfile *parent)
 {
   gdb_assert (objfile && parent);
@@ -550,10 +474,35 @@ add_separate_debug_objfile (struct objfile *objfile, struct objfile *parent)
   objfile->separate_debug_objfile_backlink = parent;
   objfile->separate_debug_objfile_link = parent->separate_debug_objfile;
   parent->separate_debug_objfile = objfile;
+}
 
-  /* Put the separate debug object before the normal one, this is so that
-     usage of objfiles_safe will stay safe.  */
-  put_objfile_before (objfile, parent);
+/* See objfiles.h.  */
+
+objfile *
+objfile::make (bfd *bfd_, const char *name_, objfile_flags flags_,
+	       objfile *parent)
+{
+  objfile *result = new objfile (bfd_, name_, flags_);
+  if (parent != nullptr)
+    add_separate_debug_objfile (result, parent);
+
+  /* Using std::make_shared might be a bit nicer here, but that would
+     require making the constructor public.  */
+  current_program_space->add_objfile (std::shared_ptr<objfile> (result),
+				      parent);
+
+  /* Rebuild section map next time we need it.  */
+  get_objfile_pspace_data (current_program_space)->new_objfiles_available = 1;
+
+  return result;
+}
+
+/* See objfiles.h.  */
+
+void
+objfile::unlink ()
+{
+  current_program_space->remove_objfile (this);
 }
 
 /* Free all separate debug objfile of OBJFILE, but don't free OBJFILE
@@ -567,7 +516,7 @@ free_objfile_separate_debug (struct objfile *objfile)
   for (child = objfile->separate_debug_objfile; child;)
     {
       struct objfile *next_child = child->separate_debug_objfile_link;
-      delete child;
+      child->unlink ();
       child = next_child;
     }
 }
@@ -643,13 +592,6 @@ objfile::~objfile ()
   else
     delete per_bfd;
 
-  /* Remove it from the chain of all objfiles.  */
-
-  unlink_objfile (this);
-
-  if (this == symfile_objfile)
-    symfile_objfile = NULL;
-
   /* Before the symbol table code was redone to make it easier to
      selectively load and remove information particular to a specific
      linkage unit, gdb used to do these things whenever the monolithic
@@ -678,21 +620,6 @@ objfile::~objfile ()
   get_objfile_pspace_data (pspace)->section_map_dirty = 1;
 }
 
-/* Free all the object files at once and clean up their users.  */
-
-void
-free_all_objfiles (void)
-{
-  struct so_list *so;
-
-  /* Any objfile reference would become stale.  */
-  for (so = master_so_list (); so; so = so->next)
-    gdb_assert (so->objfile == NULL);
-
-  for (objfile *objfile : current_program_space->objfiles_safe ())
-    delete objfile;
-  clear_symtab_users (0);
-}
 
 /* A helper function for objfile_relocate1 that relocates a single
    symbol.  */
@@ -711,7 +638,9 @@ relocate_one_symbol (struct symbol *sym, struct objfile *objfile,
        || SYMBOL_CLASS (sym) == LOC_STATIC)
       && SYMBOL_SECTION (sym) >= 0)
     {
-      SYMBOL_VALUE_ADDRESS (sym) += ANOFFSET (delta, SYMBOL_SECTION (sym));
+      SET_SYMBOL_VALUE_ADDRESS (sym,
+				SYMBOL_VALUE_ADDRESS (sym)
+				+ ANOFFSET (delta, SYMBOL_SECTION (sym)));
     }
 }
 
@@ -997,7 +926,7 @@ objfile_purge_solibs (void)
 	 be soon.  */
 
       if (!(objf->flags & OBJF_USERLOADED) && (objf->flags & OBJF_SHARED))
-	delete objf;
+	objf->unlink ();
     }
 }
 
@@ -1021,18 +950,16 @@ have_minimal_symbols (void)
 
 /* Qsort comparison function.  */
 
-static int
-qsort_cmp (const void *a, const void *b)
+static bool
+sort_cmp (const struct obj_section *sect1, const obj_section *sect2)
 {
-  const struct obj_section *sect1 = *(const struct obj_section **) a;
-  const struct obj_section *sect2 = *(const struct obj_section **) b;
   const CORE_ADDR sect1_addr = obj_section_addr (sect1);
   const CORE_ADDR sect2_addr = obj_section_addr (sect2);
 
   if (sect1_addr < sect2_addr)
-    return -1;
+    return true;
   else if (sect1_addr > sect2_addr)
-    return 1;
+    return false;
   else
     {
       /* Sections are at the same address.  This could happen if
@@ -1049,29 +976,33 @@ qsort_cmp (const void *a, const void *b)
 	  /* Case A.  The ordering doesn't matter: separate debuginfo files
 	     will be filtered out later.  */
 
-	  return 0;
+	  return false;
 	}
 
       /* Case B.  Maintain stable sort order, so bugs in GDB are easier to
 	 triage.  This section could be slow (since we iterate over all
-	 objfiles in each call to qsort_cmp), but this shouldn't happen
+	 objfiles in each call to sort_cmp), but this shouldn't happen
 	 very often (GDB is already in a confused state; one hopes this
 	 doesn't happen at all).  If you discover that significant time is
 	 spent in the loops below, do 'set complaints 100' and examine the
 	 resulting complaints.  */
-
       if (objfile1 == objfile2)
 	{
-	  /* Both sections came from the same objfile.  We are really confused.
-	     Sort on sequence order of sections within the objfile.  */
+	  /* Both sections came from the same objfile.  We are really
+	     confused.  Sort on sequence order of sections within the
+	     objfile.  The order of checks is important here, if we find a
+	     match on SECT2 first then either SECT2 is before SECT1, or,
+	     SECT2 == SECT1, in both cases we should return false.  The
+	     second case shouldn't occur during normal use, but std::sort
+	     does check that '!(a < a)' when compiled in debug mode.  */
 
 	  const struct obj_section *osect;
 
 	  ALL_OBJFILE_OSECTIONS (objfile1, osect)
-	    if (osect == sect1)
-	      return -1;
-	    else if (osect == sect2)
-	      return 1;
+	    if (osect == sect2)
+	      return false;
+	    else if (osect == sect1)
+	      return true;
 
 	  /* We should have found one of the sections before getting here.  */
 	  gdb_assert_not_reached ("section not found");
@@ -1082,9 +1013,9 @@ qsort_cmp (const void *a, const void *b)
 
 	  for (objfile *objfile : current_program_space->objfiles ())
 	    if (objfile == objfile1)
-	      return -1;
+	      return true;
 	    else if (objfile == objfile2)
-	      return 1;
+	      return false;
 
 	  /* We should have found one of the objfiles before getting here.  */
 	  gdb_assert_not_reached ("objfile not found");
@@ -1093,7 +1024,7 @@ qsort_cmp (const void *a, const void *b)
 
   /* Unreachable.  */
   gdb_assert_not_reached ("unexpected code path");
-  return 0;
+  return false;
 }
 
 /* Select "better" obj_section to keep.  We prefer the one that came from
@@ -1123,15 +1054,15 @@ static int
 insert_section_p (const struct bfd *abfd,
 		  const struct bfd_section *section)
 {
-  const bfd_vma lma = bfd_section_lma (abfd, section);
+  const bfd_vma lma = bfd_section_lma (section);
 
-  if (overlay_debugging && lma != 0 && lma != bfd_section_vma (abfd, section)
+  if (overlay_debugging && lma != 0 && lma != bfd_section_vma (section)
       && (bfd_get_file_flags (abfd) & BFD_IN_MEMORY) == 0)
     /* This is an overlay section.  IN_MEMORY check is needed to avoid
        discarding sections from the "system supplied DSO" (aka vdso)
        on some Linux systems (e.g. Fedora 11).  */
     return 0;
-  if ((bfd_get_section_flags (abfd, section) & SEC_THREAD_LOCAL) != 0)
+  if ((bfd_section_flags (section) & SEC_THREAD_LOCAL) != 0)
     /* This is a TLS section.  */
     return 0;
 
@@ -1224,10 +1155,10 @@ filter_overlapping_sections (struct obj_section **map, int map_size)
 			   " (A) section `%s' from `%s' [%s, %s)\n"
 			   " (B) section `%s' from `%s' [%s, %s).\n"
 			   "Will ignore section B"),
-			 bfd_section_name (abfd1, bfds1), objfile_name (objf1),
+			 bfd_section_name (bfds1), objfile_name (objf1),
 			 paddress (gdbarch, sect1_addr),
 			 paddress (gdbarch, sect1_endaddr),
-			 bfd_section_name (abfd2, bfds2), objfile_name (objf2),
+			 bfd_section_name (bfds2), objfile_name (objf2),
 			 paddress (gdbarch, sect2_addr),
 			 paddress (gdbarch, sect2_endaddr));
 	    }
@@ -1285,7 +1216,7 @@ update_section_map (struct program_space *pspace,
       if (insert_section_p (objfile->obfd, s->the_bfd_section))
 	map[i++] = s;
 
-  qsort (map, alloc_size, sizeof (*map), qsort_cmp);
+  std::sort (map, map + alloc_size, sort_cmp);
   map_size = filter_debuginfo_sections(map, alloc_size);
   map_size = filter_overlapping_sections(map, map_size);
 
@@ -1439,7 +1370,7 @@ shared_objfile_contains_address_p (struct program_space *pspace,
    searching the objfiles in the order they are stored internally,
    ignoring CURRENT_OBJFILE.
 
-   On most platorms, it should be close enough to doing the best
+   On most platforms, it should be close enough to doing the best
    we can without some knowledge specific to the architecture.  */
 
 void

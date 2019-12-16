@@ -712,6 +712,7 @@ struct operand_qualifier_data aarch64_opnd_qualifiers[] =
   {8, 1, 0x3, "d", OQK_OPD_VARIANT},
   {16, 1, 0x4, "q", OQK_OPD_VARIANT},
   {4, 1, 0x0, "4b", OQK_OPD_VARIANT},
+  {4, 1, 0x0, "2h", OQK_OPD_VARIANT},
 
   {1, 4, 0x0, "4b", OQK_OPD_VARIANT},
   {1, 8, 0x0, "8b", OQK_OPD_VARIANT},
@@ -1898,6 +1899,7 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 	  break;
 
 	case AARCH64_OPND_SVE_ADDR_RI_S4x16:
+	case AARCH64_OPND_SVE_ADDR_RI_S4x32:
 	  min_value = -8;
 	  max_value = 7;
 	  goto sve_imm_offset;
@@ -2544,17 +2546,14 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 	case AARCH64_OPND_SVE_SHRIMM_PRED:
 	case AARCH64_OPND_SVE_SHRIMM_UNPRED:
 	case AARCH64_OPND_SVE_SHRIMM_UNPRED_22:
+	  num = (type == AARCH64_OPND_SVE_SHRIMM_UNPRED_22) ? 2 : 1;
+	  size = aarch64_get_qualifier_esize (opnds[idx - num].qualifier);
+	  if (!value_in_range_p (opnd->imm.value, 1, 8 * size))
 	    {
-	      unsigned int index =
-		(type == AARCH64_OPND_SVE_SHRIMM_UNPRED_22) ? 2 : 1;
-	      size = aarch64_get_qualifier_esize (opnds[idx - index].qualifier);
-	      if (!value_in_range_p (opnd->imm.value, 1, 8 * size))
-		{
-		  set_imm_out_of_range_error (mismatch_detail, idx, 1, 8*size);
-		  return 0;
-		}
-	      break;
-	   }
+	      set_imm_out_of_range_error (mismatch_detail, idx, 1, 8*size);
+	      return 0;
+	    }
+	  break;
 
 	default:
 	  break;
@@ -3063,7 +3062,12 @@ print_immediate_offset_address (char *buf, size_t size,
   if (opnd->addr.writeback)
     {
       if (opnd->addr.preind)
-	snprintf (buf, size, "[%s, #%d]!", base, opnd->addr.offset.imm);
+        {
+	  if (opnd->type == AARCH64_OPND_ADDR_SIMM10 && !opnd->addr.offset.imm)
+            snprintf (buf, size, "[%s]!", base);
+          else
+	    snprintf (buf, size, "[%s, #%d]!", base, opnd->addr.offset.imm);
+        }
       else
 	snprintf (buf, size, "[%s], #%d", base, opnd->addr.offset.imm);
     }
@@ -3638,6 +3642,7 @@ aarch64_print_operand (char *buf, size_t size, bfd_vma pc,
     case AARCH64_OPND_ADDR_SIMM13:
     case AARCH64_OPND_ADDR_OFFSET:
     case AARCH64_OPND_SVE_ADDR_RI_S4x16:
+    case AARCH64_OPND_SVE_ADDR_RI_S4x32:
     case AARCH64_OPND_SVE_ADDR_RI_S4xVL:
     case AARCH64_OPND_SVE_ADDR_RI_S4x2xVL:
     case AARCH64_OPND_SVE_ADDR_RI_S4x3xVL:
@@ -3966,13 +3971,14 @@ const aarch64_sys_reg aarch64_sys_regs [] =
   { "rndr",		CPENC(3,3,C2,C4,0), F_ARCHEXT | F_REG_READ }, /* RO */
   { "rndrrs",		CPENC(3,3,C2,C4,1), F_ARCHEXT | F_REG_READ }, /* RO */
   { "tco",		CPENC(3,3,C4,C2,7), F_ARCHEXT },
-  { "tfsre0_el1",	CPENC(3,0,C6,C6,1), F_ARCHEXT },
-  { "tfsr_el1",		CPENC(3,0,C6,C5,0), F_ARCHEXT },
-  { "tfsr_el2",		CPENC(3,4,C6,C5,0), F_ARCHEXT },
-  { "tfsr_el3",		CPENC(3,6,C6,C6,0), F_ARCHEXT },
-  { "tfsr_el12",	CPENC(3,5,C6,C6,0), F_ARCHEXT },
+  { "tfsre0_el1",	CPENC(3,0,C5,C6,1), F_ARCHEXT },
+  { "tfsr_el1",		CPENC(3,0,C5,C6,0), F_ARCHEXT },
+  { "tfsr_el2",		CPENC(3,4,C5,C6,0), F_ARCHEXT },
+  { "tfsr_el3",		CPENC(3,6,C5,C6,0), F_ARCHEXT },
+  { "tfsr_el12",	CPENC(3,5,C5,C6,0), F_ARCHEXT },
   { "rgsr_el1",		CPENC(3,0,C1,C0,5), F_ARCHEXT },
   { "gcr_el1",		CPENC(3,0,C1,C0,6), F_ARCHEXT },
+  { "gmid_el1",		CPENC(3,1,C0,C0,4), F_ARCHEXT | F_REG_READ }, /* RO */
   { "tpidr_el0",        CPENC(3,3,C13,C0,2),	0 },
   { "tpidrro_el0",      CPENC(3,3,C13,C0,3),	0 }, /* RW */
   { "tpidr_el1",        CPENC(3,0,C13,C0,4),	0 },
@@ -4438,13 +4444,14 @@ aarch64_sys_reg_supported_p (const aarch64_feature_set features,
 
   /* System Registers in ARMv8.5-A with AARCH64_FEATURE_MEMTAG.  */
   if ((reg->value == CPENC (3, 3, C4, C2, 7)
-       || reg->value == CPENC (3, 0, C6, C6, 1)
-       || reg->value == CPENC (3, 0, C6, C5, 0)
-       || reg->value == CPENC (3, 4, C6, C5, 0)
-       || reg->value == CPENC (3, 6, C6, C6, 0)
-       || reg->value == CPENC (3, 5, C6, C6, 0)
+       || reg->value == CPENC (3, 0, C5, C6, 1)
+       || reg->value == CPENC (3, 0, C5, C6, 0)
+       || reg->value == CPENC (3, 4, C5, C6, 0)
+       || reg->value == CPENC (3, 6, C5, C6, 0)
+       || reg->value == CPENC (3, 5, C5, C6, 0)
        || reg->value == CPENC (3, 0, C1, C0, 5)
-       || reg->value == CPENC (3, 0, C1, C0, 6))
+       || reg->value == CPENC (3, 0, C1, C0, 6)
+       || reg->value == CPENC (3, 1, C0, C0, 4))
       && !(AARCH64_CPU_HAS_FEATURE (features, AARCH64_FEATURE_MEMTAG)))
     return FALSE;
 

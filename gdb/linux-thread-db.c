@@ -48,6 +48,7 @@
 #include <algorithm>
 #include "gdbsupport/pathstuff.h"
 #include "valprint.h"
+#include "cli/cli-style.h"
 
 /* GNU/Linux libthread_db support.
 
@@ -110,13 +111,13 @@ public:
 
 static char *libthread_db_search_path;
 
-/* Set to non-zero if thread_db auto-loading is enabled
+/* Set to true if thread_db auto-loading is enabled
    by the "set auto-load libthread-db" command.  */
-static int auto_load_thread_db = 1;
+static bool auto_load_thread_db = true;
 
-/* Set to non-zero if load-time libthread_db tests have been enabled
-   by the "maintenence set check-libthread-db" command.  */
-static int check_thread_db_on_load = 0;
+/* Set to true if load-time libthread_db tests have been enabled
+   by the "maintenance set check-libthread-db" command.  */
+static bool check_thread_db_on_load = false;
 
 /* "show" command for the auto_load_thread_db configuration variable.  */
 
@@ -933,8 +934,9 @@ try_thread_db_load_1 (struct thread_db_info *info)
 	 enabled.  User visible output should not depend on debug
 	 settings.  */
       file = *libthread_db_search_path != '\0' ? gdb_stdout : gdb_stdlog;
-      fprintf_unfiltered (file, _("Using host libthread_db library \"%s\".\n"),
-			  library);
+      fprintf_unfiltered (file,
+			  _("Using host libthread_db library \"%ps\".\n"),
+			  styled_string (file_name_style.style (), library));
     }
 
   /* The thread library was detected.  Activate the thread_db target
@@ -1028,7 +1030,8 @@ try_thread_db_load_from_pdir_1 (struct objfile *obj, const char *subdir)
   if (obj_name[0] != '/')
     {
       warning (_("Expected absolute pathname for libpthread in the"
-		 " inferior, but got %s."), obj_name);
+		 " inferior, but got %ps."),
+	       styled_string (file_name_style.style (), obj_name));
       return false;
     }
 
@@ -1672,15 +1675,20 @@ thread_db_target::thread_handle_to_thread_info (const gdb_byte *thread_handle,
 {
   thread_t handle_tid;
 
-  /* Thread handle sizes must match in order to proceed.  We don't use an
-     assert here because the resulting internal error will cause GDB to
-     exit.  This isn't necessarily an internal error due to the possibility
-     of garbage being passed as the thread handle via the python interface.  */
-  if (handle_len != sizeof (handle_tid))
+  /* When debugging a 32-bit target from a 64-bit host, handle_len
+     will be 4 and sizeof (handle_tid) will be 8.  This requires
+     a different cast than the more straightforward case where
+     the sizes are the same.
+
+     Use "--target_board unix/-m32" from a native x86_64 linux build
+     to test the 32/64-bit case.  */
+  if (handle_len == 4 && sizeof (handle_tid) == 8)
+    handle_tid = (thread_t) * (const uint32_t *) thread_handle;
+  else if (handle_len == sizeof (handle_tid))
+    handle_tid = * (const thread_t *) thread_handle;
+  else
     error (_("Thread handle size mismatch: %d vs %zu (from libthread_db)"),
 	   handle_len, sizeof (handle_tid));
-
-  handle_tid = * (const thread_t *) thread_handle;
 
   for (thread_info *tp : inf->non_exited_threads ())
     {
