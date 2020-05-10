@@ -1,5 +1,5 @@
 /* Xtensa-specific support for 32-bit ELF.
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -325,6 +325,20 @@ static reloc_howto_type elf_howto_table[] =
   HOWTO (R_XTENSA_TLS_CALL, 0, 0, 0, FALSE, 0, complain_overflow_dont,
 	 bfd_elf_xtensa_reloc, "R_XTENSA_TLS_CALL",
 	 FALSE, 0, 0, FALSE),
+
+  HOWTO (R_XTENSA_PDIFF8, 0, 0, 8, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_PDIFF8", FALSE, 0, 0xff, FALSE),
+  HOWTO (R_XTENSA_PDIFF16, 0, 1, 16, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_PDIFF16", FALSE, 0, 0xffff, FALSE),
+  HOWTO (R_XTENSA_PDIFF32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_PDIFF32", FALSE, 0, 0xffffffff, FALSE),
+
+  HOWTO (R_XTENSA_NDIFF8, 0, 0, 8, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_NDIFF8", FALSE, 0, 0xff, FALSE),
+  HOWTO (R_XTENSA_NDIFF16, 0, 1, 16, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_NDIFF16", FALSE, 0, 0xffff, FALSE),
+  HOWTO (R_XTENSA_NDIFF32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
+	 bfd_elf_xtensa_reloc, "R_XTENSA_NDIFF32", FALSE, 0, 0xffffffff, FALSE),
 };
 
 #if DEBUG_GEN_RELOC
@@ -363,6 +377,30 @@ elf_xtensa_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
     case BFD_RELOC_XTENSA_DIFF32:
       TRACE ("BFD_RELOC_XTENSA_DIFF32");
       return &elf_howto_table[(unsigned) R_XTENSA_DIFF32 ];
+
+    case BFD_RELOC_XTENSA_PDIFF8:
+      TRACE ("BFD_RELOC_XTENSA_PDIFF8");
+      return &elf_howto_table[(unsigned) R_XTENSA_PDIFF8 ];
+
+    case BFD_RELOC_XTENSA_PDIFF16:
+      TRACE ("BFD_RELOC_XTENSA_PDIFF16");
+      return &elf_howto_table[(unsigned) R_XTENSA_PDIFF16 ];
+
+    case BFD_RELOC_XTENSA_PDIFF32:
+      TRACE ("BFD_RELOC_XTENSA_PDIFF32");
+      return &elf_howto_table[(unsigned) R_XTENSA_PDIFF32 ];
+
+    case BFD_RELOC_XTENSA_NDIFF8:
+      TRACE ("BFD_RELOC_XTENSA_NDIFF8");
+      return &elf_howto_table[(unsigned) R_XTENSA_NDIFF8 ];
+
+    case BFD_RELOC_XTENSA_NDIFF16:
+      TRACE ("BFD_RELOC_XTENSA_NDIFF16");
+      return &elf_howto_table[(unsigned) R_XTENSA_NDIFF16 ];
+
+    case BFD_RELOC_XTENSA_NDIFF32:
+      TRACE ("BFD_RELOC_XTENSA_NDIFF32");
+      return &elf_howto_table[(unsigned) R_XTENSA_NDIFF32 ];
 
     case BFD_RELOC_XTENSA_RTLD:
       TRACE ("BFD_RELOC_XTENSA_RTLD");
@@ -686,7 +724,7 @@ elf_xtensa_link_hash_table_create (bfd *abfd)
 {
   struct elf_link_hash_entry *tlsbase;
   struct elf_xtensa_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_xtensa_link_hash_table);
+  size_t amt = sizeof (struct elf_xtensa_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -1851,6 +1889,12 @@ elf_xtensa_do_reloc (reloc_howto_type *howto,
     case R_XTENSA_DIFF8:
     case R_XTENSA_DIFF16:
     case R_XTENSA_DIFF32:
+    case R_XTENSA_PDIFF8:
+    case R_XTENSA_PDIFF16:
+    case R_XTENSA_PDIFF32:
+    case R_XTENSA_NDIFF8:
+    case R_XTENSA_NDIFF16:
+    case R_XTENSA_NDIFF32:
     case R_XTENSA_TLS_FUNC:
     case R_XTENSA_TLS_ARG:
     case R_XTENSA_TLS_CALL:
@@ -6039,7 +6083,7 @@ elf_xtensa_new_section_hook (bfd *abfd, asection *sec)
   if (!sec->used_by_bfd)
     {
       struct elf_xtensa_section_data *sdata;
-      bfd_size_type amt = sizeof (*sdata);
+      size_t amt = sizeof (*sdata);
 
       sdata = bfd_zalloc (abfd, amt);
       if (sdata == NULL)
@@ -7839,7 +7883,7 @@ compute_text_actions (bfd *abfd,
     print_action_list (stderr, &relax_info->action_list);
 #endif
 
-error_return:
+ error_return:
   release_contents (sec, contents);
   release_internal_relocs (sec, internal_relocs);
   if (prop_table)
@@ -8844,7 +8888,7 @@ compute_removed_literals (bfd *abfd,
   print_action_list (stderr, &relax_info->action_list);
 #endif /* DEBUG */
 
-error_return:
+ error_return:
   if (prop_table)
     free (prop_table);
   free_section_cache (&target_sec_cache);
@@ -9604,7 +9648,13 @@ relax_section (bfd *abfd, asection *sec, struct bfd_link_info *link_info)
 
 	      if (r_type == R_XTENSA_DIFF8
 		  || r_type == R_XTENSA_DIFF16
-		  || r_type == R_XTENSA_DIFF32)
+		  || r_type == R_XTENSA_DIFF32
+		  || r_type == R_XTENSA_PDIFF8
+		  || r_type == R_XTENSA_PDIFF16
+		  || r_type == R_XTENSA_PDIFF32
+		  || r_type == R_XTENSA_NDIFF8
+		  || r_type == R_XTENSA_NDIFF16
+		  || r_type == R_XTENSA_NDIFF32)
 		{
 		  bfd_signed_vma diff_value = 0;
 		  bfd_vma new_end_offset, diff_mask = 0;
@@ -9620,18 +9670,44 @@ relax_section (bfd *abfd, asection *sec, struct bfd_link_info *link_info)
 		  switch (r_type)
 		    {
 		    case R_XTENSA_DIFF8:
+		      diff_mask = 0x7f;
 		      diff_value =
 			bfd_get_signed_8 (abfd, &contents[old_source_offset]);
 		      break;
 		    case R_XTENSA_DIFF16:
+		      diff_mask = 0x7fff;
 		      diff_value =
 			bfd_get_signed_16 (abfd, &contents[old_source_offset]);
 		      break;
 		    case R_XTENSA_DIFF32:
+		      diff_mask = 0x7fffffff;
 		      diff_value =
 			bfd_get_signed_32 (abfd, &contents[old_source_offset]);
 		      break;
+		    case R_XTENSA_PDIFF8:
+		    case R_XTENSA_NDIFF8:
+		      diff_mask = 0xff;
+		      diff_value =
+			bfd_get_8 (abfd, &contents[old_source_offset]);
+		      break;
+		    case R_XTENSA_PDIFF16:
+		    case R_XTENSA_NDIFF16:
+		      diff_mask = 0xffff;
+		      diff_value =
+			bfd_get_16 (abfd, &contents[old_source_offset]);
+		      break;
+		    case R_XTENSA_PDIFF32:
+		    case R_XTENSA_NDIFF32:
+		      diff_mask = 0xffffffff;
+		      diff_value =
+			bfd_get_32 (abfd, &contents[old_source_offset]);
+		      break;
 		    }
+
+		  if (r_type >= R_XTENSA_NDIFF8
+		      && r_type <= R_XTENSA_NDIFF32
+		      && diff_value)
+		    diff_value |= ~diff_mask;
 
 		  new_end_offset = offset_with_removed_text_map
 		    (&target_relax_info->action_list,
@@ -9641,25 +9717,40 @@ relax_section (bfd *abfd, asection *sec, struct bfd_link_info *link_info)
 		  switch (r_type)
 		    {
 		    case R_XTENSA_DIFF8:
-		      diff_mask = 0x7f;
 		      bfd_put_signed_8 (abfd, diff_value,
 				 &contents[old_source_offset]);
 		      break;
 		    case R_XTENSA_DIFF16:
-		      diff_mask = 0x7fff;
 		      bfd_put_signed_16 (abfd, diff_value,
 				  &contents[old_source_offset]);
 		      break;
 		    case R_XTENSA_DIFF32:
-		      diff_mask = 0x7fffffff;
 		      bfd_put_signed_32 (abfd, diff_value,
+				  &contents[old_source_offset]);
+		      break;
+		    case R_XTENSA_PDIFF8:
+		    case R_XTENSA_NDIFF8:
+		      bfd_put_8 (abfd, diff_value,
+				 &contents[old_source_offset]);
+		      break;
+		    case R_XTENSA_PDIFF16:
+		    case R_XTENSA_NDIFF16:
+		      bfd_put_16 (abfd, diff_value,
+				  &contents[old_source_offset]);
+		      break;
+		    case R_XTENSA_PDIFF32:
+		    case R_XTENSA_NDIFF32:
+		      bfd_put_32 (abfd, diff_value,
 				  &contents[old_source_offset]);
 		      break;
 		    }
 
-		  /* Check for overflow. Sign bits must be all zeroes or all ones */
-		  if ((diff_value & ~diff_mask) != 0 &&
-		      (diff_value & ~diff_mask) != (-1 & ~diff_mask))
+		  /* Check for overflow. Sign bits must be all zeroes or
+		     all ones.  When sign bits are all ones diff_value
+		     may not be zero.  */
+		  if (((diff_value & ~diff_mask) != 0
+		       && (diff_value & ~diff_mask) != ~diff_mask)
+		      || (diff_value && (bfd_vma) diff_value == ~diff_mask))
 		    {
 		      (*link_info->callbacks->reloc_dangerous)
 			(link_info, _("overflow after relaxation"),
@@ -10148,10 +10239,9 @@ shrink_dynamic_reloc_sections (struct bfd_link_info *info,
 
   if ((r_type == R_XTENSA_32 || r_type == R_XTENSA_PLT)
       && (input_section->flags & SEC_ALLOC) != 0
-      && (dynamic_symbol || bfd_link_pic (info))
-      && (!h || h->root.type != bfd_link_hash_undefweak
-	  || (dynamic_symbol
-	      && (bfd_link_dll (info) || info->export_dynamic))))
+      && (dynamic_symbol
+	  || (bfd_link_pic (info)
+	      && (!h || h->root.type != bfd_link_hash_undefweak))))
     {
       asection *srel;
       bfd_boolean is_plt = FALSE;

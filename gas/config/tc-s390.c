@@ -1,5 +1,5 @@
 /* tc-s390.c -- Assemble for the S390
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
    Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
 
    This file is part of GAS, the GNU Assembler.
@@ -896,7 +896,7 @@ s390_elf_suffix (char **str_p, expressionS *exp_p)
 	return ptr->suffix;
       }
 
-  return BFD_RELOC_UNUSED;
+  return ELF_SUFFIX_NONE;
 }
 
 /* Structure used to hold a literal pool entry.  */

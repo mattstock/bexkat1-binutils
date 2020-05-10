@@ -1,5 +1,5 @@
 /* Annotation routines for GDB.
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -450,7 +450,7 @@ annotate_source_line (struct symtab *s, int line, int mid_statement,
 	return;
 
       annotate_source (s->fullname, line, (int) (*offsets)[line - 1],
-		       mid_statement, get_objfile_arch (SYMTAB_OBJFILE (s)),
+		       mid_statement, SYMTAB_OBJFILE (s)->arch (),
 		       pc);
     }
 }
@@ -614,8 +614,9 @@ breakpoint_changed (struct breakpoint *b)
   annotate_breakpoints_invalid ();
 }
 
+void _initialize_annotate ();
 void
-_initialize_annotate (void)
+_initialize_annotate ()
 {
   gdb::observers::breakpoint_created.attach (breakpoint_changed);
   gdb::observers::breakpoint_deleted.attach (breakpoint_changed);

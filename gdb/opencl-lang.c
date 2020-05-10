@@ -1,5 +1,5 @@
 /* OpenCL language support for GDB, the GNU debugger.
-   Copyright (C) 2010-2019 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
 
    Contributed by Ken Werner <ken.werner@de.ibm.com>.
 
@@ -1060,7 +1060,7 @@ extern const struct language_defn opencl_language_defn =
   c_emit_char,			/* Print a single char */
   opencl_print_type,		/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
@@ -1178,8 +1178,9 @@ build_opencl_types (struct gdbarch *gdbarch)
   return types;
 }
 
+void _initialize_opencl_language ();
 void
-_initialize_opencl_language (void)
+_initialize_opencl_language ()
 {
   opencl_type_data = gdbarch_data_register_post_init (build_opencl_types);
 }

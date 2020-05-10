@@ -1,4 +1,4 @@
-/* Copyright 2017-2019 Free Software Foundation, Inc.
+/* Copyright 2017-2020 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,6 +28,8 @@ int _Dmain (void)
   return 0;
 }
 
+asm ("_Dmain_end: .globl _Dmain_end");
+
 int
 main (void)
 {
@@ -51,7 +53,7 @@ asm (
 "	.2byte	0 \n"	// Pad to 16 byte boundary
 "	.2byte	0 \n"
 "	.4byte	_Dmain \n"	// Address
-"	.4byte	0x1000 \n"	// Length
+"	.4byte	_Dmain_end - _Dmain \n"	// Length
 "	.4byte	0 \n"
 "	.4byte	0 \n"
 ".Laranges_end: \n"

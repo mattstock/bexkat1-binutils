@@ -1,5 +1,5 @@
 /* Target-dependent code for the S12Z, for the GDB.
-   Copyright (C) 2018-2019 Free Software Foundation, Inc.
+   Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #include "defs.h"
 
 #include "arch-utils.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "gdbsupport/errors.h"
 #include "frame-unwind.h"
 #include "gdbcore.h"
@@ -685,8 +685,9 @@ s12z_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_s12z_tdep ();
 void
-_initialize_s12z_tdep (void)
+_initialize_s12z_tdep ()
 {
   gdbarch_register (bfd_arch_s12z, s12z_gdbarch_init, NULL);
 }

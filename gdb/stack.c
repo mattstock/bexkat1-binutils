@@ -1,6 +1,6 @@
 /* Print and select stack frames for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -330,7 +330,7 @@ frame_show_address (struct frame_info *frame,
       return false;
     }
 
-  return get_frame_pc (frame) != sal.pc;
+  return get_frame_pc (frame) != sal.pc || !sal.is_stmt;
 }
 
 /* See frame.h.  */
@@ -486,7 +486,7 @@ print_frame_arg (const frame_print_options &fp_opts,
 	      vp_opts.summary
 		= fp_opts.print_frame_arguments == print_frame_arguments_scalars;
 
-	      common_val_print (arg->val, &stb, 2, &vp_opts, language);
+	      common_val_print_checked (arg->val, &stb, 2, &vp_opts, language);
 	    }
 	  catch (const gdb_exception_error &except)
 	    {
@@ -1153,12 +1153,12 @@ print_frame_info (const frame_print_options &fp_opts,
 
 	  print_source_lines (sal.symtab, sal.line, sal.line + 1, 0);
 	}
-    }
 
-  /* If disassemble-next-line is set to on and there is line debug
-     messages, output assembly codes for next line.  */
-  if (disassemble_next_line == AUTO_BOOLEAN_TRUE)
-    do_gdb_disassembly (get_frame_arch (frame), -1, sal.pc, sal.end);
+      /* If disassemble-next-line is set to on and there is line debug
+	 messages, output assembly codes for next line.  */
+      if (disassemble_next_line == AUTO_BOOLEAN_TRUE)
+	do_gdb_disassembly (get_frame_arch (frame), -1, sal.pc, sal.end);
+    }
 
   if (set_current_sal)
     {
@@ -2237,6 +2237,7 @@ iterate_over_block_locals (const struct block *b,
     {
       switch (SYMBOL_CLASS (sym))
 	{
+	case LOC_CONST:
 	case LOC_LOCAL:
 	case LOC_REGISTER:
 	case LOC_STATIC:
@@ -2255,56 +2256,6 @@ iterate_over_block_locals (const struct block *b,
 	}
     }
 }
-
-
-/* Same, but print labels.  */
-
-#if 0
-/* Commented out, as the code using this function has also been
-   commented out.  FIXME:brobecker/2009-01-13: Find out why the code
-   was commented out in the first place.  The discussion introducing
-   this change (2007-12-04: Support lexical blocks and function bodies
-   that occupy non-contiguous address ranges) did not explain why
-   this change was made.  */
-static int
-print_block_frame_labels (struct gdbarch *gdbarch, struct block *b,
-			  int *have_default, struct ui_file *stream)
-{
-  struct block_iterator iter;
-  struct symbol *sym;
-  int values_printed = 0;
-
-  ALL_BLOCK_SYMBOLS (b, iter, sym)
-    {
-      if (strcmp (sym->linkage_name (), "default") == 0)
-	{
-	  if (*have_default)
-	    continue;
-	  *have_default = 1;
-	}
-      if (SYMBOL_CLASS (sym) == LOC_LABEL)
-	{
-	  struct symtab_and_line sal;
-	  struct value_print_options opts;
-
-	  sal = find_pc_line (SYMBOL_VALUE_ADDRESS (sym), 0);
-	  values_printed = 1;
-	  fputs_filtered (sym->print_name (), stream);
-	  get_user_print_options (&opts);
-	  if (opts.addressprint)
-	    {
-	      fprintf_filtered (stream, " ");
-	      fputs_filtered (paddress (gdbarch, SYMBOL_VALUE_ADDRESS (sym)),
-			      stream);
-	    }
-	  fprintf_filtered (stream, " in file %s, line %d\n",
-			    sal.symtab->filename, sal.line);
-	}
-    }
-
-  return values_printed;
-}
-#endif
 
 /* Iterate over all the local variables in block B, including all its
    superblocks, stopping when the top-level block is reached.  */
@@ -3339,8 +3290,9 @@ static struct cmd_list_element *select_frame_cmd_list = NULL;
 /* Commands with a prefix of `info frame'.  */
 static struct cmd_list_element *info_frame_cmd_list = NULL;
 
+void _initialize_stack ();
 void
-_initialize_stack (void)
+_initialize_stack ()
 {
   struct cmd_list_element *cmd;
 
@@ -3372,7 +3324,6 @@ Select and print a stack frame.\n\
 With no argument, print the selected stack frame.  (See also \"info frame\").\n\
 A single numerical argument specifies the frame to select."),
                   &frame_cmd_list, "frame ", 1, &cmdlist);
-
   add_com_alias ("f", "frame", class_stack, 1);
 
 #define FRAME_APPLY_OPTION_HELP "\
@@ -3431,14 +3382,6 @@ Usage: faas [OPTION]... COMMAND\n\
 shortcut for 'frame apply all -s [OPTION]... COMMAND'\n\
 See \"help frame apply all\" for available options."));
   set_cmd_completer_handle_brkchars (cmd, frame_apply_all_cmd_completer);
-
-  add_prefix_cmd ("frame", class_stack,
-		  &frame_cmd.base_command, _("\
-Select and print a stack frame.\n\
-With no argument, print the selected stack frame.  (See also \"info frame\").\n\
-A single numerical argument specifies the frame to select."),
-		  &frame_cmd_list, "frame ", 1, &cmdlist);
-  add_com_alias ("f", "frame", class_stack, 1);
 
   add_cmd ("address", class_stack, &frame_cmd.address,
 	   _("\

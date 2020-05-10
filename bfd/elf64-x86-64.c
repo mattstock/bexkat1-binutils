@@ -1,5 +1,5 @@
 /* X86-64 specific support for ELF
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
    Contributed by Jan Hubicka <jh@suse.cz>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -195,9 +195,6 @@ static reloc_howto_type x86_64_elf_howto_table[] =
 	bfd_elf_generic_reloc, "R_X86_64_32", FALSE, 0xffffffff, 0xffffffff,
 	FALSE)
 };
-
-/* Set if a relocation is converted from a GOTPCREL relocation.  */
-#define R_X86_64_converted_reloc_bit (1 << 7)
 
 #define X86_PCREL_TYPE_P(TYPE)		\
   (   ((TYPE) == R_X86_64_PC8)		\
@@ -1223,7 +1220,8 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 
     case R_X86_64_GOTPC32_TLSDESC:
       /* Check transition from GDesc access model:
-		leaq x@tlsdesc(%rip), %rax
+		leaq x@tlsdesc(%rip), %rax <--- LP64 mode.
+		rex leal x@tlsdesc(%rip), %eax <--- X32 mode.
 
 	 Make sure it's a leaq adding rip to a 32-bit offset
 	 into any register, although it's probably almost always
@@ -1233,7 +1231,8 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 	return FALSE;
 
       val = bfd_get_8 (abfd, contents + offset - 3);
-      if ((val & 0xfb) != 0x48)
+      val &= 0xfb;
+      if (val != 0x48 && (ABI_64_P (abfd) || val != 0x40))
 	return FALSE;
 
       if (bfd_get_8 (abfd, contents + offset - 2) != 0x8d)
@@ -1244,13 +1243,26 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 
     case R_X86_64_TLSDESC_CALL:
       /* Check transition from GDesc access model:
-		call *x@tlsdesc(%rax)
+		call *x@tlsdesc(%rax) <--- LP64 mode.
+		call *x@tlsdesc(%eax) <--- X32 mode.
        */
       if (offset + 2 <= sec->size)
 	{
-	  /* Make sure that it's a call *x@tlsdesc(%rax).  */
+	  unsigned int prefix;
 	  call = contents + offset;
-	  return call[0] == 0xff && call[1] == 0x10;
+	  prefix = 0;
+	  if (!ABI_64_P (abfd))
+	    {
+	      /* Check for call *x@tlsdesc(%eax).  */
+	      if (call[0] == 0x67)
+		{
+		  prefix = 1;
+		  if (offset + 3 > sec->size)
+		    return FALSE;
+		}
+	    }
+	  /* Make sure that it's a call *x@tlsdesc(%rax).  */
+	  return call[prefix] == 0xff && call[1 + prefix] == 0x10;
 	}
 
       return FALSE;
@@ -1494,6 +1506,8 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
   bfd_boolean no_overflow;
   bfd_boolean relocx;
   bfd_boolean to_reloc_pc32;
+  bfd_boolean abs_symbol;
+  bfd_boolean local_ref;
   asection *tsec;
   bfd_signed_vma raddend;
   unsigned int opcode;
@@ -1501,6 +1515,7 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
   unsigned int r_type = *r_type_p;
   unsigned int r_symndx;
   bfd_vma roff = irel->r_offset;
+  bfd_vma abs_relocation;
 
   if (roff < (r_type == R_X86_64_REX_GOTPCRELX ? 3 : 2))
     return TRUE;
@@ -1544,6 +1559,9 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
 		   || no_overflow
 		   || is_pic);
 
+  abs_symbol = FALSE;
+  abs_relocation = 0;
+
   /* Get the symbol referred to by the reloc.  */
   if (h == NULL)
     {
@@ -1554,8 +1572,13 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
       if (isym->st_shndx == SHN_UNDEF)
 	return TRUE;
 
+      local_ref = TRUE;
       if (isym->st_shndx == SHN_ABS)
-	tsec = bfd_abs_section_ptr;
+	{
+	  tsec = bfd_abs_section_ptr;
+	  abs_symbol = TRUE;
+	  abs_relocation = isym->st_value;
+	}
       else if (isym->st_shndx == SHN_COMMON)
 	tsec = bfd_com_section_ptr;
       else if (isym->st_shndx == SHN_X86_64_LCOMMON)
@@ -1571,8 +1594,10 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
 	 GOTPCRELX relocations since we need to modify REX byte.
 	 It is OK convert mov with R_X86_64_GOTPCREL to
 	 R_X86_64_PC32.  */
-      bfd_boolean local_ref;
       struct elf_x86_link_hash_entry *eh = elf_x86_hash_entry (h);
+
+      abs_symbol = ABS_SYMBOL_P (h);
+      abs_relocation = h->root.u.def.value;
 
       /* NB: Also set linker_def via SYMBOL_REFERENCES_LOCAL_P.  */
       local_ref = SYMBOL_REFERENCES_LOCAL_P (link_info, h);
@@ -1647,7 +1672,7 @@ elf_x86_64_convert_load_reloc (bfd *abfd,
   if (no_overflow)
     return TRUE;
 
-convert:
+ convert:
   if (opcode == 0xff)
     {
       /* We have "call/jmp *foo@GOTPCREL(%rip)".  */
@@ -1713,6 +1738,9 @@ convert:
 
       if (opcode == 0x8b)
 	{
+	  if (abs_symbol && local_ref)
+	    to_reloc_pc32 = FALSE;
+
 	  if (to_reloc_pc32)
 	    {
 	      /* Convert "mov foo@GOTPCREL(%rip), %reg" to
@@ -1772,7 +1800,22 @@ convert:
 	     overflow when sign-extending imm32 to imm64.  */
 	  r_type = (rex & REX_W) != 0 ? R_X86_64_32S : R_X86_64_32;
 
-rewrite_modrm_rex:
+	rewrite_modrm_rex:
+	  if (abs_relocation)
+	    {
+	      /* Check if R_X86_64_32S/R_X86_64_32 fits.  */
+	      if (r_type == R_X86_64_32S)
+		{
+		  if ((abs_relocation + 0x80000000) > 0xffffffff)
+		    return TRUE;
+		}
+	      else
+		{
+		  if (abs_relocation > 0xffffffff)
+		    return TRUE;
+		}
+	    }
+
 	  bfd_put_8 (abfd, modrm, contents + roff - 1);
 
 	  if (rex)
@@ -1864,6 +1907,7 @@ elf_x86_64_check_relocs (bfd *abfd, struct bfd_link_info *info,
       const char *name;
       bfd_boolean size_reloc;
       bfd_boolean converted_reloc;
+      bfd_boolean no_dynreloc;
 
       r_symndx = htab->r_sym (rel->r_info);
       r_type = ELF32_R_TYPE (rel->r_info);
@@ -1968,6 +2012,10 @@ elf_x86_64_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	    converted = TRUE;
 	}
 
+      if (!_bfd_elf_x86_valid_reloc_p (sec, info, htab, rel, h, isym,
+				       symtab_hdr, &no_dynreloc))
+	return FALSE;
+
       if (! elf_x86_64_tls_transition (info, abfd, sec, contents,
 				       symtab_hdr, sym_hashes,
 				       &r_type, GOT_UNKNOWN,
@@ -2014,12 +2062,26 @@ elf_x86_64_check_relocs (bfd *abfd, struct bfd_link_info *info,
 
 	    switch (r_type)
 	      {
-	      default: tls_type = GOT_NORMAL; break;
-	      case R_X86_64_TLSGD: tls_type = GOT_TLS_GD; break;
-	      case R_X86_64_GOTTPOFF: tls_type = GOT_TLS_IE; break;
+	      default:
+		tls_type = GOT_NORMAL;
+		if (h)
+		  {
+		    if (ABS_SYMBOL_P (h))
+		      tls_type = GOT_ABS;
+		  }
+		else if (isym->st_shndx == SHN_ABS)
+		  tls_type = GOT_ABS;
+		break;
+	      case R_X86_64_TLSGD:
+		tls_type = GOT_TLS_GD;
+		break;
+	      case R_X86_64_GOTTPOFF:
+		tls_type = GOT_TLS_IE;
+		break;
 	      case R_X86_64_GOTPC32_TLSDESC:
 	      case R_X86_64_TLSDESC_CALL:
-		tls_type = GOT_TLS_GDESC; break;
+		tls_type = GOT_TLS_GDESC;
+		break;
 	      }
 
 	    if (h != NULL)
@@ -2164,7 +2226,7 @@ elf_x86_64_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	case R_X86_64_PC32_BND:
 	case R_X86_64_PC64:
 	case R_X86_64_64:
-pointer:
+	pointer:
 	  if (eh != NULL && (sec->flags & SEC_CODE) != 0)
 	    eh->zero_undefweak |= 0x2;
 	  /* We are called after all symbols have been resolved.  Only
@@ -2229,9 +2291,10 @@ pointer:
 	    }
 
 	  size_reloc = FALSE;
-do_size:
-	  if (NEED_DYNAMIC_RELOCATION_P (info, TRUE, h, sec, r_type,
-					 htab->pointer_r_type))
+	do_size:
+	  if (!no_dynreloc
+	      && NEED_DYNAMIC_RELOCATION_P (info, TRUE, h, sec, r_type,
+					    htab->pointer_r_type))
 	    {
 	      struct elf_dyn_relocs *p;
 	      struct elf_dyn_relocs **head;
@@ -2279,7 +2342,7 @@ do_size:
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 
 		  p = ((struct elf_dyn_relocs *)
 		       bfd_alloc (htab->elf.dynobj, amt));
@@ -2336,7 +2399,7 @@ do_size:
 
   return TRUE;
 
-error_return:
+ error_return:
   if (elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
   sec->check_relocs_failed = 1;
@@ -2663,7 +2726,7 @@ elf_x86_64_relocate_section (bfd *output_bfd,
 	  switch (r_type)
 	    {
 	    default:
-bad_ifunc_reloc:
+	    bad_ifunc_reloc:
 	      if (h->root.root.string)
 		name = h->root.root.string;
 	      else
@@ -2687,7 +2750,7 @@ bad_ifunc_reloc:
 		goto do_relocation;
 	      /* FALLTHROUGH */
 	    case R_X86_64_64:
-do_ifunc_pointer:
+	    do_ifunc_pointer:
 	      if (rel->r_addend != 0)
 		{
 		  if (h->root.root.string)
@@ -2773,7 +2836,7 @@ do_ifunc_pointer:
 	    }
 	}
 
-skip_ifunc:
+    skip_ifunc:
       resolved_to_zero = (eh != NULL
 			  && UNDEFINED_WEAK_RESOLVED_TO_ZERO (info, eh));
 
@@ -2865,7 +2928,14 @@ skip_ifunc:
 			      base_got->contents + off);
 		  local_got_offsets[r_symndx] |= 1;
 
-		  if (bfd_link_pic (info))
+		  /* NB: GOTPCREL relocations against local absolute
+		     symbol store relocation value in the GOT slot
+		     without relative relocation.  */
+		  if (bfd_link_pic (info)
+		      && !(sym->st_shndx == SHN_ABS
+			   && (r_type == R_X86_64_GOTPCREL
+			       || r_type == R_X86_64_GOTPCRELX
+			       || r_type == R_X86_64_REX_GOTPCRELX)))
 		    relative_reloc = TRUE;
 		}
 	    }
@@ -3032,7 +3102,7 @@ skip_ifunc:
 	      break;
 	    }
 
-use_plt:
+	use_plt:
 	  if (h->plt.offset != (bfd_vma) -1)
 	    {
 	      if (htab->plt_second != NULL)
@@ -3147,7 +3217,7 @@ use_plt:
 	  /* FIXME: The ABI says the linker should make sure the value is
 	     the same when it's zeroextended to 64 bit.	 */
 
-direct:
+	direct:
 	  if ((input_section->flags & SEC_ALLOC) == 0)
 	    break;
 
@@ -3160,7 +3230,7 @@ direct:
 				    && (X86_PCREL_TYPE_P (r_type)
 					|| X86_SIZE_TYPE_P (r_type)));
 
-	  if (GENERATE_DYNAMIC_RELOCATION_P (info, eh, r_type,
+	  if (GENERATE_DYNAMIC_RELOCATION_P (info, eh, r_type, sec,
 					     need_copy_reloc_in_pie,
 					     resolved_to_zero, FALSE))
 	    {
@@ -3358,7 +3428,7 @@ direct:
 			  if (roff < 3
 			      || (roff - 3 + 22) > input_section->size)
 			    {
-corrupt_input:
+			    corrupt_input:
 			      info->callbacks->einfo
 				(_("%F%P: corrupt input: %pB\n"),
 				 input_bfd);
@@ -3401,10 +3471,13 @@ corrupt_input:
 		{
 		  /* GDesc -> LE transition.
 		     It's originally something like:
-		     leaq x@tlsdesc(%rip), %rax
+		     leaq x@tlsdesc(%rip), %rax <--- LP64 mode.
+		     rex leal x@tlsdesc(%rip), %eax <--- X32 mode.
 
 		     Change it to:
-		     movl $x@tpoff, %rax.  */
+		     movq $x@tpoff, %rax <--- LP64 mode.
+		     rex movl $x@tpoff, %eax <--- X32 mode.
+		   */
 
 		  unsigned int val, type;
 
@@ -3412,7 +3485,8 @@ corrupt_input:
 		    goto corrupt_input;
 		  type = bfd_get_8 (input_bfd, contents + roff - 3);
 		  val = bfd_get_8 (input_bfd, contents + roff - 1);
-		  bfd_put_8 (output_bfd, 0x48 | ((type >> 2) & 1),
+		  bfd_put_8 (output_bfd,
+			     (type & 0x48) | ((type >> 2) & 1),
 			     contents + roff - 3);
 		  bfd_put_8 (output_bfd, 0xc7, contents + roff - 2);
 		  bfd_put_8 (output_bfd, 0xc0 | ((val >> 3) & 7),
@@ -3426,11 +3500,30 @@ corrupt_input:
 		{
 		  /* GDesc -> LE transition.
 		     It's originally:
-		     call *(%rax)
+		     call *(%rax) <--- LP64 mode.
+		     call *(%eax) <--- X32 mode.
 		     Turn it into:
-		     xchg %ax,%ax.  */
-		  bfd_put_8 (output_bfd, 0x66, contents + roff);
-		  bfd_put_8 (output_bfd, 0x90, contents + roff + 1);
+		     xchg %ax,%ax <-- LP64 mode.
+		     nopl (%rax)  <-- X32 mode.
+		   */
+		  unsigned int prefix = 0;
+		  if (!ABI_64_P (input_bfd))
+		    {
+		      /* Check for call *x@tlsdesc(%eax).  */
+		      if (contents[roff] == 0x67)
+			prefix = 1;
+		    }
+		  if (prefix)
+		    {
+		      bfd_put_8 (output_bfd, 0x0f, contents + roff);
+		      bfd_put_8 (output_bfd, 0x1f, contents + roff + 1);
+		      bfd_put_8 (output_bfd, 0x00, contents + roff + 2);
+		    }
+		  else
+		    {
+		      bfd_put_8 (output_bfd, 0x66, contents + roff);
+		      bfd_put_8 (output_bfd, 0x90, contents + roff + 1);
+		    }
 		  continue;
 		}
 	      else if (r_type == R_X86_64_GOTTPOFF)
@@ -3741,13 +3834,18 @@ corrupt_input:
 		{
 		  /* GDesc -> IE transition.
 		     It's originally something like:
-		     leaq x@tlsdesc(%rip), %rax
+		     leaq x@tlsdesc(%rip), %rax <--- LP64 mode.
+		     rex leal x@tlsdesc(%rip), %eax <--- X32 mode.
 
 		     Change it to:
-		     movq x@gottpoff(%rip), %rax # before xchg %ax,%ax.  */
+		     # before xchg %ax,%ax in LP64 mode.
+		     movq x@gottpoff(%rip), %rax
+		     # before nopl (%rax) in X32 mode.
+		     rex movl x@gottpoff(%rip), %eax
+		  */
 
 		  /* Now modify the instruction as appropriate. To
-		     turn a leaq into a movq in the form we use it, it
+		     turn a lea into a mov in the form we use it, it
 		     suffices to change the second byte from 0x8d to
 		     0x8b.  */
 		  if (roff < 2)
@@ -3768,13 +3866,32 @@ corrupt_input:
 		{
 		  /* GDesc -> IE transition.
 		     It's originally:
-		     call *(%rax)
+		     call *(%rax) <--- LP64 mode.
+		     call *(%eax) <--- X32 mode.
 
 		     Change it to:
-		     xchg %ax, %ax.  */
+		     xchg %ax, %ax <-- LP64 mode.
+		     nopl (%rax)  <-- X32 mode.
+		   */
 
-		  bfd_put_8 (output_bfd, 0x66, contents + roff);
-		  bfd_put_8 (output_bfd, 0x90, contents + roff + 1);
+		  unsigned int prefix = 0;
+		  if (!ABI_64_P (input_bfd))
+		    {
+		      /* Check for call *x@tlsdesc(%eax).  */
+		      if (contents[roff] == 0x67)
+			prefix = 1;
+		    }
+		  if (prefix)
+		    {
+		      bfd_put_8 (output_bfd, 0x0f, contents + roff);
+		      bfd_put_8 (output_bfd, 0x1f, contents + roff + 1);
+		      bfd_put_8 (output_bfd, 0x00, contents + roff + 2);
+		    }
+		  else
+		    {
+		      bfd_put_8 (output_bfd, 0x66, contents + roff);
+		      bfd_put_8 (output_bfd, 0x90, contents + roff + 1);
+		    }
 		  continue;
 		}
 	      else
@@ -3969,12 +4086,12 @@ corrupt_input:
 	    }
 	}
 
-do_relocation:
+    do_relocation:
       r = _bfd_final_link_relocate (howto, input_bfd, input_section,
 				    contents, rel->r_offset,
 				    relocation, rel->r_addend);
 
-check_relocation_error:
+    check_relocation_error:
       if (r != bfd_reloc_ok)
 	{
 	  const char *name;
@@ -4397,7 +4514,7 @@ elf_x86_64_finish_dynamic_symbol (bfd *output_bfd,
       else
 	{
 	  BFD_ASSERT((h->got.offset & 1) == 0);
-do_glob_dat:
+	do_glob_dat:
 	  bfd_put_64 (output_bfd, (bfd_vma) 0,
 		      htab->elf.sgot->contents + h->got.offset);
 	  rela.r_info = htab->r_info (h->dynindx, R_X86_64_GLOB_DAT);

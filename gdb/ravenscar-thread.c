@@ -1,6 +1,6 @@
 /* Ada Ravenscar thread support.
 
-   Copyright (C) 2004-2019 Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -219,6 +219,9 @@ get_base_thread_from_ravenscar_task (ptid_t ptid)
 void
 ravenscar_thread_target::update_inferior_ptid ()
 {
+  process_stratum_target *proc_target
+    = as_process_stratum_target (this->beneath ());
+
   int base_cpu;
 
   m_base_ptid = inferior_ptid;
@@ -239,8 +242,8 @@ ravenscar_thread_target::update_inferior_ptid ()
   /* The running thread may not have been added to
      system.tasking.debug's list yet; so ravenscar_update_thread_list
      may not always add it to the thread list.  Add it here.  */
-  if (!find_thread_ptid (inferior_ptid))
-    add_thread (inferior_ptid);
+  if (!find_thread_ptid (proc_target, inferior_ptid))
+    add_thread (proc_target, inferior_ptid);
 }
 
 /* The Ravenscar Runtime exports a symbol which contains the ID of
@@ -336,12 +339,14 @@ ravenscar_thread_target::wait (ptid_t ptid,
 			       struct target_waitstatus *status,
 			       int options)
 {
+  process_stratum_target *beneath
+    = as_process_stratum_target (this->beneath ());
   ptid_t event_ptid;
 
   inferior_ptid = m_base_ptid;
   if (ptid != minus_one_ptid)
     ptid = m_base_ptid;
-  event_ptid = beneath ()->wait (ptid, status, 0);
+  event_ptid = beneath->wait (ptid, status, 0);
   /* Find any new threads that might have been created, and update
      inferior_ptid to the active thread.
 
@@ -367,8 +372,8 @@ ravenscar_thread_target::wait (ptid_t ptid,
 static void
 ravenscar_add_thread (struct ada_task_info *task)
 {
-  if (find_thread_ptid (task->ptid) == NULL)
-    add_thread (task->ptid);
+  if (find_thread_ptid (current_inferior (), task->ptid) == NULL)
+    add_thread (current_inferior ()->process_target (), task->ptid);
 }
 
 void
@@ -510,8 +515,9 @@ void
 ravenscar_thread_target::mourn_inferior ()
 {
   m_base_ptid = null_ptid;
-  beneath ()->mourn_inferior ();
+  target_ops *beneath = this->beneath ();
   unpush_target (this);
+  beneath->mourn_inferior ();
 }
 
 /* Implement the to_core_of_thread target_ops "method".  */
@@ -557,24 +563,6 @@ ravenscar_thread_target::get_ada_task_ptid (long lwp, long thread)
 static struct cmd_list_element *set_ravenscar_list;
 static struct cmd_list_element *show_ravenscar_list;
 
-/* Implement the "set ravenscar" prefix command.  */
-
-static void
-set_ravenscar_command (const char *arg, int from_tty)
-{
-  printf_unfiltered (_(\
-"\"set ravenscar\" must be followed by the name of a setting.\n"));
-  help_list (set_ravenscar_list, "set ravenscar ", all_commands, gdb_stdout);
-}
-
-/* Implement the "show ravenscar" prefix command.  */
-
-static void
-show_ravenscar_command (const char *args, int from_tty)
-{
-  cmd_show_list (show_ravenscar_list, from_tty, "");
-}
-
 /* Implement the "show ravenscar task-switching" command.  */
 
 static void
@@ -593,6 +581,7 @@ Support for Ravenscar task/thread switching is disabled\n"));
 /* Module startup initialization function, automagically called by
    init.c.  */
 
+void _initialize_ravenscar ();
 void
 _initialize_ravenscar ()
 {
@@ -600,13 +589,13 @@ _initialize_ravenscar ()
      ravenscar ops if needed.  */
   gdb::observers::inferior_created.attach (ravenscar_inferior_created);
 
-  add_prefix_cmd ("ravenscar", no_class, set_ravenscar_command,
-                  _("Prefix command for changing Ravenscar-specific settings."),
-                  &set_ravenscar_list, "set ravenscar ", 0, &setlist);
+  add_basic_prefix_cmd ("ravenscar", no_class,
+			_("Prefix command for changing Ravenscar-specific settings."),
+			&set_ravenscar_list, "set ravenscar ", 0, &setlist);
 
-  add_prefix_cmd ("ravenscar", no_class, show_ravenscar_command,
-                  _("Prefix command for showing Ravenscar-specific settings."),
-                  &show_ravenscar_list, "show ravenscar ", 0, &showlist);
+  add_show_prefix_cmd ("ravenscar", no_class,
+		       _("Prefix command for showing Ravenscar-specific settings."),
+		       &show_ravenscar_list, "show ravenscar ", 0, &showlist);
 
   add_setshow_boolean_cmd ("task-switching", class_obscure,
                            &ravenscar_task_support, _("\

@@ -1,5 +1,5 @@
 /* tc-ppc.c -- Assemble for the PowerPC or POWER (RS/6000)
-   Copyright (C) 1994-2019 Free Software Foundation, Inc.
+   Copyright (C) 1994-2020 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of GAS, the GNU Assembler.
@@ -3255,7 +3255,10 @@ parse_tls_arg (char **str, const expressionS *exp, struct ppc_fixup *tls_fix)
     ++sym_name;
 
   tls_fix->reloc = BFD_RELOC_NONE;
-  if (strcasecmp (sym_name, "__tls_get_addr") == 0)
+  if (strncasecmp (sym_name, "__tls_get_addr", 14) == 0
+      && (sym_name[14] == 0
+	  || strcasecmp (sym_name + 14, "_desc") == 0
+	  || strcasecmp (sym_name + 14, "_opt") == 0))
     {
       char *hold = input_line_pointer;
       input_line_pointer = *str + 1;

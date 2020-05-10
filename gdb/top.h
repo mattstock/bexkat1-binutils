@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #define TOP_H
 
 #include "gdbsupport/buffer.h"
-#include "event-loop.h"
+#include "gdbsupport/event-loop.h"
 #include "value.h"
 
 struct tl_interp_info;
@@ -281,16 +281,12 @@ extern void gdb_init (char *);
 extern int source_line_number;
 extern std::string source_file_name;
 extern bool history_expansion_p;
-extern int server_command;
+extern bool server_command;
 extern char *lim_at_start;
 
 extern void gdb_add_history (const char *);
 
 extern void show_commands (const char *args, int from_tty);
-
-extern void set_history (const char *, int);
-
-extern void show_history (const char *, int);
 
 extern void set_verbose (const char *, int, struct cmd_list_element *);
 

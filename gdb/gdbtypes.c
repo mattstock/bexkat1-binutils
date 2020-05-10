@@ -1,6 +1,6 @@
 /* Support routines for manipulating internal types for GDB.
 
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
@@ -36,9 +36,10 @@
 #include "hashtab.h"
 #include "cp-support.h"
 #include "bcache.h"
-#include "dwarf2loc.h"
+#include "dwarf2/loc.h"
 #include "gdbcore.h"
 #include "floatformat.h"
+#include <algorithm>
 
 /* Initialize BADNESS constants.  */
 
@@ -236,7 +237,7 @@ get_type_arch (const struct type *type)
   struct gdbarch *arch;
 
   if (TYPE_OBJFILE_OWNED (type))
-    arch = get_objfile_arch (TYPE_OWNER (type).objfile);
+    arch = TYPE_OWNER (type).objfile->arch ();
   else
     arch = TYPE_OWNER (type).gdbarch;
 
@@ -886,6 +887,10 @@ operator== (const dynamic_prop &l, const dynamic_prop &r)
     case PROP_LOCEXPR:
     case PROP_LOCLIST:
       return l.data.baton == r.data.baton;
+    case PROP_VARIANT_PARTS:
+      return l.data.variant_parts == r.data.variant_parts;
+    case PROP_TYPE:
+      return l.data.original_type == r.data.original_type;
     }
 
   gdb_assert_not_reached ("unhandled dynamic_prop kind");
@@ -1172,6 +1177,64 @@ discrete_position (struct type *type, LONGEST val, LONGEST *pos)
     }
 }
 
+/* If the array TYPE has static bounds calculate and update its
+   size, then return true.  Otherwise return false and leave TYPE
+   unchanged.  */
+
+static bool
+update_static_array_size (struct type *type)
+{
+  gdb_assert (TYPE_CODE (type) == TYPE_CODE_ARRAY);
+
+  struct type *range_type = TYPE_INDEX_TYPE (type);
+
+  if (type->dyn_prop (DYN_PROP_BYTE_STRIDE) == nullptr
+      && has_static_range (TYPE_RANGE_DATA (range_type))
+      && (!type_not_associated (type)
+	  && !type_not_allocated (type)))
+    {
+      LONGEST low_bound, high_bound;
+      int stride;
+      struct type *element_type;
+
+      /* If the array itself doesn't provide a stride value then take
+	 whatever stride the range provides.  Don't update BIT_STRIDE as
+	 we don't want to place the stride value from the range into this
+	 arrays bit size field.  */
+      stride = TYPE_FIELD_BITSIZE (type, 0);
+      if (stride == 0)
+	stride = TYPE_BIT_STRIDE (range_type);
+
+      if (get_discrete_bounds (range_type, &low_bound, &high_bound) < 0)
+	low_bound = high_bound = 0;
+      element_type = check_typedef (TYPE_TARGET_TYPE (type));
+      /* Be careful when setting the array length.  Ada arrays can be
+	 empty arrays with the high_bound being smaller than the low_bound.
+	 In such cases, the array length should be zero.  */
+      if (high_bound < low_bound)
+	TYPE_LENGTH (type) = 0;
+      else if (stride != 0)
+	{
+	  /* Ensure that the type length is always positive, even in the
+	     case where (for example in Fortran) we have a negative
+	     stride.  It is possible to have a single element array with a
+	     negative stride in Fortran (this doesn't mean anything
+	     special, it's still just a single element array) so do
+	     consider that case when touching this code.  */
+	  LONGEST element_count = std::abs (high_bound - low_bound + 1);
+	  TYPE_LENGTH (type)
+	    = ((std::abs (stride) * element_count) + 7) / 8;
+	}
+      else
+	TYPE_LENGTH (type) =
+	  TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
+
+      return true;
+    }
+
+  return false;
+}
+
 /* Create an array type using either a blank type supplied in
    RESULT_TYPE, or creating a new type, inheriting the objfile from
    RANGE_TYPE.
@@ -1217,38 +1280,17 @@ create_array_type_with_stride (struct type *result_type,
 
   TYPE_CODE (result_type) = TYPE_CODE_ARRAY;
   TYPE_TARGET_TYPE (result_type) = element_type;
-  if (byte_stride_prop == NULL
-      && has_static_range (TYPE_RANGE_DATA (range_type))
-      && (!type_not_associated (result_type)
-	  && !type_not_allocated (result_type)))
-    {
-      LONGEST low_bound, high_bound;
-      unsigned int stride;
 
-      /* If the array itself doesn't provide a stride value then take
-	 whatever stride the range provides.  Don't update BIT_STRIDE as
-	 we don't want to place the stride value from the range into this
-	 arrays bit size field.  */
-      stride = bit_stride;
-      if (stride == 0)
-	stride = TYPE_BIT_STRIDE (range_type);
+  TYPE_NFIELDS (result_type) = 1;
+  TYPE_FIELDS (result_type) =
+    (struct field *) TYPE_ZALLOC (result_type, sizeof (struct field));
+  TYPE_INDEX_TYPE (result_type) = range_type;
+  if (byte_stride_prop != NULL)
+    result_type->add_dyn_prop (DYN_PROP_BYTE_STRIDE, *byte_stride_prop);
+  else if (bit_stride > 0)
+    TYPE_FIELD_BITSIZE (result_type, 0) = bit_stride;
 
-      if (get_discrete_bounds (range_type, &low_bound, &high_bound) < 0)
-	low_bound = high_bound = 0;
-      element_type = check_typedef (element_type);
-      /* Be careful when setting the array length.  Ada arrays can be
-	 empty arrays with the high_bound being smaller than the low_bound.
-	 In such cases, the array length should be zero.  */
-      if (high_bound < low_bound)
-	TYPE_LENGTH (result_type) = 0;
-      else if (stride > 0)
-	TYPE_LENGTH (result_type) =
-	  (stride * (high_bound - low_bound + 1) + 7) / 8;
-      else
-	TYPE_LENGTH (result_type) =
-	  TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
-    }
-  else
+  if (!update_static_array_size (result_type))
     {
       /* This type is dynamic and its length needs to be computed
          on demand.  In the meantime, avoid leaving the TYPE_LENGTH
@@ -1258,15 +1300,6 @@ create_array_type_with_stride (struct type *result_type,
          we accidently do.  */
       TYPE_LENGTH (result_type) = 0;
     }
-
-  TYPE_NFIELDS (result_type) = 1;
-  TYPE_FIELDS (result_type) =
-    (struct field *) TYPE_ZALLOC (result_type, sizeof (struct field));
-  TYPE_INDEX_TYPE (result_type) = range_type;
-  if (byte_stride_prop != NULL)
-    add_dyn_prop (DYN_PROP_BYTE_STRIDE, *byte_stride_prop, result_type);
-  else if (bit_stride > 0)
-    TYPE_FIELD_BITSIZE (result_type, 0) = bit_stride;
 
   /* TYPE_TARGET_STUB will take care of zero length arrays.  */
   if (TYPE_LENGTH (result_type) == 0)
@@ -1924,7 +1957,7 @@ stub_noname_complaint (void)
 static int
 array_type_has_dynamic_stride (struct type *type)
 {
-  struct dynamic_prop *prop = get_dyn_prop (DYN_PROP_BYTE_STRIDE, type);
+  struct dynamic_prop *prop = type->dyn_prop (DYN_PROP_BYTE_STRIDE);
 
   return (prop != NULL && prop->kind != PROP_CONST);
 }
@@ -1955,6 +1988,13 @@ is_dynamic_type_internal (struct type *type, int top_level)
     return 1;
 
   if (TYPE_ALLOCATED_PROP (type))
+    return 1;
+
+  struct dynamic_prop *prop = type->dyn_prop (DYN_PROP_VARIANT_PARTS);
+  if (prop != nullptr && prop->kind != PROP_TYPE)
+    return 1;
+
+  if (TYPE_HAS_DYNAMIC_LENGTH (type))
     return 1;
 
   switch (TYPE_CODE (type))
@@ -1994,10 +2034,27 @@ is_dynamic_type_internal (struct type *type, int top_level)
       {
 	int i;
 
+	bool is_cplus = HAVE_CPLUS_STRUCT (type);
+
 	for (i = 0; i < TYPE_NFIELDS (type); ++i)
-	  if (!field_is_static (&TYPE_FIELD (type, i))
-	      && is_dynamic_type_internal (TYPE_FIELD_TYPE (type, i), 0))
+	  {
+	    /* Static fields can be ignored here.  */
+	    if (field_is_static (&TYPE_FIELD (type, i)))
+	      continue;
+	    /* If the field has dynamic type, then so does TYPE.  */
+	    if (is_dynamic_type_internal (TYPE_FIELD_TYPE (type, i), 0))
+	      return 1;
+	    /* If the field is at a fixed offset, then it is not
+	       dynamic.  */
+	    if (TYPE_FIELD_LOC_KIND (type, i) != FIELD_LOC_KIND_DWARF_BLOCK)
+	      continue;
+	    /* Do not consider C++ virtual base types to be dynamic
+	       due to the field's offset being dynamic; these are
+	       handled via other means.  */
+	    if (is_cplus && BASETYPE_VIA_VIRTUAL (type, i))
+	      continue;
 	    return 1;
+	  }
       }
       break;
     }
@@ -2142,12 +2199,12 @@ resolve_dynamic_array_or_string (struct type *type,
   else
     elt_type = TYPE_TARGET_TYPE (type);
 
-  prop = get_dyn_prop (DYN_PROP_BYTE_STRIDE, type);
+  prop = type->dyn_prop (DYN_PROP_BYTE_STRIDE);
   if (prop != NULL)
     {
       if (dwarf2_evaluate_property (prop, NULL, addr_stack, &value))
 	{
-	  remove_dyn_prop (DYN_PROP_BYTE_STRIDE, type);
+	  type->remove_dyn_prop (DYN_PROP_BYTE_STRIDE);
 	  bit_stride = (unsigned int) (value * 8);
 	}
       else
@@ -2206,6 +2263,162 @@ resolve_dynamic_union (struct type *type,
   return resolved_type;
 }
 
+/* See gdbtypes.h.  */
+
+bool
+variant::matches (ULONGEST value, bool is_unsigned) const
+{
+  for (const discriminant_range &range : discriminants)
+    if (range.contains (value, is_unsigned))
+      return true;
+  return false;
+}
+
+static void
+compute_variant_fields_inner (struct type *type,
+			      struct property_addr_info *addr_stack,
+			      const variant_part &part,
+			      std::vector<bool> &flags);
+
+/* A helper function to determine which variant fields will be active.
+   This handles both the variant's direct fields, and any variant
+   parts embedded in this variant.  TYPE is the type we're examining.
+   ADDR_STACK holds information about the concrete object.  VARIANT is
+   the current variant to be handled.  FLAGS is where the results are
+   stored -- this function sets the Nth element in FLAGS if the
+   corresponding field is enabled.  ENABLED is whether this variant is
+   enabled or not.  */
+
+static void
+compute_variant_fields_recurse (struct type *type,
+				struct property_addr_info *addr_stack,
+				const variant &variant,
+				std::vector<bool> &flags,
+				bool enabled)
+{
+  for (int field = variant.first_field; field < variant.last_field; ++field)
+    flags[field] = enabled;
+
+  for (const variant_part &new_part : variant.parts)
+    {
+      if (enabled)
+	compute_variant_fields_inner (type, addr_stack, new_part, flags);
+      else
+	{
+	  for (const auto &sub_variant : new_part.variants)
+	    compute_variant_fields_recurse (type, addr_stack, sub_variant,
+					    flags, enabled);
+	}
+    }
+}
+
+/* A helper function to determine which variant fields will be active.
+   This evaluates the discriminant, decides which variant (if any) is
+   active, and then updates FLAGS to reflect which fields should be
+   available.  TYPE is the type we're examining.  ADDR_STACK holds
+   information about the concrete object.  VARIANT is the current
+   variant to be handled.  FLAGS is where the results are stored --
+   this function sets the Nth element in FLAGS if the corresponding
+   field is enabled.  */
+
+static void
+compute_variant_fields_inner (struct type *type,
+			      struct property_addr_info *addr_stack,
+			      const variant_part &part,
+			      std::vector<bool> &flags)
+{
+  /* Evaluate the discriminant.  */
+  gdb::optional<ULONGEST> discr_value;
+  if (part.discriminant_index != -1)
+    {
+      int idx = part.discriminant_index;
+
+      if (TYPE_FIELD_LOC_KIND (type, idx) != FIELD_LOC_KIND_BITPOS)
+	error (_("Cannot determine struct field location"
+		 " (invalid location kind)"));
+
+      if (addr_stack->valaddr.data () != NULL)
+	discr_value = unpack_field_as_long (type, addr_stack->valaddr.data (),
+					    idx);
+      else
+	{
+	  CORE_ADDR addr = (addr_stack->addr
+			    + (TYPE_FIELD_BITPOS (type, idx)
+			       / TARGET_CHAR_BIT));
+
+	  LONGEST bitsize = TYPE_FIELD_BITSIZE (type, idx);
+	  LONGEST size = bitsize / 8;
+	  if (size == 0)
+	    size = TYPE_LENGTH (TYPE_FIELD_TYPE (type, idx));
+
+	  gdb_byte bits[sizeof (ULONGEST)];
+	  read_memory (addr, bits, size);
+
+	  LONGEST bitpos = (TYPE_FIELD_BITPOS (type, idx)
+			    % TARGET_CHAR_BIT);
+
+	  discr_value = unpack_bits_as_long (TYPE_FIELD_TYPE (type, idx),
+					     bits, bitpos, bitsize);
+	}
+    }
+
+  /* Go through each variant and see which applies.  */
+  const variant *default_variant = nullptr;
+  const variant *applied_variant = nullptr;
+  for (const auto &variant : part.variants)
+    {
+      if (variant.is_default ())
+	default_variant = &variant;
+      else if (discr_value.has_value ()
+	       && variant.matches (*discr_value, part.is_unsigned))
+	{
+	  applied_variant = &variant;
+	  break;
+	}
+    }
+  if (applied_variant == nullptr)
+    applied_variant = default_variant;
+
+  for (const auto &variant : part.variants)
+    compute_variant_fields_recurse (type, addr_stack, variant,
+				    flags, applied_variant == &variant);
+}  
+
+/* Determine which variant fields are available in TYPE.  The enabled
+   fields are stored in RESOLVED_TYPE.  ADDR_STACK holds information
+   about the concrete object.  PARTS describes the top-level variant
+   parts for this type.  */
+
+static void
+compute_variant_fields (struct type *type,
+			struct type *resolved_type,
+			struct property_addr_info *addr_stack,
+			const gdb::array_view<variant_part> &parts)
+{
+  /* Assume all fields are included by default.  */
+  std::vector<bool> flags (TYPE_NFIELDS (resolved_type), true);
+
+  /* Now disable fields based on the variants that control them.  */
+  for (const auto &part : parts)
+    compute_variant_fields_inner (type, addr_stack, part, flags);
+
+  TYPE_NFIELDS (resolved_type) = std::count (flags.begin (), flags.end (),
+					     true);
+  TYPE_FIELDS (resolved_type)
+    = (struct field *) TYPE_ALLOC (resolved_type,
+				   TYPE_NFIELDS (resolved_type)
+				   * sizeof (struct field));
+  int out = 0;
+  for (int i = 0; i < TYPE_NFIELDS (type); ++i)
+    {
+      if (!flags[i])
+	continue;
+
+      TYPE_FIELD (resolved_type, out) = TYPE_FIELD (type, i);
+      ++out;
+    }
+}
+
 /* Resolve dynamic bounds of members of the struct TYPE to static
    bounds.  ADDR_STACK is a stack of struct property_addr_info to
    be used if needed during the dynamic resolution.  */
@@ -2222,20 +2435,53 @@ resolve_dynamic_struct (struct type *type,
   gdb_assert (TYPE_NFIELDS (type) > 0);
 
   resolved_type = copy_type (type);
-  TYPE_FIELDS (resolved_type)
-    = (struct field *) TYPE_ALLOC (resolved_type,
-				   TYPE_NFIELDS (resolved_type)
-				   * sizeof (struct field));
-  memcpy (TYPE_FIELDS (resolved_type),
-	  TYPE_FIELDS (type),
-	  TYPE_NFIELDS (resolved_type) * sizeof (struct field));
+
+  dynamic_prop *variant_prop = resolved_type->dyn_prop (DYN_PROP_VARIANT_PARTS);
+  if (variant_prop != nullptr && variant_prop->kind == PROP_VARIANT_PARTS)
+    {
+      compute_variant_fields (type, resolved_type, addr_stack,
+			      *variant_prop->data.variant_parts);
+      /* We want to leave the property attached, so that the Rust code
+	 can tell whether the type was originally an enum.  */
+      variant_prop->kind = PROP_TYPE;
+      variant_prop->data.original_type = type;
+    }
+  else
+    {
+      TYPE_FIELDS (resolved_type)
+	= (struct field *) TYPE_ALLOC (resolved_type,
+				       TYPE_NFIELDS (resolved_type)
+				       * sizeof (struct field));
+      memcpy (TYPE_FIELDS (resolved_type),
+	      TYPE_FIELDS (type),
+	      TYPE_NFIELDS (resolved_type) * sizeof (struct field));
+    }
+
   for (i = 0; i < TYPE_NFIELDS (resolved_type); ++i)
     {
       unsigned new_bit_length;
       struct property_addr_info pinfo;
 
-      if (field_is_static (&TYPE_FIELD (type, i)))
+      if (field_is_static (&TYPE_FIELD (resolved_type, i)))
 	continue;
+
+      if (TYPE_FIELD_LOC_KIND (resolved_type, i) == FIELD_LOC_KIND_DWARF_BLOCK)
+	{
+	  struct dwarf2_property_baton baton;
+	  baton.property_type
+	    = lookup_pointer_type (TYPE_FIELD_TYPE (resolved_type, i));
+	  baton.locexpr = *TYPE_FIELD_DWARF_BLOCK (resolved_type, i);
+
+	  struct dynamic_prop prop;
+	  prop.kind = PROP_LOCEXPR;
+	  prop.data.baton = &baton;
+
+	  CORE_ADDR addr;
+	  if (dwarf2_evaluate_property (&prop, nullptr, addr_stack, &addr,
+					true))
+	    SET_FIELD_BITPOS (TYPE_FIELD (resolved_type, i),
+			      TARGET_CHAR_BIT * (addr - addr_stack->addr));
+	}
 
       /* As we know this field is not a static field, the field's
 	 field_loc_kind should be FIELD_LOC_KIND_BITPOS.  Verify
@@ -2244,11 +2490,11 @@ resolve_dynamic_struct (struct type *type,
 	 that verification indicates a bug in our code, the error
 	 is not severe enough to suggest to the user he stops
 	 his debugging session because of it.  */
-      if (TYPE_FIELD_LOC_KIND (type, i) != FIELD_LOC_KIND_BITPOS)
+      if (TYPE_FIELD_LOC_KIND (resolved_type, i) != FIELD_LOC_KIND_BITPOS)
 	error (_("Cannot determine struct field location"
 		 " (invalid location kind)"));
 
-      pinfo.type = check_typedef (TYPE_FIELD_TYPE (type, i));
+      pinfo.type = check_typedef (TYPE_FIELD_TYPE (resolved_type, i));
       pinfo.valaddr = addr_stack->valaddr;
       pinfo.addr
 	= (addr_stack->addr
@@ -2301,12 +2547,18 @@ resolve_dynamic_type_internal (struct type *type,
 			       int top_level)
 {
   struct type *real_type = check_typedef (type);
-  struct type *resolved_type = type;
+  struct type *resolved_type = nullptr;
   struct dynamic_prop *prop;
   CORE_ADDR value;
 
   if (!is_dynamic_type_internal (real_type, top_level))
     return type;
+
+  gdb::optional<CORE_ADDR> type_length;
+  prop = TYPE_DYNAMIC_LENGTH (type);
+  if (prop != NULL
+      && dwarf2_evaluate_property (prop, NULL, addr_stack, &value))
+    type_length = value;
 
   if (TYPE_CODE (type) == TYPE_CODE_TYPEDEF)
     {
@@ -2327,9 +2579,10 @@ resolve_dynamic_type_internal (struct type *type,
 	    struct property_addr_info pinfo;
 
 	    pinfo.type = check_typedef (TYPE_TARGET_TYPE (type));
-	    pinfo.valaddr = NULL;
-	    if (addr_stack->valaddr != NULL)
-	      pinfo.addr = extract_typed_address (addr_stack->valaddr, type);
+	    pinfo.valaddr = {};
+	    if (addr_stack->valaddr.data () != NULL)
+	      pinfo.addr = extract_typed_address (addr_stack->valaddr.data (),
+						  type);
 	    else
 	      pinfo.addr = read_memory_typed_address (addr_stack->addr, type);
 	    pinfo.next = addr_stack;
@@ -2362,6 +2615,15 @@ resolve_dynamic_type_internal (struct type *type,
 	}
     }
 
+  if (resolved_type == nullptr)
+    return type;
+
+  if (type_length.has_value ())
+    {
+      TYPE_LENGTH (resolved_type) = *type_length;
+      resolved_type->remove_dyn_prop (DYN_PROP_BYTE_SIZE);
+    }
+
   /* Resolve data_location attribute.  */
   prop = TYPE_DATA_LOCATION (resolved_type);
   if (prop != NULL
@@ -2377,7 +2639,8 @@ resolve_dynamic_type_internal (struct type *type,
 /* See gdbtypes.h  */
 
 struct type *
-resolve_dynamic_type (struct type *type, const gdb_byte *valaddr,
+resolve_dynamic_type (struct type *type,
+		      gdb::array_view<const gdb_byte> valaddr,
 		      CORE_ADDR addr)
 {
   struct property_addr_info pinfo
@@ -2388,10 +2651,10 @@ resolve_dynamic_type (struct type *type, const gdb_byte *valaddr,
 
 /* See gdbtypes.h  */
 
-struct dynamic_prop *
-get_dyn_prop (enum dynamic_prop_node_kind prop_kind, const struct type *type)
+dynamic_prop *
+type::dyn_prop (dynamic_prop_node_kind prop_kind) const
 {
-  struct dynamic_prop_list *node = TYPE_DYN_PROP_LIST (type);
+  dynamic_prop_list *node = this->main_type->dyn_prop_list;
 
   while (node != NULL)
     {
@@ -2405,43 +2668,41 @@ get_dyn_prop (enum dynamic_prop_node_kind prop_kind, const struct type *type)
 /* See gdbtypes.h  */
 
 void
-add_dyn_prop (enum dynamic_prop_node_kind prop_kind, struct dynamic_prop prop,
-              struct type *type)
+type::add_dyn_prop (dynamic_prop_node_kind prop_kind, dynamic_prop prop)
 {
   struct dynamic_prop_list *temp;
 
-  gdb_assert (TYPE_OBJFILE_OWNED (type));
+  gdb_assert (TYPE_OBJFILE_OWNED (this));
 
-  temp = XOBNEW (&TYPE_OBJFILE (type)->objfile_obstack,
+  temp = XOBNEW (&TYPE_OBJFILE (this)->objfile_obstack,
 		 struct dynamic_prop_list);
   temp->prop_kind = prop_kind;
   temp->prop = prop;
-  temp->next = TYPE_DYN_PROP_LIST (type);
+  temp->next = this->main_type->dyn_prop_list;
 
-  TYPE_DYN_PROP_LIST (type) = temp;
+  this->main_type->dyn_prop_list = temp;
 }
 
-/* Remove dynamic property from TYPE in case it exists.  */
+/* See gdbtypes.h.  */
 
 void
-remove_dyn_prop (enum dynamic_prop_node_kind prop_kind,
-                 struct type *type)
+type::remove_dyn_prop (dynamic_prop_node_kind kind)
 {
   struct dynamic_prop_list *prev_node, *curr_node;
 
-  curr_node = TYPE_DYN_PROP_LIST (type);
+  curr_node = this->main_type->dyn_prop_list;
   prev_node = NULL;
 
   while (NULL != curr_node)
     {
-      if (curr_node->prop_kind == prop_kind)
+      if (curr_node->prop_kind == kind)
 	{
 	  /* Update the linked list but don't free anything.
 	     The property was allocated on objstack and it is not known
 	     if we are on top of it.  Nevertheless, everything is released
 	     when the complete objstack is freed.  */
 	  if (NULL == prev_node)
-	    TYPE_DYN_PROP_LIST (type) = curr_node->next;
+	    this->main_type->dyn_prop_list = curr_node->next;
 	  else
 	    prev_node->next = curr_node->next;
 
@@ -2628,6 +2889,9 @@ check_typedef (struct type *type)
 	  TYPE_LENGTH (type) = TYPE_LENGTH (target_type);
 	  TYPE_TARGET_STUB (type) = 0;
 	}
+      else if (TYPE_CODE (type) == TYPE_CODE_ARRAY
+	       && update_static_array_size (type))
+	TYPE_TARGET_STUB (type) = 0;
     }
 
   type = make_qualified_type (type, instance_flags, NULL);
@@ -2991,7 +3255,7 @@ init_float_type (struct objfile *objfile,
 {
   if (byte_order == BFD_ENDIAN_UNKNOWN)
     {
-      struct gdbarch *gdbarch = get_objfile_arch (objfile);
+      struct gdbarch *gdbarch = objfile->arch ();
       byte_order = gdbarch_byte_order (gdbarch);
     }
   const struct floatformat *fmt = floatformats[byte_order];
@@ -3016,19 +3280,40 @@ init_decfloat_type (struct objfile *objfile, int bit, const char *name)
   return t;
 }
 
-/* Allocate a TYPE_CODE_COMPLEX type structure associated with OBJFILE.
-   NAME is the type name.  TARGET_TYPE is the component float type.  */
+/* Allocate a TYPE_CODE_COMPLEX type structure.  NAME is the type
+   name.  TARGET_TYPE is the component type.  */
 
 struct type *
-init_complex_type (struct objfile *objfile,
-		   const char *name, struct type *target_type)
+init_complex_type (const char *name, struct type *target_type)
 {
   struct type *t;
 
-  t = init_type (objfile, TYPE_CODE_COMPLEX,
-		 2 * TYPE_LENGTH (target_type) * TARGET_CHAR_BIT, name);
-  TYPE_TARGET_TYPE (t) = target_type;
-  return t;
+  gdb_assert (TYPE_CODE (target_type) == TYPE_CODE_INT
+	      || TYPE_CODE (target_type) == TYPE_CODE_FLT);
+
+  if (TYPE_MAIN_TYPE (target_type)->flds_bnds.complex_type == nullptr)
+    {
+      if (name == nullptr)
+	{
+	  char *new_name
+	    = (char *) TYPE_ALLOC (target_type,
+				   strlen (TYPE_NAME (target_type))
+				   + strlen ("_Complex ") + 1);
+	  strcpy (new_name, "_Complex ");
+	  strcat (new_name, TYPE_NAME (target_type));
+	  name = new_name;
+	}
+
+      t = alloc_type_copy (target_type);
+      set_type_code (t, TYPE_CODE_COMPLEX);
+      TYPE_LENGTH (t) = 2 * TYPE_LENGTH (target_type);
+      TYPE_NAME (t) = name;
+
+      TYPE_TARGET_TYPE (t) = target_type;
+      TYPE_MAIN_TYPE (target_type)->flds_bnds.complex_type = t;
+    }
+
+  return TYPE_MAIN_TYPE (target_type)->flds_bnds.complex_type;
 }
 
 /* Allocate a TYPE_CODE_PTR type structure associated with OBJFILE.
@@ -4494,6 +4779,10 @@ dump_fn_fieldlists (struct type *type, int spaces)
 			    TYPE_FN_FIELD_PROTECTED (f, overload_idx));
 	  printfi_filtered (spaces + 8, "is_stub %d\n",
 			    TYPE_FN_FIELD_STUB (f, overload_idx));
+	  printfi_filtered (spaces + 8, "defaulted %d\n",
+			    TYPE_FN_FIELD_DEFAULTED (f, overload_idx));
+	  printfi_filtered (spaces + 8, "is_deleted %d\n",
+			    TYPE_FN_FIELD_DELETED (f, overload_idx));
 	  printfi_filtered (spaces + 8, "voffset %u\n",
 			    TYPE_FN_FIELD_VOFFSET (f, overload_idx));
 	}
@@ -4557,6 +4846,9 @@ print_cplus_stuff (struct type *type, int spaces)
     {
       dump_fn_fieldlists (type, spaces);
     }
+
+  printfi_filtered (spaces, "calling_convention %d\n",
+		    TYPE_CPLUS_CALLING_CONVENTION (type));
 }
 
 /* Print the contents of the TYPE's type_specific union, assuming that
@@ -4784,10 +5076,6 @@ recursive_dump_type (struct type *type, int spaces)
   if (TYPE_PROTOTYPED (type))
     {
       puts_filtered (" TYPE_PROTOTYPED");
-    }
-  if (TYPE_INCOMPLETE (type))
-    {
-      puts_filtered (" TYPE_INCOMPLETE");
     }
   if (TYPE_VARARGS (type))
     {
@@ -5062,10 +5350,10 @@ copy_type_recursive (struct objfile *objfile,
       *TYPE_RANGE_DATA (new_type) = *TYPE_RANGE_DATA (type);
     }
 
-  if (TYPE_DYN_PROP_LIST (type) != NULL)
-    TYPE_DYN_PROP_LIST (new_type)
+  if (type->main_type->dyn_prop_list != NULL)
+    new_type->main_type->dyn_prop_list
       = copy_dynamic_prop_list (&objfile->objfile_obstack,
-				TYPE_DYN_PROP_LIST (type));
+				type->main_type->dyn_prop_list);
 
 
   /* Copy pointers to other types.  */
@@ -5130,10 +5418,10 @@ copy_type (const struct type *type)
   TYPE_LENGTH (new_type) = TYPE_LENGTH (type);
   memcpy (TYPE_MAIN_TYPE (new_type), TYPE_MAIN_TYPE (type),
 	  sizeof (struct main_type));
-  if (TYPE_DYN_PROP_LIST (type) != NULL)
-    TYPE_DYN_PROP_LIST (new_type)
+  if (type->main_type->dyn_prop_list != NULL)
+    new_type->main_type->dyn_prop_list
       = copy_dynamic_prop_list (&TYPE_OBJFILE (type) -> objfile_obstack,
-				TYPE_DYN_PROP_LIST (type));
+				type->main_type->dyn_prop_list);
 
   return new_type;
 }
@@ -5240,21 +5528,6 @@ arch_decfloat_type (struct gdbarch *gdbarch, int bit, const char *name)
   struct type *t;
 
   t = arch_type (gdbarch, TYPE_CODE_DECFLOAT, bit, name);
-  return t;
-}
-
-/* Allocate a TYPE_CODE_COMPLEX type structure associated with GDBARCH.
-   NAME is the type name.  TARGET_TYPE is the component float type.  */
-
-struct type *
-arch_complex_type (struct gdbarch *gdbarch,
-		   const char *name, struct type *target_type)
-{
-  struct type *t;
-
-  t = arch_type (gdbarch, TYPE_CODE_COMPLEX,
-		 2 * TYPE_LENGTH (target_type) * TARGET_CHAR_BIT, name);
-  TYPE_TARGET_TYPE (t) = target_type;
   return t;
 }
 
@@ -5481,11 +5754,9 @@ gdbtypes_post_init (struct gdbarch *gdbarch)
     = arch_float_type (gdbarch, gdbarch_long_double_bit (gdbarch),
 		       "long double", gdbarch_long_double_format (gdbarch));
   builtin_type->builtin_complex
-    = arch_complex_type (gdbarch, "complex",
-			 builtin_type->builtin_float);
+    = init_complex_type ("complex", builtin_type->builtin_float);
   builtin_type->builtin_double_complex
-    = arch_complex_type (gdbarch, "double complex",
-			 builtin_type->builtin_double);
+    = init_complex_type ("double complex", builtin_type->builtin_double);
   builtin_type->builtin_string
     = arch_type (gdbarch, TYPE_CODE_STRING, TARGET_CHAR_BIT, "string");
   builtin_type->builtin_bool
@@ -5587,7 +5858,7 @@ objfile_type (struct objfile *objfile)
 				 1, struct objfile_type);
 
   /* Use the objfile architecture to determine basic type properties.  */
-  gdbarch = get_objfile_arch (objfile);
+  gdbarch = objfile->arch ();
 
   /* Basic types.  */
   objfile_type->builtin_void
@@ -5687,8 +5958,9 @@ objfile_type (struct objfile *objfile)
   return objfile_type;
 }
 
+void _initialize_gdbtypes ();
 void
-_initialize_gdbtypes (void)
+_initialize_gdbtypes ()
 {
   gdbtypes_data = gdbarch_data_register_post_init (gdbtypes_post_init);
 

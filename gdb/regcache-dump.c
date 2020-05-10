@@ -1,4 +1,4 @@
-/* Copyright (C) 1986-2019 Free Software Foundation, Inc.
+/* Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -305,8 +305,9 @@ maintenance_print_remote_registers (const char *args, int from_tty)
   regcache_print (args, regcache_dump_remote);
 }
 
+void _initialize_regcache_dump ();
 void
-_initialize_regcache_dump (void)
+_initialize_regcache_dump ()
 {
   add_cmd ("registers", class_maintenance, maintenance_print_registers,
 	   _("Print the internal register configuration.\n"

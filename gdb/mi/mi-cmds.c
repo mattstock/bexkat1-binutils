@@ -1,5 +1,5 @@
 /* MI Command Set for GDB, the GNU debugger.
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions (a Red Hat company).
 
@@ -295,8 +295,9 @@ build_table (struct mi_cmd *commands)
     }
 }
 
+void _initialize_mi_cmds ();
 void
-_initialize_mi_cmds (void)
+_initialize_mi_cmds ()
 {
   build_table (mi_cmds);
   memset (&stats, 0, sizeof (stats));

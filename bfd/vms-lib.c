@@ -1,6 +1,6 @@
 /* BFD back-end for VMS archive files.
 
-   Copyright (C) 2010-2019 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
    Written by Tristan Gingold <gingold@adacore.com>, AdaCore.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -120,6 +120,9 @@ struct carsym_mem
   /* Maximum number of entries.  */
   unsigned int max;
 
+  /* Do not allocate more that this number of entries.  */
+  unsigned int limit;
+
   /* If true, the table was reallocated on the heap.  If false, it is still
      in the BFD's objalloc.  */
   bfd_boolean realloced;
@@ -134,12 +137,25 @@ vms_add_index (struct carsym_mem *cs, char *name,
   if (cs->nbr == cs->max)
     {
       struct carsym *n;
+      size_t amt;
 
+      if (cs->max > -33u / 2 || cs->max >= cs->limit)
+	{
+	  bfd_set_error (bfd_error_file_too_big);
+	  return FALSE;
+	}
       cs->max = 2 * cs->max + 32;
+      if (cs->max > cs->limit)
+	cs->max = cs->limit;
+      if (_bfd_mul_overflow (cs->max, sizeof (struct carsym), &amt))
+	{
+	  bfd_set_error (bfd_error_file_too_big);
+	  return FALSE;
+	}
 
       if (!cs->realloced)
 	{
-	  n = bfd_malloc2 (cs->max, sizeof (struct carsym));
+	  n = bfd_malloc (amt);
 	  if (n == NULL)
 	    return FALSE;
 	  memcpy (n, cs->idx, cs->nbr * sizeof (struct carsym));
@@ -147,7 +163,7 @@ vms_add_index (struct carsym_mem *cs, char *name,
 	}
       else
 	{
-	  n = bfd_realloc_or_free (cs->idx, cs->nbr * sizeof (struct carsym));
+	  n = bfd_realloc_or_free (cs->idx, amt);
 	  if (n == NULL)
 	    return FALSE;
 	}
@@ -226,12 +242,20 @@ vms_write_block (bfd *abfd, unsigned int vbn, void *blk)
    If the entry is indirect, recurse.  */
 
 static bfd_boolean
-vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs)
+vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs,
+		    unsigned int recur_count)
 {
   struct vms_indexdef indexdef;
   file_ptr off;
   unsigned char *p;
   unsigned char *endp;
+  unsigned int n;
+
+  if (recur_count == 100)
+    {
+      bfd_set_error (bfd_error_bad_value);
+      return FALSE;
+    }
 
   /* Read the index block.  */
   BFD_ASSERT (sizeof (indexdef) == VMS_BLOCK_SIZE);
@@ -240,7 +264,10 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs)
 
   /* Traverse it.  */
   p = &indexdef.keys[0];
-  endp = p + bfd_getl16 (indexdef.used);
+  n = bfd_getl16 (indexdef.used);
+  if (n > sizeof (indexdef.keys))
+    return FALSE;
+  endp = p + n;
   while (p < endp)
     {
       unsigned int idx_vbn;
@@ -281,11 +308,13 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs)
 
       /* Point to the next index entry.  */
       p = keyname + keylen;
+      if (p > endp)
+	return FALSE;
 
       if (idx_off == RFADEF__C_INDEX)
 	{
 	  /* Indirect entry.  Recurse.  */
-	  if (!vms_traverse_index (abfd, idx_vbn, cs))
+	  if (!vms_traverse_index (abfd, idx_vbn, cs, recur_count + 1))
 	    return FALSE;
 	}
       else
@@ -322,11 +351,17 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs)
 
 		  if (!vms_read_block (abfd, kvbn, kblk))
 		    return FALSE;
+		  if (koff > sizeof (kblk) - sizeof (struct vms_kbn))
+		    return FALSE;
 		  kbn = (struct vms_kbn *)(kblk + koff);
 		  klen = bfd_getl16 (kbn->keylen);
+		  if (klen > sizeof (kblk) - koff)
+		    return FALSE;
 		  kvbn = bfd_getl32 (kbn->rfa.vbn);
 		  koff = bfd_getl16 (kbn->rfa.offset);
 
+		  if (noff + klen > keylen)
+		    return FALSE;
 		  memcpy (name + noff, kbn + 1, klen);
 		  noff += klen;
 		}
@@ -357,7 +392,7 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs)
 		  || bfd_bread (&lhs, sizeof (lhs), abfd) != sizeof (lhs))
 		return FALSE;
 
-	      /* FIXME: this adds extra entries that were not accounted.  */
+	      /* These extra entries may cause reallocation of CS.  */
 	      if (!vms_add_indexes_from_list (abfd, cs, name, &lhs.ng_g_rfa))
 		return FALSE;
 	      if (!vms_add_indexes_from_list (abfd, cs, name, &lhs.ng_wk_rfa))
@@ -386,6 +421,8 @@ vms_lib_read_index (bfd *abfd, int idx, unsigned int *nbrel)
   struct vms_idd idd;
   unsigned int flags;
   unsigned int vbn;
+  ufile_ptr filesize;
+  size_t amt;
   struct carsym *csbuf;
   struct carsym_mem csm;
 
@@ -400,20 +437,33 @@ vms_lib_read_index (bfd *abfd, int idx, unsigned int *nbrel)
       || !(flags & IDD__FLAGS_VARLENIDX))
     return NULL;
 
-  csbuf = bfd_alloc (abfd, *nbrel * sizeof (struct carsym));
-  if (csbuf == NULL)
-    return NULL;
-
-  csm.max = *nbrel;
+  filesize = bfd_get_file_size (abfd);
   csm.nbr = 0;
+  csm.max = *nbrel;
+  csm.limit = -1u;
   csm.realloced = FALSE;
-  csm.idx = csbuf;
+  if (filesize != 0)
+    {
+      /* Put an upper bound based on a file full of single char keys.
+	 This is to prevent fuzzed binary silliness.  It is easily
+	 possible to set up loops over file blocks that add syms
+	 without end.  */
+      if (filesize / (sizeof (struct vms_rfa) + 2) <= -1u)
+	csm.limit = filesize / (sizeof (struct vms_rfa) + 2);
+    }
+  if (csm.max > csm.limit)
+    csm.max = csm.limit;
+  if (_bfd_mul_overflow (csm.max, sizeof (struct carsym), &amt))
+    return NULL;
+  csm.idx = csbuf = bfd_alloc (abfd, amt);
+  if (csm.idx == NULL)
+    return NULL;
 
   /* Note: if the index is empty, there is no block to traverse.  */
   vbn = bfd_getl32 (idd.vbn);
-  if (vbn != 0 && !vms_traverse_index (abfd, vbn, &csm))
+  if (vbn != 0 && !vms_traverse_index (abfd, vbn, &csm, 0))
     {
-      if (csm.realloced && csm.idx != NULL)
+      if (csm.realloced)
 	free (csm.idx);
 
       /* Note: in case of error, we can free what was allocated on the
@@ -431,14 +481,15 @@ vms_lib_read_index (bfd *abfd, int idx, unsigned int *nbrel)
 	return NULL;
       memcpy (csbuf, csm.idx, csm.nbr * sizeof (struct carsym));
       free (csm.idx);
-      *nbrel = csm.nbr;
+      csm.idx = csbuf;
     }
-  return csbuf;
+  *nbrel = csm.nbr;
+  return csm.idx;
 }
 
 /* Standard function.  */
 
-static const bfd_target *
+static bfd_cleanup
 _bfd_vms_lib_archive_p (bfd *abfd, enum vms_lib_kind kind)
 {
   struct vms_lhd lhd;
@@ -557,14 +608,11 @@ _bfd_vms_lib_archive_p (bfd *abfd, enum vms_lib_kind kind)
 	  != sizeof (buf_reclen))
 	goto err;
       reclen = bfd_getl32 (buf_reclen);
-      buf = bfd_malloc (reclen);
+      if (reclen < sizeof (struct vms_dcxmap))
+	goto err;
+      buf = _bfd_malloc_and_read (abfd, reclen, reclen);
       if (buf == NULL)
 	goto err;
-      if (bfd_bread (buf, reclen, abfd) != reclen)
-	{
-	  free (buf);
-	  goto err;
-	}
       map = (struct vms_dcxmap *)buf;
       tdata->nbr_dcxsbm = bfd_getl16 (map->nsubs);
       sbm_off = bfd_getl16 (map->sub0);
@@ -572,39 +620,57 @@ _bfd_vms_lib_archive_p (bfd *abfd, enum vms_lib_kind kind)
 	(abfd, tdata->nbr_dcxsbm * sizeof (struct dcxsbm_desc));
       for (i = 0; i < tdata->nbr_dcxsbm; i++)
 	{
-	  struct vms_dcxsbm *sbm = (struct vms_dcxsbm *) (buf + sbm_off);
+	  struct vms_dcxsbm *sbm;
 	  struct dcxsbm_desc *sbmdesc = &tdata->dcxsbm[i];
 	  unsigned int sbm_len;
 	  unsigned int sbm_sz;
 	  unsigned int off;
-	  unsigned char *data = (unsigned char *)sbm;
 	  unsigned char *buf1;
 	  unsigned int l, j;
 
+	  if (sbm_off > reclen
+	      || reclen - sbm_off < sizeof (struct vms_dcxsbm))
+	    {
+	    err_free_buf:
+	      free (buf);
+	      goto err;
+	    }
+	  sbm = (struct vms_dcxsbm *) (buf + sbm_off);
 	  sbm_sz = bfd_getl16 (sbm->size);
 	  sbm_off += sbm_sz;
-	  BFD_ASSERT (sbm_off <= reclen);
+	  if (sbm_off > reclen)
+	    goto err_free_buf;
 
 	  sbmdesc->min_char = sbm->min_char;
 	  BFD_ASSERT (sbmdesc->min_char == 0);
 	  sbmdesc->max_char = sbm->max_char;
 	  sbm_len = sbmdesc->max_char - sbmdesc->min_char + 1;
 	  l = (2 * sbm_len + 7) / 8;
-	  BFD_ASSERT
-	    (sbm_sz >= sizeof (struct vms_dcxsbm) + l + 3 * sbm_len
-	     || (tdata->nbr_dcxsbm == 1
-		 && sbm_sz >= sizeof (struct vms_dcxsbm) + l + sbm_len));
+	  if (sbm_sz < sizeof (struct vms_dcxsbm) + l + sbm_len
+	      || (tdata->nbr_dcxsbm > 1
+		  && sbm_sz < sizeof (struct vms_dcxsbm) + l + 3 * sbm_len))
+	    goto err_free_buf;
 	  sbmdesc->flags = (unsigned char *)bfd_alloc (abfd, l);
-	  memcpy (sbmdesc->flags, data + bfd_getl16 (sbm->flags), l);
+	  off = bfd_getl16 (sbm->flags);
+	  if (off > sbm_sz
+	      || sbm_sz - off < l)
+	    goto err_free_buf;
+	  memcpy (sbmdesc->flags, (bfd_byte *) sbm + off, l);
 	  sbmdesc->nodes = (unsigned char *)bfd_alloc (abfd, 2 * sbm_len);
-	  memcpy (sbmdesc->nodes, data + bfd_getl16 (sbm->nodes), 2 * sbm_len);
+	  off = bfd_getl16 (sbm->nodes);
+	  if (off > sbm_sz
+	      || sbm_sz - off < 2 * sbm_len)
+	    goto err_free_buf;
+	  memcpy (sbmdesc->nodes, (bfd_byte *) sbm + off, 2 * sbm_len);
 	  off = bfd_getl16 (sbm->next);
 	  if (off != 0)
 	    {
+	      if (off > sbm_sz
+		  || sbm_sz - off < 2 * sbm_len)
+		goto err_free_buf;
 	      /* Read the 'next' array.  */
-	      sbmdesc->next = (unsigned short *)bfd_alloc
-		(abfd, sbm_len * sizeof (unsigned short));
-	      buf1 = data + off;
+	      sbmdesc->next = (unsigned short *) bfd_alloc (abfd, 2 * sbm_len);
+	      buf1 = (bfd_byte *) sbm + off;
 	      for (j = 0; j < sbm_len; j++)
 		sbmdesc->next[j] = bfd_getl16 (buf1 + j * 2);
 	    }
@@ -627,7 +693,7 @@ _bfd_vms_lib_archive_p (bfd *abfd, enum vms_lib_kind kind)
   if (tdata->type == LBR__C_TYP_ESHSTB || tdata->type == LBR__C_TYP_ISHSTB)
     abfd->is_thin_archive = TRUE;
 
-  return abfd->xvec;
+  return _bfd_no_cleanup;
 
  err:
   bfd_release (abfd, tdata);
@@ -637,7 +703,7 @@ _bfd_vms_lib_archive_p (bfd *abfd, enum vms_lib_kind kind)
 
 /* Standard function for alpha libraries.  */
 
-const bfd_target *
+bfd_cleanup
 _bfd_vms_lib_alpha_archive_p (bfd *abfd)
 {
   return _bfd_vms_lib_archive_p (abfd, vms_lib_alpha);
@@ -645,7 +711,7 @@ _bfd_vms_lib_alpha_archive_p (bfd *abfd)
 
 /* Standard function for ia64 libraries.  */
 
-const bfd_target *
+bfd_cleanup
 _bfd_vms_lib_ia64_archive_p (bfd *abfd)
 {
   return _bfd_vms_lib_archive_p (abfd, vms_lib_ia64);
@@ -653,7 +719,7 @@ _bfd_vms_lib_ia64_archive_p (bfd *abfd)
 
 /* Standard function for text libraries.  */
 
-static const bfd_target *
+static bfd_cleanup
 _bfd_vms_lib_txt_archive_p (bfd *abfd)
 {
   return _bfd_vms_lib_archive_p (abfd, vms_lib_txt);

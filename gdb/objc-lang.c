@@ -1,6 +1,6 @@
 /* Objective-C language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    Contributed by Apple Computer, Inc.
    Written by Michael Snyder.
@@ -381,7 +381,7 @@ extern const struct language_defn objc_language_defn = {
   c_emit_char,
   c_print_type,			/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   objc_skip_trampoline, 	/* Language specific skip_trampoline */
@@ -1332,8 +1332,9 @@ find_objc_msgcall (CORE_ADDR pc, CORE_ADDR *new_pc)
   return 0;
 }
 
+void _initialize_objc_language ();
 void
-_initialize_objc_language (void)
+_initialize_objc_language ()
 {
   add_info ("selectors", info_selectors_command,
 	    _("All Objective-C selectors, or those matching REGEXP."));

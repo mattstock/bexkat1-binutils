@@ -1,6 +1,6 @@
 /* Target-dependent code for UltraSPARC.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -19,7 +19,7 @@
 
 #include "defs.h"
 #include "arch-utils.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
@@ -184,14 +184,6 @@ sparc64_forget_process (pid_t pid)
 	pit = it++;
     }
 
-}
-
-static void
-info_adi_command (const char *args, int from_tty)
-{
-  printf_unfiltered ("\"adi\" must be followed by \"examine\" "
-                     "or \"assign\".\n");
-  help_list (sparc64adilist, "adi ", all_commands, gdb_stdout);
 }
 
 /* Read attributes of a maps entry in /proc/[pid]/adi/maps.  */
@@ -534,13 +526,13 @@ adi_assign_command (const char *args, int from_tty)
   do_assign (next_address, cnt, version);
 }
 
+void _initialize_sparc64_adi_tdep ();
 void
-_initialize_sparc64_adi_tdep (void)
+_initialize_sparc64_adi_tdep ()
 {
-
-  add_prefix_cmd ("adi", class_support, info_adi_command,
-                  _("ADI version related commands."),
-                  &sparc64adilist, "adi ", 0, &cmdlist);
+  add_basic_prefix_cmd ("adi", class_support,
+			_("ADI version related commands."),
+			&sparc64adilist, "adi ", 0, &cmdlist);
   add_cmd ("examine", class_support, adi_examine_command,
            _("Examine ADI versions."), &sparc64adilist);
   add_alias_cmd ("x", "examine", no_class, 1, &sparc64adilist);

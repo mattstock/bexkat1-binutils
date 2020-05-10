@@ -1,5 +1,5 @@
 /* Disassembler code for CRX.
-   Copyright (C) 2004-2019 Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
    Contributed by Tomer Levi, NSC, Israel.
    Written by Tomer Levi.
 
@@ -105,7 +105,7 @@ get_number_of_operands (void)
 {
   int i;
 
-  for (i = 0; instruction->operands[i].op_type && i < MAX_OPERANDS; i++)
+  for (i = 0; i < MAX_OPERANDS && instruction->operands[i].op_type; i++)
     ;
 
   return i;
@@ -337,7 +337,7 @@ match_opcode (void)
   unsigned int mask;
 
   /* The instruction 'constant' opcode doewsn't exceed 32 bits.  */
-  unsigned int doubleWord = (words[1] + (words[0] << 16)) & 0xffffffff;
+  unsigned int doubleWord = words[1] + ((unsigned) words[0] << 16);
 
   /* Start searching from end of instruction table.  */
   instruction = &crx_instruction[NUMOPCODES - 2];

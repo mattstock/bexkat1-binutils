@@ -1,6 +1,6 @@
 /* Tracing functionality for remote targets in custom GDB protocol
 
-   Copyright (C) 1997-2019 Free Software Foundation, Inc.
+   Copyright (C) 1997-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -3980,8 +3980,9 @@ static const struct internalvar_funcs sdata_funcs =
 cmd_list_element *while_stepping_cmd_element = nullptr;
 
 /* module initialization */
+void _initialize_tracepoint ();
 void
-_initialize_tracepoint (void)
+_initialize_tracepoint ()
 {
   struct cmd_list_element *c;
 

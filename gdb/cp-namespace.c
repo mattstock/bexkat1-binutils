@@ -1,5 +1,5 @@
 /* Helper routines for C++ support in GDB.
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    Contributed by David Carlton and by Kealia, Inc.
 
@@ -1061,8 +1061,9 @@ maintenance_cplus_namespace (const char *args, int from_tty)
   printf_unfiltered (_("The `maint namespace' command was removed.\n"));
 }
 
+void _initialize_cp_namespace ();
 void
-_initialize_cp_namespace (void)
+_initialize_cp_namespace ()
 {
   struct cmd_list_element *cmd;
 

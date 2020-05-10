@@ -1,5 +1,5 @@
 /* Bison parser for Rust expressions, for GDB.
-   Copyright (C) 2016-2019 Free Software Foundation, Inc.
+   Copyright (C) 2016-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -2826,8 +2826,9 @@ rust_lex_tests (void)
 
 #endif /* GDB_SELF_TEST */
 
+void _initialize_rust_exp ();
 void
-_initialize_rust_exp (void)
+_initialize_rust_exp ()
 {
   int code = regcomp (&number_regex, number_regex_text, REG_EXTENDED);
   /* If the regular expression was incorrect, it was a programming

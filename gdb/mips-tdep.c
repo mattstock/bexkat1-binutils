@@ -1,6 +1,6 @@
 /* Target-dependent code for the MIPS architecture, for GDB, the GNU Debugger.
 
-   Copyright (C) 1988-2019 Free Software Foundation, Inc.
+   Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
    Contributed by Alessandro Forin(af@cs.cmu.edu) at CMU
    and by Per Bothner(bothner@cs.wisc.edu) at U.Wisconsin.
@@ -51,7 +51,7 @@
 #include "infcall.h"
 #include "remote.h"
 #include "target-descriptions.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "user-regs.h"
 #include "valprint.h"
 #include "ax.h"
@@ -6373,10 +6373,7 @@ mips_print_register (struct ui_file *file, struct frame_info *frame,
     fprintf_filtered (file, ": ");
 
   get_formatted_print_options (&opts, 'x');
-  val_print_scalar_formatted (value_type (val),
-			      value_embedded_offset (val),
-			      val,
-			      &opts, 0, file);
+  value_print_scalar_formatted (val, &opts, 0, file);
 }
 
 /* Print IEEE exception condition bits in FLAGS.  */
@@ -6880,23 +6877,6 @@ mips_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc)
     return mips32_stack_frame_destroyed_p (gdbarch, pc);
 }
 
-/* Root of all "set mips "/"show mips " commands.  This will eventually be
-   used for all MIPS-specific commands.  */
-
-static void
-show_mips_command (const char *args, int from_tty)
-{
-  help_list (showmipscmdlist, "show mips ", all_commands, gdb_stdout);
-}
-
-static void
-set_mips_command (const char *args, int from_tty)
-{
-  printf_unfiltered
-    ("\"set mips\" must be followed by an appropriate subcommand.\n");
-  help_list (setmipscmdlist, "set mips ", all_commands, gdb_stdout);
-}
-
 /* Commands to show/set the MIPS FPU type.  */
 
 static void
@@ -6935,14 +6915,6 @@ show_mipsfpu_command (const char *args, int from_tty)
       ("The MIPS floating-point coprocessor is assumed to be %s\n", fpu);
 }
 
-
-static void
-set_mipsfpu_command (const char *args, int from_tty)
-{
-  printf_unfiltered ("\"set mipsfpu\" must be followed by \"double\", "
-		     "\"single\",\"none\" or \"auto\".\n");
-  show_mipsfpu_command (args, from_tty);
-}
 
 static void
 set_mipsfpu_single_command (const char *args, int from_tty)
@@ -8971,8 +8943,9 @@ mips_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
 		      mips_fpu_type_str (MIPS_FPU_TYPE (gdbarch)));
 }
 
+void _initialize_mips_tdep ();
 void
-_initialize_mips_tdep (void)
+_initialize_mips_tdep ()
 {
   static struct cmd_list_element *mipsfpulist = NULL;
 
@@ -8992,13 +8965,13 @@ _initialize_mips_tdep (void)
   set_tdesc_property (mips_tdesc_gp64, PROPERTY_GP64, "");
 
   /* Add root prefix command for all "set mips"/"show mips" commands.  */
-  add_prefix_cmd ("mips", no_class, set_mips_command,
-		  _("Various MIPS specific commands."),
-		  &setmipscmdlist, "set mips ", 0, &setlist);
+  add_basic_prefix_cmd ("mips", no_class,
+			_("Various MIPS specific commands."),
+			&setmipscmdlist, "set mips ", 0, &setlist);
 
-  add_prefix_cmd ("mips", no_class, show_mips_command,
-		  _("Various MIPS specific commands."),
-		  &showmipscmdlist, "show mips ", 0, &showlist);
+  add_show_prefix_cmd ("mips", no_class,
+		       _("Various MIPS specific commands."),
+		       &showmipscmdlist, "show mips ", 0, &showlist);
 
   /* Allow the user to override the ABI.  */
   add_setshow_enum_cmd ("abi", class_obscure, mips_abi_strings,
@@ -9037,9 +9010,9 @@ and is updated automatically from ELF file flags if available."),
   /* Let the user turn off floating point and set the fence post for
      heuristic_proc_start.  */
 
-  add_prefix_cmd ("mipsfpu", class_support, set_mipsfpu_command,
-		  _("Set use of MIPS floating-point coprocessor."),
-		  &mipsfpulist, "set mipsfpu ", 0, &setlist);
+  add_basic_prefix_cmd ("mipsfpu", class_support,
+			_("Set use of MIPS floating-point coprocessor."),
+			&mipsfpulist, "set mipsfpu ", 0, &setlist);
   add_cmd ("single", class_support, set_mipsfpu_single_command,
 	   _("Select single-precision MIPS floating-point coprocessor."),
 	   &mipsfpulist);

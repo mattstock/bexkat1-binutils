@@ -1,6 +1,6 @@
 /* Target-dependent code for the VAX.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -507,8 +507,9 @@ vax_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return (gdbarch);
 }
 
+void _initialize_vax_tdep ();
 void
-_initialize_vax_tdep (void)
+_initialize_vax_tdep ()
 {
   gdbarch_register (bfd_arch_vax, vax_gdbarch_init, NULL);
 }

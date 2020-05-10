@@ -1,6 +1,6 @@
 /* Self tests for help doc for GDB, the GNU debugger.
 
-   Copyright (C) 2019 Free Software Foundation, Inc.
+   Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -98,6 +98,7 @@ help_doc_invariants_tests ()
 } /* namespace help_doc_tests */
 } /* namespace selftests */
 
+void _initialize_help_doc_selftests ();
 void
 _initialize_help_doc_selftests ()
 {

@@ -1,6 +1,6 @@
 /* Self tests for gdbarch for GDB, the GNU debugger.
 
-   Copyright (C) 2017-2019 Free Software Foundation, Inc.
+   Copyright (C) 2017-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -18,7 +18,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
-#if GDB_SELF_TEST
 #include "gdbsupport/selftest.h"
 #include "selftest-arch.h"
 #include "inferior.h"
@@ -70,11 +69,6 @@ register_to_value_test (struct gdbarch *gdbarch)
       builtin->builtin_char16,
       builtin->builtin_char32,
     };
-
-  /* Error out if debugging something, because we're going to push the
-     test target, which would pop any existing target.  */
-  if (current_top_target ()->stratum () >= process_stratum)
-   error (_("target already pushed"));
 
   /* Create a mock environment.  An inferior with a thread, with a
      process_stratum target pushed.  */
@@ -163,13 +157,11 @@ register_to_value_test (struct gdbarch *gdbarch)
 }
 
 } // namespace selftests
-#endif /* GDB_SELF_TEST */
 
+void _initialize_gdbarch_selftests ();
 void
-_initialize_gdbarch_selftests (void)
+_initialize_gdbarch_selftests ()
 {
-#if GDB_SELF_TEST
   selftests::register_test_foreach_arch ("register_to_value",
 					 selftests::register_to_value_test);
-#endif
 }

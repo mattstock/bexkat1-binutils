@@ -1,6 +1,6 @@
 /* TUI display registers in window.
 
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -28,10 +28,7 @@
 
 struct tui_data_item_window : public tui_gen_win_info
 {
-  tui_data_item_window ()
-    : tui_gen_win_info (DATA_ITEM_WIN)
-  {
-  }
+  tui_data_item_window () = default;
 
   DISABLE_COPY_AND_ASSIGN (tui_data_item_window);
 
@@ -61,14 +58,13 @@ struct tui_data_item_window : public tui_gen_win_info
 /* The TUI registers window.  */
 struct tui_data_window : public tui_win_info
 {
-  tui_data_window ()
-    : tui_win_info (DATA_WIN)
-  {
-  }
+  tui_data_window () = default;
 
   DISABLE_COPY_AND_ASSIGN (tui_data_window);
 
   void refresh_window () override;
+
+  void no_refresh () override;
 
   const char *name () const override
   {

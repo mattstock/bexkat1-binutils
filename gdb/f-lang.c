@@ -1,6 +1,6 @@
 /* Fortran language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
 
    Contributed by Motorola.  Adapted from the C parser by Farooq Butt
    (fmbutt@engage.sps.mot.com).
@@ -646,7 +646,7 @@ extern const struct language_defn f_language_defn =
   f_emit_char,			/* Function to print a single character */
   f_print_type,			/* Print a type using appropriate syntax */
   f_print_typedef,		/* Print a typedef using appropriate syntax */
-  f_val_print,			/* Print a value using appropriate syntax */
+  f_value_print_innner,		/* la_value_print_inner */
   c_value_print,		/* FIXME */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
@@ -741,14 +741,16 @@ build_fortran_types (struct gdbarch *gdbarch)
       = arch_type (gdbarch, TYPE_CODE_ERROR, 128, "real*16");
 
   builtin_f_type->builtin_complex_s8
-    = arch_complex_type (gdbarch, "complex*8",
-			 builtin_f_type->builtin_real);
+    = init_complex_type ("complex*8", builtin_f_type->builtin_real);
   builtin_f_type->builtin_complex_s16
-    = arch_complex_type (gdbarch, "complex*16",
-			 builtin_f_type->builtin_real_s8);
-  builtin_f_type->builtin_complex_s32
-    = arch_complex_type (gdbarch, "complex*32",
-			 builtin_f_type->builtin_real_s16);
+    = init_complex_type ("complex*16", builtin_f_type->builtin_real_s8);
+
+  if (TYPE_CODE (builtin_f_type->builtin_real_s16) == TYPE_CODE_ERROR)
+    builtin_f_type->builtin_complex_s32
+      = arch_type (gdbarch, TYPE_CODE_ERROR, 256, "complex*32");
+  else
+    builtin_f_type->builtin_complex_s32
+      = init_complex_type ("complex*32", builtin_f_type->builtin_real_s16);
 
   return builtin_f_type;
 }
@@ -761,8 +763,9 @@ builtin_f_type (struct gdbarch *gdbarch)
   return (const struct builtin_f_type *) gdbarch_data (gdbarch, f_type_data);
 }
 
+void _initialize_f_language ();
 void
-_initialize_f_language (void)
+_initialize_f_language ()
 {
   f_type_data = gdbarch_data_register_post_init (build_fortran_types);
 }

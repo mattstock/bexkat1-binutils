@@ -1,6 +1,6 @@
 /* Reading symbol files from memory.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -57,7 +57,7 @@
 /* Verify parameters of target_read_memory_bfd and target_read_memory are
    compatible.  */
 
-gdb_static_assert (sizeof (CORE_ADDR) == sizeof (bfd_vma));
+gdb_static_assert (sizeof (CORE_ADDR) >= sizeof (bfd_vma));
 gdb_static_assert (sizeof (gdb_byte) == sizeof (bfd_byte));
 gdb_static_assert (sizeof (ssize_t) <= sizeof (bfd_size_type));
 
@@ -203,8 +203,9 @@ add_vsyscall_page (struct target_ops *target, int from_tty)
     }
 }
 
+void _initialize_symfile_mem ();
 void
-_initialize_symfile_mem (void)
+_initialize_symfile_mem ()
 {
   add_cmd ("add-symbol-file-from-memory", class_files,
            add_symbol_file_from_memory_command,

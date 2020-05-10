@@ -1,6 +1,6 @@
 /* Handle SVR4 shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1537,7 +1537,6 @@ svr4_current_sos (void)
 CORE_ADDR
 svr4_fetch_objfile_link_map (struct objfile *objfile)
 {
-  struct so_list *so;
   struct svr4_info *info = get_svr4_info (objfile->pspace);
 
   /* Cause svr4_current_sos() to be run if it hasn't been already.  */
@@ -1555,7 +1554,7 @@ svr4_fetch_objfile_link_map (struct objfile *objfile)
 
   /* The other link map addresses may be found by examining the list
      of shared libraries.  */
-  for (so = master_so_list (); so; so = so->next)
+  for (struct so_list *so : current_program_space->solibs ())
     if (so->objfile == objfile)
       {
 	lm_info_svr4 *li = (lm_info_svr4 *) so->lm_info;
@@ -1942,7 +1941,27 @@ svr4_handle_solib_event (void)
     /* Always locate the debug struct, in case it moved.  */
     info->debug_base = 0;
     if (locate_base (info) == 0)
-      return;
+      {
+	/* It's possible for the reloc_complete probe to be triggered before
+	   the linker has set the DT_DEBUG pointer (for example, when the
+	   linker has finished relocating an LD_AUDIT library or its
+	   dependencies).  Since we can't yet handle libraries from other link
+	   namespaces, we don't lose anything by ignoring them here.  */
+	struct value *link_map_id_val;
+	try
+	  {
+	    link_map_id_val = pa->prob->evaluate_argument (0, frame);
+	  }
+	catch (const gdb_exception_error)
+	  {
+	    link_map_id_val = NULL;
+	  }
+	/* glibc and illumos' libc both define LM_ID_BASE as zero.  */
+	if (link_map_id_val != NULL && value_as_long (link_map_id_val) != 0)
+	  action = DO_NOTHING;
+	else
+	  return;
+      }
 
     /* GDB does not currently support libraries loaded via dlmopen
        into namespaces other than the initial one.  We must ignore
@@ -2253,8 +2272,7 @@ enable_break (struct svr4_info *info, int from_tty)
 	  CORE_ADDR load_addr;
 
 	  tmp_bfd = os->objfile->obfd;
-	  load_addr = ANOFFSET (os->objfile->section_offsets,
-				SECT_OFF_TEXT (os->objfile));
+	  load_addr = os->objfile->text_section_offset ();
 
 	  interp_sect = bfd_get_section_by_name (tmp_bfd, ".text");
 	  if (interp_sect)
@@ -2288,7 +2306,6 @@ enable_break (struct svr4_info *info, int from_tty)
       CORE_ADDR load_addr = 0;
       int load_addr_found = 0;
       int loader_found_in_list = 0;
-      struct so_list *so;
       struct target_ops *tmp_bfd_target;
 
       sym_addr = 0;
@@ -2321,8 +2338,7 @@ enable_break (struct svr4_info *info, int from_tty)
 
       /* On a running target, we can get the dynamic linker's base
          address from the shared library table.  */
-      so = master_so_list ();
-      while (so)
+      for (struct so_list *so : current_program_space->solibs ())
 	{
 	  if (svr4_same_1 (interp_name, so->so_original_name))
 	    {
@@ -2331,7 +2347,6 @@ enable_break (struct svr4_info *info, int from_tty)
 	      load_addr = lm_addr_check (so, tmp_bfd.get ());
 	      break;
 	    }
-	  so = so->next;
 	}
 
       /* If we were not able to find the base address of the loader
@@ -2375,7 +2390,8 @@ enable_break (struct svr4_info *info, int from_tty)
       if (!load_addr_found)
 	{
 	  struct regcache *regcache
-	    = get_thread_arch_regcache (inferior_ptid, target_gdbarch ());
+	    = get_thread_arch_regcache (current_inferior ()->process_target (),
+					inferior_ptid, target_gdbarch ());
 
 	  load_addr = (regcache_read_pc (regcache)
 		       - exec_entry_point (tmp_bfd.get (), tmp_bfd_target));
@@ -2955,15 +2971,8 @@ svr4_relocate_main_executable (void)
 
   if (symfile_objfile)
     {
-      struct section_offsets *new_offsets;
-      int i;
-
-      new_offsets = XALLOCAVEC (struct section_offsets,
-				symfile_objfile->num_sections);
-
-      for (i = 0; i < symfile_objfile->num_sections; i++)
-	new_offsets->offsets[i] = displacement;
-
+      section_offsets new_offsets (symfile_objfile->section_offsets.size (),
+				   displacement);
       objfile_relocate (symfile_objfile, new_offsets);
     }
   else if (exec_bfd)
@@ -3247,8 +3256,9 @@ svr4_iterate_over_objfiles_in_search_order
     }
 }
 
+void _initialize_svr4_solib ();
 void
-_initialize_svr4_solib (void)
+_initialize_svr4_solib ()
 {
   solib_svr4_data = gdbarch_data_register_pre_init (solib_svr4_init);
 

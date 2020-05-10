@@ -1,5 +1,5 @@
 /* IA-64 support for OpenVMS
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -822,11 +822,10 @@ is_unwind_section_name (bfd *abfd ATTRIBUTE_UNUSED, const char *name)
    flag.  */
 
 static bfd_boolean
-elf64_ia64_section_flags (flagword *flags,
-			  const Elf_Internal_Shdr *hdr)
+elf64_ia64_section_flags (const Elf_Internal_Shdr *hdr)
 {
   if (hdr->sh_flags & SHF_IA_64_SHORT)
-    *flags |= SEC_SMALL_DATA;
+    hdr->bfd_section->flags |= SEC_SMALL_DATA;
 
   return TRUE;
 }
@@ -1674,7 +1673,7 @@ get_dyn_sym_info (struct elf64_ia64_link_hash_table *ia64_info,
       *size_p = size;
       *info_p = info;
 
-has_space:
+    has_space:
       /* Append the new one to the array.  */
       dyn_i = info + count;
       memset (dyn_i, 0, sizeof (*dyn_i));
@@ -3284,7 +3283,7 @@ elf64_ia64_choose_gp (bfd *abfd, struct bfd_link_info *info, bfd_boolean final)
     {
       if (max_short_vma - min_short_vma >= 0x400000)
 	{
-overflow:
+	overflow:
 	  _bfd_error_handler
 	    /* xgettext:c-format */
 	    (_("%pB: short data segment overflowed (%#" PRIx64 " >= 0x400000)"),
@@ -4234,6 +4233,10 @@ elf64_ia64_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   flagword in_flags;
   bfd_boolean ok = TRUE;
 
+  /* FIXME: What should be checked when linking shared libraries?  */
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
+
   /* Don't even pretend to support mixed-format linking.  */
   if (bfd_get_flavour (ibfd) != bfd_target_elf_flavour
       || bfd_get_flavour (obfd) != bfd_target_elf_flavour)
@@ -4374,7 +4377,7 @@ elf64_ia64_object_p (bfd *abfd)
   flagword flags;
   const char *name;
   char *unwi_name, *unw_name;
-  bfd_size_type amt;
+  size_t amt;
 
   if (abfd->flags & DYNAMIC)
     return TRUE;
@@ -4848,7 +4851,7 @@ elf64_vms_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
       /* Extract IDENT.  */
       if (!bfd_malloc_and_get_section (abfd, s, &dynbuf))
 	{
-error_free_dyn:
+	error_free_dyn:
 	  free (dynbuf);
 	  goto error_return;
 	}

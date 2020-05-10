@@ -1,5 +1,5 @@
 /* IBM S/390-specific support for ELF 32 and 64 bit functions
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
    Contributed by Andreas Krebbel.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -212,7 +212,7 @@ s390_elf_allocate_ifunc_dyn_relocs (struct bfd_link_info *info,
       return TRUE;
     }
 
-keep:
+ keep:
   /* Without checking h->plt.refcount here we allocate a PLT slot.
      When setting plt.refcount in check_relocs it might not have been
      known that this will be an IFUNC symol.  */

@@ -1,5 +1,5 @@
 /* Shared library declarations for GDB, the GNU Debugger.
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -23,11 +23,6 @@
 /* For domain_enum domain.  */
 #include "symtab.h"
 #include "gdb_bfd.h"
-
-#define ALL_SO_LIBS(so) \
-    for (so = so_list_head; \
-	 so != NULL; \
-	 so = so->next)
 
 /* Base class for target-specific link map information.  */
 
@@ -182,9 +177,6 @@ struct so_deleter
 
 /* A unique pointer to a so_list.  */
 typedef std::unique_ptr<so_list, so_deleter> so_list_up;
-
-/* Return address of first so_list entry in master shared object list.  */
-struct so_list *master_so_list (void);
 
 /* Find main executable binary file.  */
 extern gdb::unique_xmalloc_ptr<char> exec_file_find (const char *in_pathname,

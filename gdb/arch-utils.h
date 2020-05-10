@@ -1,6 +1,6 @@
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -227,6 +227,10 @@ extern int default_return_in_first_hidden_param_p (struct gdbarch *,
 extern int default_insn_is_call (struct gdbarch *, CORE_ADDR);
 extern int default_insn_is_ret (struct gdbarch *, CORE_ADDR);
 extern int default_insn_is_jump (struct gdbarch *, CORE_ADDR);
+
+/* Default implementation of gdbarch_program_breakpoint_here_p.  */
+extern bool default_program_breakpoint_here_p (struct gdbarch *gdbarch,
+					       CORE_ADDR addr);
 
 /* Do-nothing version of vsyscall_range.  Returns false.  */
 

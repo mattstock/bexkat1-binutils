@@ -1,6 +1,6 @@
 /* Target-dependent code for the Matsushita MN10300 for GDB, the GNU debugger.
 
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,7 +28,7 @@
 #include "frame-unwind.h"
 #include "frame-base.h"
 #include "symtab.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "osabi.h"
 #include "infcall.h"
 #include "prologue-value.h"
@@ -1417,8 +1417,9 @@ mn10300_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
 		      tdep->am33_mode);
 }
 
+void _initialize_mn10300_tdep ();
 void
-_initialize_mn10300_tdep (void)
+_initialize_mn10300_tdep ()
 {
   gdbarch_register (bfd_arch_mn10300, mn10300_gdbarch_init, mn10300_dump_tdep);
 }

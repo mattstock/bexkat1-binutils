@@ -1,6 +1,6 @@
 /* Modula 2 language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -393,7 +393,7 @@ extern const struct language_defn m2_language_defn =
   m2_emit_char,			/* Function to print a single character */
   m2_print_type,		/* Print a type using appropriate syntax */
   m2_print_typedef,		/* Print a typedef using appropriate syntax */
-  m2_val_print,			/* Print a value using appropriate syntax */
+  m2_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
@@ -457,8 +457,9 @@ builtin_m2_type (struct gdbarch *gdbarch)
 
 /* Initialization for Modula-2 */
 
+void _initialize_m2_language ();
 void
-_initialize_m2_language (void)
+_initialize_m2_language ()
 {
   m2_type_data = gdbarch_data_register_post_init (build_m2_types);
 }

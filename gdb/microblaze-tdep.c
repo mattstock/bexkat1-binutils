@@ -1,6 +1,6 @@
 /* Target-dependent code for Xilinx MicroBlaze.
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -31,7 +31,7 @@
 #include "target.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "osabi.h"
 #include "target-descriptions.h"
 #include "opcodes/microblaze-opcm.h"
@@ -753,8 +753,9 @@ microblaze_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_microblaze_tdep ();
 void
-_initialize_microblaze_tdep (void)
+_initialize_microblaze_tdep ()
 {
   register_gdbarch_init (bfd_arch_microblaze, microblaze_gdbarch_init);
 

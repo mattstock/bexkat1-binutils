@@ -1,6 +1,6 @@
 /* Target-dependent code for the HP PA-RISC architecture.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    Contributed by the Center for Software Science at the
    University of Utah (pa-gdb-bugs@cs.utah.edu).
@@ -258,7 +258,7 @@ internalize_unwinds (struct objfile *objfile, struct unwind_table_entry *table,
 
   if (size > 0)
     {
-      struct gdbarch *gdbarch = get_objfile_arch (objfile);
+      struct gdbarch *gdbarch = objfile->arch ();
       unsigned long tmp;
       unsigned i;
       char *buf = (char *) alloca (size);
@@ -357,7 +357,7 @@ read_unwind_info (struct objfile *objfile)
   struct hppa_unwind_info *ui;
   struct hppa_objfile_private *obj_private;
 
-  text_offset = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
+  text_offset = objfile->text_section_offset ();
   ui = (struct hppa_unwind_info *) obstack_alloc (&objfile->objfile_obstack,
 					   sizeof (struct hppa_unwind_info));
 
@@ -3168,8 +3168,9 @@ hppa_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file, "elf = %s\n", tdep->is_elf ? "yes" : "no");
 }
 
+void _initialize_hppa_tdep ();
 void
-_initialize_hppa_tdep (void)
+_initialize_hppa_tdep ()
 {
   gdbarch_register (bfd_arch_hppa, hppa_gdbarch_init, hppa_dump_tdep);
 

@@ -1,5 +1,5 @@
 /* Read coff symbol tables and convert to internal format, for GDB.
-   Copyright (C) 1987-2019 Free Software Foundation, Inc.
+   Copyright (C) 1987-2020 Free Software Foundation, Inc.
    Contributed by David D. Johnson, Brown University (ddj@cs.brown.edu).
 
    This file is part of GDB.
@@ -753,7 +753,7 @@ coff_symtab_read (minimal_symbol_reader &reader,
 		  long symtab_offset, unsigned int nsyms,
 		  struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   struct context_stack *newobj = nullptr;
   struct coff_symbol coff_symbol;
   struct coff_symbol *cs = &coff_symbol;
@@ -919,8 +919,8 @@ coff_symtab_read (minimal_symbol_reader &reader,
 		     file with no symbols.  */
 		  if (in_source_file)
 		    complete_symtab (filestring,
-		    cs->c_value + ANOFFSET (objfile->section_offsets,
-					    SECT_OFF_TEXT (objfile)),
+				     (cs->c_value
+				      + objfile->text_section_offset ()),
 				     main_aux.x_scn.x_scnlen);
 		  in_source_file = 0;
 		}
@@ -986,7 +986,7 @@ coff_symtab_read (minimal_symbol_reader &reader,
  		    || cs->c_sclass == C_THUMBEXTFUNC
  		    || cs->c_sclass == C_THUMBEXT
  		    || (pe_file && (cs->c_sclass == C_STAT)))
-		  offset = ANOFFSET (objfile->section_offsets, sec);
+		  offset = objfile->section_offsets[sec];
 
 		if (bfd_section->flags & SEC_CODE)
 		  {
@@ -1113,8 +1113,7 @@ coff_symtab_read (minimal_symbol_reader &reader,
 			    NULL, cstk.start_addr,
 			    fcn_cs_saved.c_value
 			    + fcn_aux_saved.x_sym.x_misc.x_fsize
-			    + ANOFFSET (objfile->section_offsets,
-					SECT_OFF_TEXT (objfile)));
+			    + objfile->text_section_offset ());
 	      within_function = 0;
 	    }
 	  break;
@@ -1123,8 +1122,7 @@ coff_symtab_read (minimal_symbol_reader &reader,
 	  if (strcmp (cs->c_name, ".bb") == 0)
 	    {
 	      tmpaddr = cs->c_value;
-	      tmpaddr += ANOFFSET (objfile->section_offsets,
-				   SECT_OFF_TEXT (objfile));
+	      tmpaddr += objfile->text_section_offset ();
 	      push_context (++depth, tmpaddr);
 	    }
 	  else if (strcmp (cs->c_name, ".eb") == 0)
@@ -1147,9 +1145,7 @@ coff_symtab_read (minimal_symbol_reader &reader,
 		}
 	      if (*get_local_symbols () && !outermost_context_p ())
 		{
-		  tmpaddr =
-		    cs->c_value + ANOFFSET (objfile->section_offsets,
-					    SECT_OFF_TEXT (objfile));
+		  tmpaddr = cs->c_value + objfile->text_section_offset ();
 		  /* Make a block for the local symbols within.  */
 		  finish_block (0, cstk.old_blocks, NULL,
 				cstk.start_addr, tmpaddr);
@@ -1406,7 +1402,7 @@ static void
 enter_linenos (long file_offset, int first_line,
 	       int last_line, struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   char *rawptr;
   struct internal_lineno lptr;
 
@@ -1441,8 +1437,7 @@ enter_linenos (long file_offset, int first_line,
       if (L_LNNO32 (&lptr) && L_LNNO32 (&lptr) <= last_line)
 	{
 	  CORE_ADDR addr = lptr.l_addr.l_paddr;
-	  addr += ANOFFSET (objfile->section_offsets,
-			    SECT_OFF_TEXT (objfile));
+	  addr += objfile->text_section_offset ();
 	  record_line (get_current_subfile (),
 		       first_line + L_LNNO32 (&lptr),
 		       gdbarch_addr_bits_remove (gdbarch, addr));
@@ -1568,7 +1563,7 @@ process_coff_symbol (struct coff_symbol *cs,
   name = EXTERNAL_NAME (name, objfile->obfd);
   sym->set_language (get_current_subfile ()->language,
 		     &objfile->objfile_obstack);
-  SYMBOL_SET_NAMES (sym, name, true, objfile);
+  sym->compute_and_set_names (name, true, objfile->per_bfd);
 
   /* default assumptions */
   SYMBOL_VALUE (sym) = cs->c_value;
@@ -1577,8 +1572,7 @@ process_coff_symbol (struct coff_symbol *cs,
 
   if (ISFCN (cs->c_type))
     {
-      SYMBOL_VALUE (sym) += ANOFFSET (objfile->section_offsets,
-				      SECT_OFF_TEXT (objfile));
+      SYMBOL_VALUE (sym) += objfile->text_section_offset ();
       SYMBOL_TYPE (sym) =
 	lookup_function_type (decode_function_type (cs, cs->c_type,
 						    aux, objfile));
@@ -1610,8 +1604,7 @@ process_coff_symbol (struct coff_symbol *cs,
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_STATIC;
 	  SET_SYMBOL_VALUE_ADDRESS (sym,
 				    (CORE_ADDR) cs->c_value
-				    + ANOFFSET (objfile->section_offsets,
-						SECT_OFF_TEXT (objfile)));
+				    + objfile->section_offsets[SECT_OFF_TEXT (objfile)]);
 	  add_symbol_to_list (sym, get_global_symbols ());
 	  break;
 
@@ -1621,8 +1614,7 @@ process_coff_symbol (struct coff_symbol *cs,
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_STATIC;
 	  SET_SYMBOL_VALUE_ADDRESS (sym,
 				    (CORE_ADDR) cs->c_value
-				    + ANOFFSET (objfile->section_offsets,
-						SECT_OFF_TEXT (objfile)));
+				    + objfile->section_offsets[SECT_OFF_TEXT (objfile)]);
 	  if (within_function)
 	    {
 	      /* Static symbol of local scope.  */
@@ -1842,7 +1834,7 @@ decode_base_type (struct coff_symbol *cs,
 		  union internal_auxent *aux, 
 		  struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   struct type *type;
 
   switch (c_type)
@@ -2070,7 +2062,7 @@ static struct type *
 coff_read_enum_type (int index, int length, int lastsym,
 		     struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   struct symbol *sym;
   struct type *type;
   int nsyms = 0;
@@ -2194,8 +2186,9 @@ static const struct sym_fns coff_sym_fns =
   &psym_functions
 };
 
+void _initialize_coffread ();
 void
-_initialize_coffread (void)
+_initialize_coffread ()
 {
   add_symtab_fns (bfd_target_coff_flavour, &coff_sym_fns);
 

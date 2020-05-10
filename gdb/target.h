@@ -1,6 +1,6 @@
 /* Interface between GDB and target environments, including files and processes
 
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.  Written by John Gilmore.
 
@@ -43,6 +43,7 @@ struct inferior;
 #include "infrun.h" /* For enum exec_direction_kind.  */
 #include "breakpoint.h" /* For enum bptype.  */
 #include "gdbsupport/scoped_restore.h"
+#include "gdbsupport/refcounted-object.h"
 
 /* This include file defines the interface between the main part
    of the debugger, and the part which is target-specific, or
@@ -427,6 +428,7 @@ struct target_info
 };
 
 struct target_ops
+  : public refcounted_object
   {
     /* Return this target's stratum.  */
     virtual strata stratum () const = 0;
@@ -445,10 +447,10 @@ struct target_ops
     virtual const target_info &info () const = 0;
 
     /* Name this target type.  */
-    const char *shortname ()
+    const char *shortname () const
     { return info ().shortname; }
 
-    const char *longname ()
+    const char *longname () const
     { return info ().longname; }
 
     /* Close the target.  This is where the target can handle
@@ -478,6 +480,13 @@ struct target_ops
       TARGET_DEFAULT_NORETURN (noprocess ());
     virtual void commit_resume ()
       TARGET_DEFAULT_IGNORE ();
+    /* See target_wait's description.  Note that implementations of
+       this method must not assume that inferior_ptid on entry is
+       pointing at the thread or inferior that ends up reporting an
+       event.  The reported event could be for some other thread in
+       the current inferior or even for a different process of the
+       current target.  inferior_ptid may also be null_ptid on
+       entry.  */
     virtual ptid_t wait (ptid_t, struct target_waitstatus *,
 			 int TARGET_DEBUG_PRINTER (target_debug_print_options))
       TARGET_DEFAULT_FUNC (default_target_wait);
@@ -613,7 +622,7 @@ struct target_ops
       TARGET_DEFAULT_RETURN (1);
     virtual int remove_vfork_catchpoint (int)
       TARGET_DEFAULT_RETURN (1);
-    virtual int follow_fork (int, int)
+    virtual bool follow_fork (bool, bool)
       TARGET_DEFAULT_FUNC (default_follow_fork);
     virtual int insert_exec_catchpoint (int)
       TARGET_DEFAULT_RETURN (1);
@@ -679,7 +688,7 @@ struct target_ops
     virtual bool has_memory () { return false; }
     virtual bool has_stack () { return false; }
     virtual bool has_registers () { return false; }
-    virtual bool has_execution (ptid_t) { return false; }
+    virtual bool has_execution (inferior *inf) { return false; }
 
     /* Control thread execution.  */
     virtual thread_control_capabilities get_thread_control_capabilities ()
@@ -694,6 +703,8 @@ struct target_ops
       TARGET_DEFAULT_RETURN (false);
     virtual void async (int)
       TARGET_DEFAULT_NORETURN (tcomplain ());
+    virtual int async_wait_fd ()
+      TARGET_DEFAULT_NORETURN (noprocess ());
     virtual void thread_events (int)
       TARGET_DEFAULT_IGNORE ();
     /* This method must be implemented in some situations.  See the
@@ -878,11 +889,10 @@ struct target_ops
     /* Determine current architecture of thread PTID.
 
        The target is supposed to determine the architecture of the code where
-       the target is currently stopped at (on Cell, if a target is in spu_run,
-       to_thread_architecture would return SPU, otherwise PPC32 or PPC64).
-       This is architecture used to perform decr_pc_after_break adjustment,
-       and also determines the frame architecture of the innermost frame.
-       ptrace operations need to operate according to target_gdbarch ().  */
+       the target is currently stopped at.  The architecture information is
+       used to perform decr_pc_after_break adjustment, and also to determine
+       the frame architecture of the innermost frame.  ptrace operations need to
+       operate according to target_gdbarch ().  */
     virtual struct gdbarch *thread_architecture (ptid_t)
       TARGET_DEFAULT_RETURN (NULL);
 
@@ -1258,6 +1268,27 @@ struct target_ops_deleter
 /* A unique pointer for target_ops.  */
 typedef std::unique_ptr<target_ops, target_ops_deleter> target_ops_up;
 
+/* Decref a target and close if, if there are no references left.  */
+extern void decref_target (target_ops *t);
+
+/* A policy class to interface gdb::ref_ptr with target_ops.  */
+
+struct target_ops_ref_policy
+{
+  static void incref (target_ops *t)
+  {
+    t->incref ();
+  }
+
+  static void decref (target_ops *t)
+  {
+    decref_target (t);
+  }
+};
+
+/* A gdb::ref_ptr pointer to a target_ops.  */
+typedef gdb::ref_ptr<target_ops, target_ops_ref_policy> target_ops_ref;
+
 /* Native target backends call this once at initialization time to
    inform the core about which is the target that can respond to "run"
    or "attach".  Note: native targets are always singletons.  */
@@ -1311,6 +1342,9 @@ private:
    never be NULL.  If there is no target, it points to the dummy_target.  */
 
 extern target_ops *current_top_target ();
+
+/* Return the dummy target.  */
+extern target_ops *get_dummy_target ();
 
 /* Define easy words for doing these operations on our current target.  */
 
@@ -1626,10 +1660,10 @@ extern void target_load (const char *arg, int from_tty);
    necessary to continue debugging either the parent or child, as
    requested, and releasing the other.  Information about the fork
    or vfork event is available via get_last_target_status ().
-   This function returns 1 if the inferior should not be resumed
+   This function returns true if the inferior should not be resumed
    (i.e. there is another event pending).  */
 
-int target_follow_fork (int follow_child, int detach_fork);
+bool target_follow_fork (bool follow_child, bool detach_fork);
 
 /* Handle the target-specific bookkeeping required when the inferior
    makes an exec call.  INF is the exec'd inferior.  */
@@ -1784,9 +1818,10 @@ extern int target_has_registers_1 (void);
    case this will become true after to_create_inferior or
    to_attach.  */
 
-extern int target_has_execution_1 (ptid_t);
+extern bool target_has_execution_1 (inferior *inf);
 
-/* Like target_has_execution_1, but always passes inferior_ptid.  */
+/* Like target_has_execution_1, but always passes
+   current_inferior().  */
 
 extern int target_has_execution_current (void);
 
@@ -1821,6 +1856,9 @@ extern enum auto_boolean target_non_stop_enabled;
    in non-stop mode even with "set non-stop off".  Always true if "set
    non-stop" is on.  */
 extern int target_is_non_stop_p (void);
+
+/* Return true if at least one inferior has a non-stop target.  */
+extern bool exists_non_stop_target ();
 
 #define target_execution_direction() \
   (current_top_target ()->execution_direction ())
@@ -2359,7 +2397,7 @@ extern void pop_all_targets_at_and_above (enum strata stratum);
    strictly above ABOVE_STRATUM.  */
 extern void pop_all_targets_above (enum strata above_stratum);
 
-extern int target_is_pushed (struct target_ops *t);
+extern bool target_is_pushed (target_ops *t);
 
 extern CORE_ADDR target_translate_tls_address (struct objfile *objfile,
 					       CORE_ADDR offset);

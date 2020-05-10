@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux, architecture independent.
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1651,7 +1651,8 @@ linux_corefile_thread (struct thread_info *info,
 {
   struct regcache *regcache;
 
-  regcache = get_thread_arch_regcache (info->ptid, args->gdbarch);
+  regcache = get_thread_arch_regcache (info->inf->process_target (),
+				       info->ptid, args->gdbarch);
 
   target_fetch_registers (regcache, -1);
   gdb::byte_vector siginfo_data = linux_get_siginfo_data (info, args->gdbarch);
@@ -1728,7 +1729,7 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
 
   /* Copying the program name.  Only the basename matters.  */
   basename = lbasename (fname.get ());
-  strncpy (p->pr_fname, basename, sizeof (p->pr_fname));
+  strncpy (p->pr_fname, basename, sizeof (p->pr_fname) - 1);
   p->pr_fname[sizeof (p->pr_fname) - 1] = '\0';
 
   infargs = get_inferior_args ();
@@ -1738,7 +1739,7 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
   if (infargs != NULL)
     psargs = psargs + " " + infargs;
 
-  strncpy (p->pr_psargs, psargs.c_str (), sizeof (p->pr_psargs));
+  strncpy (p->pr_psargs, psargs.c_str (), sizeof (p->pr_psargs) - 1);
   p->pr_psargs[sizeof (p->pr_psargs) - 1] = '\0';
 
   xsnprintf (filename, sizeof (filename), "/proc/%d/stat", (int) pid);
@@ -2325,7 +2326,7 @@ linux_infcall_mmap (CORE_ADDR size, unsigned prot)
      "mmap" uses 64-bit off_t on x86_64 and 32-bit off_t on i386 and x32.  */
   struct value *mmap_val = find_function_in_inferior ("mmap64", &objf);
   struct value *addr_val;
-  struct gdbarch *gdbarch = get_objfile_arch (objf);
+  struct gdbarch *gdbarch = objf->arch ();
   CORE_ADDR retval;
   enum
     {
@@ -2364,7 +2365,7 @@ linux_infcall_munmap (CORE_ADDR addr, CORE_ADDR size)
   struct objfile *objf;
   struct value *munmap_val = find_function_in_inferior ("munmap", &objf);
   struct value *retval_val;
-  struct gdbarch *gdbarch = get_objfile_arch (objf);
+  struct gdbarch *gdbarch = objf->arch ();
   LONGEST retval;
   enum
     {
@@ -2485,8 +2486,9 @@ linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_get_siginfo_type (gdbarch, linux_get_siginfo_type);
 }
 
+void _initialize_linux_tdep ();
 void
-_initialize_linux_tdep (void)
+_initialize_linux_tdep ()
 {
   linux_gdbarch_data_handle =
     gdbarch_data_register_post_init (init_linux_gdbarch_data);

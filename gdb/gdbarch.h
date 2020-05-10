@@ -3,7 +3,7 @@
 
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -39,6 +39,8 @@
 #include "frame.h"
 #include "dis-asm.h"
 #include "gdb_obstack.h"
+#include "infrun.h"
+#include "osabi.h"
 
 struct floatformat;
 struct ui_file;
@@ -55,7 +57,6 @@ struct obstack;
 struct bp_target_info;
 struct target_desc;
 struct symbol;
-struct displaced_step_closure;
 struct syscall;
 struct agent_expr;
 struct axs_value;
@@ -1036,8 +1037,8 @@ extern void set_gdbarch_max_insn_length (struct gdbarch *gdbarch, ULONGEST max_i
 
 extern int gdbarch_displaced_step_copy_insn_p (struct gdbarch *gdbarch);
 
-typedef struct displaced_step_closure * (gdbarch_displaced_step_copy_insn_ftype) (struct gdbarch *gdbarch, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
-extern struct displaced_step_closure * gdbarch_displaced_step_copy_insn (struct gdbarch *gdbarch, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
+typedef displaced_step_closure_up (gdbarch_displaced_step_copy_insn_ftype) (struct gdbarch *gdbarch, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
+extern displaced_step_closure_up gdbarch_displaced_step_copy_insn (struct gdbarch *gdbarch, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
 extern void set_gdbarch_displaced_step_copy_insn (struct gdbarch *gdbarch, gdbarch_displaced_step_copy_insn_ftype *displaced_step_copy_insn);
 
 /* Return true if GDB should use hardware single-stepping to execute
@@ -1544,6 +1545,13 @@ extern void set_gdbarch_insn_is_ret (struct gdbarch *gdbarch, gdbarch_insn_is_re
 typedef int (gdbarch_insn_is_jump_ftype) (struct gdbarch *gdbarch, CORE_ADDR addr);
 extern int gdbarch_insn_is_jump (struct gdbarch *gdbarch, CORE_ADDR addr);
 extern void set_gdbarch_insn_is_jump (struct gdbarch *gdbarch, gdbarch_insn_is_jump_ftype *insn_is_jump);
+
+/* Return true if there's a program/permanent breakpoint planted in
+   memory at ADDRESS, return false otherwise. */
+
+typedef bool (gdbarch_program_breakpoint_here_p_ftype) (struct gdbarch *gdbarch, CORE_ADDR address);
+extern bool gdbarch_program_breakpoint_here_p (struct gdbarch *gdbarch, CORE_ADDR address);
+extern void set_gdbarch_program_breakpoint_here_p (struct gdbarch *gdbarch, gdbarch_program_breakpoint_here_p_ftype *program_breakpoint_here_p);
 
 /* Read one auxv entry from *READPTR, not reading locations >= ENDPTR.
    Return 0 if *READPTR is already at the end of the buffer.

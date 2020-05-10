@@ -1,6 +1,6 @@
 /* Frame unwinder for ia64 frames using the libunwind library.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    Written by Jeff Johnston, contributed by Red Hat Inc.
 
@@ -591,8 +591,9 @@ libunwind_is_initialized (void)
   return libunwind_initialized;
 }
 
+void _initialize_libunwind_frame ();
 void
-_initialize_libunwind_frame (void)
+_initialize_libunwind_frame ()
 {
   libunwind_descr_handle
     = gdbarch_data_register_post_init (libunwind_descr_init);

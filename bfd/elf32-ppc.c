@@ -1,5 +1,5 @@
 /* PowerPC-specific support for 32-bit ELF
-   Copyright (C) 1994-2019 Free Software Foundation, Inc.
+   Copyright (C) 1994-2020 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -1332,15 +1332,21 @@ ppc_elf_section_from_shdr (bfd *abfd,
     return FALSE;
 
   newsect = hdr->bfd_section;
-  flags = bfd_section_flags (newsect);
+  flags = 0;
   if (hdr->sh_flags & SHF_EXCLUDE)
     flags |= SEC_EXCLUDE;
 
   if (hdr->sh_type == SHT_ORDERED)
     flags |= SEC_SORT_ENTRIES;
 
-  bfd_set_section_flags (newsect, flags);
-  return TRUE;
+  if (strncmp (name, ".PPC.EMB", 8) == 0)
+    name += 8;
+  if (strncmp (name, ".sbss", 5) == 0
+      || strncmp (name, ".sdata", 6) == 0)
+    flags |= SEC_SMALL_DATA;
+
+  return (flags == 0
+	  || bfd_set_section_flags (newsect, newsect->flags | flags));
 }
 
 /* Set up any other section flags and such that may be necessary.  */
@@ -1394,7 +1400,7 @@ ppc_elf_modify_segment_map (bfd *abfd,
   for (m = elf_seg_map (abfd); m != NULL; m = m->next)
     {
       struct elf_segment_map *n;
-      bfd_size_type amt;
+      size_t amt;
       unsigned int j, k;
       unsigned int p_flags;
 
@@ -1802,7 +1808,7 @@ ppc_elf_get_synthetic_symtab (bfd *abfd, long symcount, asymbol **syms,
   bfd_vma stub_off;
   asymbol *s;
   arelent *p;
-  long count, i, stub_delta;
+  size_t count, i, stub_delta;
   size_t size;
   char *names;
   bfd_byte buf[4];
@@ -2802,7 +2808,7 @@ update_plt_info (bfd *abfd, struct plt_entry **plist,
       break;
   if (ent == NULL)
     {
-      bfd_size_type amt = sizeof (*ent);
+      size_t amt = sizeof (*ent);
       ent = bfd_alloc (abfd, amt);
       if (ent == NULL)
 	return FALSE;
@@ -3795,6 +3801,9 @@ ppc_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 
   if (!ppc_elf_merge_obj_attributes (ibfd, info))
     return FALSE;
+
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
 
   new_flags = elf_elfheader (ibfd)->e_flags;
   old_flags = elf_elfheader (obfd)->e_flags;
@@ -6843,7 +6852,7 @@ _bfd_elf_ppc_at_tls_transform (unsigned int insn, unsigned int reg)
 {
   unsigned int rtra;
 
-  if ((insn & (0x3f << 26)) != 31 << 26)
+  if ((insn & (0x3fu << 26)) != 31 << 26)
     return 0;
 
   if (reg == 0 || ((insn >> 11) & 0x1f) == reg)
@@ -6861,13 +6870,13 @@ _bfd_elf_ppc_at_tls_transform (unsigned int insn, unsigned int reg)
 	       || ((insn & (0x1f << 6)) >= 16 << 6
 		   && (insn & (0x1f << 6)) < 24 << 6)))
     /* load and store indexed -> dform.  */
-    insn = (32 | ((insn >> 6) & 0x1f)) << 26;
+    insn = (32u | ((insn >> 6) & 0x1f)) << 26;
   else if ((insn & (((0x1a << 5) | 0x1f) << 1)) == 21 << 1)
     /* ldx, ldux, stdx, stdux -> ld, ldu, std, stdu.  */
-    insn = ((58 | ((insn >> 6) & 4)) << 26) | ((insn >> 6) & 1);
+    insn = ((58u | ((insn >> 6) & 4)) << 26) | ((insn >> 6) & 1);
   else if ((insn & (((0x1f << 5) | 0x1f) << 1)) == 341 << 1)
     /* lwax -> lwa.  */
-    insn = (58 << 26) | 2;
+    insn = (58u << 26) | 2;
   else
     return 0;
   insn |= rtra;
@@ -6882,36 +6891,36 @@ unsigned int
 _bfd_elf_ppc_at_tprel_transform (unsigned int insn, unsigned int reg)
 {
   if ((insn & (0x1f << 16)) == reg << 16
-      && ((insn & (0x3f << 26)) == 14u << 26 /* addi */
-	  || (insn & (0x3f << 26)) == 15u << 26 /* addis */
-	  || (insn & (0x3f << 26)) == 32u << 26 /* lwz */
-	  || (insn & (0x3f << 26)) == 34u << 26 /* lbz */
-	  || (insn & (0x3f << 26)) == 36u << 26 /* stw */
-	  || (insn & (0x3f << 26)) == 38u << 26 /* stb */
-	  || (insn & (0x3f << 26)) == 40u << 26 /* lhz */
-	  || (insn & (0x3f << 26)) == 42u << 26 /* lha */
-	  || (insn & (0x3f << 26)) == 44u << 26 /* sth */
-	  || (insn & (0x3f << 26)) == 46u << 26 /* lmw */
-	  || (insn & (0x3f << 26)) == 47u << 26 /* stmw */
-	  || (insn & (0x3f << 26)) == 48u << 26 /* lfs */
-	  || (insn & (0x3f << 26)) == 50u << 26 /* lfd */
-	  || (insn & (0x3f << 26)) == 52u << 26 /* stfs */
-	  || (insn & (0x3f << 26)) == 54u << 26 /* stfd */
-	  || ((insn & (0x3f << 26)) == 58u << 26 /* lwa,ld,lmd */
+      && ((insn & (0x3fu << 26)) == 14u << 26 /* addi */
+	  || (insn & (0x3fu << 26)) == 15u << 26 /* addis */
+	  || (insn & (0x3fu << 26)) == 32u << 26 /* lwz */
+	  || (insn & (0x3fu << 26)) == 34u << 26 /* lbz */
+	  || (insn & (0x3fu << 26)) == 36u << 26 /* stw */
+	  || (insn & (0x3fu << 26)) == 38u << 26 /* stb */
+	  || (insn & (0x3fu << 26)) == 40u << 26 /* lhz */
+	  || (insn & (0x3fu << 26)) == 42u << 26 /* lha */
+	  || (insn & (0x3fu << 26)) == 44u << 26 /* sth */
+	  || (insn & (0x3fu << 26)) == 46u << 26 /* lmw */
+	  || (insn & (0x3fu << 26)) == 47u << 26 /* stmw */
+	  || (insn & (0x3fu << 26)) == 48u << 26 /* lfs */
+	  || (insn & (0x3fu << 26)) == 50u << 26 /* lfd */
+	  || (insn & (0x3fu << 26)) == 52u << 26 /* stfs */
+	  || (insn & (0x3fu << 26)) == 54u << 26 /* stfd */
+	  || ((insn & (0x3fu << 26)) == 58u << 26 /* lwa,ld,lmd */
 	      && (insn & 3) != 1)
-	  || ((insn & (0x3f << 26)) == 62u << 26 /* std, stmd */
+	  || ((insn & (0x3fu << 26)) == 62u << 26 /* std, stmd */
 	      && ((insn & 3) == 0 || (insn & 3) == 3))))
     {
       insn &= ~(0x1f << 16);
     }
   else if ((insn & (0x1f << 21)) == reg << 21
-	   && ((insn & (0x3e << 26)) == 24u << 26 /* ori, oris */
-	       || (insn & (0x3e << 26)) == 26u << 26 /* xori,xoris */
-	       || (insn & (0x3e << 26)) == 28u << 26 /* andi,andis */))
+	   && ((insn & (0x3eu << 26)) == 24u << 26 /* ori, oris */
+	       || (insn & (0x3eu << 26)) == 26u << 26 /* xori,xoris */
+	       || (insn & (0x3eu << 26)) == 28u << 26 /* andi,andis */))
     {
       insn &= ~(0x1f << 21);
       insn |= (insn & (0x1f << 16)) << 5;
-      if ((insn & (0x3e << 26)) == 26 << 26 /* xori,xoris */)
+      if ((insn & (0x3eu << 26)) == 26u << 26 /* xori,xoris */)
 	insn -= 2 >> 26;  /* convert to ori,oris */
     }
   else
@@ -6922,17 +6931,17 @@ _bfd_elf_ppc_at_tprel_transform (unsigned int insn, unsigned int reg)
 static bfd_boolean
 is_insn_ds_form (unsigned int insn)
 {
-  return ((insn & (0x3f << 26)) == 58u << 26 /* ld,ldu,lwa */
-	  || (insn & (0x3f << 26)) == 62u << 26 /* std,stdu,stq */
-	  || (insn & (0x3f << 26)) == 57u << 26 /* lfdp */
-	  || (insn & (0x3f << 26)) == 61u << 26 /* stfdp */);
+  return ((insn & (0x3fu << 26)) == 58u << 26 /* ld,ldu,lwa */
+	  || (insn & (0x3fu << 26)) == 62u << 26 /* std,stdu,stq */
+	  || (insn & (0x3fu << 26)) == 57u << 26 /* lfdp */
+	  || (insn & (0x3fu << 26)) == 61u << 26 /* stfdp */);
 }
 
 static bfd_boolean
 is_insn_dq_form (unsigned int insn)
 {
-  return ((insn & (0x3f << 26)) == 56u << 26 /* lq */
-	  || ((insn & (0x3f << 26)) == (61u << 26) /* lxv, stxv */
+  return ((insn & (0x3fu << 26)) == 56u << 26 /* lq */
+	  || ((insn & (0x3fu << 26)) == (61u << 26) /* lxv, stxv */
 	      && (insn & 3) == 1));
 }
 
@@ -7245,7 +7254,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 		{
 		  /* IE */
 		  insn1 &= (0x1f << 21) | (0x1f << 16);
-		  insn1 |= 32 << 26;	/* lwz */
+		  insn1 |= 32u << 26;	/* lwz */
 		  if (offset != (bfd_vma) -1)
 		    {
 		      rel[1].r_info = ELF32_R_INFO (STN_UNDEF, R_PPC_NONE);
@@ -7414,7 +7423,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 
 	    insn = bfd_get_32 (input_bfd,
 			       contents + rel->r_offset - d_offset);
-	    if ((insn & (0x3f << 26)) == 15u << 26
+	    if ((insn & (0x3fu << 26)) == 15u << 26
 		&& (insn & (0x1f << 16)) != 0)
 	      {
 		if (!bfd_link_pic (info))
@@ -7450,7 +7459,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	    {
 	      insn = bfd_get_32 (input_bfd,
 				 contents + rel->r_offset - d_offset);
-	      if ((insn & (0x3f << 26)) == (15u << 26)
+	      if ((insn & (0x3fu << 26)) == (15u << 26)
 		  && (insn & (0x1f << 16)) == 0 /* lis */)
 		{
 		  bfd_byte *p;
@@ -7513,23 +7522,23 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	    {
 	      insn = bfd_get_32 (input_bfd,
 				 contents + rel->r_offset - d_offset);
-	      if ((insn & (0x3f << 26)) == 14u << 26    /* addi */
-		  || (insn & (0x3f << 26)) == 32u << 26 /* lwz */
-		  || (insn & (0x3f << 26)) == 34u << 26 /* lbz */
-		  || (insn & (0x3f << 26)) == 36u << 26 /* stw */
-		  || (insn & (0x3f << 26)) == 38u << 26 /* stb */
-		  || (insn & (0x3f << 26)) == 40u << 26 /* lhz */
-		  || (insn & (0x3f << 26)) == 42u << 26 /* lha */
-		  || (insn & (0x3f << 26)) == 44u << 26 /* sth */
-		  || (insn & (0x3f << 26)) == 46u << 26 /* lmw */
-		  || (insn & (0x3f << 26)) == 47u << 26 /* stmw */
-		  || (insn & (0x3f << 26)) == 48u << 26 /* lfs */
-		  || (insn & (0x3f << 26)) == 50u << 26 /* lfd */
-		  || (insn & (0x3f << 26)) == 52u << 26 /* stfs */
-		  || (insn & (0x3f << 26)) == 54u << 26 /* stfd */
-		  || ((insn & (0x3f << 26)) == 58u << 26 /* lwa,ld,lmd */
+	      if ((insn & (0x3fu << 26)) == 14u << 26    /* addi */
+		  || (insn & (0x3fu << 26)) == 32u << 26 /* lwz */
+		  || (insn & (0x3fu << 26)) == 34u << 26 /* lbz */
+		  || (insn & (0x3fu << 26)) == 36u << 26 /* stw */
+		  || (insn & (0x3fu << 26)) == 38u << 26 /* stb */
+		  || (insn & (0x3fu << 26)) == 40u << 26 /* lhz */
+		  || (insn & (0x3fu << 26)) == 42u << 26 /* lha */
+		  || (insn & (0x3fu << 26)) == 44u << 26 /* sth */
+		  || (insn & (0x3fu << 26)) == 46u << 26 /* lmw */
+		  || (insn & (0x3fu << 26)) == 47u << 26 /* stmw */
+		  || (insn & (0x3fu << 26)) == 48u << 26 /* lfs */
+		  || (insn & (0x3fu << 26)) == 50u << 26 /* lfd */
+		  || (insn & (0x3fu << 26)) == 52u << 26 /* stfs */
+		  || (insn & (0x3fu << 26)) == 54u << 26 /* stfd */
+		  || ((insn & (0x3fu << 26)) == 58u << 26 /* lwa,ld,lmd */
 		      && (insn & 3) != 1)
-		  || ((insn & (0x3f << 26)) == 62u << 26 /* std, stmd */
+		  || ((insn & (0x3fu << 26)) == 62u << 26 /* std, stmd */
 		      && ((insn & 3) == 0 || (insn & 3) == 3)))
 		{
 		  /* Arrange to apply the reloc addend, if any.  */
@@ -7639,7 +7648,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	    {
 	      bfd_byte *p = contents + (rel->r_offset & ~3);
 	      unsigned int insn = bfd_get_32 (input_bfd, p);
-	      if ((insn & ((0x3f << 26) | 0x1f << 16))
+	      if ((insn & ((0x3fu << 26) | 0x1f << 16))
 		  != ((15u << 26) | (2 << 16)) /* addis rt,2,imm */)
 		/* xgettext:c-format */
 		info->callbacks->minfo
@@ -8780,7 +8789,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 
 	case R_PPC_VLE_ADDR20:
 	  ppc_elf_vle_split20 (output_bfd, contents + rel->r_offset, relocation);
-	  continue;
+	  goto copy_reloc;
 
 	  /* Relocate against the beginning of the section.  */
 	case R_PPC_SECTOFF:
@@ -8993,11 +9002,11 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	      unsigned int insn;
 
 	      insn = bfd_get_32 (input_bfd, contents + (rel->r_offset & ~3));
-	      if ((insn & (0x3f << 26)) == 10u << 26 /* cmpli */)
+	      if ((insn & (0x3fu << 26)) == 10u << 26 /* cmpli */)
 		complain = complain_overflow_bitfield;
-	      else if ((insn & (0x3f << 26)) == 28u << 26 /* andi */
-		       || (insn & (0x3f << 26)) == 24u << 26 /* ori */
-		       || (insn & (0x3f << 26)) == 26u << 26 /* xori */)
+	      else if ((insn & (0x3fu << 26)) == 28u << 26 /* andi */
+		       || (insn & (0x3fu << 26)) == 24u << 26 /* ori */
+		       || (insn & (0x3fu << 26)) == 26u << 26 /* xori */)
 		complain = complain_overflow_unsigned;
 	    }
 	  if (howto->complain_on_overflow != complain)
@@ -9221,10 +9230,10 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	     . new_page:		new_page:
 	     .  */
 	  insn = bfd_get_32 (input_bfd, contents + offset);
-	  if ((insn & (0x3f << 26)) == (18u << 26)	    /* b,bl,ba,bla */
-	      || ((insn & (0x3f << 26)) == (16u << 26)	    /* bc,bcl,bca,bcla*/
+	  if ((insn & (0x3fu << 26)) == (18u << 26)	    /* b,bl,ba,bla */
+	      || ((insn & (0x3fu << 26)) == (16u << 26)	    /* bc,bcl,bca,bcla*/
 		  && (insn & (0x14 << 21)) == (0x14 << 21)) /*	 with BO=0x14 */
-	      || ((insn & (0x3f << 26)) == (19u << 26)
+	      || ((insn & (0x3fu << 26)) == (19u << 26)
 		  && (insn & (0x3ff << 1)) == (16u << 1)    /* bclr,bclrl */
 		  && (insn & (0x14 << 21)) == (0x14 << 21)))/*	 with BO=0x14 */
 	    continue;
@@ -9308,7 +9317,7 @@ ppc_elf_relocate_section (bfd *output_bfd,
 	  else
 	    rel = NULL;
 
-	  if ((insn & (0x3f << 26)) == (16u << 26) /* bc */
+	  if ((insn & (0x3fu << 26)) == (16u << 26) /* bc */
 	      && (insn & 2) == 0 /* relative */)
 	    {
 	      bfd_vma delta = ((insn & 0xfffc) ^ 0x8000) - 0x8000;

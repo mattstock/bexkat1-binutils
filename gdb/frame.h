@@ -1,6 +1,6 @@
 /* Definitions for dealing with stack frames, for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -235,6 +235,10 @@ extern struct frame_id
    stack address (typically the outer-bound).  The code address as well
    as the special identifier address are set to indicate wild cards.  */
 extern struct frame_id frame_id_build_wild (CORE_ADDR stack_addr);
+
+/* Returns true if FRAME's id has been computed.
+   Returns false otherwise.  */
+extern bool frame_id_computed_p (struct frame_info *frame);
 
 /* Returns non-zero when L is a valid frame (a valid frame has a
    non-zero .base).  The outermost frame is valid even without an

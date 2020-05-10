@@ -1,5 +1,5 @@
 /* MIPS-specific support for ELF
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
 
    Most of the information added by Ian Lance Taylor, Cygnus Support,
    <ian@cygnus.com>.
@@ -1374,7 +1374,7 @@ _bfd_mips_elf_new_section_hook (bfd *abfd, asection *sec)
   if (!sec->used_by_bfd)
     {
       struct _mips_elf_section_data *sdata;
-      bfd_size_type amt = sizeof (*sdata);
+      size_t amt = sizeof (*sdata);
 
       sdata = bfd_zalloc (abfd, amt);
       if (sdata == NULL)
@@ -1413,18 +1413,23 @@ _bfd_mips_elf_read_ecoff_info (bfd *abfd, asection *section,
   /* The symbolic header contains absolute file offsets and sizes to
      read.  */
 #define READ(ptr, offset, count, size, type)				\
-  if (symhdr->count == 0)						\
-    debug->ptr = NULL;							\
-  else									\
+  do									\
     {									\
-      bfd_size_type amt = (bfd_size_type) size * symhdr->count;		\
-      debug->ptr = bfd_malloc (amt);					\
+      size_t amt;							\
+      debug->ptr = NULL;						\
+      if (symhdr->count == 0)						\
+	break;								\
+      if (_bfd_mul_overflow (size, symhdr->count, &amt))		\
+	{								\
+	  bfd_set_error (bfd_error_file_too_big);			\
+	  goto error_return;						\
+	}								\
+      if (bfd_seek (abfd, symhdr->offset, SEEK_SET) != 0)		\
+	goto error_return;						\
+      debug->ptr = (type) _bfd_malloc_and_read (abfd, amt, amt);	\
       if (debug->ptr == NULL)						\
 	goto error_return;						\
-      if (bfd_seek (abfd, symhdr->offset, SEEK_SET) != 0		\
-	  || bfd_bread (debug->ptr, amt, abfd) != amt)			\
-	goto error_return;						\
-    }
+    } while (0)
 
   READ (line, cbLineOffset, cbLine, sizeof (unsigned char), unsigned char *);
   READ (external_dnr, cbDnOffset, idnMax, swap->external_dnr_size, void *);
@@ -5644,11 +5649,12 @@ mips_elf_calculate_relocation (bfd *abfd, bfd *input_bfd,
 	}
       else
 	{
-	  bfd_boolean reject_undefined
-	    = (info->unresolved_syms_in_objects == RM_GENERATE_ERROR
-	       || ELF_ST_VISIBILITY (h->root.other) != STV_DEFAULT);
+          bfd_boolean reject_undefined
+	    = (info->unresolved_syms_in_objects == RM_DIAGNOSE
+	       && !info->warn_unresolved_syms)
+	    || ELF_ST_VISIBILITY (h->root.other) != STV_DEFAULT;
 
-	  (*info->callbacks->undefined_symbol)
+	  info->callbacks->undefined_symbol
 	    (info, h->root.root.root.string, input_bfd,
 	     input_section, relocation->r_offset, reject_undefined);
 
@@ -6602,7 +6608,7 @@ mips_elf_perform_relocation (struct bfd_link_info *info,
 	}
 
       /* Make this the JALX opcode.  */
-      x = (x & ~(0x3f << 26)) | (jalx_opcode << 26);
+      x = (x & ~(0x3fu << 26)) | (jalx_opcode << 26);
     }
   else if (cross_mode_jump_p && b_reloc_p (r_type))
     {
@@ -7420,10 +7426,7 @@ _bfd_mips_elf_section_processing (bfd *abfd, Elf_Internal_Shdr *hdr)
 
 /* Handle a MIPS specific section when reading an object file.  This
    is called when elfcode.h finds a section with an unknown type.
-   This routine supports both the 32-bit and 64-bit ELF ABI.
-
-   FIXME: We need to handle the SHF_MIPS_GPREL flag, but I'm not sure
-   how to.  */
+   This routine supports both the 32-bit and 64-bit ELF ABI.  */
 
 bfd_boolean
 _bfd_mips_elf_section_from_shdr (bfd *abfd,
@@ -7511,6 +7514,9 @@ _bfd_mips_elf_section_from_shdr (bfd *abfd,
 
   if (! _bfd_elf_make_section_from_shdr (abfd, hdr, name, shindex))
     return FALSE;
+
+  if (hdr->sh_flags & SHF_MIPS_GPREL)
+    flags |= SEC_SMALL_DATA;
 
   if (flags)
     {
@@ -7830,7 +7836,7 @@ _bfd_mips_elf_add_symbol_hook (bfd *abfd, struct bfd_link_info *info,
 	{
 	  asymbol *elf_text_symbol;
 	  asection *elf_text_section;
-	  bfd_size_type amt = sizeof (asection);
+	  size_t amt = sizeof (asection);
 
 	  elf_text_section = bfd_zalloc (abfd, amt);
 	  if (elf_text_section == NULL)
@@ -7871,7 +7877,7 @@ _bfd_mips_elf_add_symbol_hook (bfd *abfd, struct bfd_link_info *info,
 	{
 	  asymbol *elf_data_symbol;
 	  asection *elf_data_section;
-	  bfd_size_type amt = sizeof (asection);
+	  size_t amt = sizeof (asection);
 
 	  elf_data_section = bfd_zalloc (abfd, amt);
 	  if (elf_data_section == NULL)
@@ -9305,12 +9311,21 @@ _bfd_mips_elf_adjust_dynamic_symbol (struct bfd_link_info *info,
   hmips = (struct mips_elf_link_hash_entry *) h;
 
   /* Make sure we know what is going on here.  */
-  BFD_ASSERT (dynobj != NULL
-	      && (h->needs_plt
-		  || h->is_weakalias
-		  || (h->def_dynamic
-		      && h->ref_regular
-		      && !h->def_regular)));
+  if (dynobj == NULL
+      || (! h->needs_plt
+	  && ! h->is_weakalias
+	  && (! h->def_dynamic
+	      || ! h->ref_regular
+	      || h->def_regular)))
+    {
+      if (h->type == STT_GNU_IFUNC)
+	_bfd_error_handler (_("IFUNC symbol %s in dynamic symbol table - IFUNCS are not supported"),
+			    h->root.root.string);
+      else
+	_bfd_error_handler (_("non-dynamic symbol %s in dynamic symbol table"),
+			    h->root.root.string);
+      return TRUE;
+    }
 
   hmips = (struct mips_elf_link_hash_entry *) h;
 
@@ -12549,7 +12564,7 @@ _bfd_mips_elf_modify_segment_map (bfd *abfd,
 {
   asection *s;
   struct elf_segment_map *m, **pm;
-  bfd_size_type amt;
+  size_t amt;
 
   /* If there is a .reginfo section, we need a PT_MIPS_REGINFO
      segment.  */
@@ -12752,7 +12767,7 @@ _bfd_mips_elf_modify_segment_map (bfd *abfd,
 		&& s->vma + s->size <= high)
 	      ++c;
 
-	  amt = sizeof *n + (bfd_size_type) (c - 1) * sizeof (asection *);
+	  amt = sizeof *n - sizeof (asection *) + c * sizeof (asection *);
 	  n = bfd_zalloc (abfd, amt);
 	  if (n == NULL)
 	    return FALSE;
@@ -13203,7 +13218,7 @@ _bfd_mips_elf_set_section_contents (bfd *abfd, sec_ptr section,
 
       if (elf_section_data (section) == NULL)
 	{
-	  bfd_size_type amt = sizeof (struct bfd_elf_section_data);
+	  size_t amt = sizeof (struct bfd_elf_section_data);
 	  section->used_by_bfd = bfd_zalloc (abfd, amt);
 	  if (elf_section_data (section) == NULL)
 	    return FALSE;
@@ -13380,7 +13395,7 @@ _bfd_elf_mips_get_relocated_section_contents
     free (reloc_vector);
   return data;
 
-error_return:
+ error_return:
   if (reloc_vector != NULL)
     free (reloc_vector);
   return NULL;
@@ -14285,7 +14300,7 @@ struct bfd_link_hash_table *
 _bfd_mips_elf_link_hash_table_create (bfd *abfd)
 {
   struct mips_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct mips_elf_link_hash_table);
+  size_t amt = sizeof (struct mips_elf_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -15752,6 +15767,7 @@ _bfd_mips_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   /* Check to see if the input BFD actually contains any sections.  If not,
      then it has no attributes, and its flags may not have been initialized
      either, but it cannot actually cause any incompatibility.  */
+  /* FIXME: This excludes any input shared library from consideration.  */
   for (sec = ibfd->sections; sec != NULL; sec = sec->next)
     {
       /* Ignore synthetic sections and empty .text, .data and .bss sections

@@ -1,5 +1,5 @@
 /* tc-pdp11.c - pdp11-specific -
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -255,6 +255,10 @@ md_apply_fix (fixS *fixP,
     case BFD_RELOC_16:
     case BFD_RELOC_16_PCREL:
       mask = 0xffff;
+      shift = 0;
+      break;
+    case BFD_RELOC_32:
+      mask = 0xffffffff;
       shift = 0;
       break;
     case BFD_RELOC_PDP11_DISP_8_PCREL:
@@ -1419,22 +1423,22 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED,
   /* This is taken account for in md_apply_fix().  */
   reloc->addend = -symbol_get_bfdsym (fixp->fx_addsy)->section->vma;
 
-  switch (fixp->fx_r_type)
+  code = fixp->fx_r_type;
+  if (fixp->fx_pcrel)
     {
-    case BFD_RELOC_16:
-      if (fixp->fx_pcrel)
-	code = BFD_RELOC_16_PCREL;
-      else
-	code = BFD_RELOC_16;
-      break;
+      switch (code)
+	{
+	case BFD_RELOC_16:
+	  code = BFD_RELOC_16_PCREL;
+	  break;
 
-    case BFD_RELOC_16_PCREL:
-      code = BFD_RELOC_16_PCREL;
-      break;
+	case BFD_RELOC_16_PCREL:
+	  break;
 
-    default:
-      BAD_CASE (fixp->fx_r_type);
-      return NULL;
+	default:
+	  BAD_CASE (code);
+	  return NULL;
+	}
     }
 
   reloc->howto = bfd_reloc_type_lookup (stdoutput, code);

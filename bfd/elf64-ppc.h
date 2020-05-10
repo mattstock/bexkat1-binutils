@@ -1,5 +1,5 @@
 /* PowerPC64-specific support for 64-bit ELF.
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -35,6 +35,9 @@ struct ppc64_elf_params
 
   /* Whether to use a special call stub for __tls_get_addr.  */
   int tls_get_addr_opt;
+
+  /* Whether the special call stub should save r4..r12.  */
+  int no_tls_get_addr_regsave;
 
   /* Whether to allow multiple toc sections.  */
   int no_multi_toc;

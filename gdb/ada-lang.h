@@ -1,6 +1,6 @@
 /* Ada language support definitions for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -164,10 +164,10 @@ extern void ada_print_type (struct type *, const char *, struct ui_file *, int,
 extern void ada_print_typedef (struct type *type, struct symbol *new_symbol,
 			       struct ui_file *stream);
 
-extern void ada_val_print (struct type *, int, CORE_ADDR,
-			   struct ui_file *, int,
-			   struct value *,
-			   const struct value_print_options *);
+/* Implement la_value_print_inner for Ada.  */
+
+extern void ada_value_print_inner (struct value *, struct ui_file *, int,
+				   const struct value_print_options *);
 
 extern void ada_value_print (struct value *, struct ui_file *,
 			     const struct value_print_options *);
@@ -284,8 +284,7 @@ extern struct value *ada_delta (struct type *);
 
 extern struct value *ada_scaling_factor (struct type *);
 
-extern int ada_which_variant_applies (struct type *, struct type *,
-				      const gdb_byte *);
+extern int ada_which_variant_applies (struct type *, struct value *);
 
 extern struct type *ada_to_fixed_type (struct type *, const gdb_byte *,
 				       CORE_ADDR, struct value *,

@@ -1,5 +1,5 @@
-# inttypes.m4 serial 26
-dnl Copyright (C) 2006-2016 Free Software Foundation, Inc.
+# inttypes.m4 serial 28
+dnl Copyright (C) 2006-2020 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
@@ -113,10 +113,8 @@ AC_DEFUN([gl_INTTYPES_CHECK_LONG_LONG_INT_CONDITION],
 
             #if $2
              #define CONDITION ($3)
-            #elif HAVE_LONG_LONG_INT
-             #define CONDITION ($4)
             #else
-             #define CONDITION 0
+             #define CONDITION ($4)
             #endif
             int test[CONDITION ? 1 : -1];]])],
        [gl_cv_test_$1=yes],
@@ -147,6 +145,7 @@ AC_DEFUN([gl_INTTYPES_H_DEFAULTS],
   HAVE_DECL_IMAXDIV=1;   AC_SUBST([HAVE_DECL_IMAXDIV])
   HAVE_DECL_STRTOIMAX=1; AC_SUBST([HAVE_DECL_STRTOIMAX])
   HAVE_DECL_STRTOUMAX=1; AC_SUBST([HAVE_DECL_STRTOUMAX])
+  HAVE_IMAXDIV_T=1;      AC_SUBST([HAVE_IMAXDIV_T])
   REPLACE_STRTOIMAX=0;   AC_SUBST([REPLACE_STRTOIMAX])
   REPLACE_STRTOUMAX=0;   AC_SUBST([REPLACE_STRTOUMAX])
   INT32_MAX_LT_INTMAX_MAX=1;  AC_SUBST([INT32_MAX_LT_INTMAX_MAX])

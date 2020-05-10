@@ -1,6 +1,6 @@
 /* TUI display registers in window.
 
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -266,8 +266,7 @@ tui_data_window::display_registers_from (int start_element_no)
   /* Now create each data "sub" window, and write the display into
      it.  */
   cur_y = 1;
-  while (i < m_regs_content.size ()
-	 && cur_y <= viewport_height)
+  while (i < m_regs_content.size () && cur_y <= height - 2)
     {
       for (j = 0;
 	   j < m_regs_column_count && i < m_regs_content.size ();
@@ -275,7 +274,7 @@ tui_data_window::display_registers_from (int start_element_no)
 	{
 	  /* Create the window if necessary.  */
 	  m_regs_content[i].resize (1, item_win_width,
-				    (item_win_width * j) + 1, cur_y);
+				    x + (item_win_width * j) + 1, y + cur_y);
 	  i++;		/* Next register.  */
 	}
       cur_y++;		/* Next row.  */
@@ -382,7 +381,7 @@ tui_data_window::erase_data_content (const char *prompt)
 	x_pos = half_width - strlen (prompt);
       mvwaddstr (handle.get (), (height / 2), x_pos, (char *) prompt);
     }
-  wrefresh (handle.get ());
+  tui_wrefresh (handle.get ());
 }
 
 /* See tui-regs.h.  */
@@ -433,6 +432,14 @@ tui_data_window::refresh_window ()
   tui_gen_win_info::refresh_window ();
   for (auto &&win : m_regs_content)
     win.refresh_window ();
+}
+
+void
+tui_data_window::no_refresh ()
+{
+  tui_gen_win_info::no_refresh ();
+  for (auto &&win : m_regs_content)
+    win.no_refresh ();
 }
 
 /* This function check all displayed registers for changes in values,
@@ -503,7 +510,7 @@ tui_data_item_window::refresh_window ()
 	 windows, which according to the ncurses man pages aren't well
 	 supported.  */
       touchwin (handle.get ());
-      wrefresh (handle.get ());
+      tui_wrefresh (handle.get ());
     }
 }
 
@@ -543,21 +550,6 @@ tui_reg_prev (struct reggroup *current_group, struct gdbarch *gdbarch)
   return group;
 }
 
-/* A helper function to display the register window in the appropriate
-   way.  */
-
-static void
-tui_reg_layout ()
-{
-  enum tui_layout_type cur_layout = tui_current_layout ();
-  enum tui_layout_type new_layout;
-  if (cur_layout == SRC_COMMAND || cur_layout == SRC_DATA_COMMAND)
-    new_layout = SRC_DATA_COMMAND;
-  else
-    new_layout = DISASSEM_DATA_COMMAND;
-  tui_set_layout (new_layout);
-}
-
 /* Implement the 'tui reg' command.  Changes the register group displayed
    in the tui register window.  Displays the tui register window if it is
    not already on display.  */
@@ -575,11 +567,13 @@ tui_reg_command (const char *args, int from_tty)
       /* Make sure the curses mode is enabled.  */
       tui_enable ();
 
+      tui_suppress_output suppress;
+
       /* Make sure the register window is visible.  If not, select an
 	 appropriate layout.  We need to do this before trying to run the
 	 'next' or 'prev' commands.  */
       if (TUI_DATA_WIN == NULL || !TUI_DATA_WIN->is_visible ())
-	tui_reg_layout ();
+	tui_regs_layout ();
 
       struct reggroup *current_group = TUI_DATA_WIN->get_current_group ();
       if (strncmp (args, "next", len) == 0)
@@ -651,14 +645,17 @@ tui_reggroup_completer (struct cmd_list_element *ignore,
     }
 }
 
+void _initialize_tui_regs ();
 void
-_initialize_tui_regs (void)
+_initialize_tui_regs ()
 {
   struct cmd_list_element **tuicmd, *cmd;
 
   tuicmd = tui_get_cmd_list ();
 
   cmd = add_cmd ("reg", class_tui, tui_reg_command, _("\
-TUI command to control the register window."), tuicmd);
+TUI command to control the register window.\n\
+Usage: tui reg NAME\n\
+NAME is the name of the register group to display"), tuicmd);
   set_cmd_completer (cmd, tui_reggroup_completer);
 }

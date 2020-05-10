@@ -1,6 +1,6 @@
 /* Target-dependent code for Solaris x86.
 
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -151,8 +151,9 @@ i386_sol2_osabi_sniffer (bfd *abfd)
   return GDB_OSABI_UNKNOWN;
 }
 
+void _initialize_i386_sol2_tdep ();
 void
-_initialize_i386_sol2_tdep (void)
+_initialize_i386_sol2_tdep ()
 {
   /* Register an ELF OS ABI sniffer for Solaris 2 binaries.  */
   gdbarch_register_osabi_sniffer (bfd_arch_i386, bfd_target_elf_flavour,

@@ -1,5 +1,5 @@
 /* RISC-V-specific support for NN-bit ELF.
-   Copyright (C) 2011-2019 Free Software Foundation, Inc.
+   Copyright (C) 2011-2020 Free Software Foundation, Inc.
 
    Contributed by Andrew Waterman (andrew@sifive.com).
    Based on TILE-Gx and MIPS targets.
@@ -269,7 +269,7 @@ static struct bfd_link_hash_table *
 riscv_elf_link_hash_table_create (bfd *abfd)
 {
   struct riscv_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct riscv_elf_link_hash_table);
+  size_t amt = sizeof (struct riscv_elf_link_hash_table);
 
   ret = (struct riscv_elf_link_hash_table *) bfd_zmalloc (amt);
   if (ret == NULL)
@@ -724,7 +724,7 @@ riscv_elf_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 		  p = ((struct elf_dyn_relocs *)
 		       bfd_alloc (htab->elf.dynobj, amt));
 		  if (p == NULL)
@@ -1987,10 +1987,11 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	  break;
 
 	case R_RISCV_CALL:
+	case R_RISCV_CALL_PLT:
 	  /* Handle a call to an undefined weak function.  This won't be
 	     relaxed, so we have to handle it here.  */
 	  if (h != NULL && h->root.type == bfd_link_hash_undefweak
-	      && h->plt.offset == MINUS_ONE)
+	      && (!bfd_link_pic (info) || h->plt.offset == MINUS_ONE))
 	    {
 	      /* We can use x0 as the base register.  */
 	      bfd_vma insn = bfd_get_32 (input_bfd,
@@ -2003,9 +2004,9 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	    }
 	  /* Fall through.  */
 
-	case R_RISCV_CALL_PLT:
 	case R_RISCV_JAL:
 	case R_RISCV_RVC_JUMP:
+	  /* This line has to match the check in _bfd_riscv_relax_section.  */
 	  if (bfd_link_pic (info) && h != NULL && h->plt.offset != MINUS_ONE)
 	    {
 	      /* Refer to the PLT entry.  */
@@ -2395,7 +2396,7 @@ riscv_elf_relocate_section (bfd *output_bfd,
     }
 
   ret = riscv_resolve_pcrel_lo_relocs (&pcrel_relocs);
-out:
+ out:
   riscv_free_pcrel_relocs (&pcrel_relocs);
   return ret;
 }
@@ -2735,30 +2736,6 @@ riscv_std_ext_p (const char *name)
   return (strlen (name) == 1) && (name[0] != 'x') && (name[0] != 's');
 }
 
-/* Predicator for non-standard extension.  */
-
-static bfd_boolean
-riscv_non_std_ext_p (const char *name)
-{
-  return (strlen (name) >= 2) && (name[0] == 'x');
-}
-
-/* Predicator for standard supervisor extension.  */
-
-static bfd_boolean
-riscv_std_sv_ext_p (const char *name)
-{
-  return (strlen (name) >= 2) && (name[0] == 's') && (name[1] != 'x');
-}
-
-/* Predicator for non-standard supervisor extension.  */
-
-static bfd_boolean
-riscv_non_std_sv_ext_p (const char *name)
-{
-  return (strlen (name) >= 3) && (name[0] == 's') && (name[1] == 'x');
-}
-
 /* Error handler when version mis-match.  */
 
 static void
@@ -2884,53 +2861,102 @@ riscv_merge_std_ext (bfd *ibfd,
   return TRUE;
 }
 
-/* Merge non-standard and supervisor extensions.
-   Return Value:
-     Return FALSE if failed to merge.
+/* If C is a prefix class, then return the EXT string without the prefix.
+   Otherwise return the entire EXT string.  */
 
-   Arguments:
-     `bfd`: bfd handler.
-     `in_arch`: Raw arch string for input object.
-     `out_arch`: Raw arch string for output object.
-     `pin`: subset list for input object, and it'll skip all merged subset after
-            merge.
-     `pout`: Like `pin`, but for output object. */
+static const char *
+riscv_skip_prefix (const char *ext, riscv_isa_ext_class_t c)
+{
+  switch (c)
+    {
+    case RV_ISA_CLASS_X: return &ext[1];
+    case RV_ISA_CLASS_S: return &ext[1];
+    case RV_ISA_CLASS_Z: return &ext[1];
+    default: return ext;
+    }
+}
+
+/* Compare prefixed extension names canonically.  */
+
+static int
+riscv_prefix_cmp (const char *a, const char *b)
+{
+  riscv_isa_ext_class_t ca = riscv_get_prefix_class (a);
+  riscv_isa_ext_class_t cb = riscv_get_prefix_class (b);
+
+  /* Extension name without prefix  */
+  const char *anp = riscv_skip_prefix (a, ca);
+  const char *bnp = riscv_skip_prefix (b, cb);
+
+  if (ca == cb)
+    return strcasecmp (anp, bnp);
+
+  return (int)ca - (int)cb;
+}
+
+/* Merge multi letter extensions.  PIN is a pointer to the head of the input
+   object subset list.  Likewise for POUT and the output object.  Return TRUE
+   on success and FALSE when a conflict is found.  */
 
 static bfd_boolean
-riscv_merge_non_std_and_sv_ext (bfd *ibfd,
-				riscv_subset_t **pin,
-				riscv_subset_t **pout,
-				bfd_boolean (*predicate_func) (const char *))
+riscv_merge_multi_letter_ext (bfd *ibfd,
+			      riscv_subset_t **pin,
+			      riscv_subset_t **pout)
 {
   riscv_subset_t *in = *pin;
   riscv_subset_t *out = *pout;
+  riscv_subset_t *tail;
 
-  for (in = *pin; in != NULL && predicate_func (in->name); in = in->next)
-    riscv_add_subset (&merged_subsets, in->name, in->major_version,
-		      in->minor_version);
+  int cmp;
 
-  for (out = *pout; out != NULL && predicate_func (out->name); out = out->next)
+  while (in && out)
     {
-      riscv_subset_t *find_ext =
-	riscv_lookup_subset (&merged_subsets, out->name);
-      if (find_ext != NULL)
+      cmp = riscv_prefix_cmp (in->name, out->name);
+
+      if (cmp < 0)
 	{
-	  /* Check version is same or not. */
-	  /* TODO: Allow different merge policy.  */
-	  if ((find_ext->major_version != out->major_version)
-	      || (find_ext->minor_version != out->minor_version))
-	    {
-	      riscv_version_mismatch (ibfd, find_ext, out);
-	      return FALSE;
-	    }
+	  /* `in' comes before `out', append `in' and increment.  */
+	  riscv_add_subset (&merged_subsets, in->name, in->major_version,
+			    in->minor_version);
+	  in = in->next;
+	}
+      else if (cmp > 0)
+	{
+	  /* `out' comes before `in', append `out' and increment.  */
+	  riscv_add_subset (&merged_subsets, out->name, out->major_version,
+			    out->minor_version);
+	  out = out->next;
 	}
       else
-	riscv_add_subset (&merged_subsets, out->name,
-			  out->major_version, out->minor_version);
+	{
+	  /* Both present, check version and increment both.  */
+	  if ((in->major_version != out->major_version)
+	      || (in->minor_version != out->minor_version))
+	    {
+	      riscv_version_mismatch (ibfd, in, out);
+	      return FALSE;
+	    }
+
+	  riscv_add_subset (&merged_subsets, out->name, out->major_version,
+			    out->minor_version);
+	  out = out->next;
+	  in = in->next;
+	}
     }
 
-  *pin = in;
-  *pout = out;
+  if (in || out) {
+    /* If we're here, either `in' or `out' is running longer than
+       the other. So, we need to append the corresponding tail.  */
+    tail = in ? in : out;
+
+    while (tail)
+      {
+	riscv_add_subset (&merged_subsets, tail->name, tail->major_version,
+			  tail->minor_version);
+	tail = tail->next;
+      }
+  }
+
   return TRUE;
 }
 
@@ -2989,14 +3015,9 @@ riscv_merge_arch_attr_info (bfd *ibfd, char *in_arch, char *out_arch)
   /* Merge standard extension.  */
   if (!riscv_merge_std_ext (ibfd, in_arch, out_arch, &in, &out))
     return NULL;
-  /* Merge non-standard extension.  */
-  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_non_std_ext_p))
-    return NULL;
-  /* Merge standard supervisor extension.  */
-  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_std_sv_ext_p))
-    return NULL;
-  /* Merge non-standard supervisor extension.  */
-  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_non_std_sv_ext_p))
+
+  /* Merge all non-single letter extensions with single call.  */
+  if (!riscv_merge_multi_letter_ext (ibfd, &in, &out))
     return NULL;
 
   if (xlen_in != xlen_out)
@@ -3224,7 +3245,7 @@ _bfd_riscv_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 
   return TRUE;
 
-fail:
+ fail:
   bfd_set_error (bfd_error_bad_value);
   return FALSE;
 }
@@ -4128,7 +4149,9 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	      undefined_weak = TRUE;
 	    }
 
-	  if (h->plt.offset != MINUS_ONE)
+	  /* This line has to match the check in riscv_elf_relocate_section
+	     in the R_RISCV_CALL[_PLT] case.  */
+	  if (bfd_link_pic (info) && h->plt.offset != MINUS_ONE)
 	    {
 	      sym_sec = htab->elf.splt;
 	      symval = h->plt.offset;
@@ -4138,15 +4161,16 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	      symval = 0;
 	      sym_sec = bfd_und_section_ptr;
 	    }
-	  else if (h->root.u.def.section->output_section == NULL
-		   || (h->root.type != bfd_link_hash_defined
-		       && h->root.type != bfd_link_hash_defweak))
-	    continue;
-	  else
+	  else if ((h->root.type == bfd_link_hash_defined
+		    || h->root.type == bfd_link_hash_defweak)
+		   && h->root.u.def.section != NULL
+		   && h->root.u.def.section->output_section != NULL)
 	    {
 	      symval = h->root.u.def.value;
 	      sym_sec = h->root.u.def.section;
 	    }
+	  else
+	    continue;
 
 	  if (h->type != STT_FUNC)
 	    reserve_size =
@@ -4196,7 +4220,7 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 
   ret = TRUE;
 
-fail:
+ fail:
   if (relocs != data->relocs)
     free (relocs);
   riscv_free_pcgp_relocs(&pcgp_relocs, abfd, sec);

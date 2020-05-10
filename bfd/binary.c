@@ -1,5 +1,5 @@
 /* BFD back-end for binary objects.
-   Copyright (C) 1994-2019 Free Software Foundation, Inc.
+   Copyright (C) 1994-2020 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support, <ian@cygnus.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -53,7 +53,7 @@ binary_mkobject (bfd *abfd ATTRIBUTE_UNUSED)
    was not defaulted.  That is, it must be explicitly specified as
    being binary.  */
 
-static const bfd_target *
+static bfd_cleanup
 binary_object_p (bfd *abfd)
 {
   struct stat statbuf;
@@ -86,7 +86,7 @@ binary_object_p (bfd *abfd)
 
   abfd->tdata.any = (void *) sec;
 
-  return abfd->xvec;
+  return _bfd_no_cleanup;
 }
 
 #define binary_close_and_cleanup     _bfd_generic_close_and_cleanup
@@ -151,7 +151,7 @@ binary_canonicalize_symtab (bfd *abfd, asymbol **alocation)
   asection *sec = (asection *) abfd->tdata.any;
   asymbol *syms;
   unsigned int i;
-  bfd_size_type amt = BIN_SYMS * sizeof (asymbol);
+  size_t amt = BIN_SYMS * sizeof (asymbol);
 
   syms = (asymbol *) bfd_alloc (abfd, amt);
   if (syms == NULL)

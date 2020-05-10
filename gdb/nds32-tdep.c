@@ -1,6 +1,6 @@
 /* Target-dependent code for the NDS32 architecture, for GDB.
 
-   Copyright (C) 2013-2019 Free Software Foundation, Inc.
+   Copyright (C) 2013-2020 Free Software Foundation, Inc.
    Contributed by Andes Technology Corporation.
 
    This file is part of GDB.
@@ -34,7 +34,7 @@
 #include "dis-asm.h"
 #include "user-regs.h"
 #include "elf-bfd.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "remote.h"
 #include "target-descriptions.h"
 
@@ -2096,8 +2096,9 @@ nds32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_nds32_tdep ();
 void
-_initialize_nds32_tdep (void)
+_initialize_nds32_tdep ()
 {
   /* Initialize gdbarch.  */
   register_gdbarch_init (bfd_arch_nds32, nds32_gdbarch_init);

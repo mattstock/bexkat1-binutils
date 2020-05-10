@@ -1,6 +1,6 @@
 /* Program and address space management, for GDB, the GNU debugger.
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,6 +28,7 @@
 #include "gdbsupport/next-iterator.h"
 #include "gdbsupport/safe-iterator.h"
 #include <list>
+#include <vector>
 
 struct target_ops;
 struct bfd;
@@ -37,6 +38,7 @@ struct exec;
 struct address_space;
 struct program_space_data;
 struct address_space_data;
+struct so_list;
 
 typedef std::list<std::shared_ptr<objfile>> objfile_list;
 
@@ -209,7 +211,15 @@ private:
 
 struct program_space
 {
-  program_space (address_space *aspace_);
+  /* Constructs a new empty program space, binds it to ASPACE, and
+     adds it to the program space list.  */
+  explicit program_space (address_space *aspace);
+
+  /* Releases a program space, and all its contents (shared libraries,
+     objfiles, and any other references to the program space in other
+     modules).  It is an internal error to call this when the program
+     space is the current program space, since there should always be
+     a program space.  */
   ~program_space ();
 
   typedef unwrapping_objfile_range objfiles_range;
@@ -256,9 +266,12 @@ struct program_space
   /* Free all the objfiles associated with this program space.  */
   void free_all_objfiles ();
 
+  /* Return a range adapter for iterating over all the solibs in this
+     program space.  Use it like:
 
-  /* Pointer to next in linked list.  */
-  struct program_space *next = NULL;
+     for (so_list *so : pspace->solibs ()) { ... }  */
+  next_adapter<struct so_list> solibs () const;
+
 
   /* Unique ID number.  */
   int num = 0;
@@ -354,20 +367,10 @@ struct address_space
 #define current_target_sections (&current_program_space->target_sections)
 
 /* The list of all program spaces.  There's always at least one.  */
-extern struct program_space *program_spaces;
+extern std::vector<struct program_space *>program_spaces;
 
 /* The current program space.  This is always non-null.  */
 extern struct program_space *current_program_space;
-
-#define ALL_PSPACES(pspace) \
-  for ((pspace) = program_spaces; (pspace) != NULL; (pspace) = (pspace)->next)
-
-/* Remove a program space from the program spaces list and release it.  It is
-   an error to call this function while PSPACE is the current program space. */
-extern void delete_program_space (struct program_space *pspace);
-
-/* Returns the number of program spaces listed.  */
-extern int number_of_program_spaces (void);
 
 /* Returns true iff there's no inferior bound to PSPACE.  */
 extern int program_space_empty_p (struct program_space *pspace);

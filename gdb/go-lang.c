@@ -1,6 +1,6 @@
 /* Go language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -595,7 +595,7 @@ extern const struct language_defn go_language_defn =
   go_print_type,		/* Print a type using appropriate syntax.  */
   c_print_typedef,		/* Print a typedef using appropriate
 				   syntax.  */
-  go_val_print,			/* Print a value using appropriate syntax.  */
+  go_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value.  */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline.  */
@@ -665,11 +665,9 @@ build_go_types (struct gdbarch *gdbarch)
   builtin_go_type->builtin_float64
     = arch_float_type (gdbarch, 64, "float64", floatformats_ieee_double);
   builtin_go_type->builtin_complex64
-    = arch_complex_type (gdbarch, "complex64",
-			 builtin_go_type->builtin_float32);
+    = init_complex_type ("complex64", builtin_go_type->builtin_float32);
   builtin_go_type->builtin_complex128
-    = arch_complex_type (gdbarch, "complex128",
-			 builtin_go_type->builtin_float64);
+    = init_complex_type ("complex128", builtin_go_type->builtin_float64);
 
   return builtin_go_type;
 }
@@ -682,8 +680,9 @@ builtin_go_type (struct gdbarch *gdbarch)
   return (const struct builtin_go_type *) gdbarch_data (gdbarch, go_type_data);
 }
 
+void _initialize_go_language ();
 void
-_initialize_go_language (void)
+_initialize_go_language ()
 {
   go_type_data = gdbarch_data_register_post_init (build_go_types);
 }

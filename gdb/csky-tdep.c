@@ -1,6 +1,6 @@
 /* Target-dependent code for the CSKY architecture, for GDB.
 
-   Copyright (C) 2010-2019 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
 
    Contributed by C-SKY Microsystems and Mentor Graphics.
 
@@ -49,7 +49,7 @@
 #include "floatformat.h"
 #include "remote.h"
 #include "target-descriptions.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "user-regs.h"
 #include "valprint.h"
 #include "csky-tdep.h"
@@ -2240,8 +2240,9 @@ csky_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_csky_tdep ();
 void
-_initialize_csky_tdep (void)
+_initialize_csky_tdep ()
 {
 
   register_gdbarch_init (bfd_arch_csky, csky_gdbarch_init);

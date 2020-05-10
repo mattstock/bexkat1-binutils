@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -42,7 +42,7 @@
 #include "gdbsupport/version.h"
 #include "serial.h"
 #include "main.h"
-#include "event-loop.h"
+#include "gdbsupport/event-loop.h"
 #include "gdbthread.h"
 #include "extension.h"
 #include "interps.h"
@@ -51,10 +51,11 @@
 #include "filenames.h"
 #include "frame.h"
 #include "gdbsupport/buffer.h"
-#include "gdb_select.h"
+#include "gdbsupport/gdb_select.h"
 #include "gdbsupport/scope-exit.h"
 #include "gdbarch.h"
 #include "gdbsupport/pathstuff.h"
+#include "cli/cli-style.h"
 
 /* readline include files.  */
 #include "readline/readline.h"
@@ -82,6 +83,8 @@
 #endif
 
 extern void initialize_all_files (void);
+
+static bool history_filename_empty (void);
 
 #define PROMPT(X) the_prompts.prompt_stack[the_prompts.top + X].prompt
 #define PREFIX(X) the_prompts.prompt_stack[the_prompts.top + X].prefix
@@ -171,7 +174,7 @@ static const char *previous_repeat_arguments;
    whatever) can issue its own commands and also send along commands
    from the user, and have the user not notice that the user interface
    is issuing commands too.  */
-int server_command;
+bool server_command;
 
 /* Timeout limit for response from target.  */
 
@@ -883,13 +886,22 @@ static bool command_editing_p;
 
 /* static */ bool history_expansion_p;
 
+/* Should we write out the command history on exit?  In order to write out
+   the history both this flag must be true, and the history_filename
+   variable must be set to something sensible.  */
 static bool write_history_p;
+
+/* Implement 'show history save'.  */
 static void
 show_write_history_p (struct ui_file *file, int from_tty,
 		      struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("Saving of the history record on exit is %s.\n"),
-		    value);
+  if (!write_history_p || !history_filename_empty ())
+    fprintf_filtered (file, _("Saving of the history record on exit is %s.\n"),
+		      value);
+  else
+    fprintf_filtered (file, _("Saving of the history is disabled due to "
+			      "the value of 'history filename'.\n"));
 }
 
 /* The variable associated with the "set/show history size"
@@ -918,14 +930,30 @@ show_history_remove_duplicates (struct ui_file *file, int from_tty,
 		    value);
 }
 
+/* The name of the file in which GDB history will be written.  If this is
+   set to NULL, of the empty string then history will not be written.  */
 static char *history_filename;
+
+/* Return true if the history_filename is either NULL or the empty string,
+   indicating that we should not try to read, nor write out the history.  */
+static bool
+history_filename_empty (void)
+{
+  return (history_filename == nullptr || *history_filename == '\0');
+}
+
+/* Implement 'show history filename'.  */
 static void
 show_history_filename (struct ui_file *file, int from_tty,
 		       struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("The filename in which to record "
-			    "the command history is \"%s\".\n"),
-		    value);
+  if (!history_filename_empty ())
+    fprintf_filtered (file, _("The filename in which to record "
+			      "the command history is \"%ps\".\n"),
+		      styled_string (file_name_style.style (), value));
+  else
+    fprintf_filtered (file, _("There is no filename currently set for "
+			      "recording the command history in.\n"));
 }
 
 /* This is like readline(), but it has some gdb-specific behavior.
@@ -1192,8 +1220,10 @@ gdb_safe_append_history (void)
   saved_errno = errno;
   if (ret < 0 && saved_errno != ENOENT)
     {
-      warning (_("Could not rename %s to %s: %s"),
-	       history_filename, local_history_filename.c_str (),
+      warning (_("Could not rename %ps to %ps: %s"),
+	       styled_string (file_name_style.style (), history_filename),
+	       styled_string (file_name_style.style (),
+			      local_history_filename.c_str ()),
 	       safe_strerror (saved_errno));
     }
   else
@@ -1366,7 +1396,7 @@ print_gdb_version (struct ui_file *stream, bool interactive)
   /* Second line is a copyright notice.  */
 
   fprintf_filtered (stream,
-		    "Copyright (C) 2019 Free Software Foundation, Inc.\n");
+		    "Copyright (C) 2020 Free Software Foundation, Inc.\n");
 
   /* Following the copyright is a brief statement that the program is
      free software, that users are free to copy and change it on
@@ -1425,10 +1455,12 @@ print_gdb_configuration (struct ui_file *stream)
 This GDB was configured as follows:\n\
    configure --host=%s --target=%s\n\
 "), host_name, target_name);
+
   fprintf_filtered (stream, _("\
              --with-auto-load-dir=%s\n\
              --with-auto-load-safe-path=%s\n\
 "), AUTO_LOAD_DIR, AUTO_LOAD_SAFE_PATH);
+
 #if HAVE_LIBEXPAT
   fprintf_filtered (stream, _("\
              --with-expat\n\
@@ -1438,19 +1470,23 @@ This GDB was configured as follows:\n\
              --without-expat\n\
 "));
 #endif
+
   if (GDB_DATADIR[0])
     fprintf_filtered (stream, _("\
              --with-gdb-datadir=%s%s\n\
 "), GDB_DATADIR, GDB_DATADIR_RELOCATABLE ? " (relocatable)" : "");
+
 #ifdef ICONV_BIN
   fprintf_filtered (stream, _("\
              --with-iconv-bin=%s%s\n\
 "), ICONV_BIN, ICONV_BIN_RELOCATABLE ? " (relocatable)" : "");
 #endif
+
   if (JIT_READER_DIR[0])
     fprintf_filtered (stream, _("\
              --with-jit-reader-dir=%s%s\n\
 "), JIT_READER_DIR, JIT_READER_DIR_RELOCATABLE ? " (relocatable)" : "");
+
 #if HAVE_LIBUNWIND_IA64_H
   fprintf_filtered (stream, _("\
              --with-libunwind-ia64\n\
@@ -1460,6 +1496,7 @@ This GDB was configured as follows:\n\
              --without-libunwind-ia64\n\
 "));
 #endif
+
 #if HAVE_LIBLZMA
   fprintf_filtered (stream, _("\
              --with-lzma\n\
@@ -1469,31 +1506,43 @@ This GDB was configured as follows:\n\
              --without-lzma\n\
 "));
 #endif
+
 #if HAVE_LIBBABELTRACE
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --with-babeltrace\n\
 "));
 #else
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --without-babeltrace\n\
 "));
 #endif
+
 #if HAVE_LIBIPT
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --with-intel-pt\n\
 "));
 #else
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --without-intel-pt\n\
 "));
 #endif
+
 #if HAVE_LIBMPFR
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --with-mpfr\n\
 "));
 #else
-    fprintf_filtered (stream, _("\
+  fprintf_filtered (stream, _("\
              --without-mpfr\n\
+"));
+#endif
+#if HAVE_LIBXXHASH
+  fprintf_filtered (stream, _("\
+             --with-xxhash\n\
+"));
+#else
+  fprintf_filtered (stream, _("\
+             --without-xxhash\n\
 "));
 #endif
 #ifdef WITH_PYTHON_PATH
@@ -1505,6 +1554,17 @@ This GDB was configured as follows:\n\
              --without-python\n\
 "));
 #endif
+
+#if HAVE_LIBDEBUGINFOD
+  fprintf_filtered (stream, _("\
+             --with-debuginfod\n\
+"));
+#else
+   fprintf_filtered (stream, _("\
+             --without-debuginfod\n\
+"));
+#endif
+
 #if HAVE_GUILE
   fprintf_filtered (stream, _("\
              --with-guile\n\
@@ -1514,6 +1574,7 @@ This GDB was configured as follows:\n\
              --without-guile\n\
 "));
 #endif
+
 #if HAVE_SOURCE_HIGHLIGHT
   fprintf_filtered (stream, _("\
              --enable-source-highlight\n\
@@ -1523,30 +1584,36 @@ This GDB was configured as follows:\n\
              --disable-source-highlight\n\
 "));
 #endif
+
 #ifdef RELOC_SRCDIR
   fprintf_filtered (stream, _("\
              --with-relocated-sources=%s\n\
 "), RELOC_SRCDIR);
 #endif
+
   if (DEBUGDIR[0])
     fprintf_filtered (stream, _("\
              --with-separate-debug-dir=%s%s\n\
 "), DEBUGDIR, DEBUGDIR_RELOCATABLE ? " (relocatable)" : "");
+
   if (TARGET_SYSTEM_ROOT[0])
     fprintf_filtered (stream, _("\
              --with-sysroot=%s%s\n\
 "), TARGET_SYSTEM_ROOT, TARGET_SYSTEM_ROOT_RELOCATABLE ? " (relocatable)" : "");
+
   if (SYSTEM_GDBINIT[0])
     fprintf_filtered (stream, _("\
              --with-system-gdbinit=%s%s\n\
 "), SYSTEM_GDBINIT, SYSTEM_GDBINIT_RELOCATABLE ? " (relocatable)" : "");
+
   if (SYSTEM_GDBINIT_DIR[0])
     fprintf_filtered (stream, _("\
              --with-system-gdbinit-dir=%s%s\n\
 "), SYSTEM_GDBINIT_DIR, SYSTEM_GDBINIT_DIR_RELOCATABLE ? " (relocatable)" : "");
-    /* We assume "relocatable" will be printed at least once, thus we always
-       print this text.  It's a reasonably safe assumption for now.  */
-    fprintf_filtered (stream, _("\n\
+
+  /* We assume "relocatable" will be printed at least once, thus we always
+     print this text.  It's a reasonably safe assumption for now.  */
+  fprintf_filtered (stream, _("\n\
 (\"Relocatable\" means the directory can be moved with the GDB installation\n\
 tree, and GDB will still find it.)\n\
 "));
@@ -1577,21 +1644,14 @@ set_prompt (const char *s)
 }
 
 
-struct qt_args
+/* Kills or detaches the given inferior, depending on how we originally
+   gained control of it.  */
+
+static void
+kill_or_detach (inferior *inf, int from_tty)
 {
-  int from_tty;
-};
-
-/* Callback for iterate_over_inferiors.  Kills or detaches the given
-   inferior, depending on how we originally gained control of it.  */
-
-static int
-kill_or_detach (struct inferior *inf, void *args)
-{
-  struct qt_args *qt = (struct qt_args *) args;
-
   if (inf->pid == 0)
-    return 0;
+    return;
 
   thread_info *thread = any_thread_of_inferior (inf);
   if (thread != NULL)
@@ -1602,37 +1662,30 @@ kill_or_detach (struct inferior *inf, void *args)
       if (target_has_execution)
 	{
 	  if (inf->attach_flag)
-	    target_detach (inf, qt->from_tty);
+	    target_detach (inf, from_tty);
 	  else
 	    target_kill ();
 	}
     }
-
-  return 0;
 }
 
-/* Callback for iterate_over_inferiors.  Prints info about what GDB
-   will do to each inferior on a "quit".  ARG points to a struct
-   ui_out where output is to be collected.  */
+/* Prints info about what GDB will do to inferior INF on a "quit".  OUT is
+   where to collect the output.  */
 
-static int
-print_inferior_quit_action (struct inferior *inf, void *arg)
+static void
+print_inferior_quit_action (inferior *inf, ui_file *out)
 {
-  struct ui_file *stb = (struct ui_file *) arg;
-
   if (inf->pid == 0)
-    return 0;
+    return;
 
   if (inf->attach_flag)
-    fprintf_filtered (stb,
+    fprintf_filtered (out,
 		      _("\tInferior %d [%s] will be detached.\n"), inf->num,
 		      target_pid_to_str (ptid_t (inf->pid)).c_str ());
   else
-    fprintf_filtered (stb,
+    fprintf_filtered (out,
 		      _("\tInferior %d [%s] will be killed.\n"), inf->num,
 		      target_pid_to_str (ptid_t (inf->pid)).c_str ());
-
-  return 0;
 }
 
 /* If necessary, make the user confirm that we should quit.  Return
@@ -1649,7 +1702,10 @@ quit_confirm (void)
   string_file stb;
 
   stb.puts (_("A debugging session is active.\n\n"));
-  iterate_over_inferiors (print_inferior_quit_action, &stb);
+
+  for (inferior *inf : all_inferiors ())
+    print_inferior_quit_action (inf, &stb);
+
   stb.puts (_("\nQuit anyway? "));
 
   return query ("%s", stb.c_str ());
@@ -1682,7 +1738,6 @@ void
 quit_force (int *exit_arg, int from_tty)
 {
   int exit_code = 0;
-  struct qt_args qt;
 
   undo_terminal_modifications_before_exit ();
 
@@ -1693,15 +1748,14 @@ quit_force (int *exit_arg, int from_tty)
   else if (return_child_result)
     exit_code = return_child_result_value;
 
-  qt.from_tty = from_tty;
-
   /* We want to handle any quit errors and exit regardless.  */
 
   /* Get out of tfind mode, and kill or detach all inferiors.  */
   try
     {
       disconnect_tracing ();
-      iterate_over_inferiors (kill_or_detach, &qt);
+      for (inferior *inf : all_inferiors ())
+	kill_or_detach (inf, from_tty);
     }
   catch (const gdb_exception &ex)
     {
@@ -1710,13 +1764,17 @@ quit_force (int *exit_arg, int from_tty)
 
   /* Give all pushed targets a chance to do minimal cleanup, and pop
      them all out.  */
-  try
+  for (inferior *inf : all_inferiors ())
     {
-      pop_all_targets ();
-    }
-  catch (const gdb_exception &ex)
-    {
-      exception_print (gdb_stderr, ex);
+      switch_to_inferior_no_thread (inf);
+      try
+	{
+	  pop_all_targets ();
+	}
+      catch (const gdb_exception &ex)
+	{
+	  exception_print (gdb_stderr, ex);
+	}
     }
 
   /* Save the history information if it is appropriate to do so.  */
@@ -1891,20 +1949,6 @@ set_history_size_command (const char *args,
   set_readline_history_size (history_size_setshow_var);
 }
 
-void
-set_history (const char *args, int from_tty)
-{
-  printf_unfiltered (_("\"set history\" must be followed "
-		       "by the name of a history subcommand.\n"));
-  help_list (sethistlist, "set history ", all_commands, gdb_stdout);
-}
-
-void
-show_history (const char *args, int from_tty)
-{
-  cmd_show_list (showhistlist, from_tty, "");
-}
-
 bool info_verbose = false;	/* Default verbose msgs off.  */
 
 /* Called by do_set_command.  An elaborate joke.  */
@@ -1986,9 +2030,9 @@ init_history (void)
   set_readline_history_size (history_size_setshow_var);
 
   tmpenv = getenv ("GDBHISTFILE");
-  if (tmpenv)
+  if (tmpenv != nullptr)
     history_filename = xstrdup (tmpenv);
-  else if (!history_filename)
+  else if (history_filename == nullptr)
     {
       /* We include the current directory so that if the user changes
          directories the file written will be the same as the one
@@ -2003,7 +2047,9 @@ init_history (void)
       gdb::unique_xmalloc_ptr<char> temp (gdb_abspath (fname));
       history_filename = temp.release ();
     }
-  read_history (history_filename);
+
+  if (!history_filename_empty ())
+    read_history (history_filename);
 }
 
 static void
@@ -2067,9 +2113,12 @@ static void
 show_gdb_datadir (struct ui_file *file, int from_tty,
 		  struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("GDB's data directory is \"%s\".\n"),
-		    gdb_datadir.c_str ());
+  fprintf_filtered (file, _("GDB's data directory is \"%ps\".\n"),
+		    styled_string (file_name_style.style (),
+				   gdb_datadir.c_str ()));
 }
+
+/* Implement 'set history filename'.  */
 
 static void
 set_history_filename (const char *args,
@@ -2078,7 +2127,7 @@ set_history_filename (const char *args,
   /* We include the current directory so that if the user changes
      directories the file written will be the same as the one
      that was read.  */
-  if (!IS_ABSOLUTE_PATH (history_filename))
+  if (!history_filename_empty () && !IS_ABSOLUTE_PATH (history_filename))
     {
       gdb::unique_xmalloc_ptr<char> temp (gdb_abspath (history_filename));
 
@@ -2185,7 +2234,7 @@ By default this option is set to 0."),
 			   show_history_remove_duplicates,
 			   &sethistlist, &showhistlist);
 
-  add_setshow_filename_cmd ("filename", no_class, &history_filename, _("\
+  add_setshow_optional_filename_cmd ("filename", no_class, &history_filename, _("\
 Set the filename in which to record the command history."), _("\
 Show the filename in which to record the command history."), _("\
 (the list of previous commands of which a record is kept)."),
@@ -2267,7 +2316,6 @@ gdb_init (char *argv0)
 #endif
 
   init_cmd_lists ();	    /* This needs to be done first.  */
-  initialize_targets ();    /* Setup target_terminal macros for utils.c.  */
 
   init_page_info ();
 

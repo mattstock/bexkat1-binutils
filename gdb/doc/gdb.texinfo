@@ -1,5 +1,5 @@
 \input texinfo      @c -*-texinfo-*-
-@c Copyright (C) 1988-2019 Free Software Foundation, Inc.
+@c Copyright (C) 1988--2020 Free Software Foundation, Inc.
 @c
 @c %**start of header
 @c makeinfo ignores cmds prev to setfilename, so its arg cannot make use
@@ -50,7 +50,7 @@
 
 @copying
 @c man begin COPYRIGHT
-Copyright @copyright{} 1988-2019 Free Software Foundation, Inc.
+Copyright @copyright{} 1988-2020 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -120,7 +120,7 @@ This is the @value{EDITION} Edition, for @value{GDBN}
 @end ifset
 Version @value{GDBVN}.
 
-Copyright (C) 1988-2019 Free Software Foundation, Inc.
+Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
 This edition of the GDB manual is dedicated to the memory of Fred
 Fish.  Fred was a long-standing contributor to GDB and to Free
@@ -2250,8 +2250,8 @@ kill a child process.
 * Input/Output::                Your program's input and output
 * Attach::                      Debugging an already-running process
 * Kill Process::                Killing the child process
-
-* Inferiors and Programs::      Debugging multiple inferiors and programs
+* Inferiors Connections and Programs:: Debugging multiple inferiors
+					 connections and programs
 * Threads::                     Debugging programs with multiple threads
 * Forks::                       Debugging forks
 * Checkpoint/Restart::          Setting a @emph{bookmark} to return to later
@@ -2506,27 +2506,28 @@ $@file{.zshenv} for the Z shell, or the file specified in the
 @itemx set auto-connect-native-target off
 @itemx show auto-connect-native-target
 
-By default, if not connected to any target yet (e.g., with
-@code{target remote}), the @code{run} command starts your program as a
-native process under @value{GDBN}, on your local machine.  If you're
-sure you don't want to debug programs on your local machine, you can
-tell @value{GDBN} to not connect to the native target automatically
-with the @code{set auto-connect-native-target off} command.
+By default, if the current inferior is not connected to any target yet
+(e.g., with @code{target remote}), the @code{run} command starts your
+program as a native process under @value{GDBN}, on your local machine.
+If you're sure you don't want to debug programs on your local machine,
+you can tell @value{GDBN} to not connect to the native target
+automatically with the @code{set auto-connect-native-target off}
+command.
 
-If @code{on}, which is the default, and if @value{GDBN} is not
+If @code{on}, which is the default, and if the current inferior is not
 connected to a target already, the @code{run} command automaticaly
 connects to the native target, if one is available.
 
-If @code{off}, and if @value{GDBN} is not connected to a target
-already, the @code{run} command fails with an error:
+If @code{off}, and if the current inferior is not connected to a
+target already, the @code{run} command fails with an error:
 
 @smallexample
 (@value{GDBP}) run
 Don't know how to run.  Try "help target".
 @end smallexample
 
-If @value{GDBN} is already connected to a target, @value{GDBN} always
-uses it with the @code{run} command.
+If the current inferior is already connected to a target, @value{GDBN}
+always uses it with the @code{run} command.
 
 In any case, you can explicitly connect to the native target with the
 @code{target native} command.  For example,
@@ -2904,6 +2905,30 @@ the program is not found) by using the source file search path
 the @code{file} command to load the program.  @xref{Files, ,Commands to
 Specify Files}.
 
+@anchor{set exec-file-mismatch}
+If the debugger can determine the name of the executable file running
+in the process it is attaching to, and this file name does not match
+the name of the current exec-file loaded by @value{GDBN}, the option
+@code{exec-file-mismatch} specifies how to handle the mismatch.
+
+@table @code
+@kindex exec-file-mismatch
+@cindex set exec-file-mismatch
+@item set exec-file-mismatch @samp{ask|warn|off}
+
+Whether to detect mismatch between the name of the current executable
+file loaded by @value{GDBN} and the name of the executable file used to
+start the process.  If @samp{ask}, the default, display a warning
+and ask the user whether to load the process executable file; if
+@samp{warn}, just display a warning; if @samp{off}, don't attempt to
+detect a mismatch.
+
+@cindex show exec-file-mismatch
+@item show exec-file-mismatch
+Show the current value of @code{exec-file-mismatch}.
+
+@end table
+
 The first thing @value{GDBN} does after arranging to debug the specified
 process is to stop it.  You can examine and modify an attached process
 with all the @value{GDBN} commands that are ordinarily available when
@@ -2956,15 +2981,17 @@ next type @code{run}, @value{GDBN} notices that the file has changed, and
 reads the symbol table again (while trying to preserve your current
 breakpoint settings).
 
-@node Inferiors and Programs
-@section Debugging Multiple Inferiors and Programs
+@node Inferiors Connections and Programs
+@section Debugging Multiple Inferiors Connections and Programs
 
 @value{GDBN} lets you run and debug multiple programs in a single
 session.  In addition, @value{GDBN} on some systems may let you run
 several programs simultaneously (otherwise you have to exit from one
-before starting another).  In the most general case, you can have
-multiple threads of execution in each of multiple processes, launched
-from multiple executables.
+before starting another).  On some systems @value{GDBN} may even let
+you debug several programs simultaneously on different remote systems.
+In the most general case, you can have multiple threads of execution
+in each of multiple processes, launched from multiple executables,
+running on different machines.
 
 @cindex inferior
 @value{GDBN} represents the state of each program execution with an
@@ -2999,6 +3026,11 @@ the inferior number assigned by @value{GDBN}
 the target system's inferior identifier
 
 @item
+the target connection the inferior is bound to, including the unique
+connection number assigned by @value{GDBN}, and the protocol used by
+the connection.
+
+@item
 the name of the executable the inferior is running.
 
 @end enumerate
@@ -3013,9 +3045,51 @@ For example,
 
 @smallexample
 (@value{GDBP}) info inferiors
-  Num  Description       Executable
-  2    process 2307      hello
-* 1    process 3401      goodbye
+  Num  Description       Connection                      Executable
+* 1    process 3401      1 (native)                      goodbye
+  2    process 2307      2 (extended-remote host:10000)  hello
+@end smallexample
+
+To find out what open target connections exist at any moment, use
+@w{@code{info connections}}:
+
+@table @code
+@kindex info connections [ @var{id}@dots{} ]
+@item info connections
+Print a list of all open target connections currently being managed by
+@value{GDBN}.  By default all connections are printed, but the
+argument @var{id}@dots{} -- a space separated list of connections
+numbers -- can be used to limit the display to just the requested
+connections.
+
+@value{GDBN} displays for each connection (in this order):
+
+@enumerate
+@item
+the connection number assigned by @value{GDBN}.
+
+@item
+the protocol used by the connection.
+
+@item
+a textual description of the protocol used by the connection.
+
+@end enumerate
+
+@noindent
+An asterisk @samp{*} preceding the connection number indicates the
+connection of the current inferior.
+
+For example,
+@end table
+@c end table here to get a little more width for example
+
+@smallexample
+(@value{GDBP}) info connections
+  Num  What                        Description
+* 1    extended-remote host:10000  Extended remote serial target in gdb-specific protocol
+  2    native                      Native process
+  3    core                        Local core dump file
 @end smallexample
 
 To switch focus between inferiors, use the @code{inferior} command:
@@ -3044,12 +3118,21 @@ remove inferiors from the debugging session use the
 
 @table @code
 @kindex add-inferior
-@item add-inferior [ -copies @var{n} ] [ -exec @var{executable} ]
+@item add-inferior [ -copies @var{n} ] [ -exec @var{executable} ] [-no-connection ]
 Adds @var{n} inferiors to be run using @var{executable} as the
 executable; @var{n} defaults to 1.  If no executable is specified,
 the inferiors begins empty, with no program.  You can still assign or
 change the program assigned to the inferior at any time by using the
 @code{file} command with the executable name as its argument.
+
+By default, the new inferior begins connected to the same target
+connection as the current inferior.  For example, if the current
+inferior was connected to @code{gdbserver} with @code{target remote},
+then the new inferior will be connected to the same @code{gdbserver}
+instance.  The @samp{-no-connection} option starts the new inferior
+with no connection yet.  You can then for example use the @code{target
+remote} command to connect to some other @code{gdbserver} instance,
+use @code{run} to spawn a local program, etc.
 
 @kindex clone-inferior
 @item clone-inferior [ -copies @var{n} ] [ @var{infno} ]
@@ -3060,15 +3143,15 @@ want to run another instance of the inferior you are debugging.
 
 @smallexample
 (@value{GDBP}) info inferiors
-  Num  Description       Executable
-* 1    process 29964     helloworld
+  Num  Description       Connection   Executable
+* 1    process 29964     1 (native)   helloworld
 (@value{GDBP}) clone-inferior
 Added inferior 2.
 1 inferiors added.
 (@value{GDBP}) info inferiors
-  Num  Description       Executable
-  2    <null>            helloworld
-* 1    process 29964     helloworld
+  Num  Description       Connection   Executable
+* 1    process 29964     1 (native)   helloworld
+  2    <null>            1 (native)   helloworld
 @end smallexample
 
 You can now simply switch focus to inferior 2 and run it.
@@ -3389,7 +3472,7 @@ For example,
 
 @smallexample
 (@value{GDBP}) info threads
-  Id   Target Id         Frame
+  Id   Target Id             Frame
 * 1    process 35 thread 13  main (argc=1, argv=0x7ffffff8)
   2    process 35 thread 23  0x34e5 in sigpause ()
   3    process 35 thread 27  0x34e5 in sigpause ()
@@ -3721,14 +3804,14 @@ If you choose to set @samp{detach-on-fork} mode off, then @value{GDBN}
 will retain control of all forked processes (including nested forks).
 You can list the forked processes under the control of @value{GDBN} by
 using the @w{@code{info inferiors}} command, and switch from one fork
-to another by using the @code{inferior} command (@pxref{Inferiors and
-Programs, ,Debugging Multiple Inferiors and Programs}).
+to another by using the @code{inferior} command (@pxref{Inferiors Connections and
+Programs, ,Debugging Multiple Inferiors Connections and Programs}).
 
 To quit debugging one of the forked processes, you can either detach
 from it by using the @w{@code{detach inferiors}} command (allowing it
 to run independently), or kill it using the @w{@code{kill inferiors}}
-command.  @xref{Inferiors and Programs, ,Debugging Multiple Inferiors
-and Programs}.
+command.  @xref{Inferiors Connections and Programs, ,Debugging
+Multiple Inferiors Connections and Programs}.
 
 If you ask to debug a child process and a @code{vfork} is followed by an
 @code{exec}, @value{GDBN} executes the new target up to the first
@@ -11911,8 +11994,8 @@ gdbserver that supports the @code{qGetTIBAddr} request.
 This variable contains the address of the thread information block.
 
 @item $_inferior
-The number of the current inferior.  @xref{Inferiors and
-Programs, ,Debugging Multiple Inferiors and Programs}.
+The number of the current inferior.  @xref{Inferiors Connections and
+Programs, ,Debugging Multiple Inferiors Connections and Programs}.
 
 @item $_thread
 The thread number of the current thread.  @xref{thread numbers}.
@@ -13108,7 +13191,7 @@ character.
 
 @value{GDBN} caches data exchanged between the debugger and a target.
 Each cache is associated with the address space of the inferior.
-@xref{Inferiors and Programs}, about inferior and address space.
+@xref{Inferiors Connections and Programs}, about inferior and address space.
 Such caching generally improves performance in remote debugging
 (@pxref{Remote Debugging}), because it reduces the overhead of the
 remote protocol by bundling memory reads and writes into large chunks.
@@ -20277,7 +20360,7 @@ that lies within the boundaries of this symbol file in memory.  Example:
 add symbol table from file "/home/user/gdb/mylib.so" at
     .text_addr = 0x7ffff7ff9480
 (y or n) y
-Reading symbols from /home/user/gdb/mylib.so...done.
+Reading symbols from /home/user/gdb/mylib.so...
 (gdb) remove-symbol-file -a 0x7ffff7ff9480
 Remove symbol table from file "/home/user/gdb/mylib.so"? (y or n) y
 (gdb)
@@ -20485,7 +20568,7 @@ when any of shared library events happen.  The best way to do this is
 to use @code{catch load} and @code{catch unload} (@pxref{Set
 Catchpoints}).
 
-@value{GDBN} also supports the the @code{set stop-on-solib-events}
+@value{GDBN} also supports the @code{set stop-on-solib-events}
 command for this.  This command exists for historical reasons.  It is
 less useful than setting a catchpoint, because it does not allow for
 conditions or commands as a catchpoint does.
@@ -21780,6 +21863,12 @@ established.  If you are using @code{gdbserver}, you may also invoke
 @code{gdbserver} using the @option{--attach} option
 (@pxref{Running gdbserver}).
 
+Some remote targets allow @value{GDBN} to determine the executable file running
+in the process the debugger is attaching to.  In such a case, @value{GDBN}
+uses the value of @code{exec-file-mismatch} to handle a possible mismatch
+between the executable file name running in the process and the name of the
+current exec-file loaded by @value{GDBN} (@pxref{set exec-file-mismatch}).
+
 @end table
 
 @anchor{Host and target files}
@@ -21863,19 +21952,19 @@ This feature is not available if the host system does not support
 Unix domain sockets.
 
 @item target remote @code{@var{host}:@var{port}}
-@itemx target remote @code{@var{[host]}:@var{port}}
+@itemx target remote @code{[@var{host}]:@var{port}}
 @itemx target remote @code{tcp:@var{host}:@var{port}}
-@itemx target remote @code{tcp:@var{[host]}:@var{port}}
+@itemx target remote @code{tcp:[@var{host}]:@var{port}}
 @itemx target remote @code{tcp4:@var{host}:@var{port}}
 @itemx target remote @code{tcp6:@var{host}:@var{port}}
-@itemx target remote @code{tcp6:@var{[host]}:@var{port}}
+@itemx target remote @code{tcp6:[@var{host}]:@var{port}}
 @itemx target extended-remote @code{@var{host}:@var{port}}
-@itemx target extended-remote @code{@var{[host]}:@var{port}}
+@itemx target extended-remote @code{[@var{host}]:@var{port}}
 @itemx target extended-remote @code{tcp:@var{host}:@var{port}}
-@itemx target extended-remote @code{tcp:@var{[host]}:@var{port}}
+@itemx target extended-remote @code{tcp:[@var{host}]:@var{port}}
 @itemx target extended-remote @code{tcp4:@var{host}:@var{port}}
 @itemx target extended-remote @code{tcp6:@var{host}:@var{port}}
-@itemx target extended-remote @code{tcp6:@var{[host]}:@var{port}}
+@itemx target extended-remote @code{tcp6:[@var{host}]:@var{port}}
 @cindex @acronym{TCP} port, @code{target remote}
 Debug using a @acronym{TCP} connection to @var{port} on @var{host}.
 The @var{host} may be either a host name, a numeric @acronym{IPv4}
@@ -21927,15 +22016,15 @@ target remote :1234
 Note that the colon is still required here.
 
 @item target remote @code{udp:@var{host}:@var{port}}
-@itemx target remote @code{udp:@var{[host]}:@var{port}}
+@itemx target remote @code{udp:[@var{host}]:@var{port}}
 @itemx target remote @code{udp4:@var{host}:@var{port}}
-@itemx target remote @code{udp6:@var{[host]}:@var{port}}
+@itemx target remote @code{udp6:[@var{host}]:@var{port}}
 @itemx target extended-remote @code{udp:@var{host}:@var{port}}
 @itemx target extended-remote @code{udp:@var{host}:@var{port}}
-@itemx target extended-remote @code{udp:@var{[host]}:@var{port}}
+@itemx target extended-remote @code{udp:[@var{host}]:@var{port}}
 @itemx target extended-remote @code{udp4:@var{host}:@var{port}}
 @itemx target extended-remote @code{udp6:@var{host}:@var{port}}
-@itemx target extended-remote @code{udp6:@var{[host]}:@var{port}}
+@itemx target extended-remote @code{udp6:[@var{host}]:@var{port}}
 @cindex @acronym{UDP} port, @code{target remote}
 Debug using @acronym{UDP} packets to @var{port} on @var{host}.  For example, to
 connect to @acronym{UDP} port 2828 on a terminal server named @code{manyfarms}:
@@ -23318,8 +23407,8 @@ used to examine the image of a running process using file-system
 subroutines.  This facility is supported on @sc{gnu}/Linux and Solaris
 systems.
 
-On FreeBSD systems, system control nodes are used to query process
-information.
+On FreeBSD and NetBSD systems, system control nodes are used to query
+process information.
 
 In addition, some systems may provide additional process information
 in core files.  Note that a core file may include a subset of the
@@ -23349,17 +23438,17 @@ a process ID rather than a thread ID).
 @item info proc cmdline
 @cindex info proc cmdline
 Show the original command line of the process.  This command is
-supported on @sc{gnu}/Linux and FreeBSD.
+supported on @sc{gnu}/Linux, FreeBSD and NetBSD.
 
 @item info proc cwd
 @cindex info proc cwd
 Show the current working directory of the process.  This command is
-supported on @sc{gnu}/Linux and FreeBSD.
+supported on @sc{gnu}/Linux, FreeBSD and NetBSD.
 
 @item info proc exe
 @cindex info proc exe
 Show the name of executable of the process.  This command is supported
-on @sc{gnu}/Linux and FreeBSD.
+on @sc{gnu}/Linux, FreeBSD and NetBSD.
 
 @item info proc files
 @cindex info proc files
@@ -23394,9 +23483,9 @@ Open files:
 @item info proc mappings
 @cindex memory address space mappings
 Report the memory address space ranges accessible in a process.  On
-Solaris and FreeBSD systems, each memory range includes information on
-whether the process has read, write, or execute access rights to each
-range.  On @sc{gnu}/Linux and FreeBSD systems, each memory range
+Solaris, FreeBSD and NetBSD systems, each memory range includes information
+on whether the process has read, write, or execute access rights to each
+range.  On @sc{gnu}/Linux, FreeBSD and NetBSD systems, each memory range
 includes the object file which is mapped to that range.
 
 @item info proc stat
@@ -23406,13 +23495,13 @@ Show additional process-related information, including the user ID and
 group ID; virtual memory usage; the signals that are pending, blocked,
 and ignored; its TTY; its consumption of system and user time; its
 stack size; its @samp{nice} value; etc.  These commands are supported
-on @sc{gnu}/Linux and FreeBSD.
+on @sc{gnu}/Linux, FreeBSD and NetBSD.
 
 For @sc{gnu}/Linux systems, see the @samp{proc} man page for more
 information (type @kbd{man 5 proc} from your shell prompt).
 
-For FreeBSD systems, @code{info proc stat} is an alias for @code{info
-proc status}.
+For FreeBSD and NetBSD systems, @code{info proc stat} is an alias for
+@code{info proc status}.
 
 @item info proc all
 Show all the information about the process described under all of the
@@ -25217,7 +25306,7 @@ history.
 @cindex history file
 @kindex set history filename
 @cindex @env{GDBHISTFILE}, environment variable
-@item set history filename @var{fname}
+@item set history filename @r{[}@var{fname}@r{]}
 Set the name of the @value{GDBN} command history file to @var{fname}.
 This is the file where @value{GDBN} reads an initial command history
 list, and where it writes the command history from this session when it
@@ -25227,15 +25316,29 @@ to the value of the environment variable @code{GDBHISTFILE}, or to
 @file{./.gdb_history} (@file{./_gdb_history} on MS-DOS) if this variable
 is not set.
 
+The @code{GDBHISTFILE} environment variable is read after processing
+any @value{GDBN} initialization files (@pxref{Startup}) and after
+processing any commands passed using command line options (for
+example, @code{-ex}).
+
+If the @var{fname} argument is not given, or if the @code{GDBHISTFILE}
+is the empty string then @value{GDBN} will neither try to load an
+existing history file, nor will it try to save the history on exit.
+
 @cindex save command history
 @kindex set history save
 @item set history save
 @itemx set history save on
 Record command history in a file, whose name may be specified with the
-@code{set history filename} command.  By default, this option is disabled.
+@code{set history filename} command.  By default, this option is
+disabled.  The command history will be recorded when @value{GDBN}
+exits.  If @code{set history filename} is set to the empty string then
+history saving is disabled, even when @code{set history save} is
+@code{on}.
 
 @item set history save off
-Stop recording command history in a file.
+Don't record the command history into the file specified by @code{set
+history filename} when @value{GDBN} exits.
 
 @cindex history size
 @kindex set history size
@@ -25248,6 +25351,11 @@ to 256 if this variable is not set.  Non-numeric values of @env{GDBHISTSIZE}
 are ignored.  If @var{size} is @code{unlimited} or if @env{GDBHISTSIZE} is
 either a negative number or the empty string, then the number of commands
 @value{GDBN} keeps in the history list is unlimited.
+
+The @code{GDBHISTSIZE} environment variable is read after processing
+any @value{GDBN} initialization files (@pxref{Startup}) and after
+processing any commands passed using command line options (for
+example, @code{-ex}).
 
 @cindex remove duplicate history
 @kindex set history remove-duplicates
@@ -25872,7 +25980,7 @@ get loaded:
 
 @smallexample
 $ ./gdb -q ./gdb
-Reading symbols from /home/user/gdb/gdb...done.
+Reading symbols from /home/user/gdb/gdb...
 warning: File "/home/user/gdb/gdb-gdb.gdb" auto-loading has been
          declined by your `auto-load safe-path' set
          to "$debugdir:$datadir/auto-load".
@@ -27666,6 +27774,8 @@ source and registers, or
 assembly and registers.
 @end itemize
 
+These are the standard layouts, but other layouts can be defined.
+
 A status line above the command window shows the following information:
 
 @table @emph
@@ -27902,11 +28012,63 @@ Disable TUI mode, returning to the console interpreter.
 @kindex info win
 List and give the size of all displayed windows.
 
+@item tui new-layout @var{name} @var{window} @var{weight} @r{[}@var{window} @var{weight}@dots{}@r{]}
+@kindex tui new-layout
+Create a new TUI layout.  The new layout will be named @var{name}, and
+can be accessed using the @code{layout} command (see below).
+
+Each @var{window} parameter is either the name of a window to display,
+or a window description.  The windows will be displayed from top to
+bottom in the order listed.
+
+The names of the windows are the same as the ones given to the
+@code{focus} command (see below); additional, the @code{status}
+window can be specified.  Note that, because it is of fixed height,
+the weight assigned to the status window is of no importance.  It is
+conventional to use @samp{0} here.
+
+A window description looks a bit like an invocation of @code{tui
+new-layout}, and is of the form
+@{@r{[}@code{-horizontal}@r{]}@var{window} @var{weight} @r{[}@var{window} @var{weight}@dots{}@r{]}@}.
+
+This specifies a sub-layout.  If @code{-horizontal} is given, the
+windows in this description will be arranged side-by-side, rather than
+top-to-bottom.
+
+Each @var{weight} is an integer.  It is the weight of this window
+relative to all the other windows in the layout.  These numbers are
+used to calculate how much of the screen is given to each window.
+
+For example:
+
+@example
+(gdb) tui new-layout example src 1 regs 1 status 0 cmd 1
+@end example
+
+Here, the new layout is called @samp{example}.  It shows the source
+and register windows, followed by the status window, and then finally
+the command window.  The non-status windows all have the same weight,
+so the terminal will be split into three roughly equal sections.
+
+Here is a more complex example, showing a horizontal layout:
+
+@example
+(gdb) tui new-layout example @{-horizontal src 1 asm 1@} 2 status 0 cmd 1
+@end example
+
+This will result in side-by-side source and assembly windows; with the
+status and command window being beneath these, filling the entire
+width of the terminal.  Because they have weight 2, the source and
+assembly windows will be twice the height of the command window.
+
 @item layout @var{name}
 @kindex layout
-Changes which TUI windows are displayed.  In each layout the command
-window is always displayed, the @var{name} parameter controls which
-additional windows are displayed, and can be any of the following:
+Changes which TUI windows are displayed.  The @var{name} parameter
+controls which layout is shown.  It can be either one of the built-in
+layout names, or the name of a layout defined by the user using
+@code{tui new-layout}.
+
+The built-in layouts are as follows:
 
 @table @code
 @item next
@@ -28524,7 +28686,7 @@ groups can be obtained using @samp{-list-thread-groups --available}.
 In general, the content of a thread group may be only retrieved only
 after attaching to that thread group.
 
-Thread groups are related to inferiors (@pxref{Inferiors and
+Thread groups are related to inferiors (@pxref{Inferiors Connections and
 Programs}).  Each inferior corresponds to a thread group of a special
 type @samp{process}, and some additional operations are permitted on
 such thread groups.
@@ -28818,7 +28980,7 @@ recommended that front ends request a specific version of MI when launching
 @value{GDBN} (e.g. @code{--interpreter=mi2}) to make sure they get an
 interpreter with the MI version they expect.
 
-The following table gives a summary of the the released versions of the MI
+The following table gives a summary of the released versions of the MI
 interface: the version number, the version of GDB in which it first appeared
 and the breaking changes compared to the previous version.
 
@@ -28996,7 +29158,7 @@ The following is the list of possible async records:
 
 @item *running,thread-id="@var{thread}"
 The target is now running.  The @var{thread} field can be the global
-thread ID of the the thread that is now running, and it can be
+thread ID of the thread that is now running, and it can be
 @samp{all} if all threads are running.  The frontend should assume
 that no interaction with a running thread is possible after this
 notification is produced.  The frontend should not assume that this
@@ -35903,7 +36065,7 @@ popup menu, but is needless clutter on the command line, and
 -add-inferior
 @end smallexample
 
-Creates a new inferior (@pxref{Inferiors and Programs}).  The created
+Creates a new inferior (@pxref{Inferiors Connections and Programs}).  The created
 inferior is not associated with any executable.  Such association may
 be established with the @samp{-file-exec-and-symbols} command
 (@pxref{GDB/MI File Commands}).  The command response has a single
@@ -37704,6 +37866,14 @@ supported).
 @item --with-curses
 Use the curses library instead of the termcap library, for text-mode
 terminal operations.
+
+@item --with-debuginfod
+Build @value{GDBN} with libdebuginfod, the debuginfod client library.
+Used to automatically fetch source files and separate debug files from
+debuginfod servers using the associated executable's build ID. Enabled
+by default if libdebuginfod is installed and found at configure time.
+debuginfod is packaged with elfutils, starting with version 0.178. You
+can get the latest version from `https://sourceware.org/elfutils/'.
 
 @item --with-libunwind-ia64
 Use the libunwind library for unwinding function call stack on ia64
@@ -45141,6 +45311,12 @@ used.  The feature that is present should contain registers
 This feature is optional.  If present, it should contain registers
 @samp{fp0} through @samp{fp7}, @samp{fpcontrol}, @samp{fpstatus} and
 @samp{fpiaddr}.
+
+Note that, despite the fact that this feature's name says
+@samp{coldfire}, it is used to describe any floating point registers.
+The size of the registers must match the main m68k flavor; so, for
+example, if the primary feature is reported as @samp{coldfire}, then
+64-bit floating point registers are required.
 @end table
 
 @node NDS32 Features
@@ -46189,11 +46365,11 @@ command, otherwise you may get an error that looks something like
 @command{gdbserver} can also debug multiple inferiors at once,
 described in
 @ifset man
-the @value{GDBN} manual in node @code{Inferiors and Programs}
--- shell command @code{info -f gdb -n 'Inferiors and Programs'}.
+the @value{GDBN} manual in node @code{Inferiors Connections and Programs}
+-- shell command @code{info -f gdb -n 'Inferiors Connections and Programs'}.
 @end ifset
 @ifclear man
-@ref{Inferiors and Programs}.
+@ref{Inferiors Connections and Programs}.
 @end ifclear
 In such case use the @code{extended-remote} @value{GDBN} command variant:
 

@@ -1,6 +1,6 @@
 /* Target-dependent code for the Renesas RL78 for GDB, the GNU debugger.
 
-   Copyright (C) 2011-2019 Free Software Foundation, Inc.
+   Copyright (C) 2011-2020 Free Software Foundation, Inc.
 
    Contributed by Red Hat, Inc.
 
@@ -32,7 +32,7 @@
 #include "frame-base.h"
 #include "value.h"
 #include "gdbcore.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "reggroups.h"
 
 #include "elf/rl78.h"
@@ -1480,8 +1480,9 @@ rl78_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
 /* Register the above initialization routine.  */
 
+void _initialize_rl78_tdep ();
 void
-_initialize_rl78_tdep (void)
+_initialize_rl78_tdep ()
 {
   register_gdbarch_init (bfd_arch_rl78, rl78_gdbarch_init);
 }

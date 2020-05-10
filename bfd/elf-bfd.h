@@ -1,5 +1,5 @@
 /* BFD back-end data structures for ELF files.
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -635,10 +635,10 @@ struct elf_link_hash_table
 
   /* Cached first output tls section and size of PT_TLS segment.  */
   asection *tls_sec;
-  bfd_size_type tls_size;
+  bfd_size_type tls_size;  /* Bytes.  */
 
-  /* A linked list of BFD's loaded in the link.  */
-  struct elf_link_loaded_list *loaded;
+  /* A linked list of dynamic BFD's loaded in the link.  */
+  struct elf_link_loaded_list *dyn_loaded;
 
   /* Short-cuts to get to dynamic linker sections.  */
   asection *sgot;
@@ -955,7 +955,7 @@ struct elf_backend_data
   /* A function to convert machine dependent ELF section header flags to
      BFD internal section header flags.  */
   bfd_boolean (*elf_backend_section_flags)
-    (flagword *, const Elf_Internal_Shdr *);
+    (const Elf_Internal_Shdr *);
 
   /* A function that returns a struct containing ELF section flags and
      type for the given BFD section.   */
@@ -1082,6 +1082,12 @@ struct elf_backend_data
      CREATE_DYNAMIC_SECTIONS entry point.  */
   bfd_boolean (*elf_backend_size_dynamic_sections)
     (bfd *output_bfd, struct bfd_link_info *info);
+
+  /* The STRIP_ZERO_SIZED_DYNAMIC_SECTIONS function is called by the
+     ELF backend linker to strip zero-sized dynamic sections after
+     the section sizes have been set.  */
+  bfd_boolean (*elf_backend_strip_zero_sized_dynamic_sections)
+    (struct bfd_link_info *info);
 
   /* Set TEXT_INDEX_SECTION and DATA_INDEX_SECTION, the output sections
      we keep to use as a base for relocs and symbols.  */
@@ -1502,6 +1508,22 @@ struct elf_backend_data
 
   /* Opcode representing no unwind.  */
   int (*cant_unwind_opcode) (struct bfd_link_info *);
+
+  /* Called when emitting an ELF symbol whoes input version had an
+     ST_SHNDX field set to a value in the range SHN_LOPROC..SHN_HIOS.
+     Returns the value to be installed in the ST_SHNDX field of the
+     emitted symbol.  If not defined, the value is left unchanged.  */
+  unsigned int (*symbol_section_index) (bfd *, elf_symbol_type *);
+  
+  /* Called when a section has extra reloc sections.  */
+  bfd_boolean (*init_secondary_reloc_section) (bfd *, Elf_Internal_Shdr *,
+					       const char *, unsigned int);
+
+  /* Called when after loading the normal relocs for a section.  */
+  bfd_boolean (*slurp_secondary_relocs) (bfd *, asection *, asymbol **);
+
+  /* Called after writing the normal relocs for a section.  */
+  bfd_boolean (*write_secondary_relocs) (bfd *, asection *);
 
   /* This is non-zero if static TLS segments require a special alignment.  */
   unsigned static_tls_alignment;
@@ -1937,7 +1959,7 @@ struct elf_obj_tdata
   struct sdt_note *sdt_note_head;
 
   Elf_Internal_Shdr **group_sect_ptr;
-  int num_group;
+  unsigned int num_group;
 
   /* Index into group_sect_ptr, updated by setup_group when finding a
      section's group.  Used to optimize subsequent group searches.  */
@@ -2061,7 +2083,7 @@ extern bfd_boolean _bfd_elf_copy_private_bfd_data
 extern bfd_boolean _bfd_elf_print_private_bfd_data
   (bfd *, void *);
 const char * _bfd_elf_get_symbol_version_string
-  (bfd *, asymbol *, bfd_boolean *);
+  (bfd *, asymbol *, bfd_boolean, bfd_boolean *);
 extern void bfd_elf_print_symbol
   (bfd *, void *, asymbol *, bfd_print_symbol_type);
 
@@ -2394,9 +2416,9 @@ extern bfd_boolean _bfd_elf_init_file_header (bfd *, struct bfd_link_info *);
 
 extern bfd_boolean _bfd_elf_final_write_processing (bfd *);
 
-extern const bfd_target *bfd_elf32_object_p
+extern bfd_cleanup bfd_elf32_object_p
   (bfd *);
-extern const bfd_target *bfd_elf32_core_file_p
+extern bfd_cleanup bfd_elf32_core_file_p
   (bfd *);
 extern char *bfd_elf32_core_file_failing_command
   (bfd *);
@@ -2442,9 +2464,9 @@ extern void bfd_elf32_write_relocs
 extern bfd_boolean bfd_elf32_slurp_reloc_table
   (bfd *, asection *, asymbol **, bfd_boolean);
 
-extern const bfd_target *bfd_elf64_object_p
+extern bfd_cleanup bfd_elf64_object_p
   (bfd *);
-extern const bfd_target *bfd_elf64_core_file_p
+extern bfd_cleanup bfd_elf64_core_file_p
   (bfd *);
 extern char *bfd_elf64_core_file_failing_command
   (bfd *);
@@ -2504,6 +2526,10 @@ extern bfd_boolean bfd_elf_link_add_symbols
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_elf_add_dynamic_entry
   (struct bfd_link_info *, bfd_vma, bfd_vma);
+extern bfd_boolean _bfd_elf_strip_zero_sized_dynamic_sections
+  (struct bfd_link_info *);
+extern int bfd_elf_add_dt_needed_tag
+  (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_elf_link_check_relocs
   (bfd *, struct bfd_link_info *);
 
@@ -2712,6 +2738,8 @@ extern char *elfcore_write_aarch_sve
   (bfd *, char *, int *, const void *, int);
 extern char *elfcore_write_aarch_pauth
   (bfd *, char *, int *, const void *, int);
+extern char *elfcore_write_arc_v2
+  (bfd *, char *, int *, const void *, int);
 extern char *elfcore_write_lwpstatus
   (bfd *, char *, int *, long, int, const void *);
 extern char *elfcore_write_register_note
@@ -2830,14 +2858,27 @@ extern bfd_vma elf32_r_sym (bfd_vma);
 
 extern bfd_boolean is_debuginfo_file (bfd *);
 
+
+extern bfd_boolean _bfd_elf_init_secondary_reloc_section
+  (bfd *, Elf_Internal_Shdr *, const char *, unsigned int);
+extern bfd_boolean _bfd_elf_slurp_secondary_reloc_section
+  (bfd *, asection *, asymbol **);
+extern bfd_boolean _bfd_elf_copy_special_section_fields
+  (const bfd *, bfd *, const Elf_Internal_Shdr *, Elf_Internal_Shdr *);
+extern bfd_boolean _bfd_elf_write_secondary_reloc_section
+  (bfd *, asection *);
+extern unsigned int _bfd_elf_symbol_section_index
+  (bfd *, elf_symbol_type *);
+
+
 /* Large common section.  */
 extern asection _bfd_elf_large_com_section;
 
 /* Hash for local symbol with the first section id, ID, in the input
    file and the local symbol index, SYM.  */
 #define ELF_LOCAL_SYMBOL_HASH(ID, SYM) \
-  (((((ID) & 0xff) << 24) | (((ID) & 0xff00) << 8)) \
-   ^ (SYM) ^ ((ID) >> 16))
+  (((((ID) & 0xffU) << 24) | (((ID) & 0xff00) << 8)) \
+   ^ (SYM) ^ (((ID) & 0xffff0000U) >> 16))
 
 /* This is the condition under which finish_dynamic_symbol will be called.
    If our finish_dynamic_symbol isn't called, we'll need to do something
@@ -2899,8 +2940,9 @@ extern asection _bfd_elf_large_com_section;
       else if (!bfd_link_relocatable (info))				\
 	{								\
 	  bfd_boolean err;						\
-	  err = (info->unresolved_syms_in_objects == RM_GENERATE_ERROR	\
-		 || ELF_ST_VISIBILITY (h->other) != STV_DEFAULT);	\
+	  err = (info->unresolved_syms_in_objects == RM_DIAGNOSE &&	\
+		 !info->warn_unresolved_syms)				\
+		 || ELF_ST_VISIBILITY (h->other) != STV_DEFAULT;	\
 	  (*info->callbacks->undefined_symbol) (info,			\
 						h->root.root.string,	\
 						input_bfd,		\

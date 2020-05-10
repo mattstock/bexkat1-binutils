@@ -1,5 +1,5 @@
 /* Functions for deciding which macros are currently in scope.
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of GDB.
@@ -152,8 +152,9 @@ standard_macro_lookup (const char *name, void *baton)
   return result;
 }
 
+void _initialize_macroscope ();
 void
-_initialize_macroscope (void)
+_initialize_macroscope ()
 {
   macro_user_macros = new_macro_table (NULL, NULL, NULL);
   macro_set_main (macro_user_macros, "<user-defined>");

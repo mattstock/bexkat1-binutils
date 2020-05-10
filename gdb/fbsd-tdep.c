@@ -1,6 +1,6 @@
 /* Target-dependent code for FreeBSD, architecture-independent.
 
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -673,7 +673,8 @@ fbsd_corefile_thread (struct thread_info *info,
 {
   struct regcache *regcache;
 
-  regcache = get_thread_arch_regcache (info->ptid, args->gdbarch);
+  regcache = get_thread_arch_regcache (info->inf->process_target (),
+				       info->ptid, args->gdbarch);
 
   target_fetch_registers (regcache, -1);
 
@@ -724,14 +725,14 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
   if (get_exec_file (0))
     {
       const char *fname = lbasename (get_exec_file (0));
-      char *psargs = xstrdup (fname);
+      std::string psargs = fname;
 
-      if (get_inferior_args ())
-	psargs = reconcat (psargs, psargs, " ", get_inferior_args (),
-			   (char *) NULL);
+      const char *infargs = get_inferior_args ();
+      if (infargs != NULL)
+	psargs = psargs + " " + infargs;
 
       note_data = elfcore_write_prpsinfo (obfd, note_data, note_size,
-					  fname, psargs);
+					  fname, psargs.c_str ());
     }
 
   /* Thread register information.  */
@@ -1018,12 +1019,12 @@ fbsd_info_proc_files_entry (int kf_type, int kf_fd, int kf_flags,
 
 	    /* For local sockets, print out the first non-nul path
 	       rather than both paths.  */
-	    const struct fbsd_sockaddr_un *sun
+	    const struct fbsd_sockaddr_un *saddr_un
 	      = reinterpret_cast<const struct fbsd_sockaddr_un *> (kf_sa_local);
-	    if (sun->sun_path[0] == 0)
-	      sun = reinterpret_cast<const struct fbsd_sockaddr_un *>
+	    if (saddr_un->sun_path[0] == 0)
+	      saddr_un = reinterpret_cast<const struct fbsd_sockaddr_un *>
 		(kf_sa_peer);
-	    printf_filtered ("%s", sun->sun_path);
+	    printf_filtered ("%s", saddr_un->sun_path);
 	    break;
 	  }
 	case FBSD_AF_INET:
@@ -1596,6 +1597,7 @@ fbsd_print_auxv_entry (struct gdbarch *gdbarch, struct ui_file *file,
       TAG (EHDRFLAGS, _("ELF header e_flags"), AUXV_FORMAT_HEX);
       TAG (HWCAP, _("Machine-dependent CPU capability hints"), AUXV_FORMAT_HEX);
       TAG (HWCAP2, _("Extension of AT_HWCAP"), AUXV_FORMAT_HEX);
+      TAG (BSDFLAGS, _("ELF BSD flags"), AUXV_FORMAT_HEX);
     }
 
   fprint_auxv_entry (file, name, description, format, type, val);
@@ -2084,8 +2086,9 @@ fbsd_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_get_syscall_number (gdbarch, fbsd_get_syscall_number);
 }
 
+void _initialize_fbsd_tdep ();
 void
-_initialize_fbsd_tdep (void)
+_initialize_fbsd_tdep ()
 {
   fbsd_gdbarch_data_handle =
     gdbarch_data_register_post_init (init_fbsd_gdbarch_data);

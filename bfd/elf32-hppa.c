@@ -1,5 +1,5 @@
 /* BFD back-end for HP PA-RISC ELF files.
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    Original code by
 	Center for Software Science
@@ -418,7 +418,7 @@ static struct bfd_link_hash_table *
 elf32_hppa_link_hash_table_create (bfd *abfd)
 {
   struct elf32_hppa_link_hash_table *htab;
-  bfd_size_type amt = sizeof (*htab);
+  size_t amt = sizeof (*htab);
 
   htab = bfd_zmalloc (amt);
   if (htab == NULL)
@@ -731,6 +731,15 @@ hppa_build_one_stub (struct bfd_hash_entry *bh, void *in_arg)
   switch (hsh->stub_type)
     {
     case hppa_stub_long_branch:
+      /* Fail if the target section could not be assigned to an output
+	 section.  The user should fix his linker script.  */
+      if (hsh->target_section->output_section == NULL
+	  && info->non_contiguous_regions)
+	info->callbacks->einfo (_("%F%P: Could not assign '%pA' to an output "
+				  "section. Retry without "
+				  "--enable-non-contiguous-regions.\n"),
+				hsh->target_section);
+
       /* Create the long branch.  A long branch is formed with "ldil"
 	 loading the upper bits of the target address into a register,
 	 then branching with "be" which adds in the lower bits.
@@ -751,6 +760,15 @@ hppa_build_one_stub (struct bfd_hash_entry *bh, void *in_arg)
       break;
 
     case hppa_stub_long_branch_shared:
+      /* Fail if the target section could not be assigned to an output
+	 section.  The user should fix his linker script.  */
+      if (hsh->target_section->output_section == NULL
+	  && info->non_contiguous_regions)
+	info->callbacks->einfo (_("%F%P: Could not assign %pA to an output "
+				  "section. Retry without "
+				  "--enable-non-contiguous-regions.\n"),
+				hsh->target_section);
+
       /* Branches are relative.  This is where we are going to.  */
       sym_value = (hsh->target_value
 		   + hsh->target_section->output_offset
@@ -823,6 +841,15 @@ hppa_build_one_stub (struct bfd_hash_entry *bh, void *in_arg)
       break;
 
     case hppa_stub_export:
+      /* Fail if the target section could not be assigned to an output
+	 section.  The user should fix his linker script.  */
+      if (hsh->target_section->output_section == NULL
+	  && info->non_contiguous_regions)
+	info->callbacks->einfo (_("%F%P: Could not assign %pA to an output "
+				  "section. Retry without "
+				  "--enable-non-contiguous-regions.\n"),
+				hsh->target_section);
+
       /* Branches are relative.  This is where we are going to.  */
       sym_value = (hsh->target_value
 		   + hsh->target_section->output_offset
@@ -2407,7 +2434,7 @@ elf32_hppa_setup_section_lists (bfd *output_bfd, struct bfd_link_info *info)
   unsigned int top_id, top_index;
   asection *section;
   asection **input_list, **list;
-  bfd_size_type amt;
+  size_t amt;
   struct elf32_hppa_link_hash_table *htab = hppa_link_hash_table (info);
 
   if (htab == NULL)
@@ -2596,7 +2623,7 @@ get_local_syms (bfd *output_bfd, bfd *input_bfd, struct bfd_link_info *info)
   /* We want to read in symbol extension records only once.  To do this
      we need to read in the local symbols in parallel and save them for
      later use; so hold pointers to the local symbols in an array.  */
-  bfd_size_type amt = sizeof (Elf_Internal_Sym *) * htab->bfd_count;
+  size_t amt = sizeof (Elf_Internal_Sym *) * htab->bfd_count;
   all_local_syms = bfd_zmalloc (amt);
   htab->all_local_syms = all_local_syms;
   if (all_local_syms == NULL)
@@ -3221,7 +3248,7 @@ final_link_relocate (asection *input_section,
 		     struct elf32_hppa_link_hash_entry *hh,
 		     struct bfd_link_info *info)
 {
-  int insn;
+  unsigned int insn;
   unsigned int r_type = ELF32_R_TYPE (rela->r_info);
   unsigned int orig_r_type = r_type;
   reloc_howto_type *howto = elf_hppa_howto_table + r_type;
@@ -3340,7 +3367,7 @@ final_link_relocate (asection *input_section,
 	      /* GCC sometimes uses a register other than r19 for the
 		 operation, so we must convert any addil instruction
 		 that uses this relocation.  */
-	      if ((insn & 0xfc000000) == ((int) OP_ADDIL << 26))
+	      if ((insn & 0xfc000000) == OP_ADDIL << 26)
 		insn = ADDIL_DP;
 	      else
 		/* We must have a ldil instruction.  It's too hard to find
@@ -3374,8 +3401,8 @@ final_link_relocate (asection *input_section,
 	 instance: "extern int foo" with foo defined as "const int foo".  */
       if (sym_sec == NULL || (sym_sec->flags & SEC_CODE) != 0)
 	{
-	  if ((insn & ((0x3f << 26) | (0x1f << 21)))
-	      == (((int) OP_ADDIL << 26) | (27 << 21)))
+	  if ((insn & ((0x3fu << 26) | (0x1f << 21)))
+	      == ((OP_ADDIL << 26) | (27 << 21)))
 	    {
 	      insn &= ~ (0x1f << 21);
 	    }

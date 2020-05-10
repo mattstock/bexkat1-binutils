@@ -1,6 +1,6 @@
 /* Intel 386 target-dependent stuff.
 
-   Copyright (C) 1988-2019 Free Software Foundation, Inc.
+   Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 #include "arch-utils.h"
 #include "command.h"
 #include "dummy-frame.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
@@ -798,13 +798,14 @@ i386_insn_is_jump (struct gdbarch *gdbarch, CORE_ADDR addr)
 
 /* Some kernels may run one past a syscall insn, so we have to cope.  */
 
-struct displaced_step_closure *
+displaced_step_closure_up
 i386_displaced_step_copy_insn (struct gdbarch *gdbarch,
 			       CORE_ADDR from, CORE_ADDR to,
 			       struct regcache *regs)
 {
   size_t len = gdbarch_max_insn_length (gdbarch);
-  i386_displaced_step_closure *closure = new i386_displaced_step_closure (len);
+  std::unique_ptr<i386_displaced_step_closure> closure
+    (new i386_displaced_step_closure (len));
   gdb_byte *buf = closure->buf.data ();
 
   read_memory (from, buf, len);
@@ -830,7 +831,8 @@ i386_displaced_step_copy_insn (struct gdbarch *gdbarch,
       displaced_step_dump_bytes (gdb_stdlog, buf, len);
     }
 
-  return closure;
+  /* This is a work around for a problem with g++ 4.8.  */
+  return displaced_step_closure_up (closure.release ());
 }
 
 /* Fix up the state of registers and memory after having single-stepped
@@ -2666,12 +2668,15 @@ i386_push_dummy_code (struct gdbarch *gdbarch, CORE_ADDR sp, CORE_ADDR funaddr,
   return sp - 16;
 }
 
-static CORE_ADDR
-i386_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
-		      struct regcache *regcache, CORE_ADDR bp_addr, int nargs,
-		      struct value **args, CORE_ADDR sp,
-		      function_call_return_method return_method,
-		      CORE_ADDR struct_addr)
+/* The "push_dummy_call" gdbarch method, optionally with the thiscall
+   calling convention.  */
+
+CORE_ADDR
+i386_thiscall_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
+			       struct regcache *regcache, CORE_ADDR bp_addr,
+			       int nargs, struct value **args, CORE_ADDR sp,
+			       function_call_return_method return_method,
+			       CORE_ADDR struct_addr, bool thiscall)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   gdb_byte buf[4];
@@ -2707,7 +2712,7 @@ i386_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 	    args_space += 4;
 	}
 
-      for (i = 0; i < nargs; i++)
+      for (i = thiscall ? 1 : 0; i < nargs; i++)
 	{
 	  int len = TYPE_LENGTH (value_enclosing_type (args[i]));
 
@@ -2759,6 +2764,10 @@ i386_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
   /* ...and fake a frame pointer.  */
   regcache->cooked_write (I386_EBP_REGNUM, buf);
 
+  /* The 'this' pointer needs to be in ECX.  */
+  if (thiscall)
+    regcache->cooked_write (I386_ECX_REGNUM, value_contents_all (args[0]));
+
   /* MarkK wrote: This "+ 8" is all over the place:
      (i386_frame_this_id, i386_sigtramp_frame_this_id,
      i386_dummy_id).  It's there, since all frame unwinders for
@@ -2769,6 +2778,20 @@ i386_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
      the i386, when %ebp is used as a frame pointer, the offset
      between the contents %ebp and the CFA as defined by GCC.  */
   return sp + 8;
+}
+
+/* Implement the "push_dummy_call" gdbarch method.  */
+
+static CORE_ADDR
+i386_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
+		      struct regcache *regcache, CORE_ADDR bp_addr, int nargs,
+		      struct value **args, CORE_ADDR sp,
+		      function_call_return_method return_method,
+		      CORE_ADDR struct_addr)
+{
+  return i386_thiscall_push_dummy_call (gdbarch, function, regcache, bp_addr,
+					nargs, args, sp, return_method,
+					struct_addr, false);
 }
 
 /* These registers are used for returning integers (and on some
@@ -9016,24 +9039,9 @@ i386_mpx_set_bounds (const char *args, int from_tty)
 
 static struct cmd_list_element *mpx_set_cmdlist, *mpx_show_cmdlist;
 
-/* Helper function for the CLI commands.  */
-
-static void
-set_mpx_cmd (const char *args, int from_tty)
-{
-  help_list (mpx_set_cmdlist, "set mpx ", all_commands, gdb_stdout);
-}
-
-/* Helper function for the CLI commands.  */
-
-static void
-show_mpx_cmd (const char *args, int from_tty)
-{
-  cmd_show_list (mpx_show_cmdlist, from_tty, "");
-}
-
+void _initialize_i386_tdep ();
 void
-_initialize_i386_tdep (void)
+_initialize_i386_tdep ()
 {
   register_gdbarch_init (bfd_arch_i386, i386_gdbarch_init);
 
@@ -9061,17 +9069,17 @@ is \"default\"."),
 
   /* Add "mpx" prefix for the set commands.  */
 
-  add_prefix_cmd ("mpx", class_support, set_mpx_cmd, _("\
+  add_basic_prefix_cmd ("mpx", class_support, _("\
 Set Intel Memory Protection Extensions specific variables."),
-		  &mpx_set_cmdlist, "set mpx ",
-		  0 /* allow-unknown */, &setlist);
+			&mpx_set_cmdlist, "set mpx ",
+			0 /* allow-unknown */, &setlist);
 
   /* Add "mpx" prefix for the show commands.  */
 
-  add_prefix_cmd ("mpx", class_support, show_mpx_cmd, _("\
+  add_show_prefix_cmd ("mpx", class_support, _("\
 Show Intel Memory Protection Extensions specific variables."),
-		  &mpx_show_cmdlist, "show mpx ",
-		  0 /* allow-unknown */, &showlist);
+		       &mpx_show_cmdlist, "show mpx ",
+		       0 /* allow-unknown */, &showlist);
 
   /* Add "bound" command for the show mpx commands list.  */
 

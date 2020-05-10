@@ -1,4 +1,4 @@
-/* Copyright (C) 1992-2019 Free Software Foundation, Inc.
+/* Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -679,7 +679,8 @@ read_atcb (CORE_ADDR task_id, struct ada_task_info *task_info)
 		  task_name = p + 2;
 
 	      /* Copy the task name.  */
-	      strncpy (task_info->name, task_name, sizeof (task_info->name));
+	      strncpy (task_info->name, task_name,
+		       sizeof (task_info->name) - 1);
 	      task_info->name[sizeof (task_info->name) - 1] = 0;
 	    }
 	  else
@@ -1128,7 +1129,7 @@ print_ada_task_info (struct ui_out *uiout,
       if (uiout->is_mi_like_p ())
         {
 	  thread_info *thread = (ada_task_is_alive (task_info)
-				 ? find_thread_ptid (task_info->ptid)
+				 ? find_thread_ptid (inf, task_info->ptid)
 				 : nullptr);
 
 	  if (thread != NULL)
@@ -1343,7 +1344,7 @@ task_command_1 (const char *taskno_str, int from_tty, struct inferior *inf)
      computed if target_get_ada_task_ptid has not been implemented for
      our target (yet).  Rather than cause an assertion error in that case,
      it's nicer for the user to just refuse to perform the task switch.  */
-  thread_info *tp = find_thread_ptid (task_info->ptid);
+  thread_info *tp = find_thread_ptid (inf, task_info->ptid);
   if (tp == NULL)
     error (_("Unable to compute thread ID for task %s.\n"
              "Cannot switch to this task."),
@@ -1432,9 +1433,7 @@ ada_tasks_new_objfile_observer (struct objfile *objfile)
     {
       /* All objfiles are being cleared, so we should clear all
 	 our caches for all program spaces.  */
-      struct program_space *pspace;
-
-      for (pspace = program_spaces; pspace != NULL; pspace = pspace->next)
+      for (struct program_space *pspace : program_spaces)
         ada_tasks_invalidate_pspace_data (pspace);
     }
   else
@@ -1455,8 +1454,9 @@ ada_tasks_new_objfile_observer (struct objfile *objfile)
       ada_tasks_invalidate_inferior_data (inf);
 }
 
+void _initialize_tasks ();
 void
-_initialize_tasks (void)
+_initialize_tasks ()
 {
   /* Attach various observers.  */
   gdb::observers::normal_stop.attach (ada_tasks_normal_stop_observer);

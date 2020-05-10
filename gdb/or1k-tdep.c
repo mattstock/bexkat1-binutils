@@ -1,5 +1,5 @@
 /* Target-dependent code for the 32-bit OpenRISC 1000, for the GDB.
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -35,7 +35,7 @@
 #include "arch-utils.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "trad-frame.h"
 #include "regset.h"
 #include "remote.h"
@@ -1269,8 +1269,9 @@ or1k_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
 }
 
 
+void _initialize_or1k_tdep ();
 void
-_initialize_or1k_tdep (void)
+_initialize_or1k_tdep ()
 {
   /* Register this architecture.  */
   gdbarch_register (bfd_arch_or1k, or1k_gdbarch_init, or1k_dump_tdep);

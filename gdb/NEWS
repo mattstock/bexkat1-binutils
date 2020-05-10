@@ -3,6 +3,79 @@
 
 *** Changes since GDB 9
 
+* GDB now supports debuginfod, an HTTP server for distributing ELF/DWARF
+  debugging information as well as source code.
+
+  When built with debuginfod, GDB can automatically query debuginfod
+  servers for the separate debug files and source code of the executable
+  being debugged.
+
+  To build GDB with debuginfod, pass --with-debuginfod to configure (this
+  requires libdebuginfod, the debuginfod client library).
+
+  debuginfod is distributed with elfutils, starting with version 0.178.
+
+  You can get the latest version from https://sourceware.org/elfutils.
+
+* New features in the GDB remote stub, GDBserver
+
+  ** GDBserver is now supported on RISC-V GNU/Linux.
+
+* Debugging MS-Windows processes now sets $_exitsignal when the
+  inferior is terminated by a signal, instead of setting $_exitcode.
+
+* Multithreaded symbol loading has now been enabled by default on systems
+  that support it (see entry for GDB 9, below), providing faster
+  performance for programs with many symbols.
+
+* The $_siginfo convenience variable now also works on Windows targets,
+  and will display the EXCEPTION_RECORD of the last handled exception.
+
+* TUI windows can now be arranged horizontally.
+
+* The command history filename can now be set to the empty string
+  either using 'set history filename' or by setting 'GDBHISTFILE=' in
+  the environment.  The effect of setting this filename to the empty
+  string is that GDB will not try to load any previous command
+  history.
+
+* On Windows targets, it is now possible to debug 32-bit programs with a
+  64-bit GDB.
+
+* New commands
+
+set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).
+show exec-file-mismatch -- Show exec-file-mismatch handling (ask|warn|off).
+  Set or show the option 'exec-file-mismatch'.  When GDB attaches to
+  a running process and can determine the name of the executable file
+  the process runs, this new option indicates whether to detect mismatch
+  between the name of the current executable file loaded by GDB
+  and the name of the executable file used to start the process.
+  If 'ask', the default, display a warning and ask the user
+  whether to load the process executable file; if 'warn', just display
+  a warning; if 'off', don't attempt to detect a mismatch.
+
+tui new-layout NAME WINDOW WEIGHT [WINDOW WEIGHT]...
+  Define a new TUI layout, specifying its name and the windows that
+  will be displayed.
+
+* New targets
+
+GNU/Linux/RISC-V (gdbserver)	riscv*-*-linux*
+
+* Python API
+
+  ** gdb.register_window_type can be used to implement new TUI windows
+     in Python.
+
+  ** Dynamic types can now be queried.  gdb.Type has a new attribute,
+     "dynamic", and gdb.Type.sizeof can be None for a dynamic type.  A
+     field of a dynamic type may have None for its "bitpos" attribute
+     as well.
+
+  ** Commands written in Python can be in the "TUI" help class by
+     registering with the new constant gdb.COMMAND_TUI.
+
 *** Changes in GDB 9
 
 * 'thread-exited' event is now available in the annotations interface.
@@ -69,6 +142,21 @@
 * GDB now supports multithreaded symbol loading for higher performance.
   This feature is still in testing, so it is disabled by default.  You
   can turn it on using 'maint set worker-threads unlimited'.
+
+* Multi-target debugging support
+
+  GDB now supports debugging multiple target connections
+  simultaneously.  For example, you can now have each inferior
+  connected to different remote servers running in different machines,
+  or have one inferior debugging a local native process, an inferior
+  debugging a core dump, etc.
+
+  This support is experimental and comes with some limitations -- you
+  can only resume multiple targets simultaneously if all targets
+  support non-stop mode, and all remote stubs or servers must support
+  the same set of remote protocol features exactly.  See also "info
+  connections" and "add-inferior -no-connection" below, and "maint set
+  target-non-stop" in the user manual.
 
 * Python API
 
@@ -236,6 +324,9 @@ show debug remote-packet-max-chars
   "set debug remote".
   The default is 512 bytes.
 
+info connections
+  Lists the target connections currently in use.
+
 * Changed commands
 
 help
@@ -279,6 +370,17 @@ show print raw-frame-arguments
   frame-arguments" commands (now with a dash instead of a space).  The
   old commands are now deprecated and may be removed in a future
   release.
+
+add-inferior [-no-connection]
+  The add-inferior command now supports a "-no-connection" flag that
+  makes the new inferior start with no target connection associated.
+  By default, the new inferior inherits the target connection of the
+  current inferior.  See also "info connections".
+
+info inferior
+  This command's output now includes a new "Connection" column
+  indicating which target connection an inferior is bound to.  See
+  "info connections" above.
 
 maint test-options require-delimiter
 maint test-options unknown-is-error
@@ -2325,7 +2427,7 @@ show code-cache
 * Newly installed $prefix/bin/gcore acts as a shell interface for the
   GDB command gcore.
 
-* GDB now implements the the C++ 'typeid' operator.
+* GDB now implements the C++ 'typeid' operator.
 
 * The new convenience variable $_exception holds the exception being
   thrown or caught at an exception-related catchpoint.
@@ -5109,7 +5211,7 @@ The new infrastructure making possible the implementation of key new
 features including 32x64 (e.g., 64-bit amd64 GDB debugging a 32-bit
 i386 application).
 
-GDB 6.3 will be the last release to include the the registers[]
+GDB 6.3 will be the last release to include the registers[]
 compatibility module that allowed out-of-date configurations to
 continue to work.  This change directly impacts the following
 configurations:
@@ -6540,7 +6642,7 @@ Remote targets now use a data cache to speed up communication with the
 remote side.  The data cache could lead to incorrect results because
 it doesn't know about volatile variables, thus making it impossible to
 debug targets which use memory mapped I/O devices. `set remotecache
-off' turns the the data cache off.
+off' turns the data cache off.
 
 * Remote targets may have threads
 

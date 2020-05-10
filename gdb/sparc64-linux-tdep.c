@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux UltraSPARC.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,7 +20,7 @@
 #include "defs.h"
 #include "frame.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "regset.h"
 #include "regcache.h"
 #include "gdbarch.h"
@@ -408,8 +408,9 @@ sparc64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 					 sparc64_linux_handle_segmentation_fault);
 }
 
+void _initialize_sparc64_linux_tdep ();
 void
-_initialize_sparc64_linux_tdep (void)
+_initialize_sparc64_linux_tdep ()
 {
   gdbarch_register_osabi (bfd_arch_sparc, bfd_mach_sparc_v9,
 			  GDB_OSABI_LINUX, sparc64_linux_init_abi);

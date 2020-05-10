@@ -1,6 +1,6 @@
 /* Renesas M32C target-dependent code for GDB, the GNU debugger.
 
-   Copyright (C) 2004-2019 Free Software Foundation, Inc.
+   Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,8 +27,8 @@
 #include "arch-utils.h"
 #include "frame.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
-#include "dwarf2expr.h"
+#include "dwarf2/frame.h"
+#include "dwarf2/expr.h"
 #include "symtab.h"
 #include "gdbcore.h"
 #include "value.h"
@@ -2644,8 +2644,9 @@ m32c_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_m32c_tdep ();
 void
-_initialize_m32c_tdep (void)
+_initialize_m32c_tdep ()
 {
   register_gdbarch_init (bfd_arch_m32c, m32c_gdbarch_init);
 

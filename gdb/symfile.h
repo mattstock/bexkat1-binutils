@@ -1,6 +1,6 @@
 /* Definitions for reading symbol files into GDB.
 
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -183,6 +183,17 @@ struct quick_symbol_functions
 					    const char *name,
 					    domain_enum domain);
 
+  /* Check to see if the global symbol is defined in a "partial" symbol table
+     of OBJFILE. NAME is the name of the symbol to look for.  DOMAIN
+     indicates what sort of symbol to search for.
+
+     If found, sets *symbol_found_p to true and returns the symbol language.
+     defined, or NULL if no such symbol table exists.  */
+  enum language (*lookup_global_symbol_language) (struct objfile *objfile,
+						  const char *name,
+						  domain_enum domain,
+						  bool *symbol_found_p);
+
   /* Print statistics about any indices loaded for OBJFILE.  The
      statistics should be printed to gdb_stdout.  This is used for
      "maint print statistics".  */
@@ -242,11 +253,14 @@ struct quick_symbol_functions
      names (the passed file name is already only the lbasename'd
      part).
 
-     Otherwise, if KIND does not match, this symbol is skipped.
+     If the file is not skipped, and SYMBOL_MATCHER and LOOKUP_NAME are NULL,
+     the symbol table is expanded.
 
-     If even KIND matches, SYMBOL_MATCHER is called for each symbol
-     defined in the file.  The symbol "search" name is passed to
-     SYMBOL_MATCHER.
+     Otherwise, individual symbols are considered.
+
+     If KIND does not match, the symbol is skipped.
+
+     If the symbol name does not match LOOKUP_NAME, the symbol is skipped.
 
      If SYMBOL_MATCHER returns false, then the symbol is skipped.
 
@@ -254,7 +268,7 @@ struct quick_symbol_functions
   void (*expand_symtabs_matching)
     (struct objfile *objfile,
      gdb::function_view<expand_symtabs_file_matcher_ftype> file_matcher,
-     const lookup_name_info &lookup_name,
+     const lookup_name_info *lookup_name,
      gdb::function_view<expand_symtabs_symbol_matcher_ftype> symbol_matcher,
      gdb::function_view<expand_symtabs_exp_notify_ftype> expansion_notify,
      enum search_domain kind);
@@ -373,8 +387,7 @@ extern section_addr_info
   build_section_addr_info_from_objfile (const struct objfile *objfile);
 
 extern void relative_addr_info_to_section_offsets
-  (struct section_offsets *section_offsets, int num_sections,
-   const section_addr_info &addrs);
+  (section_offsets &section_offsets, const section_addr_info &addrs);
 
 extern void addr_info_make_relative (section_addr_info *addrs,
 				     bfd *abfd);
@@ -515,7 +528,7 @@ extern bfd_byte *symfile_relocate_debug_section (struct objfile *, asection *,
 
 extern int symfile_map_offsets_to_segments (bfd *,
 					    const struct symfile_segment_data *,
-					    struct section_offsets *,
+					    section_offsets &,
 					    int, const CORE_ADDR *);
 struct symfile_segment_data *get_symfile_segment_data (bfd *abfd);
 void free_symfile_segment_data (struct symfile_segment_data *data);
@@ -569,6 +582,7 @@ struct dwarf2_debug_sections {
   struct dwarf2_section_names macinfo;
   struct dwarf2_section_names macro;
   struct dwarf2_section_names str;
+  struct dwarf2_section_names str_offsets;
   struct dwarf2_section_names line_str;
   struct dwarf2_section_names ranges;
   struct dwarf2_section_names rnglists;

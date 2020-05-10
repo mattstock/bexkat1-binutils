@@ -1,6 +1,6 @@
 /* Support for printing C++ values for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -47,11 +47,8 @@ static void cp_print_static_field (struct type *, struct value *,
 				   struct ui_file *, int,
 				   const struct value_print_options *);
 
-static void cp_print_value (struct type *, struct type *,
-			    LONGEST,
-			    CORE_ADDR, struct ui_file *,
-			    int, struct value *,
-			    const struct value_print_options *,
+static void cp_print_value (struct value *, struct ui_file *,
+			    int, const struct value_print_options *,
 			    struct type **);
 
 
@@ -121,11 +118,8 @@ cp_is_vtbl_member (struct type *type)
    or zero if called from top level.  */
 
 void
-cp_print_value_fields (struct type *type, struct type *real_type,
-		       LONGEST offset,
-		       CORE_ADDR address, struct ui_file *stream,
-		       int recurse, struct value *val,
-		       const struct value_print_options *options,
+cp_print_value_fields (struct value *val, struct ui_file *stream,
+		       int recurse, const struct value_print_options *options,
 		       struct type **dont_print_vb,
 		       int dont_print_statmem)
 {
@@ -133,8 +127,8 @@ cp_print_value_fields (struct type *type, struct type *real_type,
   int fields_seen = 0;
   static int last_set_recurse = -1;
 
-  type = check_typedef (type);
-  
+  struct type *type = check_typedef (value_type (val));
+
   if (recurse == 0)
     {
       /* Any object can be left on obstacks only during an unexpected
@@ -162,10 +156,7 @@ cp_print_value_fields (struct type *type, struct type *real_type,
      duplicates of virtual baseclasses.  */
 
   if (n_baseclasses > 0)
-    cp_print_value (type, real_type,
-		    offset, address, stream,
-		    recurse + 1, val, options,
-		    dont_print_vb);
+    cp_print_value (val, stream, recurse + 1, options, dont_print_vb);
 
   /* Second, print out data fields */
 
@@ -235,11 +226,16 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 	  annotate_field_begin (TYPE_FIELD_TYPE (type, i));
 
 	  if (field_is_static (&TYPE_FIELD (type, i)))
-	    fputs_filtered ("static ", stream);
-	  fprintf_symbol_filtered (stream,
-				   TYPE_FIELD_NAME (type, i),
-				   current_language->la_language,
-				   DMGL_PARAMS | DMGL_ANSI);
+	    {
+	      fputs_filtered ("static ", stream);
+	      fprintf_symbol_filtered (stream,
+				       TYPE_FIELD_NAME (type, i),
+				       current_language->la_language,
+				       DMGL_PARAMS | DMGL_ANSI);
+	    }
+	  else
+	    fputs_styled (TYPE_FIELD_NAME (type, i),
+			  variable_name_style.style (), stream);
 	  annotate_field_name_end ();
 
 	  /* We tweak various options in a few cases below.  */
@@ -285,7 +281,8 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 		{
 		  opts->deref_ref = 0;
 
-		  v = value_field_bitfield (type, i, valaddr, offset, val);
+		  v = value_field_bitfield (type, i, valaddr,
+					    value_embedded_offset (val), val);
 
 		  common_val_print (v, stream, recurse + 1,
 				    opts, current_language);
@@ -317,13 +314,14 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 		}
 	      else if (i == vptr_fieldno && type == vptr_basetype)
 		{
-		  int i_offset = offset + TYPE_FIELD_BITPOS (type, i) / 8;
+		  int i_offset = TYPE_FIELD_BITPOS (type, i) / 8;
 		  struct type *i_type = TYPE_FIELD_TYPE (type, i);
 
 		  if (valprint_check_validity (stream, i_type, i_offset, val))
 		    {
 		      CORE_ADDR addr;
-		      
+
+		      i_offset += value_embedded_offset (val);
 		      addr = extract_typed_address (valaddr + i_offset, i_type);
 		      print_function_pointer_address (opts,
 						      get_type_arch (type),
@@ -332,12 +330,10 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 		}
 	      else
 		{
+		  struct value *v = value_primitive_field (val, 0, i, type);
 		  opts->deref_ref = 0;
-		  val_print (TYPE_FIELD_TYPE (type, i),
-			     offset + TYPE_FIELD_BITPOS (type, i) / 8,
-			     address,
-			     stream, recurse + 1, val, opts,
-			     current_language);
+		  common_val_print (v, stream, recurse + 1, opts,
+				    current_language);
 		}
 	    }
 	  annotate_field_end ();
@@ -360,7 +356,7 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 	    {
 	      obstack_final_size =
 		obstack_object_size (&dont_print_stat_array_obstack);
-	      
+
 	      if (obstack_final_size > stat_array_obstack_initial_size)
 		{
 		  void *free_to_ptr =
@@ -385,69 +381,20 @@ cp_print_value_fields (struct type *type, struct type *real_type,
   fprintf_filtered (stream, "}");
 }
 
-/* Like cp_print_value_fields, but find the runtime type of the object
-   and pass it as the `real_type' argument to cp_print_value_fields.
-   This function is a hack to work around the fact that
-   common_val_print passes the embedded offset to val_print, but not
-   the enclosing type.  */
-
-void
-cp_print_value_fields_rtti (struct type *type,
-			    const gdb_byte *valaddr, LONGEST offset,
-			    CORE_ADDR address,
-			    struct ui_file *stream, int recurse,
-			    struct value *val,
-			    const struct value_print_options *options,
-			    struct type **dont_print_vb, 
-			    int dont_print_statmem)
-{
-  struct type *real_type = NULL;
-
-  /* We require all bits to be valid in order to attempt a
-     conversion.  */
-  if (!value_bits_any_optimized_out (val,
-				     TARGET_CHAR_BIT * offset,
-				     TARGET_CHAR_BIT * TYPE_LENGTH (type)))
-    {
-      struct value *value;
-      int full, using_enc;
-      LONGEST top;
-
-      /* Ugh, we have to convert back to a value here.  */
-      value = value_from_contents_and_address (type, valaddr + offset,
-					       address + offset);
-      type = value_type (value);
-      /* We don't actually care about most of the result here -- just
-	 the type.  We already have the correct offset, due to how
-	 val_print was initially called.  */
-      real_type = value_rtti_type (value, &full, &top, &using_enc);
-    }
-
-  if (!real_type)
-    real_type = type;
-
-  cp_print_value_fields (type, real_type, offset,
-			 address, stream, recurse, val, options,
-			 dont_print_vb, dont_print_statmem);
-}
-
 /* Special val_print routine to avoid printing multiple copies of
    virtual baseclasses.  */
 
 static void
-cp_print_value (struct type *type, struct type *real_type,
-		LONGEST offset,
-		CORE_ADDR address, struct ui_file *stream,
-		int recurse, struct value *val,
-		const struct value_print_options *options,
+cp_print_value (struct value *val, struct ui_file *stream,
+		int recurse, const struct value_print_options *options,
 		struct type **dont_print_vb)
 {
+  struct type *type = check_typedef (value_type (val));
+  CORE_ADDR address = value_address (val);
   struct type **last_dont_print
     = (struct type **) obstack_next_free (&dont_print_vb_obstack);
   struct obstack tmp_obstack = dont_print_vb_obstack;
   int i, n_baseclasses = TYPE_N_BASECLASSES (type);
-  LONGEST thisoffset;
-  struct type *thistype;
   const gdb_byte *valaddr = value_contents_for_printing (val);
 
   if (dont_print_vb == 0)
@@ -482,12 +429,11 @@ cp_print_value (struct type *type, struct type *real_type,
 	  obstack_ptr_grow (&dont_print_vb_obstack, baseclass);
 	}
 
-      thisoffset = offset;
-      thistype = real_type;
-
       try
 	{
-	  boffset = baseclass_offset (type, i, valaddr, offset, address, val);
+	  boffset = baseclass_offset (type, i, valaddr,
+				      value_embedded_offset (val),
+				      address, val);
 	}
       catch (const gdb_exception_error &ex)
 	{
@@ -505,8 +451,7 @@ cp_print_value (struct type *type, struct type *real_type,
 		 clobbered by the user program. Make sure that it
 		 still points to a valid memory location.  */
 
-	      if ((boffset + offset) < 0
-		  || (boffset + offset) >= TYPE_LENGTH (real_type))
+	      if (boffset < 0 || boffset >= TYPE_LENGTH (type))
 		{
 		  gdb::byte_vector buf (TYPE_LENGTH (baseclass));
 
@@ -517,9 +462,7 @@ cp_print_value (struct type *type, struct type *real_type,
 							      buf.data (),
 							      address + boffset);
 		  baseclass = value_type (base_val);
-		  thisoffset = 0;
 		  boffset = 0;
-		  thistype = baseclass;
 		}
 	      else
 		{
@@ -561,22 +504,19 @@ cp_print_value (struct type *type, struct type *real_type,
 	    }
 	  else
 	    {
+	      struct value *baseclass_val = value_primitive_field (val, 0,
+								   i, type);
+
 	      /* Attempt to run an extension language pretty-printer on the
 		 baseclass if possible.  */
 	      if (!options->raw)
 		result
-		  = apply_ext_lang_val_pretty_printer (baseclass,
-						       thisoffset + boffset,
-						       value_address (base_val),
-						       stream, recurse,
-						       base_val, options,
+		  = apply_ext_lang_val_pretty_printer (baseclass_val, stream,
+						       recurse, options,
 						       current_language);
 
 	      if (!result)
-		cp_print_value_fields (baseclass, thistype,
-				       thisoffset + boffset,
-				       value_address (base_val),
-				       stream, recurse, base_val, options,
+		cp_print_value_fields (baseclass_val, stream, recurse, options,
 				       ((struct type **)
 					obstack_base (&dont_print_vb_obstack)),
 				       0);
@@ -626,7 +566,7 @@ cp_print_static_field (struct type *type,
   if (TYPE_CODE (real_type) == TYPE_CODE_STRUCT)
     {
       CORE_ADDR *first_dont_print;
-      CORE_ADDR addr;
+      CORE_ADDR addr = value_address (val);
       int i;
 
       first_dont_print
@@ -636,7 +576,7 @@ cp_print_static_field (struct type *type,
 
       while (--i >= 0)
 	{
-	  if (value_address (val) == first_dont_print[i])
+	  if (addr == first_dont_print[i])
 	    {
 	      fputs_styled (_("<same as static member of an already"
 			      " seen type>"),
@@ -645,13 +585,9 @@ cp_print_static_field (struct type *type,
 	    }
 	}
 
-      addr = value_address (val);
       obstack_grow (&dont_print_statmem_obstack, (char *) &addr,
 		    sizeof (CORE_ADDR));
-      cp_print_value_fields (type, value_enclosing_type (val),
-			     value_embedded_offset (val), addr,
-			     stream, recurse, val,
-			     options, NULL, 1);
+      cp_print_value_fields (val, stream, recurse, options, NULL, 1);
       return;
     }
 
@@ -684,11 +620,7 @@ cp_print_static_field (struct type *type,
 
   opts = *options;
   opts.deref_ref = 0;
-  val_print (type,
-	     value_embedded_offset (val),
-	     value_address (val),
-	     stream, recurse, val,
-	     &opts, current_language);
+  common_val_print (val, stream, recurse, &opts, current_language);
 }
 
 /* Find the field in *SELF, or its non-virtual base classes, with
@@ -782,15 +714,17 @@ cp_print_class_member (const gdb_byte *valaddr, struct type *type,
       else
 	c_type_print_base (self_type, stream, 0, 0, &type_print_raw_options);
       fprintf_filtered (stream, "::");
-      fputs_filtered (TYPE_FIELD_NAME (self_type, fieldno), stream);
+      fputs_styled (TYPE_FIELD_NAME (self_type, fieldno),
+		    variable_name_style.style (), stream);
     }
   else
     fprintf_filtered (stream, "%ld", (long) val);
 }
 
 
+void _initialize_cp_valprint ();
 void
-_initialize_cp_valprint (void)
+_initialize_cp_valprint ()
 {
   obstack_begin (&dont_print_stat_array_obstack,
 		 32 * sizeof (struct type *));

@@ -1,6 +1,6 @@
 /* Type stack for GDB parser.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -40,6 +40,8 @@ enum type_pieces
     tp_const, 
     tp_volatile, 
     tp_space_identifier,
+    tp_atomic,
+    tp_restrict,
     tp_type_stack,
     tp_kind
   };

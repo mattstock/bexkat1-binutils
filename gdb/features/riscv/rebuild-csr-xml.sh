@@ -9,7 +9,7 @@ function gen_csr_xml ()
 
     cat <<EOF
 <?xml version="1.0"?>
-<!-- Copyright (C) 2018-2019 Free Software Foundation, Inc.
+<!-- Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
      Copying and distribution of this file, with or without modification,
      are permitted in any medium without royalty provided the copyright
@@ -19,10 +19,18 @@ function gen_csr_xml ()
 <feature name="org.gnu.gdb.riscv.csr">
 EOF
 
+if [ "$bitsize" = "64" ]; then
     grep "^DECLARE_CSR(" ${RISCV_OPC_FILE} \
-        | sed -e "s!DECLARE_CSR(\(.*\), .*!  <reg name=\"\1\" bitsize=\"$bitsize\"/>!"
+        | sed /CSR_CLASS_.*_32/d \
+        | sed -e "s!DECLARE_CSR(\(.*\), .*, .*!  <reg name=\"\1\" bitsize=\"$bitsize\"/>!"
 
     echo "</feature>"
+else
+    grep "^DECLARE_CSR(" ${RISCV_OPC_FILE} \
+        | sed -e "s!DECLARE_CSR(\(.*\), .*, .*!  <reg name=\"\1\" bitsize=\"$bitsize\"/>!"
+
+    echo "</feature>"
+fi
 }
 
 gen_csr_xml 32 > ${RISCV_FEATURE_DIR}/32bit-csr.xml

@@ -1,6 +1,6 @@
 /* Target-dependent code for the Sanyo Xstormy16a (LC590000) processor.
 
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "gdbcmd.h"
@@ -833,8 +833,9 @@ xstormy16_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
    Initializer function for the Sanyo Xstormy16a module.
    Called by gdb at start-up.  */
 
+void _initialize_xstormy16_tdep ();
 void
-_initialize_xstormy16_tdep (void)
+_initialize_xstormy16_tdep ()
 {
   register_gdbarch_init (bfd_arch_xstormy16, xstormy16_gdbarch_init);
 }

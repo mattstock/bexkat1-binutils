@@ -1,5 +1,5 @@
 /* This module handles expression trees.
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support <sac@cygnus.com>.
 
    This file is part of the GNU Binutils.
@@ -700,7 +700,8 @@ fold_name (etree_type *tree)
 	  /* Don't find the real header size if only marking sections;
 	     The bfd function may cache incorrect data.  */
 	  if (expld.phase != lang_mark_phase_enum)
-	    hdr_size = bfd_sizeof_headers (link_info.output_bfd, &link_info);
+	    hdr_size = (bfd_sizeof_headers (link_info.output_bfd, &link_info)
+			/ bfd_octets_per_byte (link_info.output_bfd, NULL));
 	  new_number (hdr_size);
 	}
       break;
@@ -730,7 +731,10 @@ fold_name (etree_type *tree)
 					    tree->name.name,
 					    TRUE, FALSE, TRUE);
 	  if (!h)
-	    einfo (_("%F%P: bfd_link_hash_lookup failed: %E\n"));
+	    {
+	      if (expld.phase != lang_first_phase_enum)
+		einfo (_("%F%P: bfd_link_hash_lookup failed: %E\n"));
+	    }
 	  else if (h->type == bfd_link_hash_defined
 		   || h->type == bfd_link_hash_defweak)
 	    {

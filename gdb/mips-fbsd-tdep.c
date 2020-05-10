@@ -1,6 +1,6 @@
 /* Target-dependent code for FreeBSD/mips.
 
-   Copyright (C) 2017-2019 Free Software Foundation, Inc.
+   Copyright (C) 2017-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -553,8 +553,9 @@ mips_fbsd_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 	       mips_fbsd_lp64_fetch_link_map_offsets));
 }
 
+void _initialize_mips_fbsd_tdep ();
 void
-_initialize_mips_fbsd_tdep (void)
+_initialize_mips_fbsd_tdep ()
 {
   gdbarch_register_osabi (bfd_arch_mips, 0, GDB_OSABI_FREEBSD,
 			  mips_fbsd_init_abi);

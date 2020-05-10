@@ -1,5 +1,5 @@
 /* ELF support for BFD.
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
 
    Written by Fred Fish @ Cygnus Support, from information published
    in "UNIX System V Release 4, Programmers Guide: ANSI C and
@@ -655,6 +655,8 @@
 					/*   note name must be "LINUX".  */
 #define NT_ARM_PAC_MASK	0x406		/* AArch pointer authentication code masks */
 					/*   note name must be "LINUX".  */
+#define NT_ARC_V2	0x600		/* ARC HS accumulator/extra registers.  */
+					/*   note name must be "LINUX".  */
 #define NT_SIGINFO	0x53494749	/* Fields of siginfo_t.  */
 #define NT_FILE		0x46494c45	/* Description of mapped files.  */
 
@@ -689,6 +691,8 @@
    must start with "NetBSD-CORE".  */
 
 #define NT_NETBSDCORE_PROCINFO	1	/* Has a struct procinfo */
+#define NT_NETBSDCORE_AUXV	2	/* Has auxv data */
+#define NT_NETBSDCORE_LWPSTATUS	24	/* Has LWPSTATUS data */
 #define NT_NETBSDCORE_FIRSTMACH	32	/* start of machdep note types */
 
 
@@ -1225,6 +1229,21 @@
 #define AT_L2_CACHESHAPE  36
 #define AT_L3_CACHESHAPE  37
 
+/* Shapes of the caches, with more room to describe them.
+   *GEOMETRY are comprised of cache line size in bytes in the bottom 16 bits
+   and the cache associativity in the next 16 bits.  */
+#define AT_L1I_CACHESIZE	40
+#define AT_L1I_CACHEGEOMETRY	41
+#define AT_L1D_CACHESIZE	42
+#define AT_L1D_CACHEGEOMETRY	43
+#define AT_L2_CACHESIZE		44
+#define AT_L2_CACHEGEOMETRY	45
+#define AT_L3_CACHESIZE		46
+#define AT_L3_CACHEGEOMETRY	47
+
+#define AT_MINSIGSTKSZ		51 /* Stack needed for signal delivery
+				      (AArch64).  */
+
 #define AT_FREEBSD_EXECPATH     15      /* Path to the executable. */
 #define AT_FREEBSD_CANARY       16      /* Canary for SSP. */
 #define AT_FREEBSD_CANARYLEN    17      /* Length of the canary. */
@@ -1237,6 +1256,7 @@
 #define AT_FREEBSD_EHDRFLAGS    24      /* e_flags field from ELF header. */
 #define AT_FREEBSD_HWCAP        25      /* CPU feature flags. */
 #define AT_FREEBSD_HWCAP2       26      /* CPU feature flags 2. */
+#define AT_FREEBSD_BSDFLAGS     27      /* ELF BSD Flags. */
 
 #define AT_SUN_UID      2000    /* Effective user ID.  */
 #define AT_SUN_RUID     2001    /* Real user ID.  */

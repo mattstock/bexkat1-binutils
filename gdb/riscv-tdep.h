@@ -1,7 +1,7 @@
 /* Target-dependent header for the RISC-V architecture, for GDB, the
    GNU Debugger.
 
-   Copyright (C) 2018-2019 Free Software Foundation, Inc.
+   Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -44,7 +44,7 @@ enum
   RISCV_LAST_FP_REGNUM = 64,	/* Last Floating Point Register */
 
   RISCV_FIRST_CSR_REGNUM = 65,  /* First CSR */
-#define DECLARE_CSR(name, num) \
+#define DECLARE_CSR(name, num, class) \
   RISCV_ ## num ## _REGNUM = RISCV_FIRST_CSR_REGNUM + num,
 #include "opcode/riscv-opc.h"
 #undef DECLARE_CSR

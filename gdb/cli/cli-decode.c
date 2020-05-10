@@ -1,6 +1,6 @@
 /* Handle lists of commands, their decoding and documentation, for GDB.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -378,6 +378,58 @@ add_prefix_cmd (const char *name, enum command_class theclass,
     p->prefix = c;
 
   return c;
+}
+
+/* A helper function for add_basic_prefix_cmd.  This is a command
+   function that just forwards to help_list.  */
+
+static void
+do_prefix_cmd (const char *args, int from_tty, struct cmd_list_element *c)
+{
+  /* Look past all aliases.  */
+  while (c->cmd_pointer != nullptr)
+    c = c->cmd_pointer;
+
+  help_list (*c->prefixlist, c->prefixname, all_commands, gdb_stdout);
+}
+
+/* See command.h.  */
+
+struct cmd_list_element *
+add_basic_prefix_cmd (const char *name, enum command_class theclass,
+		      const char *doc, struct cmd_list_element **prefixlist,
+		      const char *prefixname, int allow_unknown,
+		      struct cmd_list_element **list)
+{
+  struct cmd_list_element *cmd = add_prefix_cmd (name, theclass, nullptr,
+						 doc, prefixlist, prefixname,
+						 allow_unknown, list);
+  set_cmd_sfunc (cmd, do_prefix_cmd);
+  return cmd;
+}
+
+/* A helper function for add_show_prefix_cmd.  This is a command
+   function that just forwards to cmd_show_list.  */
+
+static void
+do_show_prefix_cmd (const char *args, int from_tty, struct cmd_list_element *c)
+{
+  cmd_show_list (*c->prefixlist, from_tty, "");
+}
+
+/* See command.h.  */
+
+struct cmd_list_element *
+add_show_prefix_cmd (const char *name, enum command_class theclass,
+		     const char *doc, struct cmd_list_element **prefixlist,
+		     const char *prefixname, int allow_unknown,
+		     struct cmd_list_element **list)
+{
+  struct cmd_list_element *cmd = add_prefix_cmd (name, theclass, nullptr,
+						 doc, prefixlist, prefixname,
+						 allow_unknown, list);
+  set_cmd_sfunc (cmd, do_show_prefix_cmd);
+  return cmd;
 }
 
 /* Like ADD_PREFIX_CMD but sets the suppress_notification pointer on the
@@ -1760,25 +1812,25 @@ deprecated_cmd_warning (const char *text)
 }
 
 
-/* Look up the contents of LINE as a command in the command list 'cmdlist'.
+/* Look up the contents of TEXT as a command in the command list 'cmdlist'.
    Return 1 on success, 0 on failure.
-   
-   If LINE refers to an alias, *alias will point to that alias.
-   
-   If LINE is a postfix command (i.e. one that is preceded by a prefix
-   command) set *prefix_cmd.
-   
-   Set *cmd to point to the command LINE indicates.
-   
-   If any of *alias, *prefix_cmd, or *cmd cannot be determined or do not 
+
+   If TEXT refers to an alias, *ALIAS will point to that alias.
+
+   If TEXT is a subcommand (i.e. one that is preceded by a prefix
+   command) set *PREFIX_CMD.
+
+   Set *CMD to point to the command TEXT indicates.
+
+   If any of *ALIAS, *PREFIX_CMD, or *CMD cannot be determined or do not
    exist, they are NULL when we return.
-   
+
 */
 int
 lookup_cmd_composition (const char *text,
-                      struct cmd_list_element **alias,
-                      struct cmd_list_element **prefix_cmd, 
-                      struct cmd_list_element **cmd)
+			struct cmd_list_element **alias,
+			struct cmd_list_element **prefix_cmd,
+			struct cmd_list_element **cmd)
 {
   char *command;
   int len, nfound;
@@ -1788,43 +1840,43 @@ lookup_cmd_composition (const char *text,
   *alias = NULL;
   *prefix_cmd = NULL;
   *cmd = NULL;
-  
+
   cur_list = cmdlist;
-  
+
   while (1)
-    { 
+    {
       /* Go through as many command lists as we need to,
 	 to find the command TEXT refers to.  */
-      
+
       prev_cmd = *cmd;
-      
+
       while (*text == ' ' || *text == '\t')
 	(text)++;
-      
+
       /* Identify the name of the command.  */
       len = find_command_name_length (text);
-      
+
       /* If nothing but whitespace, return.  */
       if (len == 0)
 	return 0;
-      
-      /* Text is the start of the first command word to lookup (and
+
+      /* TEXT is the start of the first command word to lookup (and
 	 it's length is len).  We copy this into a local temporary.  */
-      
+
       command = (char *) alloca (len + 1);
       memcpy (command, text, len);
       command[len] = '\0';
-      
+
       /* Look it up.  */
       *cmd = 0;
       nfound = 0;
       *cmd = find_cmd (command, len, cur_list, 1, &nfound);
-      
+
       if (*cmd == CMD_LIST_AMBIGUOUS)
 	{
 	  return 0;              /* ambiguous */
 	}
-      
+
       if (*cmd == NULL)
 	return 0;                /* nothing found */
       else
@@ -1832,7 +1884,7 @@ lookup_cmd_composition (const char *text,
 	  if ((*cmd)->cmd_pointer)
 	    {
 	      /* cmd was actually an alias, we note that an alias was
-		 used (by assigning *alais) and we set *cmd.  */
+		 used (by assigning *ALIAS) and we set *CMD.  */
 	      *alias = *cmd;
 	      *cmd = (*cmd)->cmd_pointer;
 	    }
@@ -1842,7 +1894,7 @@ lookup_cmd_composition (const char *text,
 	cur_list = *(*cmd)->prefixlist;
       else
 	return 1;
-      
+
       text += len;
     }
 }

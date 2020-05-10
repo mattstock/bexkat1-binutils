@@ -1,6 +1,6 @@
 /* Routines for handling XML generic OS data provided by target.
 
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -289,8 +289,9 @@ info_osdata_command (const char *arg, int from_tty)
   info_osdata (arg);
 }
 
+void _initialize_osdata ();
 void
-_initialize_osdata (void)
+_initialize_osdata ()
 {
   add_info ("os", info_osdata_command,
            _("Show OS data ARG."));

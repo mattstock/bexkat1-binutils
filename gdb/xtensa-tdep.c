@@ -1,6 +1,6 @@
 /* Target-dependent code for the Xtensa port of GDB, the GNU debugger.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -35,8 +35,8 @@
 
 #include "dummy-frame.h"
 #include "dwarf2.h"
-#include "dwarf2-frame.h"
-#include "dwarf2loc.h"
+#include "dwarf2/frame.h"
+#include "dwarf2/loc.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
 
@@ -3253,8 +3253,9 @@ xtensa_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
   error (_("xtensa_dump_tdep(): not implemented"));
 }
 
+void _initialize_xtensa_tdep ();
 void
-_initialize_xtensa_tdep (void)
+_initialize_xtensa_tdep ()
 {
   gdbarch_register (bfd_arch_xtensa, xtensa_gdbarch_init, xtensa_dump_tdep);
   xtensa_init_reggroups ();

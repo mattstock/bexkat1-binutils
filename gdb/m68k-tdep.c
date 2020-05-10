@@ -1,6 +1,6 @@
 /* Target-dependent code for the Motorola 68000 series.
 
-   Copyright (C) 1990-2019 Free Software Foundation, Inc.
+   Copyright (C) 1990-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -18,7 +18,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
@@ -1281,8 +1281,9 @@ m68k_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
     return;
 }
 
+void _initialize_m68k_tdep ();
 void
-_initialize_m68k_tdep (void)
+_initialize_m68k_tdep ()
 {
   gdbarch_register (bfd_arch_m68k, m68k_gdbarch_init, m68k_dump_tdep);
 }

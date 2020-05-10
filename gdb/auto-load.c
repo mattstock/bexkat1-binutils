@@ -1,6 +1,6 @@
 /* GDB routines for supporting auto-loaded scripts.
 
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1460,15 +1460,6 @@ automatic loading of Python scripts."),
   return &retval;
 }
 
-/* Command "show auto-load" displays summary of all the current
-   "show auto-load " settings.  */
-
-static void
-show_auto_load_cmd (const char *args, int from_tty)
-{
-  cmd_show_list (*auto_load_show_cmdlist_get (), from_tty, "");
-}
-
 /* Initialize "show auto-load " commands prefix and return it.  */
 
 struct cmd_list_element **
@@ -1477,12 +1468,12 @@ auto_load_show_cmdlist_get (void)
   static struct cmd_list_element *retval;
 
   if (retval == NULL)
-    add_prefix_cmd ("auto-load", class_maintenance, show_auto_load_cmd, _("\
+    add_show_prefix_cmd ("auto-load", class_maintenance, _("\
 Show auto-loading specific settings.\n\
 Show configuration of various auto-load-specific variables such as\n\
 automatic loading of Python scripts."),
-		    &retval, "show auto-load ",
-		    0/*allow-unknown*/, &showlist);
+			 &retval, "show auto-load ",
+			 0/*allow-unknown*/, &showlist);
 
   return &retval;
 }
@@ -1530,8 +1521,9 @@ found and/or loaded."),
   return &retval;
 }
 
+void _initialize_auto_load ();
 void
-_initialize_auto_load (void)
+_initialize_auto_load ()
 {
   struct cmd_list_element *cmd;
   char *scripts_directory_help, *gdb_name_help, *python_name_help;

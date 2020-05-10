@@ -7,7 +7,7 @@ else
 fi
 fragment <<EOF
 /* This file is part of GLD, the Gnu Linker.
-   Copyright (C) 1995-2019 Free Software Foundation, Inc.
+   Copyright (C) 1995-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -763,6 +763,7 @@ struct ld_emulation_xfer_struct ld_${EMULATION_NAME}_emulation =
   after_parse_default,
   gld_${EMULATION_NAME}_after_open,
   after_check_relocs_default,
+  before_place_orphans_default,
   after_allocation_default,
   set_output_arch_default,
   ldemul_default_target,

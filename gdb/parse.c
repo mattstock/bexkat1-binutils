@@ -1,6 +1,6 @@
 /* Parse expressions for GDB.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    Modified from expread.y by the Department of Computer Science at the
    State University of New York at Buffalo, 1991.
@@ -1436,8 +1436,9 @@ increase_expout_size (struct expr_builder *ps, size_t lenelt)
     }
 }
 
+void _initialize_parse ();
 void
-_initialize_parse (void)
+_initialize_parse ()
 {
   add_setshow_zuinteger_cmd ("expression", class_maintenance,
 			     &expressiondebug,

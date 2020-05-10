@@ -1,6 +1,6 @@
 /* Code dealing with blocks for GDB.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -341,6 +341,16 @@ extern struct symbol *block_iter_match_first (const struct block *block,
 
 extern struct symbol *block_iter_match_next
   (const lookup_name_info &name, struct block_iterator *iterator);
+
+/* Return true if symbol A is the best match possible for DOMAIN.  */
+
+extern bool best_symbol (struct symbol *a, const domain_enum domain);
+
+/* Return symbol B if it is a better match than symbol A for DOMAIN.
+   Otherwise return A.  */
+
+extern struct symbol *better_symbol (struct symbol *a, struct symbol *b,
+				     const domain_enum domain);
 
 /* Search BLOCK for symbol NAME in DOMAIN.  */
 

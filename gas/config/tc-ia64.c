@@ -1,5 +1,5 @@
 /* tc-ia64.c -- Assembler for the HP/Intel IA-64 architecture.
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
    Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
 
    This file is part of GAS, the GNU Assembler.
@@ -1139,7 +1139,7 @@ obj_elf_vms_common (int ignore ATTRIBUTE_UNUSED)
   demand_empty_rest_of_line ();
 
   obj_elf_change_section
-    (sec_name, SHT_NOBITS, 0,
+    (sec_name, SHT_NOBITS,
      SHF_ALLOC | SHF_WRITE | SHF_IA_64_VMS_OVERLAID | SHF_IA_64_VMS_GLOBAL,
      0, NULL, 1, 0);
 
@@ -11845,7 +11845,7 @@ dot_alias (int section)
     {
       as_fatal (_("inserting \"%s\" into %s name hash table failed: %s"),
 		alias, kind, error_string);
-out:
+    out:
       obstack_free (&notes, name);
       obstack_free (&notes, alias);
     }

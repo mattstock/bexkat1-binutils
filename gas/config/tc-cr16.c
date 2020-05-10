@@ -1,5 +1,5 @@
 /* tc-cr16.c -- Assembler code for the CR16 CPU core.
-   Copyright (C) 2007-2019 Free Software Foundation, Inc.
+   Copyright (C) 2007-2020 Free Software Foundation, Inc.
 
    Contributed by M R Swami Reddy <MR.Swami.Reddy@nsc.com>
 
@@ -2329,8 +2329,8 @@ assemble_insn (const char *mnemonic, ins *insn)
       match = 1;
       break;
 
-/* Try again with next instruction.  */
-next_insn:
+      /* Try again with next instruction.  */
+    next_insn:
       instruction++;
     }
 

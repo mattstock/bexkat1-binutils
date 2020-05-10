@@ -1,5 +1,5 @@
 /* linker.c -- BFD linker routines
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Written by Steve Chamberlain and Ian Lance Taylor, Cygnus Support
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -536,7 +536,7 @@ bfd_wrapped_link_hash_lookup (bfd *abfd,
 			      bfd_boolean copy,
 			      bfd_boolean follow)
 {
-  bfd_size_type amt;
+  size_t amt;
 
   if (info->wrap_hash != NULL)
     {
@@ -764,7 +764,7 @@ struct bfd_link_hash_table *
 _bfd_generic_link_hash_table_create (bfd *abfd)
 {
   struct generic_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct generic_link_hash_table);
+  size_t amt = sizeof (struct generic_link_hash_table);
 
   ret = (struct generic_link_hash_table *) bfd_malloc (amt);
   if (ret == NULL)
@@ -2422,7 +2422,7 @@ _bfd_generic_reloc_link_order (bfd *abfd,
 struct bfd_link_order *
 bfd_new_link_order (bfd *abfd, asection *section)
 {
-  bfd_size_type amt = sizeof (struct bfd_link_order);
+  size_t amt = sizeof (struct bfd_link_order);
   struct bfd_link_order *new_lo;
 
   new_lo = (struct bfd_link_order *) bfd_zalloc (abfd, amt);

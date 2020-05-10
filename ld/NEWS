@@ -1,6 +1,32 @@
 -*- text -*-
 
+* Add command-line options --enable-non-contiguous-regions and
+  --enable-non-contiguous-regions-warnings.
+
+* Add command-line option --imagic for the pdp11-aout target to output format
+  IMAGIC (0411) for separate instruction and data spaces, and change the
+  default format option for pdp11-aout to be --omagic.
+
+* Relative pathnames in INPUT() and GROUP() directives in linker scripts are
+  searched relative to the directory of the linker script before other search
+  paths.
+
+Changes in 2.34:
+
+* The ld check for "PHDR segment not covered by LOAD segment" is more
+  effective, catching cases that were wrongly allowed by previous versions of
+  ld.  If you see this error it is likely you are linking with a bad linker
+  script or the binary you are building is not intended to be loaded by a
+  dynamic loader.  In the latter case --no-dynamic-linker is appropriate.
+
 * cr16c support removed.
+
+* Add support for z80-elf.
+
+* Add support for relocation of each byte or word of multibyte value to Z80
+  targets.
+
+* Add support for Zilog eZ80 (both ADL and Z80 mode) and Zilog Z180 CPUs.
 
 Changes in 2.33:
 
@@ -766,7 +792,7 @@ Changes in version 2.1:
   other utilities should work on Risc/Ultrix and Irix.
 
 
-Copyright (C) 2012-2019 Free Software Foundation, Inc.
+Copyright (C) 2012-2020 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

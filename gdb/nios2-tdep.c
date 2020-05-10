@@ -1,5 +1,5 @@
 /* Target-machine dependent code for Nios II, for GDB.
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
    Contributed by Peter Brookes (pbrookes@altera.com)
    and Andrew Draper (adraper@altera.com).
    Contributed by Mentor Graphics, Inc.
@@ -24,7 +24,7 @@
 #include "frame-unwind.h"
 #include "frame-base.h"
 #include "trad-frame.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "symtab.h"
 #include "inferior.h"
 #include "gdbtypes.h"
@@ -2390,8 +2390,9 @@ nios2_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_nios2_tdep ();
 void
-_initialize_nios2_tdep (void)
+_initialize_nios2_tdep ()
 {
   gdbarch_register (bfd_arch_nios2, nios2_gdbarch_init, NULL);
   initialize_tdesc_nios2 ();

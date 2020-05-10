@@ -1,5 +1,5 @@
 /* .eh_frame section optimization.
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
    Written by Jakub Jelinek <jakub@redhat.com>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -2149,6 +2149,7 @@ _bfd_elf_write_section_eh_frame (bfd *abfd,
 			/* Fall thru */
 		      case bfd_arch_frv:
 		      case bfd_arch_i386:
+		      case bfd_arch_nios2:
 			BFD_ASSERT (htab->hgot != NULL
 				    && ((htab->hgot->root.type
 					 == bfd_link_hash_defined)

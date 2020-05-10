@@ -1,5 +1,5 @@
 /* Support for HPPA 64-bit ELF
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -289,7 +289,7 @@ static struct bfd_link_hash_table*
 elf64_hppa_hash_table_create (bfd *abfd)
 {
   struct elf64_hppa_link_hash_table *htab;
-  bfd_size_type amt = sizeof (*htab);
+  size_t amt = sizeof (*htab);
 
   htab = bfd_zmalloc (amt);
   if (htab == NULL)
@@ -383,7 +383,9 @@ elf64_hppa_section_from_shdr (bfd *abfd,
   if (! _bfd_elf_make_section_from_shdr (abfd, hdr, name, shindex))
     return FALSE;
 
-  return TRUE;
+  return ((hdr->sh_flags & SHF_PARISC_SHORT) == 0
+	  || bfd_set_section_flags (hdr->bfd_section,
+				    hdr->bfd_section->flags | SEC_SMALL_DATA));
 }
 
 /* SEC is a section containing relocs for an input BFD when linking; return
@@ -3880,13 +3882,14 @@ elf64_hppa_relocate_section (bfd *output_bfd,
 	  else if (!bfd_link_relocatable (info))
 	    {
 	      bfd_boolean err;
-	      err = (info->unresolved_syms_in_objects == RM_GENERATE_ERROR
-		     || ELF_ST_VISIBILITY (eh->other) != STV_DEFAULT);
-	      (*info->callbacks->undefined_symbol) (info,
-						    eh->root.root.string,
-						    input_bfd,
-						    input_section,
-						    rel->r_offset, err);
+
+	      err = (info->unresolved_syms_in_objects == RM_DIAGNOSE
+		     && !info->warn_unresolved_syms)
+		|| ELF_ST_VISIBILITY (eh->other) != STV_DEFAULT;
+
+	      info->callbacks->undefined_symbol
+		(info, eh->root.root.string, input_bfd,
+		 input_section, rel->r_offset, err);
 	    }
 
 	  if (!bfd_link_relocatable (info)
@@ -3898,7 +3901,7 @@ elf64_hppa_relocate_section (bfd *output_bfd,
 	      if (info->unresolved_syms_in_objects == RM_IGNORE
 		  && ELF_ST_VISIBILITY (eh->other) == STV_DEFAULT
 		  && eh->type == STT_PARISC_MILLI)
-		(*info->callbacks->undefined_symbol)
+		info->callbacks->undefined_symbol
 		  (info, eh_name (eh), input_bfd,
 		   input_section, rel->r_offset, FALSE);
 	    }

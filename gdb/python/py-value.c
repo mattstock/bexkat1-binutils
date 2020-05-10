@@ -1,6 +1,6 @@
 /* Python interface to values.
 
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1779,6 +1779,27 @@ value_to_value_object (struct value *val)
   if (val_obj != NULL)
     {
       val_obj->value = release_value (val).release ();
+      val_obj->address = NULL;
+      val_obj->type = NULL;
+      val_obj->dynamic_type = NULL;
+      note_value (val_obj);
+    }
+
+  return (PyObject *) val_obj;
+}
+
+/* Returns an object for a value, but without releasing it from the
+   all_values chain.  */
+PyObject *
+value_to_value_object_no_release (struct value *val)
+{
+  value_object *val_obj;
+
+  val_obj = PyObject_New (value_object, &value_object_type);
+  if (val_obj != NULL)
+    {
+      value_incref (val);
+      val_obj->value = val;
       val_obj->address = NULL;
       val_obj->type = NULL;
       val_obj->dynamic_type = NULL;

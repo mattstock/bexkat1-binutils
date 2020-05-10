@@ -1,5 +1,5 @@
 /* ldemul.c -- clearing house for ld emulation states
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -69,6 +69,12 @@ void
 ldemul_after_check_relocs (void)
 {
   ld_emulation->after_check_relocs ();
+}
+
+void
+ldemul_before_place_orphans (void)
+{
+  ld_emulation->before_place_orphans ();
 }
 
 void
@@ -263,6 +269,11 @@ after_open_default (void)
 
 void
 after_check_relocs_default (void)
+{
+}
+
+void
+before_place_orphans_default (void)
 {
 }
 

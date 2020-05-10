@@ -1,5 +1,5 @@
 /* Routines to link ECOFF debugging information.
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support, <ian@cygnus.com>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -467,7 +467,7 @@ bfd_ecoff_debug_init (bfd *output_bfd ATTRIBUTE_UNUSED,
 		      struct bfd_link_info *info)
 {
   struct accumulate *ainfo;
-  bfd_size_type amt = sizeof (struct accumulate);
+  size_t amt = sizeof (struct accumulate);
 
   ainfo = (struct accumulate *) bfd_malloc (amt);
   if (!ainfo)

@@ -1,5 +1,5 @@
 /* tc-s12z.c -- Assembler code for the Freescale S12Z
-   Copyright (C) 2018-2019 Free Software Foundation, Inc.
+   Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -322,7 +322,7 @@ lex_imm (long *v, expressionS *exp_o)
   *v = exp.X_add_number;
   return true;
 
-fail:
+ fail:
   fail_line_pointer = input_line_pointer;
   input_line_pointer = ilp;
   return false;

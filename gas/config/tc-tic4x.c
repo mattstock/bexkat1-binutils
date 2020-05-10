@@ -1,5 +1,5 @@
 /* tc-tic4x.c -- Assemble for the Texas Instruments TMS320C[34]x.
-   Copyright (C) 1997-2019 Free Software Foundation, Inc.
+   Copyright (C) 1997-2020 Free Software Foundation, Inc.
 
    Contributed by Michael P. Hayes (m.hayes@elec.canterbury.ac.nz)
 
@@ -2193,7 +2193,7 @@ tic4x_operands_match (tic4x_inst_t *inst, tic4x_insn_t *tinsn, int check)
 		}
 	      else if (exp->X_add_number < 32 && IS_CPU_TIC3X (tic4x_cpu))
 		{
-		  INSERTU (opcode, exp->X_add_number | 0x20, 4, 0);
+		  INSERTU (opcode, exp->X_add_number | 0x20, 5, 0);
 		  continue;
 		}
 	      else

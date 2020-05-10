@@ -1,5 +1,5 @@
 /* write.c - emit .o file
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -443,7 +443,7 @@ cvt_frag_to_fill (segT sec ATTRIBUTE_UNUSED, fragS *fragP)
 #ifdef HANDLE_ALIGN
       HANDLE_ALIGN (fragP);
 #endif
-skip_align:
+    skip_align:
       know (fragP->fr_next != NULL);
       fragP->fr_offset = (fragP->fr_next->fr_address
 			  - fragP->fr_address
@@ -2429,7 +2429,7 @@ write_object_file (void)
 #endif
 
   /* Stop if there is an error.  */
-  if (had_errors ())
+  if (!flag_always_generate_output && had_errors ())
     return;
 
   /* Now that all the sizes are known, and contents correct, we can

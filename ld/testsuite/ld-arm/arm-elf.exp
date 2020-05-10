@@ -1,5 +1,5 @@
 # Expect script for various ARM ELF tests.
-#   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+#   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -1261,3 +1261,15 @@ set arm_unwind_tests {
      "unwind-mix"}
 }
 run_ld_link_tests $arm_unwind_tests
+
+run_dump_test "non-contiguous-arm"
+run_dump_test "non-contiguous-arm2"
+run_dump_test "non-contiguous-arm3"
+run_dump_test "non-contiguous-arm4"
+run_dump_test "non-contiguous-arm5"
+run_dump_test "non-contiguous-arm6"
+
+if { ![istarget "arm*-*-nacl*"] } {
+    run_dump_test "thumb-plt"
+    run_dump_test "thumb-plt-got"
+}

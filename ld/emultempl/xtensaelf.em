@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+#   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -1223,6 +1223,10 @@ ld_build_required_section_dependence (lang_statement_union_type *s)
        iter_stack_next (&stack))
     {
       lang_statement_union_type *l = iter_stack_current (&stack);
+
+      if (l == NULL && link_info.non_contiguous_regions)
+	einfo (_("%F%P: Relaxation not supported with "
+		 "--enable-non-contiguous-regions.\n"));
 
       if (l->header.type == lang_input_section_enum)
 	{

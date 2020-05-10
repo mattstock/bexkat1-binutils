@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    Written by Elena Zannoni <ezannoni@cygnus.com> of Cygnus Solutions.
 
@@ -25,7 +25,7 @@
 #include "infrun.h"
 #include "target.h"
 #include "terminal.h"
-#include "event-loop.h"
+#include "gdbsupport/event-loop.h"
 #include "event-top.h"
 #include "interps.h"
 #include <signal.h>
@@ -39,8 +39,9 @@
 #include "maint.h"
 #include "gdbsupport/buffer.h"
 #include "ser-event.h"
-#include "gdb_select.h"
+#include "gdbsupport/gdb_select.h"
 #include "gdbsupport/gdb-sigmask.h"
+#include "async-event.h"
 
 /* readline include files.  */
 #include "readline/readline.h"
@@ -416,7 +417,7 @@ display_gdb_prompt (const char *new_prompt)
       /* Don't use a _filtered function here.  It causes the assumed
          character position to be off, since the newline we read from
          the user is not accounted for.  */
-      fputs_unfiltered (actual_gdb_prompt.c_str (), gdb_stdout);
+      fprintf_unfiltered (gdb_stdout, "%s", actual_gdb_prompt.c_str ());
       gdb_flush (gdb_stdout);
     }
 }
@@ -1137,12 +1138,16 @@ async_disconnect (gdb_client_data arg)
       exception_print (gdb_stderr, exception);
     }
 
-  try
+  for (inferior *inf : all_inferiors ())
     {
-      pop_all_targets ();
-    }
-  catch (const gdb_exception &exception)
-    {
+      switch_to_inferior_no_thread (inf);
+      try
+	{
+	  pop_all_targets ();
+	}
+      catch (const gdb_exception &exception)
+	{
+	}
     }
 
   signal (SIGHUP, SIG_DFL);	/*FIXME: ???????????  */

@@ -1,6 +1,6 @@
 /* Scheme interface to types.
 
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,7 +27,7 @@
 #include "objfiles.h"
 #include "language.h"
 #include "bcache.h"
-#include "dwarf2loc.h"
+#include "dwarf2/loc.h"
 #include "typeprint.h"
 #include "guile-internal.h"
 

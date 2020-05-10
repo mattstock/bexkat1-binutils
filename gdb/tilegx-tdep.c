@@ -1,6 +1,6 @@
 /* Target-dependent code for the Tilera TILE-Gx processor.
 
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "trad-frame.h"
 #include "symtab.h"
 #include "gdbtypes.h"
@@ -1032,8 +1032,9 @@ tilegx_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_tilegx_tdep ();
 void
-_initialize_tilegx_tdep (void)
+_initialize_tilegx_tdep ()
 {
   register_gdbarch_init (bfd_arch_tilegx, tilegx_gdbarch_init);
 }

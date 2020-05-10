@@ -1,5 +1,5 @@
 /* MMIX-specific support for 64-bit ELF.
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
    Contributed by Hans-Peter Nilsson <hp@bitrange.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -831,7 +831,7 @@ mmix_elf_new_section_hook (bfd *abfd, asection *sec)
   if (!sec->used_by_bfd)
     {
       struct _mmix_elf_section_data *sdata;
-      bfd_size_type amt = sizeof (*sdata);
+      size_t amt = sizeof (*sdata);
 
       sdata = bfd_zalloc (abfd, amt);
       if (sdata == NULL)

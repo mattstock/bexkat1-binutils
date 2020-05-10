@@ -1,7 +1,7 @@
 /* *INDENT-OFF* */ /* ATTRIBUTE_PRINTF confuses indent, avoid running it
 		      for now.  */
 /* I/O, string, cleanup, and other random utilities for GDB.
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -319,6 +319,12 @@ extern struct ui_file **current_ui_gdb_stdout_ptr (void);
 extern struct ui_file **current_ui_gdb_stdin_ptr (void);
 extern struct ui_file **current_ui_gdb_stderr_ptr (void);
 extern struct ui_file **current_ui_gdb_stdlog_ptr (void);
+
+/* Flush STREAM.  This is a wrapper for ui_file_flush that also
+   flushes any output pending from uses of the *_filtered output
+   functions; that output is kept in a special buffer so that
+   pagination and styling are handled properly.  */
+extern void gdb_flush (struct ui_file *);
 
 /* The current top level's ui_file streams.  */
 

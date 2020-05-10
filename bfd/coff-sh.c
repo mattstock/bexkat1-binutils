@@ -1,5 +1,5 @@
 /* BFD back-end for Renesas Super-H COFF binaries.
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
    Written by Steve Chamberlain, <sac@cygnus.com>.
    Relaxing code written by Ian Lance Taylor, <ian@cygnus.com>.
@@ -722,7 +722,7 @@ sh_relax_section (bfd *abfd,
 
   if (coff_section_data (abfd, sec) == NULL)
     {
-      bfd_size_type amt = sizeof (struct coff_section_tdata);
+      size_t amt = sizeof (struct coff_section_tdata);
       sec->used_by_bfd = bfd_zalloc (abfd, amt);
       if (sec->used_by_bfd == NULL)
 	return FALSE;
@@ -3044,7 +3044,7 @@ CREATE_LITTLE_COFF_TARGET_VEC (TARGET_SYM, TARGET_SHL_NAME, BFD_IS_RELAXABLE,
 /* Only recognize the small versions if the target was not defaulted.
    Otherwise we won't recognize the non default endianness.  */
 
-static const bfd_target *
+static bfd_cleanup
 coff_small_object_p (bfd *abfd)
 {
   if (abfd->target_defaulted)

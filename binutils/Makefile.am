@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -52,6 +52,8 @@ NO_WERROR = @NO_WERROR@
 AM_CFLAGS = $(WARN_CFLAGS) $(ZLIBINC)
 AM_CFLAGS_FOR_BUILD = $(WARN_CFLAGS_FOR_BUILD) $(ZLIBINC)
 LIBICONV = @LIBICONV@
+
+LIBDEBUGINFOD = @LIBDEBUGINFOD@
 
 # these two are almost the same program
 AR_PROG=ar
@@ -134,7 +136,7 @@ CFILES = \
 	is-ranlib.c is-strip.c maybe-ranlib.c maybe-strip.c \
 	nm.c not-ranlib.c not-strip.c \
 	objcopy.c objdump.c prdbg.c \
-	od-xcoff.c od-macho.c \
+	od-elf32_avr.c od-macho.c od-xcoff.c \
 	rclex.c rdcoff.c rddbg.c readelf.c rename.c \
 	resbin.c rescoff.c resrc.c resres.c \
 	size.c srconv.c stabs.c strings.c sysdump.c \
@@ -245,7 +247,7 @@ objcopy_SOURCES = objcopy.c not-strip.c rename.c $(WRITE_DEBUG_SRCS) $(BULIBS)
 strings_SOURCES = strings.c $(BULIBS)
 
 readelf_SOURCES = readelf.c version.c unwind-ia64.c dwarf.c $(ELFLIBS)
-readelf_LDADD   = $(LIBINTL) $(LIBCTF_NOBFD) $(LIBIBERTY) $(ZLIB)
+readelf_LDADD   = $(LIBINTL) $(LIBCTF_NOBFD) $(LIBIBERTY) $(ZLIB) $(LIBDEBUGINFOD)
 
 elfedit_SOURCES = elfedit.c version.c $(ELFLIBS)
 elfedit_LDADD = $(LIBINTL) $(LIBIBERTY)
@@ -256,7 +258,7 @@ nm_new_SOURCES = nm.c $(BULIBS)
 
 objdump_SOURCES = objdump.c dwarf.c prdbg.c $(DEBUG_SRCS) $(BULIBS) $(ELFLIBS)
 EXTRA_objdump_SOURCES = od-xcoff.c
-objdump_LDADD = $(OBJDUMP_PRIVATE_OFILES) $(OPCODES) $(LIBCTF) $(BFDLIB) $(LIBIBERTY) $(LIBINTL)
+objdump_LDADD = $(OBJDUMP_PRIVATE_OFILES) $(OPCODES) $(LIBCTF) $(BFDLIB) $(LIBIBERTY) $(LIBINTL) $(LIBDEBUGINFOD)
 
 objdump.@OBJEXT@:objdump.c
 if am__fastdepCC

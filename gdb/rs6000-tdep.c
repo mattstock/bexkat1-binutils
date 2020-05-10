@@ -1,6 +1,6 @@
 /* Target-dependent code for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,7 +37,7 @@
 #include "sim-regno.h"
 #include "gdb/sim-ppc.h"
 #include "reggroups.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "target-descriptions.h"
 #include "user-regs.h"
 #include "record-full.h"
@@ -855,7 +855,7 @@ typedef buf_displaced_step_closure ppc_displaced_step_closure;
 
 /* We can't displaced step atomic sequences.  */
 
-static struct displaced_step_closure *
+static displaced_step_closure_up
 ppc_displaced_step_copy_insn (struct gdbarch *gdbarch,
 			      CORE_ADDR from, CORE_ADDR to,
 			      struct regcache *regs)
@@ -894,7 +894,8 @@ ppc_displaced_step_copy_insn (struct gdbarch *gdbarch,
       displaced_step_dump_bytes (gdb_stdlog, buf, len);
     }
 
-  return closure.release ();
+  /* This is a work around for a problem with g++ 4.8.  */
+  return displaced_step_closure_up (closure.release ());
 }
 
 /* Fix up the state of registers and memory after having single-stepped
@@ -3314,7 +3315,7 @@ rs6000_adjust_frame_regnum (struct gdbarch *gdbarch, int num, int eh_frame_p)
 
 /* Information about a particular processor variant.  */
 
-struct variant
+struct ppc_variant
   {
     /* Name of this variant.  */
     const char *name;
@@ -3332,7 +3333,7 @@ struct variant
     struct target_desc **tdesc;
   };
 
-static struct variant variants[] =
+static struct ppc_variant variants[] =
 {
   {"powerpc", "PowerPC user-level", bfd_arch_powerpc,
    bfd_mach_ppc, &tdesc_powerpc_altivec32},
@@ -3391,10 +3392,10 @@ static struct variant variants[] =
 /* Return the variant corresponding to architecture ARCH and machine number
    MACH.  If no such variant exists, return null.  */
 
-static const struct variant *
+static const struct ppc_variant *
 find_variant_by_arch (enum bfd_architecture arch, unsigned long mach)
 {
-  const struct variant *v;
+  const struct ppc_variant *v;
 
   for (v = variants; v->name; v++)
     if (arch == v->arch && mach == v->mach)
@@ -6198,7 +6199,7 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
      layout, if we do not already have one.  */
   if (! tdesc_has_registers (tdesc))
     {
-      const struct variant *v;
+      const struct ppc_variant *v;
 
       /* Choose variant.  */
       v = find_variant_by_arch (arch, mach);
@@ -7171,22 +7172,6 @@ rs6000_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
   /* FIXME: Dump gdbarch_tdep.  */
 }
 
-/* PowerPC-specific commands.  */
-
-static void
-set_powerpc_command (const char *args, int from_tty)
-{
-  printf_unfiltered (_("\
-\"set powerpc\" must be followed by an appropriate subcommand.\n"));
-  help_list (setpowerpccmdlist, "set powerpc ", all_commands, gdb_stdout);
-}
-
-static void
-show_powerpc_command (const char *args, int from_tty)
-{
-  cmd_show_list (showpowerpccmdlist, from_tty, "");
-}
-
 static void
 powerpc_set_soft_float (const char *args, int from_tty,
 			struct cmd_list_element *c)
@@ -7307,8 +7292,9 @@ ppc_insn_ds_field (unsigned int insn)
 
 /* Initialization code.  */
 
+void _initialize_rs6000_tdep ();
 void
-_initialize_rs6000_tdep (void)
+_initialize_rs6000_tdep ()
 {
   gdbarch_register (bfd_arch_rs6000, rs6000_gdbarch_init, rs6000_dump_tdep);
   gdbarch_register (bfd_arch_powerpc, rs6000_gdbarch_init, rs6000_dump_tdep);
@@ -7336,13 +7322,13 @@ _initialize_rs6000_tdep (void)
 
   /* Add root prefix command for all "set powerpc"/"show powerpc"
      commands.  */
-  add_prefix_cmd ("powerpc", no_class, set_powerpc_command,
-		  _("Various PowerPC-specific commands."),
-		  &setpowerpccmdlist, "set powerpc ", 0, &setlist);
+  add_basic_prefix_cmd ("powerpc", no_class,
+			_("Various PowerPC-specific commands."),
+			&setpowerpccmdlist, "set powerpc ", 0, &setlist);
 
-  add_prefix_cmd ("powerpc", no_class, show_powerpc_command,
-		  _("Various PowerPC-specific commands."),
-		  &showpowerpccmdlist, "show powerpc ", 0, &showlist);
+  add_show_prefix_cmd ("powerpc", no_class,
+		       _("Various PowerPC-specific commands."),
+		       &showpowerpccmdlist, "show powerpc ", 0, &showlist);
 
   /* Add a command to allow the user to force the ABI.  */
   add_setshow_auto_boolean_cmd ("soft-float", class_support,

@@ -1,5 +1,5 @@
 /* 32-bit ELF support for TI C6X
-   Copyright (C) 2010-2019 Free Software Foundation, Inc.
+   Copyright (C) 2010-2020 Free Software Foundation, Inc.
    Contributed by Joseph Myers <joseph@codesourcery.com>
 		  Bernd Schmidt  <bernds@codesourcery.com>
 
@@ -1595,7 +1595,7 @@ static struct bfd_link_hash_table *
 elf32_tic6x_link_hash_table_create (bfd *abfd)
 {
   struct elf32_tic6x_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf32_tic6x_link_hash_table);
+  size_t amt = sizeof (struct elf32_tic6x_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -2147,7 +2147,7 @@ elf32_tic6x_new_section_hook (bfd *abfd, asection *sec)
   if (!sec->used_by_bfd)
     {
       _tic6x_elf_section_data *sdata;
-      bfd_size_type amt = sizeof (*sdata);
+      size_t amt = sizeof (*sdata);
 
       sdata = (_tic6x_elf_section_data *) bfd_zalloc (abfd, amt);
       if (sdata == NULL)
@@ -2945,7 +2945,7 @@ elf32_tic6x_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 		  p = bfd_alloc (htab->elf.dynobj, amt);
 		  if (p == NULL)
 		    return FALSE;
@@ -3724,6 +3724,10 @@ elf32_tic6x_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
   int i;
   int array_align_in, array_align_out, array_expect_in, array_expect_out;
 
+  /* FIXME: What should be checked when linking shared libraries?  */
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
+
   if (!elf_known_obj_attributes_proc (obfd)[0].i)
     {
       /* This is the first object.  Copy the attributes.  */
@@ -3862,6 +3866,9 @@ elf32_tic6x_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 
 	case Tag_ABI_PIC:
 	case Tag_ABI_PID:
+	  /* Don't transfer these tags from dynamic objects.  */
+	  if ((ibfd->flags & DYNAMIC) != 0)
+	    continue;
 	  if (out_attr[i].i > in_attr[i].i)
 	    out_attr[i].i = in_attr[i].i;
 	  break;

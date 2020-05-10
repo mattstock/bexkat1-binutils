@@ -1,5 +1,5 @@
 /* objcopy.c -- copy object file from input to output, optionally massaging it.
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -68,7 +68,7 @@ struct addsym_node
   long      symval;
   flagword  flags;
   char *    section;
-  char *    othersym;
+  const char *  othersym;
 };
 
 typedef struct section_rename
@@ -780,6 +780,7 @@ parse_flags (const char *s)
       PARSE_FLAG ("code", SEC_CODE);
       PARSE_FLAG ("data", SEC_DATA);
       PARSE_FLAG ("rom", SEC_ROM);
+      PARSE_FLAG ("exclude", SEC_EXCLUDE);
       PARSE_FLAG ("share", SEC_COFF_SHARED);
       PARSE_FLAG ("contents", SEC_HAS_CONTENTS);
       PARSE_FLAG ("merge", SEC_MERGE);
@@ -794,7 +795,7 @@ parse_flags (const char *s)
 	  copy[len] = '\0';
 	  non_fatal (_("unrecognized section flag `%s'"), copy);
 	  fatal (_("supported flags: %s"),
-		 "alloc, load, noload, readonly, debug, code, data, rom, share, contents, merge, strings");
+		 "alloc, load, noload, readonly, debug, code, data, rom, exclude, share, contents, merge, strings");
 	}
 
       s = snext;
@@ -808,7 +809,7 @@ parse_flags (const char *s)
    string can't be parsed.  */
 
 static flagword
-parse_symflags (const char *s, char **other)
+parse_symflags (const char *s, const char **other)
 {
   flagword ret;
   const char *snext;
@@ -1453,6 +1454,9 @@ is_hidden_symbol (asymbol *sym)
   return FALSE;
 }
 
+/* Empty name is hopefully never a valid symbol name.  */
+static const char * empty_name = "";
+
 static bfd_boolean
 need_sym_before (struct addsym_node **node, const char *sym)
 {
@@ -1464,10 +1468,12 @@ need_sym_before (struct addsym_node **node, const char *sym)
     {
       if (!ptr->othersym)
 	break;
+      if (ptr->othersym == empty_name)
+	continue;
       else if (strcmp (ptr->othersym, sym) == 0)
 	{
-	  free (ptr->othersym);
-	  ptr->othersym = ""; /* Empty name is hopefully never a valid symbol name.  */
+	  free ((char *) ptr->othersym);
+	  ptr->othersym = empty_name;
 	  *node = ptr;
 	  return TRUE;
 	}
@@ -1543,12 +1549,13 @@ filter_symbols (bfd *abfd, bfd *obfd, asymbol **osyms,
 
       /* Check if we will remove the current leading character.  */
       rem_leading_char =
-	(name[0] == bfd_get_symbol_leading_char (abfd))
-	&& (change_leading_char
-	    || (remove_leading_char
-		&& ((flags & (BSF_GLOBAL | BSF_WEAK)) != 0
-		    || undefined
-		    || bfd_is_com_section (bfd_asymbol_section (sym)))));
+	(name[0] != '\0'
+	 && name[0] == bfd_get_symbol_leading_char (abfd)
+	 && (change_leading_char
+	     || (remove_leading_char
+		 && ((flags & (BSF_GLOBAL | BSF_WEAK)) != 0
+		     || undefined
+		     || bfd_is_com_section (bfd_asymbol_section (sym))))));
 
       /* Check if we will add a new leading character.  */
       add_leading_char =
@@ -1574,9 +1581,14 @@ filter_symbols (bfd *abfd, bfd *obfd, asymbol **osyms,
       if (add_leading_char || prefix_symbols_string)
 	{
 	  char *n, *ptr;
+	  size_t len = strlen (name) + 1;
 
-	  ptr = n = (char *) xmalloc (1 + strlen (prefix_symbols_string)
-				      + strlen (name) + 1);
+	  if (add_leading_char)
+	    len++;
+	  if (prefix_symbols_string)
+	    len += strlen (prefix_symbols_string);
+
+	  ptr = n = (char *) xmalloc (len);
 	  if (add_leading_char)
 	    *ptr++ = bfd_get_symbol_leading_char (obfd);
 
@@ -1695,7 +1707,7 @@ filter_symbols (bfd *abfd, bfd *obfd, asymbol **osyms,
 	{
 	  if (ptr->othersym)
 	    {
-	      if (strcmp (ptr->othersym, ""))
+	      if (ptr->othersym != empty_name)
 		fatal (_("'before=%s' not found"), ptr->othersym);
 	    }
 	  else
@@ -1940,7 +1952,7 @@ typedef struct objcopy_internal_note
   bfd_vma            start;
   bfd_vma            end;
 } objcopy_internal_note;
-  
+
 #define DEBUG_MERGE 0
 
 #if DEBUG_MERGE
@@ -2036,7 +2048,7 @@ compare_gnu_build_notes (const void * data1, const void * data2)
 		    pnote1->note.namesz - 3 : pnote2->note.namesz - 3);
   if (cmp)
     return cmp;
-  
+
   if (pnote1->end < pnote2->start)
     return -1;
   if (pnote1->start > pnote2->end)
@@ -2047,13 +2059,15 @@ compare_gnu_build_notes (const void * data1, const void * data2)
     return -1;
   if (pnote1->end > pnote2->end)
     return 1;
-  
+  if (pnote1->end < pnote2->end)
+    return -1;
+
   /* Put OPEN notes before function notes.  */
   if (is_open_note (pnote1) && ! is_open_note (pnote2))
     return -1;
   if (! is_open_note (pnote1) && is_open_note (pnote2))
     return 1;
-  
+
   return 0;
 }
 
@@ -2081,7 +2095,7 @@ sort_gnu_build_notes (const void * data1, const void * data2)
 
       return 1;				/* 1: F   2: O   */
     }
-  
+
   /* Sort by starting address.  */
   if (pnote1->start < pnote2->start)
     return -1;
@@ -2099,7 +2113,7 @@ sort_gnu_build_notes (const void * data1, const void * data2)
       && pnote2->note.namesz > 4
       && pnote1->note.namedata[3] != pnote2->note.namedata[3])
     return pnote1->note.namedata[3] - pnote2->note.namedata[3];
-  
+
   return 0;
 }
 
@@ -2146,7 +2160,7 @@ merge_gnu_build_notes (bfd *          abfd,
 	  goto done;
 	}
     }
-  
+
   /* Make a copy of the notes and convert to our internal format.
      Minimum size of a note is 12 bytes.  Also locate the version
      notes and check them.  */
@@ -2227,7 +2241,7 @@ merge_gnu_build_notes (bfd *          abfd,
 	     address.  */
 	  end = (bfd_vma) -1;
 	  break;
-	  
+
 	case 8:
 	  if (! is_64bit (abfd))
 	    {
@@ -2252,7 +2266,7 @@ merge_gnu_build_notes (bfd *          abfd,
 	  start = bfd_get_64 (abfd, pnote->note.descdata);
 	  end = bfd_get_64 (abfd, pnote->note.descdata + 8);
 	  break;
-	  
+
 	default:
 	  err = _("corrupt GNU build attribute note: bad description size");
 	  goto done;
@@ -2391,7 +2405,7 @@ merge_gnu_build_notes (bfd *          abfd,
 	      || memcmp (back->note.namedata,
 			 pnote->note.namedata, pnote->note.namesz) != 0)
 	    break;
-	  
+
 	  if (back->start == pnote->start
 	      && back->end == pnote->end)
 	    {
@@ -2445,7 +2459,7 @@ merge_gnu_build_notes (bfd *          abfd,
       if (! is_deleted_note (pnote))
 	merge_debug ("Unable to do anything with note at %#08lx\n",
 		     (pnote->note.namedata - (char *) contents) - 12);
-#endif		     
+#endif
     }
 
   /* Resort the notes.  */
@@ -2527,7 +2541,7 @@ merge_gnu_build_notes (bfd *          abfd,
 		   pnote->note.namesz
 		   );
 #endif
-  
+
   new_size = new - new_contents;
   if (new_size < size)
     {
@@ -2548,6 +2562,23 @@ merge_gnu_build_notes (bfd *          abfd,
   return size;
 }
 
+static flagword
+check_new_section_flags (flagword flags, bfd * abfd, const char * secname)
+{
+  /* Only set the SEC_COFF_SHARED flag on COFF files.
+     The same bit value is used by ELF targets to indicate
+     compressed sections, and setting that flag here breaks
+     things.  */
+  if ((flags & SEC_COFF_SHARED)
+      && bfd_get_flavour (abfd) != bfd_target_coff_flavour)
+    {
+      non_fatal (_("%s[%s]: Note - dropping 'share' flag as output format is not COFF"),
+		 bfd_get_filename (abfd), secname);
+      flags &= ~ SEC_COFF_SHARED;
+    }
+  return flags;
+}
+
 /* Copy object file IBFD onto OBFD.
    Returns TRUE upon success, FALSE otherwise.  */
 
@@ -2565,7 +2596,7 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
   void *dhandle;
   enum bfd_architecture iarch;
   unsigned int imach;
-  unsigned int c, i;
+  unsigned int num_sec, i;
 
   if (ibfd->xvec->byteorder != obfd->xvec->byteorder
       && ibfd->xvec->byteorder != BFD_ENDIAN_UNKNOWN
@@ -2743,6 +2774,11 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 
 		     file_alignment, section_alignment);
 	}
+
+      if (preserve_dates
+	  && bfd_get_flavour (ibfd) == bfd_target_coff_flavour
+	  && bfd_pei_p (ibfd))
+	pe->timestamp = pe_data (ibfd)->coff.timestamp;
     }
 
   if (isympp)
@@ -2796,7 +2832,10 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	  pset = find_section_list (padd->name, FALSE,
 				    SECTION_CONTEXT_SET_FLAGS);
 	  if (pset != NULL)
-	    flags = pset->flags | SEC_HAS_CONTENTS;
+	    {	      
+	      flags = pset->flags | SEC_HAS_CONTENTS;
+	      flags = check_new_section_flags (flags, obfd, padd->name);
+	    }
 	  else
 	    flags = SEC_HAS_CONTENTS | SEC_READONLY | SEC_DATA;
 
@@ -2944,6 +2983,9 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 
       for (pdump = dump_sections; pdump != NULL; pdump = pdump->next)
 	{
+	  FILE * f;
+	  bfd_byte *contents;
+
 	  osec = bfd_get_section_by_name (ibfd, pdump->name);
 	  if (osec == NULL)
 	    {
@@ -2961,14 +3003,8 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	    }
 
 	  bfd_size_type size = bfd_section_size (osec);
-	  if (size == 0)
-	    {
-	      bfd_nonfatal_message (NULL, ibfd, osec,
-				    _("can't dump section - it is empty"));
-	      continue;
-	    }
+	  /* Note - we allow the dumping of zero-sized sections.  */
 
-	  FILE * f;
 	  f = fopen (pdump->filename, FOPEN_WB);
 	  if (f == NULL)
 	    {
@@ -2977,7 +3013,6 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	      continue;
 	    }
 
-	  bfd_byte *contents;
 	  if (bfd_malloc_and_get_section (ibfd, osec, &contents))
 	    {
 	      if (fwrite (contents, 1, size, f) != size)
@@ -3067,8 +3102,8 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	}
     }
 
-  c = bfd_count_sections (obfd);
-  if (c != 0
+  num_sec = bfd_count_sections (obfd);
+  if (num_sec != 0
       && (gap_fill_set || pad_to_set))
     {
       asection **set;
@@ -3079,22 +3114,24 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	 increasing the section sizes as required to fill the gaps.
 	 We write out the gap contents below.  */
 
-      osections = (asection **) xmalloc (c * sizeof (asection *));
+      osections = xmalloc (num_sec * sizeof (*osections));
       set = osections;
       bfd_map_over_sections (obfd, get_sections, &set);
 
-      qsort (osections, c, sizeof (asection *), compare_section_lma);
+      qsort (osections, num_sec, sizeof (*osections), compare_section_lma);
 
-      gaps = (bfd_size_type *) xmalloc (c * sizeof (bfd_size_type));
-      memset (gaps, 0, c * sizeof (bfd_size_type));
+      gaps = xmalloc (num_sec * sizeof (*gaps));
+      memset (gaps, 0, num_sec * sizeof (*gaps));
 
       if (gap_fill_set)
 	{
-	  for (i = 0; i < c - 1; i++)
+	  for (i = 0; i < num_sec - 1; i++)
 	    {
 	      flagword flags;
-	      bfd_size_type size;
-	      bfd_vma gap_start, gap_stop;
+	      bfd_size_type size;           /* Octets.  */
+	      bfd_vma gap_start, gap_stop;  /* Octets.  */
+	      unsigned int opb1 = bfd_octets_per_byte (obfd, osections[i]);
+	      unsigned int opb2 = bfd_octets_per_byte (obfd, osections[i+1]);
 
 	      flags = bfd_section_flags (osections[i]);
 	      if ((flags & SEC_HAS_CONTENTS) == 0
@@ -3102,8 +3139,8 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 		continue;
 
 	      size = bfd_section_size (osections[i]);
-	      gap_start = bfd_section_lma (osections[i]) + size;
-	      gap_stop = bfd_section_lma (osections[i + 1]);
+	      gap_start = bfd_section_lma (osections[i]) * opb1 + size;
+	      gap_stop = bfd_section_lma (osections[i + 1]) * opb2;
 	      if (gap_start < gap_stop)
 		{
 		  if (!bfd_set_section_size (osections[i],
@@ -3123,24 +3160,26 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 
       if (pad_to_set)
 	{
-	  bfd_vma lma;
-	  bfd_size_type size;
+	  bfd_vma lma;         /* Octets.  */
+	  bfd_size_type size;  /* Octets.  */
+	  unsigned int opb = bfd_octets_per_byte (obfd, osections[num_sec - 1]);
+	  bfd_vma _pad_to = pad_to * opb;
 
-	  lma = bfd_section_lma (osections[c - 1]);
-	  size = bfd_section_size (osections[c - 1]);
-	  if (lma + size < pad_to)
+	  lma = bfd_section_lma (osections[num_sec - 1]) * opb;
+	  size = bfd_section_size (osections[num_sec - 1]);
+	  if (lma + size < _pad_to)
 	    {
-	      if (!bfd_set_section_size (osections[c - 1], pad_to - lma))
+	      if (!bfd_set_section_size (osections[num_sec - 1], _pad_to - lma))
 		{
-		  bfd_nonfatal_message (NULL, obfd, osections[c - 1],
+		  bfd_nonfatal_message (NULL, obfd, osections[num_sec - 1],
 					_("can't add padding"));
 		  status = 1;
 		}
 	      else
 		{
-		  gaps[c - 1] = pad_to - (lma + size);
-		  if (max_gap < pad_to - (lma + size))
-		    max_gap = pad_to - (lma + size);
+		  gaps[num_sec - 1] = _pad_to - (lma + size);
+		  if (max_gap < _pad_to - (lma + size))
+		    max_gap = _pad_to - (lma + size);
 		}
 	    }
 	}
@@ -3338,7 +3377,7 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	}
     }
 
-  if (gap_fill_set || pad_to_set)
+  if (gaps != NULL)
     {
       bfd_byte *buf;
 
@@ -3348,8 +3387,7 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
       buf = (bfd_byte *) xmalloc (max_gap);
       memset (buf, gap_fill, max_gap);
 
-      c = bfd_count_sections (obfd);
-      for (i = 0; i < c; i++)
+      for (i = 0; i < num_sec; i++)
 	{
 	  if (gaps[i] != 0)
 	    {
@@ -3932,6 +3970,7 @@ setup_section (bfd *ibfd, sec_ptr isection, void *obfdarg)
   flagword flags;
   const char *err;
   const char * name;
+  const char * new_name;
   char *prefix = NULL;
   bfd_boolean make_nobits;
   unsigned int alignment;
@@ -3947,7 +3986,12 @@ setup_section (bfd *ibfd, sec_ptr isection, void *obfdarg)
       flags &= bfd_applicable_section_flags (ibfd);
       flags &= bfd_applicable_section_flags (obfd);
     }
-  name = find_section_rename (name, &flags);
+  new_name = find_section_rename (name, &flags);
+  if (new_name != name)
+    {
+      name = new_name;
+      flags = check_new_section_flags (flags, obfd, name);
+    }
 
   /* Prefix sections.  */
   if (prefix_alloc_sections_string
@@ -3971,7 +4015,10 @@ setup_section (bfd *ibfd, sec_ptr isection, void *obfdarg)
   p = find_section_list (bfd_section_name (isection), FALSE,
 			 SECTION_CONTEXT_SET_FLAGS);
   if (p != NULL)
-    flags = p->flags | (flags & (SEC_HAS_CONTENTS | SEC_RELOC));
+    {
+      flags = p->flags | (flags & (SEC_HAS_CONTENTS | SEC_RELOC));
+      flags = check_new_section_flags (flags, obfd, bfd_section_name (isection));
+    }
   else if (strip_symbols == STRIP_NONDEBUG
 	   && (flags & (SEC_ALLOC | SEC_GROUP)) != 0
 	   && !is_nondebug_keep_contents_section (ibfd, isection))
@@ -4052,7 +4099,7 @@ setup_section (bfd *ibfd, sec_ptr isection, void *obfdarg)
     alignment = p->alignment;
   else
     alignment = bfd_section_alignment (isection);
-  
+
   /* FIXME: This is probably not enough.  If we change the LMA we
      may have to recompute the header for the file as well.  */
   if (!bfd_set_section_alignment (osection, alignment))
@@ -5463,7 +5510,7 @@ copy_main (int argc, char *argv[])
 	    s = strchr (optarg, '=');
 	    if (s == NULL)
 	      fatal (_("bad format for --set-section-alignment: argument needed"));
-	    
+
 	    align = atoi (s + 1);
 	    if (align <= 0)
 	      fatal (_("bad format for --set-section-alignment: numeric argument needed"));
@@ -5475,7 +5522,7 @@ copy_main (int argc, char *argv[])
 	    	align >>= 1;
 	    	++palign;
 	      }
-	    
+
 	    if (align != 1)
 	      /* Number has more than on 1, i.e. wasn't a power of 2.  */
 	      fatal (_("bad format for --set-section-alignment: alignment is not a power of two"));
@@ -5491,7 +5538,7 @@ copy_main (int argc, char *argv[])
 	      p->alignment = palign;
 	  }
 	  break;
-	  
+
 	case OPTION_RENAME_SECTION:
 	  {
 	    flagword flags;

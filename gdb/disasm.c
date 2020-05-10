@@ -1,6 +1,6 @@
 /* Disassemble support for GDB.
 
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -375,6 +375,12 @@ do_mixed_source_and_assembly_deprecated
     {
       if (le[i].line == le[i + 1].line && le[i].pc == le[i + 1].pc)
 	continue;		/* Ignore duplicates.  */
+
+      /* Ignore non-statement line table entries.  This means we print the
+	 source line at the place where GDB would insert a breakpoint for
+	 that line, which seems more intuitive.  */
+      if (le[i].is_stmt == 0)
+	continue;
 
       /* Skip any end-of-function markers.  */
       if (le[i].line == 0)
@@ -781,6 +787,11 @@ gdb_disassembler::gdb_disassembler (struct gdbarch *gdbarch,
   disassemble_init_for_target (&m_di);
 }
 
+gdb_disassembler::~gdb_disassembler ()
+{
+  disassemble_free_target (&m_di);
+}
+
 int
 gdb_disassembler::print_insn (CORE_ADDR memaddr,
 			      int *branch_delay_insns)
@@ -908,7 +919,9 @@ gdb_buffered_insn_length (struct gdbarch *gdbarch,
   gdb_buffered_insn_length_init_dis (gdbarch, &di, insn, max_len, addr,
 				     &disassembler_options_holder);
 
-  return gdbarch_print_insn (gdbarch, addr, &di);
+  int result = gdbarch_print_insn (gdbarch, addr, &di);
+  disassemble_free_target (&di);
+  return result;
 }
 
 char *
@@ -1128,8 +1141,9 @@ disassembler_options_completer (struct cmd_list_element *ignore,
 
 /* Initialization code.  */
 
+void _initialize_disasm ();
 void
-_initialize_disasm (void)
+_initialize_disasm ()
 {
   struct cmd_list_element *cmd;
 

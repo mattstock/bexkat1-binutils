@@ -1,6 +1,6 @@
 /* Target-dependent code for s390.
 
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 
 #include "arch-utils.h"
 #include "ax-gdb.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "elf/s390.h"
 #include "elf-bfd.h"
 #include "frame-base.h"
@@ -425,7 +425,7 @@ typedef buf_displaced_step_closure s390_displaced_step_closure;
 
 /* Implementation of gdbarch_displaced_step_copy_insn.  */
 
-static struct displaced_step_closure *
+static displaced_step_closure_up
 s390_displaced_step_copy_insn (struct gdbarch *gdbarch,
 			       CORE_ADDR from, CORE_ADDR to,
 			       struct regcache *regs)
@@ -477,7 +477,8 @@ s390_displaced_step_copy_insn (struct gdbarch *gdbarch,
       displaced_step_dump_bytes (gdb_stdlog, buf, len);
     }
 
-  return closure.release ();
+  /* This is a work around for a problem with g++ 4.8.  */
+  return displaced_step_closure_up (closure.release ());
 }
 
 /* Fix up the state of registers and memory after having single-stepped
@@ -7215,8 +7216,9 @@ s390_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_s390_tdep ();
 void
-_initialize_s390_tdep (void)
+_initialize_s390_tdep ()
 {
   /* Hook us into the gdbarch mechanism.  */
   register_gdbarch_init (bfd_arch_s390, s390_gdbarch_init);

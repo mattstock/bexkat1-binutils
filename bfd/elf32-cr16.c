@@ -1,5 +1,5 @@
 /* BFD back-end for National Semiconductor's CR16 ELF
-   Copyright (C) 2007-2019 Free Software Foundation, Inc.
+   Copyright (C) 2007-2020 Free Software Foundation, Inc.
    Written by M R Swami Reddy.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -1641,7 +1641,7 @@ static struct bfd_link_hash_table *
 elf32_cr16_link_hash_table_create (bfd *abfd)
 {
   struct elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_link_hash_table);
+  size_t amt = sizeof (struct elf_link_hash_table);
 
   ret = (struct elf_link_hash_table *) bfd_zmalloc (amt);
   if (ret == (struct elf_link_hash_table *) NULL)
@@ -2854,7 +2854,7 @@ bfd_cr16_elf32_create_embedded_relocs (bfd *abfd,
     free (internal_relocs);
   return TRUE;
 
-error_return:
+ error_return:
   if (isymbuf != NULL && symtab_hdr->contents != (unsigned char *) isymbuf)
     free (isymbuf);
   if (internal_relocs != NULL

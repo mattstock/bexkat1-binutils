@@ -1,5 +1,5 @@
 /* YACC parser for C expressions, for GDB.
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -54,6 +54,7 @@
 #include "typeprint.h"
 #include "cp-abi.h"
 #include "type-stack.h"
+#include "target-float.h"
 
 #define parse_type(ps) builtin_type (ps->gdbarch ())
 
@@ -174,7 +175,7 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 
 %type <voidval> exp exp1 type_exp start variable qualified_name lcurly function_method
 %type <lval> rcurly
-%type <tval> type typebase
+%type <tval> type typebase scalar_type
 %type <tvec> nonempty_typelist func_mod parameter_typelist
 /* %type <bval> block */
 
@@ -185,8 +186,8 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 
 %type <type_stack> ptr_operator_ts abs_decl direct_abs_decl
 
-%token <typed_val_int> INT
-%token <typed_val_float> FLOAT
+%token <typed_val_int> INT COMPLEX_INT
+%token <typed_val_float> FLOAT COMPLEX_FLOAT
 
 /* Both NAME and TYPENAME tokens represent symbols in the input,
    and both convey their data as strings.
@@ -237,6 +238,8 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 /* Special type cases, put in to allow the parser to distinguish different
    legal basetypes.  */
 %token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD
+%token RESTRICT ATOMIC
+%token FLOAT_KEYWORD COMPLEX
 
 %token <sval> DOLLAR_VARIABLE
 
@@ -774,6 +777,22 @@ exp	:	INT
 			  write_exp_elt_opcode (pstate, OP_LONG); }
 	;
 
+exp	:	COMPLEX_INT
+			{
+			  write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_type (pstate, TYPE_TARGET_TYPE ($1.type));
+			  write_exp_elt_longcst (pstate, 0);
+			  write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_type (pstate, TYPE_TARGET_TYPE ($1.type));
+			  write_exp_elt_longcst (pstate, (LONGEST) ($1.val));
+			  write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_opcode (pstate, OP_COMPLEX);
+			  write_exp_elt_type (pstate, $1.type);
+			  write_exp_elt_opcode (pstate, OP_COMPLEX);
+			}
+	;
+
 exp	:	CHAR
 			{
 			  struct stoken_vector vec;
@@ -801,6 +820,27 @@ exp	:	FLOAT
 			  write_exp_elt_type (pstate, $1.type);
 			  write_exp_elt_floatcst (pstate, $1.val);
 			  write_exp_elt_opcode (pstate, OP_FLOAT); }
+	;
+
+exp	:	COMPLEX_FLOAT
+			{
+			  struct type *underlying
+			    = TYPE_TARGET_TYPE ($1.type);
+
+			  write_exp_elt_opcode (pstate, OP_FLOAT);
+			  write_exp_elt_type (pstate, underlying);
+			  gdb_byte val[16];
+			  target_float_from_host_double (val, underlying, 0);
+			  write_exp_elt_floatcst (pstate, val);
+			  write_exp_elt_opcode (pstate, OP_FLOAT);
+			  write_exp_elt_opcode (pstate, OP_FLOAT);
+			  write_exp_elt_type (pstate, underlying);
+			  write_exp_elt_floatcst (pstate, $1.val);
+			  write_exp_elt_opcode (pstate, OP_FLOAT);
+			  write_exp_elt_opcode (pstate, OP_COMPLEX);
+			  write_exp_elt_type (pstate, $1.type);
+			  write_exp_elt_opcode (pstate, OP_COMPLEX);
+			}
 	;
 
 exp	:	variable
@@ -1169,36 +1209,43 @@ variable:	name_not_typename
 			}
 	;
 
-space_identifier : '@' NAME
+const_or_volatile: const_or_volatile_noopt
+	|
+	;
+
+single_qualifier:
+		CONST_KEYWORD
+			{ cpstate->type_stack.insert (tp_const); }
+	| 	VOLATILE_KEYWORD
+			{ cpstate->type_stack.insert (tp_volatile); }
+	| 	ATOMIC
+			{ cpstate->type_stack.insert (tp_atomic); }
+	| 	RESTRICT
+			{ cpstate->type_stack.insert (tp_restrict); }
+	|	'@' NAME
 		{
 		  cpstate->type_stack.insert (pstate,
 					      copy_name ($2.stoken).c_str ());
 		}
 	;
 
-const_or_volatile: const_or_volatile_noopt
-	|
+qualifier_seq_noopt:
+		single_qualifier
+	| 	qualifier_seq single_qualifier
 	;
 
-cv_with_space_id : const_or_volatile space_identifier const_or_volatile
-	;
-
-const_or_volatile_or_space_identifier_noopt: cv_with_space_id
-	| const_or_volatile_noopt
-	;
-
-const_or_volatile_or_space_identifier:
-		const_or_volatile_or_space_identifier_noopt
+qualifier_seq:
+		qualifier_seq_noopt
 	|
 	;
 
 ptr_operator:
 		ptr_operator '*'
 			{ cpstate->type_stack.insert (tp_pointer); }
-		const_or_volatile_or_space_identifier
+		qualifier_seq
 	|	'*'
 			{ cpstate->type_stack.insert (tp_pointer); }
-		const_or_volatile_or_space_identifier
+		qualifier_seq
 	|	'&'
 			{ cpstate->type_stack.insert (tp_reference); }
 	|	'&' ptr_operator
@@ -1285,20 +1332,11 @@ func_mod:	'(' ')'
 type	:	ptype
 	;
 
-/* Implements (approximately): (type-qualifier)* type-specifier.
+/* A helper production that recognizes scalar types that can validly
+   be used with _Complex.  */
 
-   When type-specifier is only ever a single word, like 'float' then these
-   arrive as pre-built TYPENAME tokens thanks to the classify_name
-   function.  However, when a type-specifier can contain multiple words,
-   for example 'double' can appear as just 'double' or 'long double', and
-   similarly 'long' can appear as just 'long' or in 'long double', then
-   these type-specifiers are parsed into their own tokens in the function
-   lex_one_token and the ident_tokens array.  These separate tokens are all
-   recognised here.  */
-typebase
-	:	TYPENAME
-			{ $$ = $1.type; }
-	|	INT_KEYWORD
+scalar_type:
+		INT_KEYWORD
 			{ $$ = lookup_signed_typename (pstate->language (),
 						       "int"); }
 	|	LONG
@@ -1381,11 +1419,49 @@ typebase
 						"double",
 						NULL,
 						0); }
+	|	FLOAT_KEYWORD
+			{ $$ = lookup_typename (pstate->language (),
+						"float",
+						NULL,
+						0); }
 	|	LONG DOUBLE_KEYWORD
 			{ $$ = lookup_typename (pstate->language (),
 						"long double",
 						NULL,
 						0); }
+	|	UNSIGNED type_name
+			{ $$ = lookup_unsigned_typename (pstate->language (),
+							 TYPE_NAME($2.type)); }
+	|	UNSIGNED
+			{ $$ = lookup_unsigned_typename (pstate->language (),
+							 "int"); }
+	|	SIGNED_KEYWORD type_name
+			{ $$ = lookup_signed_typename (pstate->language (),
+						       TYPE_NAME($2.type)); }
+	|	SIGNED_KEYWORD
+			{ $$ = lookup_signed_typename (pstate->language (),
+						       "int"); }
+	;
+
+/* Implements (approximately): (type-qualifier)* type-specifier.
+
+   When type-specifier is only ever a single word, like 'float' then these
+   arrive as pre-built TYPENAME tokens thanks to the classify_name
+   function.  However, when a type-specifier can contain multiple words,
+   for example 'double' can appear as just 'double' or 'long double', and
+   similarly 'long' can appear as just 'long' or in 'long double', then
+   these type-specifiers are parsed into their own tokens in the function
+   lex_one_token and the ident_tokens array.  These separate tokens are all
+   recognised here.  */
+typebase
+	:	TYPENAME
+			{ $$ = $1.type; }
+	|	scalar_type
+			{ $$ = $1; }
+	|	COMPLEX scalar_type
+			{
+			  $$ = init_complex_type (nullptr, $2);
+			}
 	|	STRUCT name
 			{ $$
 			    = lookup_struct (copy_name ($2).c_str (),
@@ -1452,18 +1528,6 @@ typebase
 						       $2.length);
 			  $$ = NULL;
 			}
-	|	UNSIGNED type_name
-			{ $$ = lookup_unsigned_typename (pstate->language (),
-							 TYPE_NAME($2.type)); }
-	|	UNSIGNED
-			{ $$ = lookup_unsigned_typename (pstate->language (),
-							 "int"); }
-	|	SIGNED_KEYWORD type_name
-			{ $$ = lookup_signed_typename (pstate->language (),
-						       TYPE_NAME($2.type)); }
-	|	SIGNED_KEYWORD
-			{ $$ = lookup_signed_typename (pstate->language (),
-						       "int"); }
                 /* It appears that this rule for templates is never
                    reduced; template recognition happens by lookahead
                    in the token processing code in yylex. */
@@ -1472,9 +1536,9 @@ typebase
 			    (copy_name($2).c_str (), $4,
 			     pstate->expression_context_block);
 			}
-	| const_or_volatile_or_space_identifier_noopt typebase
+	|	qualifier_seq_noopt typebase
 			{ $$ = cpstate->type_stack.follow_types ($2); }
-	| typebase const_or_volatile_or_space_identifier_noopt
+	|	typebase qualifier_seq_noopt
 			{ $$ = cpstate->type_stack.follow_types ($1); }
 	;
 
@@ -1675,13 +1739,14 @@ oper:	OPERATOR NEW
 
 			  c_print_type ($2, NULL, &buf, -1, 0,
 					&type_print_raw_options);
+			  std::string name = std::move (buf.string ());
 
 			  /* This also needs canonicalization.  */
-			  std::string canon
-			    = cp_canonicalize_string (buf.c_str ());
-			  if (canon.empty ())
-			    canon = std::move (buf.string ());
-			  $$ = operator_stoken ((" " + canon).c_str ());
+			  gdb::unique_xmalloc_ptr<char> canon
+			    = cp_canonicalize_string (name.c_str ());
+			  if (canon != nullptr)
+			    name = canon.get ();
+			  $$ = operator_stoken ((" " + name).c_str ());
 			}
 	;
 
@@ -1689,12 +1754,11 @@ oper:	OPERATOR NEW
    match the 'name' rule to appear as fields within a struct.  The example
    that initially motivated this was the RISC-V target which models the
    floating point registers as a union with fields called 'float' and
-   'double'.  The 'float' string becomes a TYPENAME token and can appear
-   anywhere a 'name' can, however 'double' is its own token,
-   DOUBLE_KEYWORD, and doesn't match the 'name' rule.*/
+   'double'.  */
 field_name
 	:	name
 	|	DOUBLE_KEYWORD { $$ = typename_stoken ("double"); }
+	|	FLOAT_KEYWORD { $$ = typename_stoken ("float"); }
 	|	INT_KEYWORD { $$ = typename_stoken ("int"); }
 	|	LONG { $$ = typename_stoken ("long"); }
 	|	SHORT { $$ = typename_stoken ("short"); }
@@ -1845,7 +1909,10 @@ parse_number (struct parser_state *par_state,
   /* Number of "L" suffixes encountered.  */
   int long_p = 0;
 
-  /* We have found a "L" or "U" suffix.  */
+  /* Imaginary number.  */
+  bool imaginary_p = false;
+
+  /* We have found a "L" or "U" (or "i") suffix.  */
   int found_suffix = 0;
 
   ULONGEST high_bit;
@@ -1858,6 +1925,12 @@ parse_number (struct parser_state *par_state,
 
   if (parsed_float)
     {
+      if (len >= 1 && p[len - 1] == 'i')
+	{
+	  imaginary_p = true;
+	  --len;
+	}
+
       /* Handle suffixes for decimal floating-point: "df", "dd" or "dl".  */
       if (len >= 2 && p[len - 2] == 'd' && p[len - 1] == 'f')
 	{
@@ -1901,7 +1974,12 @@ parse_number (struct parser_state *par_state,
 			putithere->typed_val_float.type,
 			putithere->typed_val_float.val))
         return ERROR;
-      return FLOAT;
+
+      if (imaginary_p)
+	putithere->typed_val_float.type
+	  = init_complex_type (nullptr, putithere->typed_val_float.type);
+
+      return imaginary_p ? COMPLEX_FLOAT : FLOAT;
     }
 
   /* Handle base-switching prefixes 0x, 0t, 0d, 0 */
@@ -1950,7 +2028,7 @@ parse_number (struct parser_state *par_state,
       c = *p++;
       if (c >= 'A' && c <= 'Z')
 	c += 'a' - 'A';
-      if (c != 'l' && c != 'u')
+      if (c != 'l' && c != 'u' && c != 'i')
 	n *= base;
       if (c >= '0' && c <= '9')
 	{
@@ -1976,6 +2054,11 @@ parse_number (struct parser_state *par_state,
 	      unsigned_p = 1;
 	      found_suffix = 1;
 	    }
+	  else if (c == 'i')
+	    {
+	      imaginary_p = true;
+	      found_suffix = 1;
+	    }
 	  else
 	    return ERROR;	/* Char not a digit */
 	}
@@ -1985,13 +2068,13 @@ parse_number (struct parser_state *par_state,
       /* Portably test for overflow (only works for nonzero values, so make
 	 a second check for zero).  FIXME: Can't we just make n and prevn
 	 unsigned and avoid this?  */
-      if (c != 'l' && c != 'u' && (prevn >= n) && n != 0)
+      if (c != 'l' && c != 'u' && c != 'i' && (prevn >= n) && n != 0)
 	unsigned_p = 1;		/* Try something unsigned */
 
       /* Portably test for unsigned overflow.
 	 FIXME: This check is wrong; for example it doesn't find overflow
 	 on 0x123456789 when LONGEST is 32 bits.  */
-      if (c != 'l' && c != 'u' && n != 0)
+      if (c != 'l' && c != 'u' && c != 'i' && n != 0)
 	{	
 	  if (unsigned_p && prevn >= n)
 	    error (_("Numeric constant too large."));
@@ -2063,7 +2146,11 @@ parse_number (struct parser_state *par_state,
        putithere->typed_val_int.type = signed_type;
      }
 
-   return INT;
+   if (imaginary_p)
+     putithere->typed_val_int.type
+       = init_complex_type (nullptr, putithere->typed_val_int.type);
+
+   return imaginary_p ? COMPLEX_INT : INT;
 }
 
 /* Temporary obstack used for holding strings.  */
@@ -2345,11 +2432,15 @@ enum token_flag
 
   FLAG_CXX = 1,
 
+  /* If this bit is set, the token is C-only.  */
+
+  FLAG_C = 2,
+
   /* If this bit is set, the token is conditional: if there is a
      symbol of the same name, then the token is a symbol; otherwise,
      the token is a keyword.  */
 
-  FLAG_SHADOW = 2
+  FLAG_SHADOW = 4
 };
 DEF_ENUM_FLAGS_TYPE (enum token_flag, token_flags);
 
@@ -2399,7 +2490,7 @@ static const struct token tokentab2[] =
 /* Identifier-like tokens.  Only type-specifiers than can appear in
    multi-word type names (for example 'double' can appear in 'long
    double') need to be listed here.  type-specifiers that are only ever
-   single word (like 'float') are handled by the classify_name function.  */
+   single word (like 'char') are handled by the classify_name function.  */
 static const struct token ident_tokens[] =
   {
     {"unsigned", UNSIGNED, OP_NULL, 0},
@@ -2411,13 +2502,21 @@ static const struct token ident_tokens[] =
     {"_Alignof", ALIGNOF, OP_NULL, 0},
     {"alignof", ALIGNOF, OP_NULL, FLAG_CXX},
     {"double", DOUBLE_KEYWORD, OP_NULL, 0},
+    {"float", FLOAT_KEYWORD, OP_NULL, 0},
     {"false", FALSEKEYWORD, OP_NULL, FLAG_CXX},
     {"class", CLASS, OP_NULL, FLAG_CXX},
     {"union", UNION, OP_NULL, 0},
     {"short", SHORT, OP_NULL, 0},
     {"const", CONST_KEYWORD, OP_NULL, 0},
+    {"restrict", RESTRICT, OP_NULL, FLAG_C | FLAG_SHADOW},
+    {"__restrict__", RESTRICT, OP_NULL, 0},
+    {"__restrict", RESTRICT, OP_NULL, 0},
+    {"_Atomic", ATOMIC, OP_NULL, 0},
     {"enum", ENUM, OP_NULL, 0},
     {"long", LONG, OP_NULL, 0},
+    {"_Complex", COMPLEX, OP_NULL, 0},
+    {"__complex__", COMPLEX, OP_NULL, 0},
+
     {"true", TRUEKEYWORD, OP_NULL, FLAG_CXX},
     {"int", INT_KEYWORD, OP_NULL, 0},
     {"new", NEW, OP_NULL, FLAG_CXX},
@@ -2550,6 +2649,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	if ((tokentab3[i].flags & FLAG_CXX) != 0
 	    && par_state->language ()->la_language != language_cplus)
 	  break;
+	gdb_assert ((tokentab3[i].flags & FLAG_C) == 0);
 
 	pstate->lexptr += 3;
 	yylval.opcode = tokentab3[i].opcode;
@@ -2563,6 +2663,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	if ((tokentab2[i].flags & FLAG_CXX) != 0
 	    && par_state->language ()->la_language != language_cplus)
 	  break;
+	gdb_assert ((tokentab2[i].flags & FLAG_C) == 0);
 
 	pstate->lexptr += 2;
 	yylval.opcode = tokentab2[i].opcode;
@@ -2856,6 +2957,10 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
       {
 	if ((ident_tokens[i].flags & FLAG_CXX) != 0
 	    && par_state->language ()->la_language != language_cplus)
+	  break;
+	if ((ident_tokens[i].flags & FLAG_C) != 0
+	    && par_state->language ()->la_language != language_c
+	    && par_state->language ()->la_language != language_objc)
 	  break;
 
 	if ((ident_tokens[i].flags & FLAG_SHADOW) != 0)

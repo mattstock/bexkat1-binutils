@@ -1,5 +1,5 @@
 /* 32-bit ELF support for ARM
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -2453,8 +2453,8 @@ static const bfd_vma elf32_thumb2_plt_entry [] =
   0x0c00f240,		/* movw	   ip, #0xNNNN	  */
   0x0c00f2c0,		/* movt	   ip, #0xNNNN	  */
   0xf8dc44fc,		/* add	   ip, pc	  */
-  0xe7fdf000		/* ldr.w   pc, [ip]	  */
-			/* b      .-2		  */
+  0xe7fcf000		/* ldr.w   pc, [ip]	  */
+			/* b      .-4		  */
 };
 
 /* The format of the first entry in the procedure linkage table
@@ -4110,7 +4110,7 @@ static struct bfd_link_hash_table *
 elf32_arm_link_hash_table_create (bfd *abfd)
 {
   struct elf32_arm_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf32_arm_link_hash_table);
+  size_t amt = sizeof (struct elf32_arm_link_hash_table);
 
   ret = (struct elf32_arm_link_hash_table *) bfd_zmalloc (amt);
   if (ret == NULL)
@@ -5064,6 +5064,14 @@ arm_build_one_stub (struct bfd_hash_entry *gen_entry,
   stub_entry = (struct elf32_arm_stub_hash_entry *) gen_entry;
   info = (struct bfd_link_info *) in_arg;
 
+  /* Fail if the target section could not be assigned to an output
+     section.  The user should fix his linker script.  */
+  if (stub_entry->target_section->output_section == NULL
+      && info->non_contiguous_regions)
+    info->callbacks->einfo (_("%F%P: Could not assign '%pA' to an output section. "
+			      "Retry without --enable-non-contiguous-regions.\n"),
+			    stub_entry->target_section);
+
   globals = elf32_arm_hash_table (info);
   if (globals == NULL)
     return FALSE;
@@ -5304,7 +5312,7 @@ elf32_arm_setup_section_lists (bfd *output_bfd,
   unsigned int top_id, top_index;
   asection *section;
   asection **input_list, **list;
-  bfd_size_type amt;
+  size_t amt;
   struct elf32_arm_link_hash_table *htab = elf32_arm_hash_table (info);
 
   if (htab == NULL)
@@ -6415,7 +6423,7 @@ set_cmse_veneer_addr_from_implib (struct bfd_link_info *info,
       ret = FALSE;
     }
 
-free_sym_buf:
+ free_sym_buf:
   free (sympp);
   return ret;
 }
@@ -7148,7 +7156,6 @@ find_arm_glue (struct bfd_link_info *link_info,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen (name)
 				  + strlen (ARM2THUMB_GLUE_ENTRY_NAME) + 1);
-
   BFD_ASSERT (tmp_name);
 
   sprintf (tmp_name, ARM2THUMB_GLUE_ENTRY_NAME, name);
@@ -7323,7 +7330,6 @@ record_arm_to_thumb_glue (struct bfd_link_info * link_info,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen (name)
 				  + strlen (ARM2THUMB_GLUE_ENTRY_NAME) + 1);
-
   BFD_ASSERT (tmp_name);
 
   sprintf (tmp_name, ARM2THUMB_GLUE_ENTRY_NAME, name);
@@ -7401,7 +7407,6 @@ record_arm_bx_glue (struct bfd_link_info * link_info, int reg)
   /* Add symbol for veneer.  */
   tmp_name = (char *)
       bfd_malloc ((bfd_size_type) strlen (ARM_BX_GLUE_ENTRY_NAME) + 1);
-
   BFD_ASSERT (tmp_name);
 
   sprintf (tmp_name, ARM_BX_GLUE_ENTRY_NAME, reg);
@@ -7493,7 +7498,6 @@ record_vfp11_erratum_veneer (struct bfd_link_info *link_info,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen
 				  (VFP11_ERRATUM_VENEER_ENTRY_NAME) + 10);
-
   BFD_ASSERT (tmp_name);
 
   sprintf (tmp_name, VFP11_ERRATUM_VENEER_ENTRY_NAME,
@@ -7613,7 +7617,6 @@ record_stm32l4xx_erratum_veneer (struct bfd_link_info *link_info,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen
 				  (STM32L4XX_ERRATUM_VENEER_ENTRY_NAME) + 10);
-
   BFD_ASSERT (tmp_name);
 
   sprintf (tmp_name, STM32L4XX_ERRATUM_VENEER_ENTRY_NAME,
@@ -7996,7 +7999,7 @@ bfd_elf32_arm_process_before_allocation (bfd *abfd,
 
   return TRUE;
 
-error_return:
+ error_return:
   if (contents != NULL
       && elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
@@ -8612,7 +8615,7 @@ bfd_elf32_arm_vfp11_erratum_scan (bfd *abfd, struct bfd_link_info *link_info)
 
   return TRUE;
 
-error_return:
+ error_return:
   if (contents != NULL
       && elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
@@ -8644,6 +8647,7 @@ bfd_elf32_arm_vfp11_fix_veneer_locations (bfd *abfd,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen
 				  (VFP11_ERRATUM_VENEER_ENTRY_NAME) + 10);
+  BFD_ASSERT (tmp_name);
 
   for (sec = abfd->sections; sec != NULL; sec = sec->next)
     {
@@ -8731,6 +8735,7 @@ bfd_elf32_arm_stm32l4xx_fix_veneer_locations (bfd *abfd,
 
   tmp_name = (char *) bfd_malloc ((bfd_size_type) strlen
 				  (STM32L4XX_ERRATUM_VENEER_ENTRY_NAME) + 10);
+  BFD_ASSERT (tmp_name);
 
   for (sec = abfd->sections; sec != NULL; sec = sec->next)
     {
@@ -9047,7 +9052,7 @@ bfd_elf32_arm_stm32l4xx_erratum_scan (bfd *abfd,
 
   return TRUE;
 
-error_return:
+ error_return:
   if (contents != NULL
       && elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
@@ -9996,6 +10001,12 @@ elf32_arm_populate_plt_entry (bfd *output_bfd, struct bfd_link_info *info,
 	      rel.r_info = ELF32_R_INFO (dynindx, R_ARM_JUMP_SLOT);
 	      initial_got_entry = (splt->output_section->vma
 				   + splt->output_offset);
+
+	      /* PR ld/16017
+		 When thumb only we need to set the LSB for any address that
+		 will be used with an interworking branch instruction.  */
+	      if (using_thumb_only (htab))
+		initial_got_entry |= 1;
 	    }
 	}
 
@@ -11581,8 +11592,7 @@ elf32_arm_final_link_relocate (reloc_howto_type *	    howto,
 		  if (dynreloc_st_type == STT_GNU_IFUNC)
 		    outrel.r_info = ELF32_R_INFO (0, R_ARM_IRELATIVE);
 		  else if (bfd_link_pic (info)
-			   && (ELF_ST_VISIBILITY (h->other) == STV_DEFAULT
-			       || h->root.type != bfd_link_hash_undefweak))
+			   && !UNDEFWEAK_NO_DYNAMIC_RELOC (info, h))
 		    outrel.r_info = ELF32_R_INFO (0, R_ARM_RELATIVE);
 		  else
 		    {
@@ -15725,7 +15735,7 @@ elf32_arm_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	  p = *head;
 	  if (p == NULL || p->sec != sec)
 	    {
-	      bfd_size_type amt = sizeof *p;
+	      size_t amt = sizeof *p;
 
 	      p = (struct elf_dyn_relocs *) bfd_alloc (htab->root.dynobj, amt);
 	      if (p == NULL)
@@ -16455,8 +16465,7 @@ allocate_dynrelocs_for_symbol (struct elf_link_hash_entry *h, void * inf)
 	       GOT entry's R_ARM_IRELATIVE relocation.  */
 	    elf32_arm_allocate_irelocs (info, htab->root.srelgot, 1);
 	  else if (bfd_link_pic (info)
-		   && (ELF_ST_VISIBILITY (h->other) == STV_DEFAULT
-		       || h->root.type != bfd_link_hash_undefweak))
+		   && !UNDEFWEAK_NO_DYNAMIC_RELOC (info, h))
 	    /* Reserve room for the GOT entry's R_ARM_RELATIVE relocation.  */
 	    elf32_arm_allocate_dynrelocs (info, htab->root.srelgot, 1);
 	  else if (htab->fdpic_p && tls_type == GOT_NORMAL)
@@ -18505,6 +18514,8 @@ elf32_arm_filter_cmse_symbols (bfd *abfd ATTRIBUTE_UNUSED,
 
   maxnamelen = 128;
   cmse_name = (char *) bfd_malloc (maxnamelen);
+  BFD_ASSERT (cmse_name);
+
   for (src_count = 0; src_count < symcount; src_count++)
     {
       struct elf32_arm_link_hash_entry *cmse_hash;
@@ -18580,7 +18591,7 @@ elf32_arm_new_section_hook (bfd *abfd, asection *sec)
   if (!sec->used_by_bfd)
     {
       _arm_elf_section_data *sdata;
-      bfd_size_type amt = sizeof (*sdata);
+      size_t amt = sizeof (*sdata);
 
       sdata = (_arm_elf_section_data *) bfd_zalloc (abfd, amt);
       if (sdata == NULL)
@@ -19700,6 +19711,8 @@ elf32_arm_write_section (bfd *output_bfd,
       unsigned int in_index, out_index;
       bfd_vma add_to_offsets = 0;
 
+      if (edited_contents == NULL)
+	return FALSE;
       for (in_index = 0, out_index = 0; in_index * 8 < input_size || edit_node;)
 	{
 	  if (edit_node)
@@ -20231,10 +20244,10 @@ elf32_arm_get_synthetic_symtab (bfd *abfd,
 }
 
 static bfd_boolean
-elf32_arm_section_flags (flagword *flags, const Elf_Internal_Shdr * hdr)
+elf32_arm_section_flags (const Elf_Internal_Shdr *hdr)
 {
   if (hdr->sh_flags & SHF_ARM_PURECODE)
-    *flags |= SEC_ELF_PURECODE;
+    hdr->bfd_section->flags |= SEC_ELF_PURECODE;
   return TRUE;
 }
 

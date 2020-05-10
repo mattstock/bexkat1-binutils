@@ -1,6 +1,6 @@
 /* Rust language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2016-2019 Free Software Foundation, Inc.
+   Copyright (C) 2016-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -68,38 +68,37 @@ rust_crate_for_block (const struct block *block)
    enum.  */
 
 static bool
-rust_enum_p (const struct type *type)
+rust_enum_p (struct type *type)
 {
-  return (TYPE_CODE (type) == TYPE_CODE_STRUCT
-	  && TYPE_NFIELDS (type) == 1
-	  && TYPE_FLAG_DISCRIMINATED_UNION (TYPE_FIELD_TYPE (type, 0)));
+  /* is_dynamic_type will return true if any field has a dynamic
+     attribute -- but we only want to check the top level.  */
+  return TYPE_HAS_VARIANT_PARTS (type);
 }
 
-/* Return true if TYPE, which must be an enum type, has no
-   variants.  */
+/* Return true if TYPE, which must be an already-resolved enum type,
+   has no variants.  */
 
 static bool
 rust_empty_enum_p (const struct type *type)
 {
-  gdb_assert (rust_enum_p (type));
-  /* In Rust the enum always fills the containing structure.  */
-  gdb_assert (TYPE_FIELD_BITPOS (type, 0) == 0);
-
-  return TYPE_NFIELDS (TYPE_FIELD_TYPE (type, 0)) == 0;
+  return TYPE_NFIELDS (type) == 0;
 }
 
-/* Given an enum type and contents, find which variant is active.  */
+/* Given an already-resolved enum type and contents, find which
+   variant is active.  */
 
-static struct field *
-rust_enum_variant (struct type *type, const gdb_byte *contents)
+static int
+rust_enum_variant (struct type *type)
 {
-  /* In Rust the enum always fills the containing structure.  */
-  gdb_assert (TYPE_FIELD_BITPOS (type, 0) == 0);
+  /* The active variant is simply the first non-artificial field.  */
+  for (int i = 0; i < TYPE_NFIELDS (type); ++i)
+    if (!TYPE_FIELD_ARTIFICIAL (type, i))
+      return i;
 
-  struct type *union_type = TYPE_FIELD_TYPE (type, 0);
-
-  int fieldno = value_union_variant (union_type, contents);
-  return &TYPE_FIELD (union_type, fieldno);
+  /* Perhaps we could get here by trying to print an Ada variant
+     record in Rust mode.  Unlikely, but an error is safer than an
+     assert.  */
+  error (_("Could not find active enum variant"));
 }
 
 /* See rust-lang.h.  */
@@ -351,6 +350,10 @@ rust_printstr (struct ui_file *stream, struct type *type,
 
 
 
+static void rust_value_print_inner (struct value *val, struct ui_file *stream,
+				    int recurse,
+				    const struct value_print_options *options);
+
 /* Helper function to print a string slice.  */
 
 static void
@@ -369,13 +372,12 @@ rust_val_print_str (struct ui_file *stream, struct value *val,
 /* rust_val_print helper for structs and untagged unions.  */
 
 static void
-val_print_struct (struct type *type, int embedded_offset,
-		  CORE_ADDR address, struct ui_file *stream,
-		  int recurse, struct value *val,
+val_print_struct (struct value *val, struct ui_file *stream, int recurse,
 		  const struct value_print_options *options)
 {
   int i;
   int first_field;
+  struct type *type = check_typedef (value_type (val));
 
   if (rust_slice_type_p (type) && strcmp (TYPE_NAME (type), "&str") == 0)
     {
@@ -386,7 +388,7 @@ val_print_struct (struct type *type, int embedded_offset,
 	 However, RUST_VAL_PRINT_STR looks up the fields of the string
 	 inside VAL, assuming that VAL is the string.
 	 So, recreate VAL as a value representing just the string.  */
-      val = value_at_lazy (type, value_address (val) + embedded_offset);
+      val = value_at_lazy (type, value_address (val));
       rust_val_print_str (stream, val, options);
       return;
     }
@@ -436,15 +438,13 @@ val_print_struct (struct type *type, int embedded_offset,
 
       if (!is_tuple && !is_tuple_struct)
         {
-	  fputs_filtered (TYPE_FIELD_NAME (type, i), stream);
+	  fputs_styled (TYPE_FIELD_NAME (type, i),
+			variable_name_style.style (), stream);
 	  fputs_filtered (": ", stream);
         }
 
-      val_print (TYPE_FIELD_TYPE (type, i),
-		 embedded_offset + TYPE_FIELD_BITPOS (type, i) / 8,
-		 address,
-		 stream, recurse + 1, val, &opts,
-		 current_language);
+      rust_value_print_inner (value_field (val, i), stream, recurse + 1,
+			      &opts);
     }
 
   if (options->prettyformat)
@@ -462,14 +462,18 @@ val_print_struct (struct type *type, int embedded_offset,
 /* rust_val_print helper for discriminated unions (Rust enums).  */
 
 static void
-rust_print_enum (struct type *type, int embedded_offset,
-		 CORE_ADDR address, struct ui_file *stream,
-		 int recurse, struct value *val,
+rust_print_enum (struct value *val, struct ui_file *stream, int recurse,
 		 const struct value_print_options *options)
 {
   struct value_print_options opts = *options;
+  struct type *type = check_typedef (value_type (val));
 
   opts.deref_ref = 0;
+
+  gdb_assert (rust_enum_p (type));
+  gdb::array_view<const gdb_byte> view (value_contents_for_printing (val),
+					TYPE_LENGTH (value_type (val)));
+  type = resolve_dynamic_type (type, view, value_address (val));
 
   if (rust_empty_enum_p (type))
     {
@@ -480,10 +484,9 @@ rust_print_enum (struct type *type, int embedded_offset,
       return;
     }
 
-  const gdb_byte *valaddr = value_contents_for_printing (val);
-  struct field *variant_field = rust_enum_variant (type, valaddr);
-  embedded_offset += FIELD_BITPOS (*variant_field) / 8;
-  struct type *variant_type = FIELD_TYPE (*variant_field);
+  int variant_fieldno = rust_enum_variant (type);
+  val = value_field (val, variant_fieldno);
+  struct type *variant_type = TYPE_FIELD_TYPE (type, variant_fieldno);
 
   int nfields = TYPE_NFIELDS (variant_type);
 
@@ -514,15 +517,12 @@ rust_print_enum (struct type *type, int embedded_offset,
       first_field = false;
 
       if (!is_tuple)
-	fprintf_filtered (stream, "%s: ",
-			  TYPE_FIELD_NAME (variant_type, j));
+	fprintf_filtered (stream, "%ps: ",
+			  styled_string (variable_name_style.style (),
+					 TYPE_FIELD_NAME (variant_type, j)));
 
-      val_print (TYPE_FIELD_TYPE (variant_type, j),
-		 (embedded_offset
-		  + TYPE_FIELD_BITPOS (variant_type, j) / 8),
-		 address,
-		 stream, recurse + 1, val, &opts,
-		 current_language);
+      rust_value_print_inner (value_field (val, j), stream, recurse + 1,
+			      &opts);
     }
 
   if (is_tuple)
@@ -545,17 +545,20 @@ static const struct generic_val_print_decorations rust_decorations =
   "]"
 };
 
-/* la_val_print implementation for Rust.  */
-
+/* la_value_print_inner implementation for Rust.  */
 static void
-rust_val_print (struct type *type, int embedded_offset,
-		CORE_ADDR address, struct ui_file *stream, int recurse,
-		struct value *val,
-		const struct value_print_options *options)
+rust_value_print_inner (struct value *val, struct ui_file *stream,
+			int recurse,
+			const struct value_print_options *options)
 {
-  const gdb_byte *valaddr = value_contents_for_printing (val);
+  struct value_print_options opts = *options;
+  opts.deref_ref = 1;
 
-  type = check_typedef (type);
+  if (opts.prettyformat == Val_prettyformat_default)
+    opts.prettyformat = (opts.prettyformat_structs
+			 ? Val_prettyformat : Val_no_prettyformat);
+
+  struct type *type = check_typedef (value_type (val));
   switch (TYPE_CODE (type))
     {
     case TYPE_CODE_PTR:
@@ -565,34 +568,32 @@ rust_val_print (struct type *type, int embedded_offset,
 	if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_ARRAY
 	    && rust_u8_type_p (TYPE_TARGET_TYPE (TYPE_TARGET_TYPE (type)))
 	    && get_array_bounds (TYPE_TARGET_TYPE (type), &low_bound,
-				 &high_bound)) {
-	  /* We have a pointer to a byte string, so just print
-	     that.  */
-	  struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
-	  CORE_ADDR addr;
-	  struct gdbarch *arch = get_type_arch (type);
-	  int unit_size = gdbarch_addressable_memory_unit_size (arch);
+				 &high_bound))
+	  {
+	    /* We have a pointer to a byte string, so just print
+	       that.  */
+	    struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+	    CORE_ADDR addr = value_as_address (val);
+	    struct gdbarch *arch = get_type_arch (type);
 
-	  addr = unpack_pointer (type, valaddr + embedded_offset * unit_size);
-	  if (options->addressprint)
-	    {
-	      fputs_filtered (paddress (arch, addr), stream);
-	      fputs_filtered (" ", stream);
-	    }
+	    if (opts.addressprint)
+	      {
+		fputs_filtered (paddress (arch, addr), stream);
+		fputs_filtered (" ", stream);
+	      }
 
-	  fputs_filtered ("b", stream);
-	  val_print_string (TYPE_TARGET_TYPE (elttype), "ASCII", addr,
-			    high_bound - low_bound + 1, stream,
-			    options);
-	  break;
-	}
+	    fputs_filtered ("b", stream);
+	    val_print_string (TYPE_TARGET_TYPE (elttype), "ASCII", addr,
+			      high_bound - low_bound + 1, stream,
+			      &opts);
+	    break;
+	  }
       }
-      /* Fall through.  */
+      goto generic_print;
 
     case TYPE_CODE_METHODPTR:
     case TYPE_CODE_MEMBERPTR:
-      c_val_print (type, embedded_offset, address, stream,
-		   recurse, val, options);
+      c_value_print_inner (val, stream, recurse, &opts);
       break;
 
     case TYPE_CODE_INT:
@@ -607,8 +608,6 @@ rust_val_print (struct type *type, int embedded_offset,
 
     case TYPE_CODE_STRING:
       {
-	struct gdbarch *arch = get_type_arch (type);
-	int unit_size = gdbarch_addressable_memory_unit_size (arch);
 	LONGEST low_bound, high_bound;
 
 	if (!get_array_bounds (type, &low_bound, &high_bound))
@@ -619,8 +618,8 @@ rust_val_print (struct type *type, int embedded_offset,
 	   encoding.  */
 	fputs_filtered ("b", stream);
 	rust_printstr (stream, TYPE_TARGET_TYPE (type),
-		       valaddr + embedded_offset * unit_size,
-		       high_bound - low_bound + 1, "ASCII", 0, options);
+		       value_contents_for_printing (val),
+		       high_bound - low_bound + 1, "ASCII", 0, &opts);
       }
       break;
 
@@ -642,24 +641,20 @@ rust_val_print (struct type *type, int embedded_offset,
 	 for printing a union is same as that for a struct, the only
 	 difference is that the input type will have overlapping
 	 fields.  */
-      val_print_struct (type, embedded_offset, address, stream,
-			recurse, val, options);
+      val_print_struct (val, stream, recurse, &opts);
       break;
 
     case TYPE_CODE_STRUCT:
       if (rust_enum_p (type))
-	rust_print_enum (type, embedded_offset, address, stream,
-			 recurse, val, options);
+	rust_print_enum (val, stream, recurse, &opts);
       else
-	val_print_struct (type, embedded_offset, address, stream,
-			  recurse, val, options);
+	val_print_struct (val, stream, recurse, &opts);
       break;
 
     default:
     generic_print:
       /* Nothing special yet.  */
-      generic_val_print (type, embedded_offset, address, stream,
-			 recurse, val, options, &rust_decorations);
+      generic_value_print (val, stream, recurse, &opts, &rust_decorations);
     }
 }
 
@@ -703,8 +698,6 @@ rust_print_struct_def (struct type *type, const char *varstring,
   bool is_tuple = rust_tuple_type_p (type);
   bool is_enum = rust_enum_p (type);
 
-  int enum_discriminant_index = -1;
-
   if (for_rust_enum)
     {
       /* Already printing an outer enum, so nothing to print here.  */
@@ -715,25 +708,9 @@ rust_print_struct_def (struct type *type, const char *varstring,
       if (is_enum)
 	{
 	  fputs_filtered ("enum ", stream);
-
-	  if (rust_empty_enum_p (type))
-	    {
-	      if (tagname != NULL)
-		{
-		  fputs_filtered (tagname, stream);
-		  fputs_filtered (" ", stream);
-		}
-	      fputs_filtered ("{}", stream);
-	      return;
-	    }
-
-	  type = TYPE_FIELD_TYPE (type, 0);
-
-	  struct dynamic_prop *discriminant_prop
-	    = get_dyn_prop (DYN_PROP_DISCRIMINATED, type);
-	  struct discriminant_info *info
-	    = (struct discriminant_info *) discriminant_prop->data.baton;
-	  enum_discriminant_index = info->discriminant_index;
+	  dynamic_prop *prop = type->dyn_prop (DYN_PROP_VARIANT_PARTS);
+	  if (prop != nullptr && prop->kind == PROP_TYPE)
+	    type = prop->data.original_type;
 	}
       else if (TYPE_CODE (type) == TYPE_CODE_STRUCT)
 	fputs_filtered ("struct ", stream);
@@ -760,7 +737,7 @@ rust_print_struct_def (struct type *type, const char *varstring,
     {
       if (field_is_static (&TYPE_FIELD (type, i)))
 	continue;
-      if (is_enum && i == enum_discriminant_index)
+      if (is_enum && TYPE_FIELD_ARTIFICIAL (type, i))
 	continue;
       fields.push_back (i);
     }
@@ -777,7 +754,7 @@ rust_print_struct_def (struct type *type, const char *varstring,
       QUIT;
 
       gdb_assert (!field_is_static (&TYPE_FIELD (type, i)));
-      gdb_assert (! (is_enum && i == enum_discriminant_index));
+      gdb_assert (! (is_enum && TYPE_FIELD_ARTIFICIAL (type, i)));
 
       if (flags->print_offsets)
 	podata->update (type, i, stream);
@@ -791,9 +768,12 @@ rust_print_struct_def (struct type *type, const char *varstring,
       if (!for_rust_enum || flags->print_offsets)
 	print_spaces_filtered (level + 2, stream);
       if (is_enum)
-	fputs_filtered (TYPE_FIELD_NAME (type, i), stream);
+	fputs_styled (TYPE_FIELD_NAME (type, i), variable_name_style.style (),
+		      stream);
       else if (!is_tuple_struct)
-	fprintf_filtered (stream, "%s: ", TYPE_FIELD_NAME (type, i));
+	fprintf_filtered (stream, "%ps: ",
+			  styled_string (variable_name_style.style (),
+					 TYPE_FIELD_NAME (type, i)));
 
       rust_internal_print_type (TYPE_FIELD_TYPE (type, i), NULL,
 				stream, (is_enum ? show : show - 1),
@@ -942,7 +922,9 @@ rust_internal_print_type (struct type *type, const char *varstring,
 		&& name[len] == ':'
 		&& name[len + 1] == ':')
 	      name += len + 2;
-	    fprintfi_filtered (level + 2, stream, "%s,\n", name);
+	    fprintfi_filtered (level + 2, stream, "%ps,\n",
+			       styled_string (variable_name_style.style (),
+					      name));
 	  }
 
 	fputs_filtered ("}", stream);
@@ -1679,20 +1661,16 @@ rust_evaluate_subexp (struct type *expect_type, struct expression *exp,
 
 	    if (rust_enum_p (type))
 	      {
+		gdb::array_view<const gdb_byte> view (value_contents (lhs),
+						      TYPE_LENGTH (type));
+		type = resolve_dynamic_type (type, view, value_address (lhs));
+
 		if (rust_empty_enum_p (type))
 		  error (_("Cannot access field %d of empty enum %s"),
 			 field_number, TYPE_NAME (type));
 
-		const gdb_byte *valaddr = value_contents (lhs);
-		struct field *variant_field = rust_enum_variant (type, valaddr);
-
-		struct value *union_value = value_primitive_field (lhs, 0, 0,
-								   type);
-
-		int fieldno = (variant_field
-			       - &TYPE_FIELD (value_type (union_value), 0));
-		lhs = value_primitive_field (union_value, 0, fieldno,
-					     value_type (union_value));
+		int fieldno = rust_enum_variant (type);
+		lhs = value_primitive_field (lhs, 0, fieldno, type);
 		outer_type = type;
 		type = value_type (lhs);
 	      }
@@ -1751,20 +1729,16 @@ tuple structs, and tuple-like enum variants"));
         type = value_type (lhs);
         if (TYPE_CODE (type) == TYPE_CODE_STRUCT && rust_enum_p (type))
 	  {
+	    gdb::array_view<const gdb_byte> view (value_contents (lhs),
+						  TYPE_LENGTH (type));
+	    type = resolve_dynamic_type (type, view, value_address (lhs));
+
 	    if (rust_empty_enum_p (type))
 	      error (_("Cannot access field %s of empty enum %s"),
 		     field_name, TYPE_NAME (type));
 
-	    const gdb_byte *valaddr = value_contents (lhs);
-	    struct field *variant_field = rust_enum_variant (type, valaddr);
-
-	    struct value *union_value = value_primitive_field (lhs, 0, 0,
-							       type);
-
-	    int fieldno = (variant_field
-			   - &TYPE_FIELD (value_type (union_value), 0));
-	    lhs = value_primitive_field (union_value, 0, fieldno,
-					 value_type (union_value));
+	    int fieldno = rust_enum_variant (type);
+	    lhs = value_primitive_field (lhs, 0, fieldno, type);
 
 	    struct type *outer_type = type;
 	    type = value_type (lhs);
@@ -2145,7 +2119,7 @@ extern const struct language_defn rust_language_defn =
   rust_emitchar,		/* Print a single char */
   rust_print_type,		/* Print a type using appropriate syntax */
   rust_print_typedef,		/* Print a typedef using appropriate syntax */
-  rust_val_print,		/* Print a value using appropriate syntax */
+  rust_value_print_inner,	/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */

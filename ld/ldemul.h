@@ -1,5 +1,5 @@
 /* ld-emul.h - Linker emulation header file
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -35,6 +35,8 @@ extern void ldemul_before_parse
 extern void ldemul_after_open
   (void);
 extern void ldemul_after_check_relocs
+  (void);
+extern void ldemul_before_place_orphans
   (void);
 extern void ldemul_after_allocation
   (void);
@@ -79,6 +81,8 @@ extern void after_parse_default
 extern void after_open_default
   (void);
 extern void after_check_relocs_default
+  (void);
+extern void before_place_orphans_default
   (void);
 extern void after_allocation_default
   (void);
@@ -128,6 +132,9 @@ typedef struct ld_emulation_xfer_struct {
 
   /* Run after checking relocations.  */
   void   (*after_check_relocs)  (void);
+
+  /* Run before placing orphans.  */
+  void   (*before_place_orphans)  (void);
 
   /* Run after allocating output sections.  */
   void   (*after_allocation)  (void);

@@ -1,6 +1,6 @@
 /* D language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2005-2019 Free Software Foundation, Inc.
+   Copyright (C) 2005-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -224,7 +224,7 @@ extern const struct language_defn d_language_defn =
   c_print_type,			/* Print a type using appropriate syntax.  */
   c_print_typedef,		/* Print a typedef using appropriate
 				   syntax.  */
-  d_val_print,			/* Print a value using appropriate syntax.  */
+  d_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value.  */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline.  */
@@ -314,14 +314,11 @@ build_d_types (struct gdbarch *gdbarch)
     = arch_float_type (gdbarch, gdbarch_long_double_bit (gdbarch),
 		       "ireal", gdbarch_long_double_format (gdbarch));
   builtin_d_type->builtin_cfloat
-    = arch_complex_type (gdbarch, "cfloat",
-			 builtin_d_type->builtin_float);
+    = init_complex_type ("cfloat", builtin_d_type->builtin_float);
   builtin_d_type->builtin_cdouble
-    = arch_complex_type (gdbarch, "cdouble",
-			 builtin_d_type->builtin_double);
+    = init_complex_type ("cdouble", builtin_d_type->builtin_double);
   builtin_d_type->builtin_creal
-    = arch_complex_type (gdbarch, "creal",
-			 builtin_d_type->builtin_real);
+    = init_complex_type ("creal", builtin_d_type->builtin_real);
 
   /* Character types.  */
   builtin_d_type->builtin_char
@@ -344,8 +341,9 @@ builtin_d_type (struct gdbarch *gdbarch)
   return (const struct builtin_d_type *) gdbarch_data (gdbarch, d_type_data);
 }
 
+void _initialize_d_language ();
 void
-_initialize_d_language (void)
+_initialize_d_language ()
 {
   d_type_data = gdbarch_data_register_post_init (build_d_types);
 }

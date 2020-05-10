@@ -1,5 +1,5 @@
 /* Alpha specific support for 64-bit ELF
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@tamu.edu>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -144,14 +144,14 @@ struct alpha_elf_reloc_entry
   /* Which .reloc section? */
   asection *srel;
 
-  /* What kind of relocation? */
-  unsigned int rtype;
-
-  /* Is this against read-only section? */
-  unsigned int reltext : 1;
+  /* Which section this relocation is against? */
+  asection *sec;
 
   /* How many did we find?  */
   unsigned long count;
+
+  /* What kind of relocation? */
+  unsigned int rtype;
 };
 
 struct alpha_elf_link_hash_entry
@@ -280,7 +280,7 @@ static struct bfd_link_hash_table *
 elf64_alpha_bfd_link_hash_table_create (bfd *abfd)
 {
   struct alpha_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct alpha_elf_link_hash_table);
+  size_t amt = sizeof (struct alpha_elf_link_hash_table);
 
   ret = (struct alpha_elf_link_hash_table *) bfd_zmalloc (amt);
   if (ret == (struct alpha_elf_link_hash_table *) NULL)
@@ -1136,9 +1136,7 @@ elf64_alpha_info_to_howto (bfd *abfd, arelent *cache_ptr,
 
 /* Handle an Alpha specific section when reading an object file.  This
    is called when bfd_section_from_shdr finds a section with an unknown
-   type.
-   FIXME: We need to handle the SHF_ALPHA_GPREL flag, but I'm not sure
-   how to.  */
+   type.  */
 
 static bfd_boolean
 elf64_alpha_section_from_shdr (bfd *abfd,
@@ -1180,10 +1178,10 @@ elf64_alpha_section_from_shdr (bfd *abfd,
 /* Convert Alpha specific section flags to bfd internal section flags.  */
 
 static bfd_boolean
-elf64_alpha_section_flags (flagword *flags, const Elf_Internal_Shdr *hdr)
+elf64_alpha_section_flags (const Elf_Internal_Shdr *hdr)
 {
   if (hdr->sh_flags & SHF_ALPHA_GPREL)
-    *flags |= SEC_SMALL_DATA;
+    hdr->bfd_section->flags |= SEC_SMALL_DATA;
 
   return TRUE;
 }
@@ -1387,18 +1385,23 @@ elf64_alpha_read_ecoff_info (bfd *abfd, asection *section,
   /* The symbolic header contains absolute file offsets and sizes to
      read.  */
 #define READ(ptr, offset, count, size, type)				\
-  if (symhdr->count == 0)						\
-    debug->ptr = NULL;							\
-  else									\
+  do									\
     {									\
-      bfd_size_type amt = (bfd_size_type) size * symhdr->count;		\
-      debug->ptr = (type) bfd_malloc (amt);				\
+      size_t amt;							\
+      debug->ptr = NULL;						\
+      if (symhdr->count == 0)						\
+	break;								\
+      if (_bfd_mul_overflow (size, symhdr->count, &amt))		\
+	{								\
+	  bfd_set_error (bfd_error_file_too_big);			\
+	  goto error_return;						\
+	}								\
+      if (bfd_seek (abfd, symhdr->offset, SEEK_SET) != 0)		\
+	goto error_return;						\
+      debug->ptr = (type) _bfd_malloc_and_read (abfd, amt, amt);	\
       if (debug->ptr == NULL)						\
 	goto error_return;						\
-      if (bfd_seek (abfd, (file_ptr) symhdr->offset, SEEK_SET) != 0	\
-	  || bfd_bread (debug->ptr, amt, abfd) != amt)			\
-	goto error_return;						\
-    }
+    } while (0)
 
   READ (line, cbLineOffset, cbLine, sizeof (unsigned char), unsigned char *);
   READ (external_dnr, cbDnOffset, idnMax, swap->external_dnr_size, void *);
@@ -1724,7 +1727,7 @@ get_got_entry (bfd *abfd, struct alpha_elf_link_hash_entry *h,
   if (!gotent)
     {
       int entry_size;
-      bfd_size_type amt;
+      size_t amt;
 
       amt = sizeof (struct alpha_elf_got_entry);
       gotent = (struct alpha_elf_got_entry *) bfd_alloc (abfd, amt);
@@ -1787,7 +1790,6 @@ elf64_alpha_check_relocs (bfd *abfd, struct bfd_link_info *info,
   Elf_Internal_Shdr *symtab_hdr;
   struct alpha_elf_link_hash_entry **sym_hashes;
   const Elf_Internal_Rela *rel, *relend;
-  bfd_size_type amt;
 
   if (bfd_link_relocatable (info))
     return TRUE;
@@ -1990,15 +1992,15 @@ elf64_alpha_check_relocs (bfd *abfd, struct bfd_link_info *info,
 
 	      if (!rent)
 		{
-		  amt = sizeof (struct alpha_elf_reloc_entry);
+		  size_t amt = sizeof (struct alpha_elf_reloc_entry);
 		  rent = (struct alpha_elf_reloc_entry *) bfd_alloc (abfd, amt);
 		  if (!rent)
 		    return FALSE;
 
 		  rent->srel = sreloc;
+		  rent->sec = sec;
 		  rent->rtype = r_type;
 		  rent->count = 1;
-		  rent->reltext = (sec->flags & SEC_READONLY) != 0;
 
 		  rent->next = h->reloc_entries;
 		  h->reloc_entries = rent;
@@ -2012,7 +2014,13 @@ elf64_alpha_check_relocs (bfd *abfd, struct bfd_link_info *info,
 		 loaded into memory, we need a RELATIVE reloc.  */
 	      sreloc->size += sizeof (Elf64_External_Rela);
 	      if (sec->flags & SEC_READONLY)
-		info->flags |= DF_TEXTREL;
+		{
+		  info->flags |= DF_TEXTREL;
+		  info->callbacks->minfo
+		    (_("%pB: dynamic relocation against `%pT' in "
+		       "read-only section `%pA'\n"),
+		     sec->owner, h->root.root.root.string, sec);
+		}
 	    }
 	}
     }
@@ -2697,10 +2705,17 @@ elf64_alpha_calc_dynrel_sizes (struct alpha_elf_link_hash_entry *h,
 						 bfd_link_pie (info));
       if (entries)
 	{
+	  asection *sec = relent->sec;
 	  relent->srel->size +=
 	    entries * sizeof (Elf64_External_Rela) * relent->count;
-	  if (relent->reltext)
-	    info->flags |= DT_TEXTREL;
+	  if ((sec->flags & SEC_READONLY) != 0)
+	    {
+	      info->flags |= DT_TEXTREL;
+	      info->callbacks->minfo
+		(_("%pB: dynamic relocation against `%pT' in "
+		   "read-only section `%pA'\n"),
+		 sec->owner, h->root.root.root.string, sec);
+	    }
 	}
     }
 
@@ -5522,6 +5537,9 @@ static const struct elf_size_info alpha_elf_size_info =
 
 #define elf_backend_special_sections \
   elf64_alpha_special_sections
+
+#define elf_backend_strip_zero_sized_dynamic_sections \
+  _bfd_elf_strip_zero_sized_dynamic_sections
 
 /* A few constants that determine how the .plt section is set up.  */
 #define elf_backend_want_got_plt 0

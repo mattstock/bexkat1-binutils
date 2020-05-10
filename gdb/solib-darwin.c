@@ -1,6 +1,6 @@
 /* Handle Darwin shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -669,8 +669,9 @@ darwin_bfd_open (const char *pathname)
 
 struct target_so_ops darwin_so_ops;
 
+void _initialize_darwin_solib ();
 void
-_initialize_darwin_solib (void)
+_initialize_darwin_solib ()
 {
   darwin_so_ops.relocate_section_addresses = darwin_relocate_section_addresses;
   darwin_so_ops.free_so = darwin_free_so;

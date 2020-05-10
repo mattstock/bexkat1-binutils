@@ -1,5 +1,5 @@
 /* Or1k-specific support for 32-bit ELF.
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
    Contributed for OR32 by Johan Rydberg, jrydberg@opencores.org
 
    PIC parts added by Stefan Kristiansson, stefan.kristiansson@saunalahti.fi,
@@ -970,7 +970,7 @@ static struct bfd_link_hash_table *
 or1k_elf_link_hash_table_create (bfd *abfd)
 {
   struct elf_or1k_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_or1k_link_hash_table);
+  size_t amt = sizeof (struct elf_or1k_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -2118,7 +2118,7 @@ or1k_elf_check_relocs (bfd *abfd,
 		p = *head;
 		if (p == NULL || p->sec != sec)
 		  {
-		    bfd_size_type amt = sizeof *p;
+		    size_t amt = sizeof *p;
 		    p = ((struct elf_dyn_relocs *)
 			 bfd_alloc (htab->root.dynobj, amt));
 		    if (p == NULL)

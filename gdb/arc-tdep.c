@@ -1,6 +1,6 @@
 /* Target dependent code for ARC architecture, for GDB.
 
-   Copyright 2005-2019 Free Software Foundation, Inc.
+   Copyright 2005-2020 Free Software Foundation, Inc.
    Contributed by Synopsys Inc.
 
    This file is part of GDB.
@@ -22,26 +22,25 @@
 #include "defs.h"
 #include "arch-utils.h"
 #include "disasm.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
 #include "gdbcore.h"
 #include "gdbcmd.h"
 #include "objfiles.h"
+#include "osabi.h"
 #include "prologue-value.h"
+#include "target-descriptions.h"
 #include "trad-frame.h"
 
 /* ARC header files.  */
 #include "opcode/arc.h"
 #include "opcodes/arc-dis.h"
 #include "arc-tdep.h"
+#include "arch/arc.h"
 
 /* Standard headers.  */
 #include <algorithm>
-
-/* Default target descriptions.  */
-#include "features/arc-v2.c"
-#include "features/arc-arcompact.c"
 
 /* The frame unwind cache for ARC.  */
 
@@ -146,6 +145,9 @@ static const char *const core_arcompact_register_names[] = {
 };
 
 static char *arc_disassembler_options = NULL;
+
+/* Possible arc target descriptors.  */
+static struct target_desc *tdesc_arc_list[ARC_SYS_TYPE_NUM];
 
 /* Functions are sorted in the order as they are used in the
    _initialize_arc_tdep (), which uses the same order as gdbarch.h.  Static
@@ -1750,21 +1752,13 @@ arc_tdesc_init (struct gdbarch_info info, const struct target_desc **tdesc,
   const char *const *core_regs;
   const char *core_feature_name;
 
-  /* If target doesn't provide a description - use default one.  */
+  /* If target doesn't provide a description, use the default ones.  */
   if (!tdesc_has_registers (tdesc_loc))
     {
       if (is_arcv2)
-	{
-	  tdesc_loc = tdesc_arc_v2;
-	  if (arc_debug)
-	    debug_printf ("arc: Using default register set for ARC v2.\n");
-	}
+	tdesc_loc = arc_read_description (ARC_SYS_TYPE_ARCV2);
       else
-	{
-	  tdesc_loc = tdesc_arc_arcompact;
-	  if (arc_debug)
-	    debug_printf ("arc: Using default register set for ARCompact.\n");
-	}
+	tdesc_loc = arc_read_description (ARC_SYS_TYPE_ARCOMPACT);
     }
   else
     {
@@ -2117,14 +2111,6 @@ arc_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file, "arc_dump_tdep: jb_pc = %i\n", tdep->jb_pc);
 }
 
-/* Wrapper for "maintenance print arc" list of commands.  */
-
-static void
-maintenance_print_arc_command (const char *args, int from_tty)
-{
-  cmd_show_list (maintenance_print_arc_list, from_tty, "");
-}
-
 /* This command accepts single argument - address of instruction to
    disassemble.  */
 
@@ -2145,22 +2131,52 @@ dump_arc_instruction_command (const char *args, int from_tty)
   arc_insn_dump (insn);
 }
 
+/* See arc-tdep.h.  */
+
+const target_desc *
+arc_read_description (arc_sys_type sys_type)
+{
+  if (arc_debug)
+    debug_printf ("arc: Reading target description for \"%s\".\n",
+		  arc_sys_type_to_str (sys_type));
+
+  gdb_assert ((sys_type >= 0) && (sys_type < ARC_SYS_TYPE_NUM));
+  struct target_desc *tdesc = tdesc_arc_list[sys_type];
+
+  if (tdesc == nullptr)
+    {
+      tdesc = arc_create_target_description (sys_type);
+      tdesc_arc_list[sys_type] = tdesc;
+
+      if (arc_debug)
+	{
+	  const char *arch = tdesc_architecture_name (tdesc);
+	  const char *abi = tdesc_osabi_name (tdesc);
+	  arch = arch != NULL ? arch : "";
+	  abi = abi != NULL ? abi : "";
+	  debug_printf ("arc: Created target description for "
+			"\"%s\": arch=\"%s\", ABI=\"%s\"\n",
+			arc_sys_type_to_str (sys_type), arch, abi);
+	}
+    }
+
+  return tdesc;
+}
+
+void _initialize_arc_tdep ();
 void
-_initialize_arc_tdep (void)
+_initialize_arc_tdep ()
 {
   gdbarch_register (bfd_arch_arc, arc_gdbarch_init, arc_dump_tdep);
-
-  initialize_tdesc_arc_v2 ();
-  initialize_tdesc_arc_arcompact ();
 
   /* Register ARC-specific commands with gdb.  */
 
   /* Add root prefix command for "maintenance print arc" commands.  */
-  add_prefix_cmd ("arc", class_maintenance, maintenance_print_arc_command,
-		  _("ARC-specific maintenance commands for printing GDB "
-		    "internal state."),
-		  &maintenance_print_arc_list, "maintenance print arc ", 0,
-		  &maintenanceprintlist);
+  add_show_prefix_cmd ("arc", class_maintenance,
+		       _("ARC-specific maintenance commands for printing GDB "
+			 "internal state."),
+		       &maintenance_print_arc_list, "maintenance print arc ",
+		       0, &maintenanceprintlist);
 
   add_cmd ("arc-instruction", class_maintenance,
 	   dump_arc_instruction_command,

@@ -1,4 +1,4 @@
-/* Copyright 2019 Free Software Foundation, Inc.
+/* Copyright 2019-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -41,3 +41,8 @@ f3 (another_int_t arg)
   return arg + 2;
 }
 
+typedef char another_char_t;
+typedef short another_short_t;
+
+static another_char_t var1;
+static another_short_t var2;

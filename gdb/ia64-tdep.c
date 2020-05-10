@@ -1,6 +1,6 @@
 /* Target-dependent code for the IA-64 for GDB, the GNU debugger.
 
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -2713,7 +2713,7 @@ ia64_find_unwind_table (struct objfile *objfile, unw_word_t ip,
   ehdr = elf_tdata (bfd)->elf_header;
   phdr = elf_tdata (bfd)->phdr;
 
-  load_base = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
+  load_base = objfile->text_section_offset ();
 
   for (i = 0; i < ehdr->e_phnum; ++i)
     {
@@ -2764,7 +2764,7 @@ ia64_find_unwind_table (struct objfile *objfile, unw_word_t ip,
 
   dip->start_ip = p_text->p_vaddr + load_base;
   dip->end_ip = dip->start_ip + p_text->p_memsz;
-  dip->gp = ia64_find_global_pointer (get_objfile_arch (objfile), ip);
+  dip->gp = ia64_find_global_pointer (objfile->arch (), ip);
   dip->format = UNW_INFO_FORMAT_REMOTE_TABLE;
   dip->u.rti.name_ptr = (unw_word_t) bfd_get_filename (bfd);
   dip->u.rti.segbase = segbase;
@@ -4012,8 +4012,9 @@ ia64_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_ia64_tdep ();
 void
-_initialize_ia64_tdep (void)
+_initialize_ia64_tdep ()
 {
   gdbarch_register (bfd_arch_ia64, ia64_gdbarch_init, NULL);
 }

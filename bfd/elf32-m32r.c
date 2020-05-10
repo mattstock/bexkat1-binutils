@@ -1,5 +1,5 @@
 /* M32R-specific support for 32-bit ELF.
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -1575,7 +1575,7 @@ static struct bfd_link_hash_table *
 m32r_elf_link_hash_table_create (bfd *abfd)
 {
   struct elf_m32r_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_m32r_link_hash_table);
+  size_t amt = sizeof (struct elf_m32r_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -2551,12 +2551,12 @@ m32r_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 		   && ELF_ST_VISIBILITY (h->other) == STV_DEFAULT)
 	    ;
 	  else if (!bfd_link_relocatable (info))
-	    (*info->callbacks->undefined_symbol)
-	      (info, h->root.root.string, input_bfd,
-	       input_section, offset,
-	       (info->unresolved_syms_in_objects == RM_GENERATE_ERROR
-		|| ELF_ST_VISIBILITY (h->other)));
-	}
+            info->callbacks->undefined_symbol
+	      (info, h->root.root.string, input_bfd, input_section, offset,
+	       (info->unresolved_syms_in_objects == RM_DIAGNOSE
+		&& !info->warn_unresolved_syms)
+	       || ELF_ST_VISIBILITY (h->other));
+        }
 
       if (sec != NULL && discarded_section (sec))
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
@@ -3775,7 +3775,7 @@ m32r_elf_check_relocs (bfd *abfd,
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof (*p);
+		  size_t amt = sizeof (*p);
 
 		  p = bfd_alloc (dynobj, amt);
 		  if (p == NULL)
@@ -3826,6 +3826,18 @@ static const struct bfd_elf_special_section m32r_elf_special_sections[] =
   { STRING_COMMA_LEN (".sdata"), -2, SHT_PROGBITS, SHF_ALLOC + SHF_WRITE },
   { NULL,		      0,  0, 0,		   0 }
 };
+
+static bfd_boolean
+m32r_elf_section_flags (const Elf_Internal_Shdr *hdr)
+{
+  const char *name = hdr->bfd_section->name;
+
+  if (strncmp (name, ".sbss", 5) == 0
+      || strncmp (name, ".sdata", 6) == 0)
+    hdr->bfd_section->flags |= SEC_SMALL_DATA;
+
+  return TRUE;
+}
 
 static enum elf_reloc_type_class
 m32r_elf_reloc_type_class (const struct bfd_link_info *info ATTRIBUTE_UNUSED,
@@ -3897,6 +3909,7 @@ m32r_elf_reloc_type_class (const struct bfd_link_info *info ATTRIBUTE_UNUSED,
 #define bfd_elf32_bfd_set_private_flags		m32r_elf_set_private_flags
 #define bfd_elf32_bfd_print_private_bfd_data	m32r_elf_print_private_bfd_data
 #define elf_backend_special_sections		m32r_elf_special_sections
+#define elf_backend_section_flags		m32r_elf_section_flags
 
 #define elf_backend_linux_prpsinfo32_ugid16	TRUE
 

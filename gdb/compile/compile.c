@@ -1,6 +1,6 @@
 /* General Compile and inject code
 
-   Copyright (C) 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2014-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -957,8 +957,9 @@ compile_instance::compile (const char *filename, int verbose_level)
 /* See compile.h.  */
 cmd_list_element *compile_cmd_element = nullptr;
 
+void _initialize_compile ();
 void
-_initialize_compile (void)
+_initialize_compile ()
 {
   struct cmd_list_element *c = NULL;
 

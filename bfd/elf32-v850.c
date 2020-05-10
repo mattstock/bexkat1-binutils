@@ -1,5 +1,5 @@
 /* V850-specific support for 32-bit ELF
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -230,7 +230,7 @@ static void
 remember_hi16s_reloc (bfd *abfd, bfd_vma addend, bfd_byte *address)
 {
   hi16s_location * entry = NULL;
-  bfd_size_type amt = sizeof (* free_hi16s);
+  size_t amt = sizeof (* free_hi16s);
 
   /* Find a free structure.  */
   if (free_hi16s == NULL)
@@ -3151,6 +3151,8 @@ v850_elf_section_from_shdr (bfd *abfd,
 			    const char *name,
 			    int shindex)
 {
+  flagword flags;
+
   /* There ought to be a place to keep ELF backend specific flags, but
      at the moment there isn't one.  We just keep track of the
      sections by their name, instead.  */
@@ -3158,18 +3160,21 @@ v850_elf_section_from_shdr (bfd *abfd,
   if (! _bfd_elf_make_section_from_shdr (abfd, hdr, name, shindex))
     return FALSE;
 
+  flags = 0;
   switch (hdr->sh_type)
     {
     case SHT_V850_SCOMMON:
     case SHT_V850_TCOMMON:
     case SHT_V850_ZCOMMON:
-      if (!bfd_set_section_flags (hdr->bfd_section,
-				  (bfd_section_flags (hdr->bfd_section)
-				   | SEC_IS_COMMON)))
-	return FALSE;
+      flags = SEC_IS_COMMON;
     }
 
-  return TRUE;
+  if ((hdr->sh_flags & SHF_V850_GPREL) != 0)
+    flags |= SEC_SMALL_DATA;
+
+  return (flags == 0
+	  || bfd_set_section_flags (hdr->bfd_section,
+				    hdr->bfd_section->flags | flags));
 }
 
 /* Set the correct type for a V850 ELF section.  We do this
@@ -3837,7 +3842,7 @@ v850_elf_relax_section (bfd *abfd,
 		  if (no_match < 0
 		      && ((insn[2] & JMP_R_MASK) != JMP_R
 			   || MOVEA_R2 (insn[1]) != JMP_R1 (insn[2])))
-		    no_match = 4;
+		    no_match = 2;
 		}
 	      else
 		{

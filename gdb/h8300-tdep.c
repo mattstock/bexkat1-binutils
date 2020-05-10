@@ -1,6 +1,6 @@
 /* Target-machine dependent code for Renesas H8/300, for GDB.
 
-   Copyright (C) 1988-2019 Free Software Foundation, Inc.
+   Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,7 @@
 #include "gdbcore.h"
 #include "objfiles.h"
 #include "dis-asm.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
 
@@ -1377,8 +1377,9 @@ h8300_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
 }
 
+void _initialize_h8300_tdep ();
 void
-_initialize_h8300_tdep (void)
+_initialize_h8300_tdep ()
 {
   register_gdbarch_init (bfd_arch_h8300, h8300_gdbarch_init);
 }

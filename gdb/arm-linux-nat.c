@@ -1,5 +1,5 @@
 /* GNU/Linux on ARM native support.
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1299,8 +1299,9 @@ arm_linux_nat_target::low_new_fork (struct lwp_info *parent, pid_t child_pid)
   *child_state = *parent_state;
 }
 
+void _initialize_arm_linux_nat ();
 void
-_initialize_arm_linux_nat (void)
+_initialize_arm_linux_nat ()
 {
   /* Register the target.  */
   linux_target = &the_arm_linux_nat_target;

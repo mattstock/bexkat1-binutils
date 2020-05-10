@@ -1,5 +1,5 @@
 /* Support for the generic parts of PE/PEI; the common executable parts.
-   Copyright (C) 1995-2019 Free Software Foundation, Inc.
+   Copyright (C) 1995-2020 Free Software Foundation, Inc.
    Written by Cygnus Solutions.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -177,25 +177,25 @@ _bfd_XXi_swap_sym_in (bfd * abfd, void * ext1, void * in1)
 	  int unused_section_number = 0;
 	  asection *sec;
 	  flagword flags;
+	  size_t name_len;
+	  char *sec_name;
 
 	  for (sec = abfd->sections; sec; sec = sec->next)
 	    if (unused_section_number <= sec->target_index)
 	      unused_section_number = sec->target_index + 1;
 
-	  if (name == namebuf)
+	  name_len = strlen (name) + 1;
+	  sec_name = bfd_alloc (abfd, name_len);
+	  if (sec_name == NULL)
 	    {
-	      name = (const char *) bfd_alloc (abfd, strlen (namebuf) + 1);
-	      if (name == NULL)
-		{
-		  _bfd_error_handler (_("%pB: out of memory creating name for empty section"),
-				      abfd);
-		  return;
-		}
-	      strcpy ((char *) name, namebuf);
+	      _bfd_error_handler (_("%pB: out of memory creating name "
+				    "for empty section"), abfd);
+	      return;
 	    }
+	  memcpy (sec_name, name, name_len);
 
 	  flags = SEC_HAS_CONTENTS | SEC_ALLOC | SEC_DATA | SEC_LOAD;
-	  sec = bfd_make_section_anyway_with_flags (abfd, name, flags);
+	  sec = bfd_make_section_anyway_with_flags (abfd, sec_name, flags);
 	  if (sec == NULL)
 	    {
 	      _bfd_error_handler (_("%pB: unable to create fake empty section"),
@@ -876,10 +876,10 @@ _bfd_XXi_only_swap_filehdr_out (bfd * abfd, void * in, void * out)
 
   /* Use a real timestamp by default, unless the no-insert-timestamp
      option was chosen.  */
-  if ((pe_data (abfd)->insert_timestamp))
+  if ((pe_data (abfd)->timestamp) == -1)
     H_PUT_32 (abfd, time (0), filehdr_out->f_timdat);
   else
-    H_PUT_32 (abfd, 0, filehdr_out->f_timdat);
+    H_PUT_32 (abfd, pe_data (abfd)->timestamp, filehdr_out->f_timdat);
 
   PUT_FILEHDR_SYMPTR (abfd, filehdr_in->f_symptr,
 		      filehdr_out->f_symptr);
@@ -2603,7 +2603,7 @@ rsrc_print_section (bfd * abfd, void * vfile)
   return TRUE;
 }
 
-#define IMAGE_NUMBEROF_DEBUG_TYPES 12
+#define IMAGE_NUMBEROF_DEBUG_TYPES 17
 
 static char * debug_type_names[IMAGE_NUMBEROF_DEBUG_TYPES] =
 {
@@ -2619,6 +2619,11 @@ static char * debug_type_names[IMAGE_NUMBEROF_DEBUG_TYPES] =
   "Borland",
   "Reserved",
   "CLSID",
+  "Feature",
+  "CoffGrp",
+  "ILTCG",
+  "MPX",
+  "Repro",
 };
 
 static bfd_boolean
@@ -2630,7 +2635,7 @@ pe_print_debugdata (bfd * abfd, void * vfile)
   asection *section;
   bfd_byte *data = 0;
   bfd_size_type dataoff;
-  unsigned int i;
+  unsigned int i, j;
 
   bfd_vma addr = extra->DataDirectory[PE_DEBUG_DATA].VirtualAddress;
   bfd_size_type size = extra->DataDirectory[PE_DEBUG_DATA].Size;
@@ -2722,8 +2727,8 @@ pe_print_debugdata (bfd * abfd, void * vfile)
 					       idd.SizeOfData, cvinfo))
 	    continue;
 
-	  for (i = 0; i < cvinfo->SignatureLength; i++)
-	    sprintf (&signature[i*2], "%02x", cvinfo->Signature[i] & 0xff);
+	  for (j = 0; j < cvinfo->SignatureLength; j++)
+	    sprintf (&signature[j*2], "%02x", cvinfo->Signature[j] & 0xff);
 
 	  /* xgettext:c-format */
 	  fprintf (file, _("(format %c%c%c%c signature %s age %ld)\n"),
@@ -2732,11 +2737,78 @@ pe_print_debugdata (bfd * abfd, void * vfile)
 	}
     }
 
+  free(data);
+
   if (size % sizeof (struct external_IMAGE_DEBUG_DIRECTORY) != 0)
     fprintf (file,
 	    _("The debug directory size is not a multiple of the debug directory entry size\n"));
 
   return TRUE;
+}
+
+static bfd_boolean
+pe_is_repro (bfd * abfd)
+{
+  pe_data_type *pe = pe_data (abfd);
+  struct internal_extra_pe_aouthdr *extra = &pe->pe_opthdr;
+  asection *section;
+  bfd_byte *data = 0;
+  bfd_size_type dataoff;
+  unsigned int i;
+  bfd_boolean res = FALSE;
+
+  bfd_vma addr = extra->DataDirectory[PE_DEBUG_DATA].VirtualAddress;
+  bfd_size_type size = extra->DataDirectory[PE_DEBUG_DATA].Size;
+
+  if (size == 0)
+    return FALSE;
+
+  addr += extra->ImageBase;
+  for (section = abfd->sections; section != NULL; section = section->next)
+    {
+      if ((addr >= section->vma) && (addr < (section->vma + section->size)))
+	break;
+    }
+
+  if ((section == NULL)
+      || (!(section->flags & SEC_HAS_CONTENTS))
+      || (section->size < size))
+    {
+      return FALSE;
+    }
+
+  dataoff = addr - section->vma;
+
+  if (size > (section->size - dataoff))
+    {
+      return FALSE;
+    }
+
+  if (!bfd_malloc_and_get_section (abfd, section, &data))
+    {
+      if (data != NULL)
+	free (data);
+      return FALSE;
+    }
+
+  for (i = 0; i < size / sizeof (struct external_IMAGE_DEBUG_DIRECTORY); i++)
+    {
+      struct external_IMAGE_DEBUG_DIRECTORY *ext
+	= &((struct external_IMAGE_DEBUG_DIRECTORY *)(data + dataoff))[i];
+      struct internal_IMAGE_DEBUG_DIRECTORY idd;
+
+      _bfd_XXi_swap_debugdir_in (abfd, ext, &idd);
+
+      if (idd.Type == PE_IMAGE_DEBUG_TYPE_REPRO)
+        {
+          res = TRUE;
+          break;
+        }
+    }
+
+  free(data);
+
+  return res;
 }
 
 /* Print out the program headers.  */
@@ -2770,11 +2842,21 @@ _bfd_XX_print_private_bfd_data_common (bfd * abfd, void * vfile)
   PF (IMAGE_FILE_BYTES_REVERSED_HI, "big endian");
 #undef PF
 
-  /* ctime implies '\n'.  */
-  {
-    time_t t = pe->coff.timestamp;
-    fprintf (file, "\nTime/Date\t\t%s", ctime (&t));
-  }
+  /*
+    If a PE_IMAGE_DEBUG_TYPE_REPRO entry is present in the debug directory, the
+    timestamp is to be interpreted as the hash of a reproducible build.
+  */
+  if (pe_is_repro (abfd))
+    {
+      fprintf (file, "\nTime/Date\t\t%08lx", pe->coff.timestamp);
+      fprintf (file, "\t(This is a reproducible build file hash, not a timestamp)\n");
+    }
+  else
+    {
+      /* ctime implies '\n'.  */
+      time_t t = pe->coff.timestamp;
+      fprintf (file, "\nTime/Date\t\t%s", ctime (&t));
+    }
 
 #ifndef IMAGE_NT_OPTIONAL_HDR_MAGIC
 # define IMAGE_NT_OPTIONAL_HDR_MAGIC 0x10b
@@ -3056,7 +3138,7 @@ _bfd_XX_bfd_copy_private_section_data (bfd *ibfd,
     {
       if (coff_section_data (obfd, osec) == NULL)
 	{
-	  bfd_size_type amt = sizeof (struct coff_section_tdata);
+	  size_t amt = sizeof (struct coff_section_tdata);
 	  osec->used_by_bfd = bfd_zalloc (obfd, amt);
 	  if (osec->used_by_bfd == NULL)
 	    return FALSE;
@@ -3064,7 +3146,7 @@ _bfd_XX_bfd_copy_private_section_data (bfd *ibfd,
 
       if (pei_section_data (obfd, osec) == NULL)
 	{
-	  bfd_size_type amt = sizeof (struct pei_section_tdata);
+	  size_t amt = sizeof (struct pei_section_tdata);
 	  coff_section_data (obfd, osec)->tdata = bfd_zalloc (obfd, amt);
 	  if (coff_section_data (obfd, osec)->tdata == NULL)
 	    return FALSE;

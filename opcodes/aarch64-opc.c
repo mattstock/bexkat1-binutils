@@ -1,5 +1,5 @@
 /* aarch64-opc.c -- AArch64 opcode support.
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of the GNU opcodes library.
@@ -251,6 +251,7 @@ const aarch64_field fields[] =
     { 10, 12 },	/* imm12: in ld/st unsigned imm or add/sub shifted inst.  */
     {  5, 14 },	/* imm14: in test bit and branch instructions.  */
     {  5, 16 },	/* imm16: in exception instructions.  */
+    {  0, 16 },	/* imm16_2: in udf instruction. */
     {  0, 26 },	/* imm26: in unconditional branch instructions.  */
     { 10,  6 },	/* imms: in bitfield and logical immediate instructions.  */
     { 16,  6 },	/* immr: in bitfield and logical immediate instructions.  */
@@ -546,7 +547,7 @@ value_fit_signed_field_p (int64_t value, unsigned width)
   assert (width < 32);
   if (width < sizeof (value) * 8)
     {
-      int64_t lim = (int64_t)1 << (width - 1);
+      int64_t lim = (uint64_t) 1 << (width - 1);
       if (value >= -lim && value < lim)
 	return 1;
     }
@@ -560,7 +561,7 @@ value_fit_unsigned_field_p (int64_t value, unsigned width)
   assert (width < 32);
   if (width < sizeof (value) * 8)
     {
-      int64_t lim = (int64_t)1 << width;
+      int64_t lim = (uint64_t) 1 << width;
       if (value >= 0 && value < lim)
 	return 1;
     }
@@ -1063,7 +1064,7 @@ match_operands_qualifier (aarch64_inst *inst, bfd_boolean update_p)
    amount will be returned in *SHIFT_AMOUNT.  */
 
 bfd_boolean
-aarch64_wide_constant_p (int64_t value, int is32, unsigned int *shift_amount)
+aarch64_wide_constant_p (uint64_t value, int is32, unsigned int *shift_amount)
 {
   int amount;
 
@@ -1074,22 +1075,21 @@ aarch64_wide_constant_p (int64_t value, int is32, unsigned int *shift_amount)
       /* Allow all zeros or all ones in top 32-bits, so that
 	 32-bit constant expressions like ~0x80000000 are
 	 permitted.  */
-      uint64_t ext = value;
-      if (ext >> 32 != 0 && ext >> 32 != (uint64_t) 0xffffffff)
+      if (value >> 32 != 0 && value >> 32 != 0xffffffff)
 	/* Immediate out of range.  */
 	return FALSE;
-      value &= (int64_t) 0xffffffff;
+      value &= 0xffffffff;
     }
 
   /* first, try movz then movn */
   amount = -1;
-  if ((value & ((int64_t) 0xffff << 0)) == value)
+  if ((value & ((uint64_t) 0xffff << 0)) == value)
     amount = 0;
-  else if ((value & ((int64_t) 0xffff << 16)) == value)
+  else if ((value & ((uint64_t) 0xffff << 16)) == value)
     amount = 16;
-  else if (!is32 && (value & ((int64_t) 0xffff << 32)) == value)
+  else if (!is32 && (value & ((uint64_t) 0xffff << 32)) == value)
     amount = 32;
-  else if (!is32 && (value & ((int64_t) 0xffff << 48)) == value)
+  else if (!is32 && (value & ((uint64_t) 0xffff << 48)) == value)
     amount = 48;
 
   if (amount == -1)
@@ -1535,7 +1535,7 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 			       : _("z0-z7 expected"));
 	      return 0;
 	    }
-	  mask = (1 << (size - shift)) - 1;
+	  mask = (1u << (size - shift)) - 1;
 	  if (!value_in_range_p (opnd->reglane.index, 0, mask))
 	    {
 	      set_elem_idx_out_of_range_error (mismatch_detail, idx, 0, mask);
@@ -2146,6 +2146,7 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 	case AARCH64_OPND_NZCV:
 	case AARCH64_OPND_CCMP_IMM:
 	case AARCH64_OPND_EXCEPTION:
+	case AARCH64_OPND_UNDEFINED:
 	case AARCH64_OPND_TME_UIMM16:
 	case AARCH64_OPND_UIMM4:
 	case AARCH64_OPND_UIMM4_ADDG:
@@ -2161,7 +2162,7 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 	  if (!value_fit_unsigned_field_p (opnd->imm.value, size))
 	    {
 	      set_imm_out_of_range_error (mismatch_detail, idx, 0,
-					  (1 << size) - 1);
+					  (1u << size) - 1);
 	      return 0;
 	    }
 	  break;
@@ -3358,6 +3359,7 @@ aarch64_print_operand (char *buf, size_t size, bfd_vma pc,
     case AARCH64_OPND_IMM0:
     case AARCH64_OPND_IMMR:
     case AARCH64_OPND_IMMS:
+    case AARCH64_OPND_UNDEFINED:
     case AARCH64_OPND_FBITS:
     case AARCH64_OPND_TME_UIMM16:
     case AARCH64_OPND_SIMM5:
@@ -3763,6 +3765,9 @@ aarch64_print_operand (char *buf, size_t size, bfd_vma pc,
       break;
 
     case AARCH64_OPND_BARRIER_PSB:
+      snprintf (buf, size, "csync");
+      break;
+
     case AARCH64_OPND_BTI_TARGET:
       if ((HINT_FLAG (opnd->hint_option->value) & HINT_OPD_F_NOPRINT) == 0)
 	snprintf (buf, size, "%s", opnd->hint_option->name);
@@ -5110,7 +5115,7 @@ verify_constraints (const struct aarch64_inst *inst,
 	    }
 	}
 
-done:
+    done:
       /* Add the new instruction to the sequence.  */
       memcpy (insn_sequence->current_insns + insn_sequence->next_insn++,
 	      inst, sizeof (aarch64_inst));

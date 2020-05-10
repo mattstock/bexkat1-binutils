@@ -1,6 +1,6 @@
 /* GDB-specific functions for operating on agent expressions.
 
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -2743,8 +2743,9 @@ maint_agent_printf_command (const char *cmdrest, int from_tty)
 
 /* Initialization code.  */
 
+void _initialize_ax_gdb ();
 void
-_initialize_ax_gdb (void)
+_initialize_ax_gdb ()
 {
   add_cmd ("agent", class_maintenance, agent_command,
 	   _("\

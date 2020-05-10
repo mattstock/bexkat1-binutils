@@ -1,6 +1,6 @@
 /* tc-aarch64.c -- Assemble for the AArch64 ISA
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GAS.
@@ -883,7 +883,7 @@ parse_vector_type_for_operand (aarch64_reg_type reg_type,
       return FALSE;
     }
 
-elt_size:
+ elt_size:
   switch (TOLOWER (*ptr))
     {
     case 'b':
@@ -2424,7 +2424,7 @@ parse_aarch64_imm_float (char **ccp, int *immed, bfd_boolean dp_p,
   *ccp = str;
   return TRUE;
 
-invalid_fp:
+ invalid_fp:
   set_fatal_syntax_error (_("invalid floating-point constant"));
   return FALSE;
 }
@@ -4026,7 +4026,7 @@ parse_barrier_psb (char **str,
   if (!o)
     {
       set_fatal_syntax_error
-	( _("unknown or missing option to PSB"));
+	( _("unknown or missing option to PSB/TSB"));
       return PARSE_FAIL;
     }
 
@@ -4034,7 +4034,7 @@ parse_barrier_psb (char **str,
     {
       /* PSB only accepts option name 'CSYNC'.  */
       set_syntax_error
-	(_("the specified option is not accepted for PSB"));
+	(_("the specified option is not accepted for PSB/TSB"));
       return PARSE_FAIL;
     }
 
@@ -5216,7 +5216,7 @@ vectype_to_qualifier (const struct vector_type_el *vectype)
       return offset;
     }
 
-vectype_conversion_fail:
+ vectype_conversion_fail:
   first_error (_("bad vector arrangement type"));
   return AARCH64_OPND_QLF_NIL;
 }
@@ -6149,6 +6149,7 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	  break;
 
 	case AARCH64_OPND_EXCEPTION:
+	case AARCH64_OPND_UNDEFINED:
 	  po_misc_or_fail (parse_immediate_expression (&str, &inst.reloc.exp,
 						       imm_reg_type));
 	  assign_imm_if_const_or_fixup_later (&inst.reloc, info,
@@ -6652,7 +6653,7 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	case AARCH64_OPND_SYSREG_TLBI:
 	  inst.base.operands[i].sysins_op =
 	    parse_sys_ins_reg (&str, aarch64_sys_regs_tlbi_hsh);
-sys_reg_ins:
+	sys_reg_ins:
 	  if (inst.base.operands[i].sysins_op == NULL)
 	    {
 	      set_fatal_syntax_error ( _("unknown or missing operation name"));
@@ -6707,7 +6708,7 @@ sys_reg_ins:
       inst.base.operands[i].present = 1;
       continue;
 
-failure:
+    failure:
       /* The parse routine should already have set the error, but in case
 	 not, set a default one here.  */
       if (! error_p ())
@@ -6773,7 +6774,7 @@ failure:
 	(_("unexpected characters following instruction"));
     }
 
-parse_operands_return:
+ parse_operands_return:
 
   if (error_p ())
     {
@@ -7745,11 +7746,12 @@ fix_insn (fixS *fixP, uint32_t flags, offsetT value)
   switch (opnd)
     {
     case AARCH64_OPND_EXCEPTION:
+    case AARCH64_OPND_UNDEFINED:
       if (unsigned_overflow (value, 16))
 	as_bad_where (fixP->fx_file, fixP->fx_line,
 		      _("immediate out of range"));
       insn = get_aarch64_insn (buf);
-      insn |= encode_svc_imm (value);
+      insn |= (opnd == AARCH64_OPND_EXCEPTION) ? encode_svc_imm (value) : value;
       put_aarch64_insn (buf, insn);
       break;
 
@@ -8263,7 +8265,7 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
       break;
     }
 
-apply_fix_return:
+ apply_fix_return:
   /* Free the allocated the struct aarch64_inst.
      N.B. currently there are very limited number of fix-up types actually use
      this field, so the impact on the performance should be minimal .  */
@@ -9063,9 +9065,9 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"i8mm",		AARCH64_FEATURE (AARCH64_FEATURE_I8MM, 0),
 			AARCH64_ARCH_NONE},
   {"f32mm",		AARCH64_FEATURE (AARCH64_FEATURE_F32MM, 0),
-			AARCH64_ARCH_NONE},
+			AARCH64_FEATURE (AARCH64_FEATURE_SVE, 0)},
   {"f64mm",		AARCH64_FEATURE (AARCH64_FEATURE_F64MM, 0),
-			AARCH64_ARCH_NONE},
+			AARCH64_FEATURE (AARCH64_FEATURE_SVE, 0)},
   {NULL,		AARCH64_ARCH_NONE, AARCH64_ARCH_NONE},
 };
 

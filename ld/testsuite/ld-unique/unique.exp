@@ -1,6 +1,6 @@
 # Expect script for linker support of STB_GNU_UNIQUE symbols
 #
-#   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+#   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 #   Contributed by Red Hat.
 #
 # This file is part of the GNU Binutils.
@@ -30,7 +30,7 @@ if { ![is_elf_format] } {
 }
 
 # Require STB_GNU_UNIQUE support with OSABI set to GNU.
-if { ![supports_gnu_unique] } {
+if { ![supports_gnu_unique] || [istarget tic6x-*-*] } {
     verbose "UNIQUE tests not run - target does not support UNIQUE"
     return
 }
@@ -92,7 +92,7 @@ proc contains_unique_symbol { binary_file } {
     # Look for a line like this:
     #    54: 0000000000400474     4 OBJECT  UNIQUE DEFAULT   13 a
 
-    if { ![regexp ".*\[ \]*OBJECT\[ \]+UNIQUE\[ \]+DEFAULT\[ \]+\[UND0-9\]+\[ \]+\[ab\]\n" [file_contents readelf.out]] } {
+    if { ![regexp ".*\[ \]*OBJECT\[ \]+UNIQUE\[ \]+DEFAULT\[ \]+\[UND0-9\]+\[ \]+\[ab\]_val\n" [file_contents readelf.out]] } {
 	return 0
     }
 
@@ -163,8 +163,8 @@ if { $fails == 0 } {
 }
 
 # Check the empty object file.
-case $target_triplet in {
-    { hppa*-*-linux* } { set expected_none {UNIX - GNU} }
+switch -glob $target_triplet {
+    hppa*-*-linux* { set expected_none {UNIX - GNU} }
     default { set expected_none {UNIX - System V} }
 }
 if {! [check_osabi tmpdir/unique_empty.o $expected_none]} {

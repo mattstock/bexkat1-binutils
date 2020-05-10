@@ -1,5 +1,5 @@
 /* read.c - read a source file -
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -1052,7 +1052,8 @@ read_a_source_file (const char *name)
 		  {
 		    char *s2 = s;
 
-		    strncpy (original_case_string, s2, sizeof (original_case_string));
+		    strncpy (original_case_string, s2,
+			     sizeof (original_case_string) - 1);
 		    original_case_string[sizeof (original_case_string) - 1] = 0;
 
 		    while (*s2)
@@ -2464,7 +2465,7 @@ bss_alloc (symbolS *symbolP, addressT size, unsigned int align)
 	{
 	  bss_seg = subseg_new (".sbss", 1);
 	  seg_info (bss_seg)->bss = 1;
-	  if (!bfd_set_section_flags (bss_seg, SEC_ALLOC))
+	  if (!bfd_set_section_flags (bss_seg, SEC_ALLOC | SEC_SMALL_DATA))
 	    as_warn (_("error setting flags for \".sbss\": %s"),
 		     bfd_errmsg (bfd_get_error ()));
 	}
@@ -5435,8 +5436,9 @@ next_char_of_string (void)
       bump_line_counters ();
       break;
 
-#ifndef NO_STRING_ESCAPES
     case '\\':
+      if (!TC_STRING_ESCAPES)
+	break;
       switch (c = *input_line_pointer++ & CHAR_MASK)
 	{
 	case 'b':
@@ -5538,7 +5540,6 @@ next_char_of_string (void)
 	  break;
 	}
       break;
-#endif /* ! defined (NO_STRING_ESCAPES) */
 
     default:
       break;
@@ -5810,7 +5811,7 @@ s_incbin (int x ATTRIBUTE_UNUSED)
 	as_warn (_("truncated file `%s', %ld of %ld bytes read"),
 		 path, bytes, count);
     }
-done:
+ done:
   if (binfile != NULL)
     fclose (binfile);
   if (path)
@@ -5874,7 +5875,7 @@ s_include (int arg ATTRIBUTE_UNUSED)
 
   free (path);
   path = filename;
-gotit:
+ gotit:
   /* malloc Storage leak when file is found on path.  FIXME-SOMEDAY.  */
   register_dependency (path);
   input_scrub_insert_file (path);

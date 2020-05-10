@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 2013-2019 Free Software Foundation, Inc.
+#   Copyright (C) 2013-2020 Free Software Foundation, Inc.
 #
 # This file is part of GNU Binutils.
 #
@@ -197,7 +197,7 @@ elf32_csky_add_stub_section (const char *stub_sec_name,
   if (hook_in_stub (&info, &os->children.head))
     return stub_sec;
 
-err_ret:
+ err_ret:
   einfo (_("%X%P: can not make stub section: %E\n"));
   return NULL;
 }

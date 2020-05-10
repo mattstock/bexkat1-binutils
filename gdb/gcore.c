@@ -1,6 +1,6 @@
 /* Generate a core file for the inferior process.
 
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -282,7 +282,7 @@ call_target_sbrk (int sbrk_arg)
   else
     return (bfd_vma) 0;
 
-  gdbarch = get_objfile_arch (sbrk_objf);
+  gdbarch = sbrk_objf->arch ();
   target_sbrk_arg = value_from_longest (builtin_type (gdbarch)->builtin_int, 
 					sbrk_arg);
   gdb_assert (target_sbrk_arg);
@@ -590,8 +590,9 @@ gcore_memory_sections (bfd *obfd)
   return 1;
 }
 
+void _initialize_gcore ();
 void
-_initialize_gcore (void)
+_initialize_gcore ()
 {
   add_com ("generate-core-file", class_files, gcore_command, _("\
 Save a core file with the current state of the debugged process.\n\

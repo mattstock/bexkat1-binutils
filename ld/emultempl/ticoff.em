@@ -3,7 +3,7 @@
 (echo;echo;echo;echo)>e${EMULATION_NAME}.c # there, now line numbers match ;-)
 fragment <<EOF
 /* This file is part of GLD, the Gnu Linker.
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -163,6 +163,7 @@ struct ld_emulation_xfer_struct ld_${EMULATION_NAME}_emulation =
   after_parse_default,
   after_open_default,
   after_check_relocs_default,
+  before_place_orphans_default,
   after_allocation_default,
   set_output_arch_default,
   ldemul_default_target,

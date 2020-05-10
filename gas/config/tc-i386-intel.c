@@ -1,5 +1,5 @@
 /* tc-i386.c -- Assemble Intel syntax code for ix86/x86-64
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -509,7 +509,7 @@ static int i386_intel_simplify (expressionS *e)
 
       /* FALLTHROUGH */
     default:
-fallthrough:
+    fallthrough:
       if (e->X_add_symbol
 	  && !i386_intel_simplify_symbol (e->X_add_symbol))
 	return 0;
@@ -694,9 +694,11 @@ i386_intel_operand (char *operand_string, int got_a_float)
 	  if (got_a_float == 1)
 	    suffix = LONG_DOUBLE_MNEM_SUFFIX;
 	  else if ((current_templates->start->operand_types[0].bitfield.fword
-		    || current_templates->start->operand_types[0].bitfield.tbyte)
+		    || current_templates->start->operand_types[0].bitfield.tbyte
+		    || current_templates->start->opcode_modifier.jump == JUMP_DWORD
+		    || current_templates->start->opcode_modifier.jump == JUMP)
 		   && flag_code == CODE_64BIT)
-	    suffix = QWORD_MNEM_SUFFIX; /* l[fgs]s, [ls][gi]dt */
+	    suffix = QWORD_MNEM_SUFFIX; /* l[fgs]s, [ls][gi]dt, call, jmp */
 	  else
 	    i.types[this_operand].bitfield.byte = 1; /* cause an error */
 	  break;
@@ -939,12 +941,13 @@ i386_intel_operand (char *operand_string, int got_a_float)
 
 	  if (flag_code == CODE_64BIT)
 	    {
-	      i.types[this_operand].bitfield.disp32 = 1;
 	      if (!i.prefix[ADDR_PREFIX])
 		{
 		  i.types[this_operand].bitfield.disp64 = 1;
 		  i.types[this_operand].bitfield.disp32s = 1;
 		}
+	      else
+		i.types[this_operand].bitfield.disp32 = 1;
 	    }
 	  else if (!i.prefix[ADDR_PREFIX] ^ (flag_code == CODE_16BIT))
 	    i.types[this_operand].bitfield.disp32 = 1;

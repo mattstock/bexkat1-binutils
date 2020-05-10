@@ -1,6 +1,6 @@
 /* Target-dependent code for SPARC.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #include "arch-utils.h"
 #include "dis-asm.h"
 #include "dwarf2.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
@@ -2258,8 +2258,9 @@ const struct sparc_fpregmap sparc32_bsd_fpregmap =
   32 * 4,			/* %fsr */
 };
 
+void _initialize_sparc_tdep ();
 void
-_initialize_sparc_tdep (void)
+_initialize_sparc_tdep ()
 {
   register_gdbarch_init (bfd_arch_sparc, sparc32_gdbarch_init);
 }

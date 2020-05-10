@@ -1,5 +1,5 @@
 /* ADI Blackfin BFD support for 32-bit ELF.
-   Copyright (C) 2005-2019 Free Software Foundation, Inc.
+   Copyright (C) 2005-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -1728,7 +1728,7 @@ static struct bfd_link_hash_table *
 bfinfdpic_elf_link_hash_table_create (bfd *abfd)
 {
   struct bfinfdpic_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct bfinfdpic_elf_link_hash_table);
+  size_t amt = sizeof (struct bfinfdpic_elf_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -4755,6 +4755,10 @@ elf32_bfin_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   flagword old_flags, new_flags;
   bfd_boolean error = FALSE;
 
+  /* FIXME: What should be checked when linking shared libraries?  */
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
+
   new_flags = elf_elfheader (ibfd)->e_flags;
   old_flags = elf_elfheader (obfd)->e_flags;
 
@@ -4842,7 +4846,7 @@ static struct bfd_link_hash_table *
 bfin_link_hash_table_create (bfd * abfd)
 {
   struct bfin_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct bfin_link_hash_table);
+  size_t amt = sizeof (struct bfin_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -5398,7 +5402,7 @@ bfd_bfin_elf32_create_embedded_relocs (bfd *abfd,
     free (internal_relocs);
   return TRUE;
 
-error_return:
+ error_return:
   if (isymbuf != NULL && symtab_hdr->contents != (unsigned char *) isymbuf)
     free (isymbuf);
   if (internal_relocs != NULL

@@ -1,5 +1,5 @@
 /* Lattice Mico32-specific support for 32-bit ELF
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
    Contributed by Jon Beniston <jon@beniston.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -132,7 +132,7 @@ static struct bfd_link_hash_table *
 lm32_elf_link_hash_table_create (bfd *abfd)
 {
   struct elf_lm32_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_lm32_link_hash_table);
+  size_t amt = sizeof (struct elf_lm32_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)

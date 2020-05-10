@@ -1,5 +1,5 @@
 /* GDB stub for Itanium OpenVMS
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 
    Contributed by Tristan Gingold, AdaCore.
 
@@ -776,7 +776,7 @@ set_thread_scheduling (int val)
   return blk.dbgext$l_stop_value;
 }
 
-/* Get next thead (after THR).  Start with 0.  */
+/* Get next thread (after THR).  Start with 0.  */
 
 static unsigned int
 thread_next (unsigned int thr)

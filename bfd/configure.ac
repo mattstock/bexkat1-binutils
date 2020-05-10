@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-dnl   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+dnl   Copyright (C) 2012-2020 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -502,6 +502,7 @@ do
     i386_mach_o_vec)		 tb="$tb mach-o-i386.lo" ;;
     i386_msdos_vec)		 tb="$tb i386msdos.lo" ;;
     i386_pe_vec)		 tb="$tb pe-i386.lo peigen.lo $coff" ;;
+    i386_pe_big_vec)		 tb="$tb pe-i386.lo peigen.lo $coff" ;;
     i386_pei_vec)		 tb="$tb pei-i386.lo peigen.lo $coff" ;;
     iamcu_elf32_vec)		 tb="$tb elf32-i386.lo $elfxx_x86 elf32.lo $elf" ;;
     ia64_elf32_be_vec)		 tb="$tb elf32-ia64.lo elfxx-ia64.lo elf32.lo $elf" ;;
@@ -615,8 +616,8 @@ do
     rx_elf32_linux_le_vec)	 tb="$tb elf32-rx.lo elf32.lo $elf" ;;
     s390_elf32_vec)		 tb="$tb elf32-s390.lo elf32.lo $elf" ;;
     s390_elf64_vec)		 tb="$tb elf64-s390.lo elf64.lo $elf"; target_size=64 ;;
-    score_elf32_be_vec)		 tb="$tb elf32-score.lo elf32-score7.lo elf32.lo $elf"; want64=true; target_size=64 ;;
-    score_elf32_le_vec)		 tb="$tb elf32-score.lo elf32-score7.lo elf32.lo $elf"; want64=true; target_size=64 ;;
+    score_elf32_be_vec)		 tb="$tb elf32-score.lo elf32-score7.lo elf32.lo elf64.lo $elf"; want64=true; target_size=64 ;;
+    score_elf32_le_vec)		 tb="$tb elf32-score.lo elf32-score7.lo elf32.lo elf64.lo $elf"; want64=true; target_size=64 ;;
     sh_coff_vec)		 tb="$tb coff-sh.lo $coff" ;;
     sh_coff_le_vec)		 tb="$tb coff-sh.lo $coff" ;;
     sh_coff_small_vec)		 tb="$tb coff-sh.lo $coff" ;;
@@ -661,7 +662,6 @@ do
     tic6x_elf32_c6000_le_vec)	 tb="$tb elf32-tic6x.lo elf32.lo $elf" ;;
     tic6x_elf32_linux_be_vec)	 tb="$tb elf32-tic6x.lo elf32.lo $elf" ;;
     tic6x_elf32_linux_le_vec)	 tb="$tb elf32-tic6x.lo elf32.lo $elf" ;;
-    tic80_coff_vec)		 tb="$tb coff-tic80.lo $coff" ;;
     tilegx_elf32_be_vec)	 tb="$tb elf32-tilegx.lo elfxx-tilegx.lo elf32.lo $elf" ; target_size=32 ;;
     tilegx_elf32_le_vec)	 tb="$tb elf32-tilegx.lo elfxx-tilegx.lo elf32.lo $elf" ; target_size=32 ;;
     tilegx_elf64_be_vec)	 tb="$tb elf64-tilegx.lo elfxx-tilegx.lo elf64.lo $elf" ; target_size=64 ;;
@@ -686,7 +686,7 @@ do
     x86_64_elf64_sol2_vec)	 tb="$tb elf64-x86-64.lo $elfxx_x86 elf64.lo $elf"; target_size=64 ;;
     x86_64_mach_o_vec)		 tb="$tb mach-o-x86-64.lo" ;;
     x86_64_pe_vec)		 tb="$tb pe-x86_64.lo pex64igen.lo $coff"; target_size=64 ;;
-    x86_64_pe_be_vec)		 tb="$tb pe-x86_64.lo pex64igen.lo $coff"; target_size=64 ;;
+    x86_64_pe_big_vec)		 tb="$tb pe-x86_64.lo pex64igen.lo $coff"; target_size=64 ;;
     x86_64_pei_vec)		 tb="$tb pei-x86_64.lo pex64igen.lo $coff"; target_size=64 ;;
     xc16x_elf32_vec)		 tb="$tb elf32-xc16x.lo elf32.lo $elf" ;;
     xgate_elf32_vec)		 tb="$tb elf32-xgate.lo elf32.lo $elf" ;;
@@ -694,6 +694,7 @@ do
     xtensa_elf32_be_vec)	 tb="$tb xtensa-isa.lo xtensa-modules.lo elf32-xtensa.lo elf32.lo $elf" ;;
     xtensa_elf32_le_vec)	 tb="$tb xtensa-isa.lo xtensa-modules.lo elf32-xtensa.lo elf32.lo $elf" ;;
     z80_coff_vec)		 tb="$tb coff-z80.lo reloc16.lo $coffgen" ;;
+    z80_elf32_vec)		 tb="$tb elf32-z80.lo elf32.lo $elf" ;;
     z8k_coff_vec)		 tb="$tb coff-z8k.lo reloc16.lo $coff" ;;
 
     # These appear out of order in targets.c
@@ -838,7 +839,7 @@ if test "${target}" = "${host}"; then
 	;;
   arm-*-freebsd* | arm-*-kfreebsd*-gnu)
 	COREFILE='' ;;
-  arm-*-netbsd* | arm-*-openbsd*)
+  arm*-*-netbsd* | arm-*-openbsd*)
 	COREFILE=netbsd-core.lo
 	;;
   arm-*-riscix)		COREFILE=trad-core.lo ;;
@@ -923,7 +924,7 @@ changequote(,)dnl
   i[3-7]86-*-isc*)	COREFILE=trad-core.lo ;;
   i[3-7]86-*-aix*)	COREFILE=aix386-core.lo ;;
 changequote([,])dnl
-  mips-*-netbsd* | mips*-*-openbsd*)
+  mips*-*-netbsd* | mips*-*-openbsd*)
 	COREFILE=netbsd-core.lo
 	;;
   mips-sgi-irix4*)	COREFILE=irix-core.lo ;;

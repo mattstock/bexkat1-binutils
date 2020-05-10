@@ -1,6 +1,6 @@
 /* General utility routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -469,18 +469,6 @@ demangler_warning (const char *file, int line, const char *string, ...)
   va_end (ap);
 }
 
-/* Dummy functions to keep add_prefix_cmd happy.  */
-
-static void
-set_internal_problem_cmd (const char *args, int from_tty)
-{
-}
-
-static void
-show_internal_problem_cmd (const char *args, int from_tty)
-{
-}
-
 /* When GDB reports an internal problem (error or warning) it gives
    the user the opportunity to quit GDB and/or create a core file of
    the current debug session.  This function registers a few commands
@@ -515,19 +503,17 @@ add_internal_problem_command (struct internal_problem *problem)
   show_doc = xstrprintf (_("Show what GDB does when %s is detected."),
 			 problem->name);
 
-  add_prefix_cmd (problem->name,
-		  class_maintenance, set_internal_problem_cmd, set_doc,
-		  set_cmd_list,
-		  concat ("maintenance set ", problem->name, " ",
-			  (char *) NULL),
-		  0/*allow-unknown*/, &maintenance_set_cmdlist);
+  add_basic_prefix_cmd (problem->name, class_maintenance, set_doc,
+			set_cmd_list,
+			concat ("maintenance set ", problem->name, " ",
+				(char *) NULL),
+			0/*allow-unknown*/, &maintenance_set_cmdlist);
 
-  add_prefix_cmd (problem->name,
-		  class_maintenance, show_internal_problem_cmd, show_doc,
-		  show_cmd_list,
-		  concat ("maintenance show ", problem->name, " ",
-			  (char *) NULL),
-		  0/*allow-unknown*/, &maintenance_show_cmdlist);
+  add_show_prefix_cmd (problem->name, class_maintenance, show_doc,
+		       show_cmd_list,
+		       concat ("maintenance show ", problem->name, " ",
+			       (char *) NULL),
+		       0/*allow-unknown*/, &maintenance_show_cmdlist);
 
   if (problem->user_settable_should_quit)
     {
@@ -689,6 +675,15 @@ malloc_failure (long size)
     {
       internal_error (__FILE__, __LINE__, _("virtual memory exhausted."));
     }
+}
+
+/* See common/errors.h.  */
+
+void
+flush_streams ()
+{
+  gdb_stdout->flush ();
+  gdb_stderr->flush ();
 }
 
 /* My replacement for the read system call.
@@ -1277,7 +1272,7 @@ init_page_info (void)
 	}
 
       /* If the output is not a terminal, don't paginate it.  */
-      if (!ui_file_isatty (gdb_stdout))
+      if (!gdb_stdout->isatty ())
 	lines_per_page = UINT_MAX;
 #endif
     }
@@ -1405,7 +1400,7 @@ emit_style_escape (const ui_file_style &style,
   if (stream == nullptr)
     wrap_buffer.append (style.to_ansi ());
   else
-    fputs_unfiltered (style.to_ansi ().c_str (), stream);
+    stream->puts (style.to_ansi ().c_str ());
 }
 
 /* Set the current output style.  This will affect future uses of the
@@ -1539,9 +1534,18 @@ flush_wrap_buffer (struct ui_file *stream)
 {
   if (stream == gdb_stdout && !wrap_buffer.empty ())
     {
-      fputs_unfiltered (wrap_buffer.c_str (), stream);
+      stream->puts (wrap_buffer.c_str ());
       wrap_buffer.clear ();
     }
+}
+
+/* See utils.h.  */
+
+void
+gdb_flush (struct ui_file *stream)
+{
+  flush_wrap_buffer (stream);
+  stream->flush ();
 }
 
 /* Indicate that if the next sequence of characters overflows the line,
@@ -1569,9 +1573,7 @@ void
 wrap_here (const char *indent)
 {
   /* This should have been allocated, but be paranoid anyway.  */
-  if (!filter_initialized)
-    internal_error (__FILE__, __LINE__,
-		    _("failed internal consistency check"));
+  gdb_assert (filter_initialized);
 
   flush_wrap_buffer (gdb_stdout);
   if (chars_per_line == UINT_MAX)	/* No line overflow checking.  */
@@ -1688,7 +1690,7 @@ fputs_maybe_filtered (const char *linebuffer, struct ui_file *stream,
       || top_level_interpreter ()->interp_ui_out ()->is_mi_like_p ())
     {
       flush_wrap_buffer (stream);
-      fputs_unfiltered (linebuffer, stream);
+      stream->puts (linebuffer);
       return;
     }
 
@@ -1767,7 +1769,12 @@ fputs_maybe_filtered (const char *linebuffer, struct ui_file *stream,
 		     newline -- if chars_per_line is right, we
 		     probably just overflowed anyway; if it's wrong,
 		     let us keep going.  */
-		  fputc_unfiltered ('\n', stream);
+		  /* XXX: The ideal thing would be to call
+		     'stream->putc' here, but we can't because it
+		     currently calls 'fputc_unfiltered', which ends up
+		     calling us, which generates an infinite
+		     recursion.  */
+		  stream->puts ("\n");
 		}
 	      else
 		{
@@ -1788,7 +1795,7 @@ fputs_maybe_filtered (const char *linebuffer, struct ui_file *stream,
 	      /* Now output indentation and wrapped string.  */
 	      if (wrap_column)
 		{
-		  fputs_unfiltered (wrap_indent, stream);
+		  stream->puts (wrap_indent);
 		  if (stream->can_emit_style_escape ())
 		    emit_style_escape (save_style, stream);
 		  /* FIXME, this strlen is what prevents wrap_indent from
@@ -1812,7 +1819,12 @@ fputs_maybe_filtered (const char *linebuffer, struct ui_file *stream,
 	  wrap_here ((char *) 0);	/* Spit out chars, cancel
 					   further wraps.  */
 	  lines_printed++;
-	  fputc_unfiltered ('\n', stream);
+	  /* XXX: The ideal thing would be to call
+	     'stream->putc' here, but we can't because it
+	     currently calls 'fputc_unfiltered', which ends up
+	     calling us, which generates an infinite
+	     recursion.  */
+	  stream->puts ("\n");
 	  lineptr++;
 	}
     }
@@ -1824,6 +1836,12 @@ void
 fputs_filtered (const char *linebuffer, struct ui_file *stream)
 {
   fputs_maybe_filtered (linebuffer, stream, 1);
+}
+
+void
+fputs_unfiltered (const char *linebuffer, struct ui_file *stream)
+{
+  fputs_maybe_filtered (linebuffer, stream, 0);
 }
 
 /* See utils.h.  */
@@ -1901,10 +1919,7 @@ fputs_highlighted (const char *str, const compiled_regex &highlight,
 int
 putchar_unfiltered (int c)
 {
-  char buf = c;
-
-  ui_file_write (gdb_stdout, &buf, 1);
-  return c;
+  return fputc_unfiltered (c, gdb_stdout);
 }
 
 /* Write character C to gdb_stdout using GDB's paging mechanism and return C.
@@ -1919,9 +1934,11 @@ putchar_filtered (int c)
 int
 fputc_unfiltered (int c, struct ui_file *stream)
 {
-  char buf = c;
+  char buf[2];
 
-  ui_file_write (stream, &buf, 1);
+  buf[0] = c;
+  buf[1] = 0;
+  fputs_unfiltered (buf, stream);
   return c;
 }
 
@@ -3411,12 +3428,13 @@ copy_bitwise (gdb_byte *dest, ULONGEST dest_offset,
 	buf |= *source << avail;
 
       buf &= (1 << nbits) - 1;
-      *dest = (*dest & (~0 << nbits)) | buf;
+      *dest = (*dest & (~0U << nbits)) | buf;
     }
 }
 
+void _initialize_utils ();
 void
-_initialize_utils (void)
+_initialize_utils ()
 {
   add_setshow_uinteger_cmd ("width", class_support, &chars_per_line, _("\
 Set number of characters where GDB should wrap lines of its output."), _("\

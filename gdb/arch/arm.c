@@ -1,6 +1,6 @@
 /* Common target dependent code for GDB on ARM systems.
 
-   Copyright (C) 1988-2019 Free Software Foundation, Inc.
+   Copyright (C) 1988-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,17 +37,6 @@ thumb_insn_size (unsigned short inst1)
     return 4;
   else
     return 2;
-}
-
-/* See arm.h.  */
-
-int
-bitcount (unsigned long val)
-{
-  int nbits;
-  for (nbits = 0; val != 0; nbits++)
-    val &= val - 1;		/* Delete rightmost 1-bit in val.  */
-  return nbits;
 }
 
 /* See arm.h.  */

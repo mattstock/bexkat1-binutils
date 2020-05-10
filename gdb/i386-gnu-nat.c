@@ -1,6 +1,6 @@
 /* Low level interface to i386 running the GNU Hurd.
 
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -425,8 +425,9 @@ i386_gnu_dr_get_control (void)
 }
 #endif /* i386_DEBUG_STATE */
 
+void _initialize_i386gnu_nat ();
 void
-_initialize_i386gnu_nat (void)
+_initialize_i386gnu_nat ()
 {
 #ifdef i386_DEBUG_STATE
   x86_dr_low.set_control = i386_gnu_dr_set_control;

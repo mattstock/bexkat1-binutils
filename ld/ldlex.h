@@ -1,5 +1,5 @@
 /* ldlex.h -
-   Copyright (C) 1991-2019 Free Software Foundation, Inc.
+   Copyright (C) 1991-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -150,6 +150,8 @@ enum option_values
   OPTION_FORCE_GROUP_ALLOCATION,
   OPTION_PRINT_MAP_DISCARDED,
   OPTION_NO_PRINT_MAP_DISCARDED,
+  OPTION_NON_CONTIGUOUS_REGIONS,
+  OPTION_NON_CONTIGUOUS_REGIONS_WARNINGS,
 };
 
 /* The initial parser states.  */

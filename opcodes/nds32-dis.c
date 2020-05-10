@@ -1,5 +1,5 @@
 /* NDS32-specific support for 32-bit ELF.
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
    Contributed by Andes Technology Corporation.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -877,7 +877,7 @@ nds32_mask_opcode (uint32_t insn)
 	}
       return MASK_OP (insn, 0x1f << 20);
     default:
-      return (1 << 31);
+      return 1u << 31;
     }
 }
 
@@ -976,8 +976,8 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
   int status;
   bfd_byte buf[4];
   bfd_byte buf_data[16];
-  long long given;
-  long long given1;
+  uint64_t given;
+  uint64_t given1;
   uint32_t insn;
   int n;
   int last_symbol_index = -1;
@@ -985,7 +985,7 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
   int is_data = FALSE;
   bfd_boolean found = FALSE;
   struct nds32_private_data *private_data;
-  unsigned int size = 16;
+  unsigned int size;
   enum map_type mapping_type = MAP_CODE;
 
   if (info->private_data == NULL)
@@ -1063,6 +1063,7 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
 
       /* Fix corner case: there is no next mapping symbol,
 	 let mapping type decides size */
+      size = 16;
       if (last_symbol_index + 1 >= info->symtab_size)
 	{
 	  if (mapping_type == MAP_DATA0)
@@ -1096,7 +1097,7 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
 	size = (pc & 1) ? 1 : 2;
 
       /* Read bytes from BFD.  */
-      info->read_memory_func (pc, (bfd_byte *) buf_data, size, info);
+      info->read_memory_func (pc, buf_data, size, info);
       given = 0;
       given1 = 0;
       /* Start assembling data.  */
@@ -1129,39 +1130,44 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
       info->bytes_per_line = 4;
 
       if (size == 16)
-	info->fprintf_func (info->stream, ".qword\t0x%016llx%016llx",
+	info->fprintf_func (info->stream, ".qword\t0x%016" PRIx64 "%016" PRIx64,
 			    given, given1);
       else if (size == 8)
-	info->fprintf_func (info->stream, ".dword\t0x%016llx", given);
+	info->fprintf_func (info->stream, ".dword\t0x%016" PRIx64, given);
       else if (size == 4)
-	info->fprintf_func (info->stream, ".word\t0x%08llx", given);
+	info->fprintf_func (info->stream, ".word\t0x%08" PRIx64, given);
       else if (size == 2)
 	{
 	  /* short */
 	  if (mapping_type == MAP_DATA0)
-	    info->fprintf_func (info->stream, ".byte\t0x%02llx", given & 0xFF);
+	    info->fprintf_func (info->stream, ".byte\t0x%02" PRIx64,
+				given & 0xFF);
 	  else
-	    info->fprintf_func (info->stream, ".short\t0x%04llx", given);
+	    info->fprintf_func (info->stream, ".short\t0x%04" PRIx64, given);
 	}
       else
 	{
 	  /* byte */
-	  info->fprintf_func (info->stream, ".byte\t0x%02llx", given);
+	  info->fprintf_func (info->stream, ".byte\t0x%02" PRIx64, given);
 	}
 
       return size;
     }
 
-  status = info->read_memory_func (pc, (bfd_byte *) buf, 4, info);
+  size = 4;
+  status = info->read_memory_func (pc, buf, 4, info);
   if (status)
     {
       /* For the last 16-bit instruction.  */
-      status = info->read_memory_func (pc, (bfd_byte *) buf, 2, info);
+      size = 2;
+      status = info->read_memory_func (pc, buf, 2, info);
       if (status)
 	{
-	  (*info->memory_error_func)(status, pc, info);
+	  (*info->memory_error_func) (status, pc, info);
 	  return -1;
 	}
+      buf[2] = 0;
+      buf[3] = 0;
     }
 
   insn = bfd_getb32 (buf);
@@ -1173,11 +1179,12 @@ print_insn_nds32 (bfd_vma pc, disassemble_info *info)
     }
 
   /* 32-bit instructions.  */
+  if (size == 4)
+    print_insn32 (pc, info, insn, NDS32_PARSE_INSN32);
   else
-    {
-      print_insn32 (pc, info, insn, NDS32_PARSE_INSN32);
-      return 4;
-    }
+    info->fprintf_func (info->stream,
+			_("insufficient data to decode instruction"));
+  return 4;
 }
 
 /* Ignore disassembling unnecessary name.  */

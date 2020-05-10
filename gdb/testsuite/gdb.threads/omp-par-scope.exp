@@ -1,4 +1,4 @@
-# Copyright 2017-2019 Free Software Foundation, Inc.
+# Copyright 2017-2020 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -273,7 +273,9 @@ with_test_prefix "nested_parallel" {
 	    gdb_continue_to_breakpoint "at printf"
 
 	    if {$have_older_gcc} { setup_xfail "*-*-*" }
-	    set thread_num [get_valueof "" "num" "unknown"]
+	    # Use get_local_valueof instead of get_valueof to avoid picking up
+	    # some random 'num' in a shared library.
+	    set thread_num [get_local_valueof "num" "unknown"]
 
 	    gdb_test "print file_scope_var" "= 9876"
 	    if {$have_older_gcc} { setup_xfail "*-*-*" }

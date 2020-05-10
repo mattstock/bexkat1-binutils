@@ -1,6 +1,6 @@
 /* Target-dependent code for the ALPHA architecture, for GDB, the GNU Debugger.
 
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,7 @@
 #include "frame.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "inferior.h"
 #include "symtab.h"
 #include "value.h"
@@ -1821,8 +1821,9 @@ alpha_dwarf2_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   frame_base_append_sniffer (gdbarch, dwarf2_frame_base_sniffer);
 }
 
+void _initialize_alpha_tdep ();
 void
-_initialize_alpha_tdep (void)
+_initialize_alpha_tdep ()
 {
 
   gdbarch_register (bfd_arch_alpha, alpha_gdbarch_init, NULL);

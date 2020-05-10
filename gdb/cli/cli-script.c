@@ -1,6 +1,6 @@
 /* GDB CLI command scripting.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1667,8 +1667,9 @@ show_user_1 (struct cmd_list_element *c, const char *prefix, const char *name,
 
 }
 
+void _initialize_cli_script ();
 void
-_initialize_cli_script (void)
+_initialize_cli_script ()
 {
   struct cmd_list_element *c;
 

@@ -1,6 +1,6 @@
 /* Implementation of the GDB variable objects API.
 
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -2520,8 +2520,9 @@ varobj_invalidate (void)
   all_root_varobjs (varobj_invalidate_iter, NULL);
 }
 
+void _initialize_varobj ();
 void
-_initialize_varobj (void)
+_initialize_varobj ()
 {
   varobj_table = XCNEWVEC (struct vlist *, VAROBJ_TABLE_SIZE);
 

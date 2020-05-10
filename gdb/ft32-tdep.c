@@ -1,6 +1,6 @@
 /* Target-dependent code for FT32.
 
-   Copyright (C) 2009-2019 Free Software Foundation, Inc.
+   Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -616,8 +616,9 @@ ft32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
 /* Register this machine's init routine.  */
 
+void _initialize_ft32_tdep ();
 void
-_initialize_ft32_tdep (void)
+_initialize_ft32_tdep ()
 {
   register_gdbarch_init (bfd_arch_ft32, ft32_gdbarch_init);
 }

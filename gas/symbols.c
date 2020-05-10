@@ -1,5 +1,5 @@
 /* symbols.c -symbol table-
-   Copyright (C) 1987-2019 Free Software Foundation, Inc.
+   Copyright (C) 1987-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -1638,7 +1638,7 @@ resolve_symbol_value (symbolS *symp)
   if (finalize_syms)
     S_SET_VALUE (symp, final_val);
 
-exit_dont_set_value:
+ exit_dont_set_value:
   /* Always set the segment, even if not finalizing the value.
      The segment is used to determine whether a symbol is defined.  */
     S_SET_SEGMENT (symp, final_seg);

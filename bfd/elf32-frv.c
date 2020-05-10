@@ -1,5 +1,5 @@
 /* FRV-specific support for 32-bit ELF.
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -942,7 +942,7 @@ static struct bfd_link_hash_table *
 frvfdpic_elf_link_hash_table_create (bfd *abfd)
 {
   struct frvfdpic_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct frvfdpic_elf_link_hash_table);
+  size_t amt = sizeof (struct frvfdpic_elf_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)
@@ -6343,6 +6343,10 @@ frv_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   bfd_boolean error = FALSE;
   char new_opt[80];
   char old_opt[80];
+
+  /* FIXME: What should be checked when linking shared libraries?  */
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
 
   new_opt[0] = old_opt[0] = '\0';
   new_flags = elf_elfheader (ibfd)->e_flags;

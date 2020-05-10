@@ -1,5 +1,5 @@
 /* COFF specific linker code.
-   Copyright (C) 1994-2019 Free Software Foundation, Inc.
+   Copyright (C) 1994-2020 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -109,7 +109,7 @@ struct bfd_link_hash_table *
 _bfd_coff_link_hash_table_create (bfd *abfd)
 {
   struct coff_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct coff_link_hash_table);
+  size_t amt = sizeof (struct coff_link_hash_table);
 
   ret = (struct coff_link_hash_table *) bfd_malloc (amt);
   if (ret == NULL)
@@ -689,7 +689,7 @@ _bfd_coff_final_link (bfd *abfd,
 	  rel_filepos += o->reloc_count * relsz;
 	  /* In PE COFF, if there are at least 0xffff relocations an
 	     extra relocation will be written out to encode the count.  */
-	  if (obj_pe (abfd) && o->reloc_count >= 0xffff)
+	  if ((obj_pe (abfd) || obj_go32 (abfd)) && o->reloc_count >= 0xffff)
 	    rel_filepos += relsz;
 	}
 
@@ -1108,7 +1108,7 @@ _bfd_coff_final_link (bfd *abfd,
 
 	  if (bfd_seek (abfd, o->rel_filepos, SEEK_SET) != 0)
 	    goto error_return;
-	  if (obj_pe (abfd) && o->reloc_count >= 0xffff)
+	  if ((obj_pe (abfd) || obj_go32 (abfd)) && o->reloc_count >= 0xffff)
 	    {
 	      /* In PE COFF, write the count of relocs as the first
 		 reloc.  The header overflow bit will be set
@@ -1647,7 +1647,7 @@ _bfd_coff_link_input_bfd (struct coff_final_link_info *flaginfo, bfd *input_bfd)
 	  struct coff_debug_merge_element **epp;
 	  bfd_byte *esl, *eslend;
 	  struct internal_syment *islp;
-	  bfd_size_type amt;
+	  size_t amt;
 
 	  name = _bfd_coff_internal_syment_name (input_bfd, &isym, buf);
 	  if (name == NULL)

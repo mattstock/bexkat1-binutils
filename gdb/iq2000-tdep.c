@@ -1,7 +1,7 @@
 /* Target-dependent code for the IQ2000 architecture, for GDB, the GNU
    Debugger.
 
-   Copyright (C) 2000-2019 Free Software Foundation, Inc.
+   Copyright (C) 2000-2020 Free Software Foundation, Inc.
 
    Contributed by Red Hat.
 
@@ -24,7 +24,7 @@
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "gdbtypes.h"
 #include "value.h"
 #include "dis-asm.h"
@@ -839,8 +839,9 @@ iq2000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
    Initializer function for the iq2000 module.
    Called by gdb at start-up.  */
 
+void _initialize_iq2000_tdep ();
 void
-_initialize_iq2000_tdep (void)
+_initialize_iq2000_tdep ()
 {
   register_gdbarch_init (bfd_arch_iq2000, iq2000_gdbarch_init);
 }

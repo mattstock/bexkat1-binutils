@@ -1,6 +1,6 @@
 /* Target description support for GDB.
 
-   Copyright (C) 2006-2019 Free Software Foundation, Inc.
+   Copyright (C) 2006-2020 Free Software Foundation, Inc.
 
    Contributed by CodeSourcery.
 
@@ -1218,24 +1218,6 @@ static struct cmd_list_element *tdesc_unset_cmdlist;
 /* Helper functions for the CLI commands.  */
 
 static void
-set_tdesc_cmd (const char *args, int from_tty)
-{
-  help_list (tdesc_set_cmdlist, "set tdesc ", all_commands, gdb_stdout);
-}
-
-static void
-show_tdesc_cmd (const char *args, int from_tty)
-{
-  cmd_show_list (tdesc_show_cmdlist, from_tty, "");
-}
-
-static void
-unset_tdesc_cmd (const char *args, int from_tty)
-{
-  help_list (tdesc_unset_cmdlist, "unset tdesc ", all_commands, gdb_stdout);
-}
-
-static void
 set_tdesc_filename_cmd (const char *args, int from_tty,
 			struct cmd_list_element *c)
 {
@@ -1715,7 +1697,8 @@ maint_print_c_tdesc_cmd (const char *args, int from_tty)
       || startswith (filename_after_features.c_str (), "riscv/")
       || startswith (filename_after_features.c_str (), "tic6x-")
       || startswith (filename_after_features.c_str (), "aarch64")
-      || startswith (filename_after_features.c_str (), "arm/"))
+      || startswith (filename_after_features.c_str (), "arm/")
+      || startswith (filename_after_features.c_str (), "arc/"))
     {
       print_c_feature v (filename_after_features);
 
@@ -1824,23 +1807,24 @@ maintenance_check_xml_descriptions (const char *dir, int from_tty)
 		   (long) selftests::xml_tdesc.size (), failed);
 }
 
+void _initialize_target_descriptions ();
 void
-_initialize_target_descriptions (void)
+_initialize_target_descriptions ()
 {
   tdesc_data = gdbarch_data_register_pre_init (tdesc_data_init);
 
-  add_prefix_cmd ("tdesc", class_maintenance, set_tdesc_cmd, _("\
+  add_basic_prefix_cmd ("tdesc", class_maintenance, _("\
 Set target description specific variables."),
-		  &tdesc_set_cmdlist, "set tdesc ",
-		  0 /* allow-unknown */, &setlist);
-  add_prefix_cmd ("tdesc", class_maintenance, show_tdesc_cmd, _("\
+			&tdesc_set_cmdlist, "set tdesc ",
+			0 /* allow-unknown */, &setlist);
+  add_show_prefix_cmd ("tdesc", class_maintenance, _("\
 Show target description specific variables."),
-		  &tdesc_show_cmdlist, "show tdesc ",
-		  0 /* allow-unknown */, &showlist);
-  add_prefix_cmd ("tdesc", class_maintenance, unset_tdesc_cmd, _("\
+		       &tdesc_show_cmdlist, "show tdesc ",
+		       0 /* allow-unknown */, &showlist);
+  add_basic_prefix_cmd ("tdesc", class_maintenance, _("\
 Unset target description specific variables."),
-		  &tdesc_unset_cmdlist, "unset tdesc ",
-		  0 /* allow-unknown */, &unsetlist);
+			&tdesc_unset_cmdlist, "unset tdesc ",
+			0 /* allow-unknown */, &unsetlist);
 
   add_setshow_filename_cmd ("filename", class_obscure,
 			    &tdesc_filename_cmd_string,

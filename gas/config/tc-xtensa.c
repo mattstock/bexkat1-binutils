@@ -1,5 +1,5 @@
 /* tc-xtensa.c -- Assemble Xtensa instructions.
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -33,6 +33,10 @@
 /* Provide default values for new configuration settings.  */
 #ifndef XSHAL_ABI
 #define XSHAL_ABI 0
+#endif
+
+#ifndef XTENSA_MARCH_EARLIEST
+#define XTENSA_MARCH_EARLIEST 0
 #endif
 
 #ifndef uint32
@@ -73,6 +77,8 @@ const char FLT_CHARS[] = "rRsSfFdDxXpP";
 
 bfd_boolean density_supported;
 bfd_boolean absolute_literals_supported;
+
+static unsigned microarch_earliest;
 
 static vliw_insn cur_vinsn;
 
@@ -2047,13 +2053,13 @@ tokenize_arguments (char **args, char *str)
 	}
     }
 
-fini:
+ fini:
   if (saw_comma || saw_colon)
     goto err;
   input_line_pointer = old_input_line_pointer;
   return num_args;
 
-err:
+ err:
   if (saw_comma)
     as_bad (_("extra comma"));
   else if (saw_colon)
@@ -2498,6 +2504,18 @@ xg_translate_idioms (char **popname, int *pnum_args, char **arg_strings)
 	  xg_replace_opname (popname, (has_underbar ? "_or" : "or"));
 	  arg_strings[2] = xstrdup (arg_strings[1]);
 	  *pnum_args = 3;
+	}
+      return 0;
+    }
+
+  /* Without an operand, this is given a default immediate operand of 0.  */
+  if ((strcmp (opname, "simcall") == 0 && microarch_earliest >= 280000))
+    {
+      if (*pnum_args == 0)
+	{
+	  arg_strings[0] = (char *) xmalloc (2);
+	  strcpy (arg_strings[0], "0");
+	  *pnum_args = 1;
 	}
       return 0;
     }
@@ -5236,6 +5254,8 @@ xg_init_global_config (void)
 
   directive_state[directive_density] = XCHAL_HAVE_DENSITY;
   directive_state[directive_absolute_literals] = XSHAL_USE_ABSOLUTE_LITERALS;
+
+  microarch_earliest = XTENSA_MARCH_EARLIEST;
 }
 
 void
@@ -5974,18 +5994,24 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
     case BFD_RELOC_8:
       if (fixP->fx_subsy)
 	{
+	  bfd_boolean neg = S_GET_VALUE (fixP->fx_addsy) + fixP->fx_offset
+	    < S_GET_VALUE (fixP->fx_subsy);
+
 	  switch (fixP->fx_r_type)
 	    {
 	    case BFD_RELOC_8:
-	      fixP->fx_r_type = BFD_RELOC_XTENSA_DIFF8;
+	      fixP->fx_r_type = neg
+		? BFD_RELOC_XTENSA_NDIFF8 : BFD_RELOC_XTENSA_PDIFF8;
 	      fixP->fx_signed = 0;
 	      break;
 	    case BFD_RELOC_16:
-	      fixP->fx_r_type = BFD_RELOC_XTENSA_DIFF16;
+	      fixP->fx_r_type = neg
+		? BFD_RELOC_XTENSA_NDIFF16 : BFD_RELOC_XTENSA_PDIFF16;
 	      fixP->fx_signed = 0;
 	      break;
 	    case BFD_RELOC_32:
-	      fixP->fx_r_type = BFD_RELOC_XTENSA_DIFF32;
+	      fixP->fx_r_type = neg
+		? BFD_RELOC_XTENSA_NDIFF32 : BFD_RELOC_XTENSA_PDIFF32;
 	      fixP->fx_signed = 0;
 	      break;
 	    default:

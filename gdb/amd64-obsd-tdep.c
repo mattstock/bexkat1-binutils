@@ -1,6 +1,6 @@
 /* Target-dependent code for OpenBSD/amd64.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -448,8 +448,9 @@ amd64obsd_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   frame_unwind_prepend_unwinder (gdbarch, &amd64obsd_trapframe_unwind);
 }
 
+void _initialize_amd64obsd_tdep ();
 void
-_initialize_amd64obsd_tdep (void)
+_initialize_amd64obsd_tdep ()
 {
   /* The OpenBSD/amd64 native dependent code makes this assumption.  */
   gdb_assert (ARRAY_SIZE (amd64obsd_r_reg_offset) == AMD64_NUM_GREGS);

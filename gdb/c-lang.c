@@ -1,6 +1,6 @@
 /* C language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2019 Free Software Foundation, Inc.
+   Copyright (C) 1992-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -303,14 +303,14 @@ c_get_string (struct value *value, gdb::unique_xmalloc_ptr<gdb_byte> *buffer,
       if (*length >= 0)
 	i  = *length;
       else
- 	/* Otherwise, look for a null character.  */
- 	for (i = 0; i < fetchlimit; i++)
+	/* Otherwise, look for a null character.  */
+	for (i = 0; i < fetchlimit; i++)
 	  if (extract_unsigned_integer (contents + i * width,
 					width, byte_order) == 0)
- 	    break;
+	    break;
   
       /* I is now either a user-defined length, the number of non-null
- 	 characters, or FETCHLIMIT.  */
+	 characters, or FETCHLIMIT.  */
       *length = i * width;
       buffer->reset ((gdb_byte *) xmalloc (*length));
       memcpy (buffer->get (), contents, *length);
@@ -903,7 +903,7 @@ extern const struct language_defn c_language_defn =
   c_emit_char,			/* Print a single char */
   c_print_type,			/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
@@ -1048,7 +1048,7 @@ extern const struct language_defn cplus_language_defn =
   c_emit_char,			/* Print a single char */
   c_print_type,			/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   cplus_skip_trampoline,	/* Language specific skip_trampoline */
@@ -1102,7 +1102,7 @@ extern const struct language_defn asm_language_defn =
   c_emit_char,			/* Print a single char */
   c_print_type,			/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
@@ -1119,7 +1119,7 @@ extern const struct language_defn asm_language_defn =
   0,				/* String lower bound */
   default_word_break_characters,
   default_collect_symbol_completion_matches,
-  c_language_arch_info, 	/* FIXME: la_language_arch_info.  */
+  c_language_arch_info,		/* FIXME: la_language_arch_info.  */
   default_print_array_index,
   default_pass_by_reference,
   c_watch_location_expression,
@@ -1156,7 +1156,7 @@ extern const struct language_defn minimal_language_defn =
   c_emit_char,			/* Print a single char */
   c_print_type,			/* Print a type using appropriate syntax */
   c_print_typedef,		/* Print a typedef using appropriate syntax */
-  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print_inner,		/* la_value_print_inner */
   c_value_print,		/* Print a top-level value */
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */

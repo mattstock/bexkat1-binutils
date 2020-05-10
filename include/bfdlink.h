@@ -1,5 +1,5 @@
 /* bfdlink.h -- header file for BFD link routines
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
    Written by Steve Chamberlain and Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -270,8 +270,7 @@ enum report_method
      allowed to set the value.  */
   RM_NOT_YET_SET = 0,
   RM_IGNORE,
-  RM_GENERATE_WARNING,
-  RM_GENERATE_ERROR
+  RM_DIAGNOSE,
 };
 
 typedef enum {with_flags, without_flags} flag_type;
@@ -373,7 +372,7 @@ struct bfd_link_info
   ENUM_BITFIELD (bfd_link_elf_stt_common) elf_stt_common : 2;
 
   /* Criteria for skipping symbols when determining
-     whether to include an object from an archive. */
+     whether to include an object from an archive.  */
   ENUM_BITFIELD (bfd_link_common_skip_ar_symbols) common_skip_ar_symbols : 2;
 
   /* What to do with unresolved symbols in an object file.
@@ -386,6 +385,9 @@ struct bfd_link_info
   /* What to do with unresolved symbols in a shared library.
      The same defaults apply.  */
   ENUM_BITFIELD (report_method) unresolved_syms_in_shared_libs : 2;
+
+  /* TRUE if unresolved symbols are to be warned, rather than errored.  */
+  unsigned int warn_unresolved_syms: 1;
 
   /* TRUE if shared objects should be linked directly, not shared.  */
   unsigned int static_link: 1;
@@ -500,6 +502,14 @@ struct bfd_link_info
 
   /* TRUE if "-Map map" is passed to linker.  */
   unsigned int has_map_file : 1;
+
+  /* TRUE if "--enable-non-contiguous-regions" is passed to the
+     linker.  */
+  unsigned int non_contiguous_regions : 1;
+
+  /* TRUE if "--enable-non-contiguous-regions-warnings" is passed to
+     the linker.  */
+  unsigned int non_contiguous_regions_warnings : 1;
 
   /* Char that may appear as the first char of a symbol, but should be
      skipped (like symbol_leading_char) when looking up symbols in
@@ -801,9 +811,9 @@ struct bfd_link_order
   struct bfd_link_order *next;
   /* Type of link_order.  */
   enum bfd_link_order_type type;
-  /* Offset within output section.  */
+  /* Offset within output section in bytes.  */
   bfd_vma offset;
-  /* Size within output section.  */
+  /* Size within output section in octets.  */
   bfd_size_type size;
   /* Type specific information.  */
   union

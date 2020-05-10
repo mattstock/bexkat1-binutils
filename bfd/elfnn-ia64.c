@@ -1,5 +1,5 @@
 /* IA-64 support for 64-bit ELF
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
    Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -38,6 +38,10 @@
 #if ARCH_SIZE == 32
 #define	LOG_SECTION_ALIGN	2
 #endif
+
+#define is_ia64_elf(bfd)			   \
+  (bfd_get_flavour (bfd) == bfd_target_elf_flavour \
+   && elf_object_id (bfd) == IA64_ELF_DATA)
 
 typedef struct bfd_hash_entry *(*new_hash_entry_func)
   (struct bfd_hash_entry *, struct bfd_hash_table *, const char *);
@@ -938,11 +942,10 @@ elfNN_ia64_section_from_shdr (bfd *abfd,
    flag.  */
 
 static bfd_boolean
-elfNN_ia64_section_flags (flagword *flags,
-			  const Elf_Internal_Shdr *hdr)
+elfNN_ia64_section_flags (const Elf_Internal_Shdr *hdr)
 {
   if (hdr->sh_flags & SHF_IA_64_SHORT)
-    *flags |= SEC_SMALL_DATA;
+    hdr->bfd_section->flags |= SEC_SMALL_DATA;
 
   return TRUE;
 }
@@ -1910,7 +1913,7 @@ get_dyn_sym_info (struct elfNN_ia64_link_hash_table *ia64_info,
       *size_p = size;
       *info_p = info;
 
-has_space:
+    has_space:
       /* Append the new one to the array.  */
       dyn_i = info + count;
       memset (dyn_i, 0, sizeof (*dyn_i));
@@ -3702,7 +3705,7 @@ elfNN_ia64_choose_gp (bfd *abfd, struct bfd_link_info *info, bfd_boolean final)
     {
       if (max_short_vma - min_short_vma >= 0x400000)
 	{
-overflow:
+	overflow:
 	  _bfd_error_handler
 	    /* xgettext:c-format */
 	    (_("%pB: short data segment overflowed (%#" PRIx64 " >= 0x400000)"),
@@ -4472,7 +4475,7 @@ elfNN_ia64_relocate_section (bfd *output_bfd,
 	case bfd_reloc_outofrange:
 	case bfd_reloc_overflow:
 	default:
-missing_tls_sec:
+	missing_tls_sec:
 	  {
 	    const char *name;
 
@@ -4732,6 +4735,7 @@ elfNN_ia64_set_private_flags (bfd *abfd, flagword flags)
 
 /* Merge backend specific data from an object file to the output
    object file when linking.  */
+
 static bfd_boolean
 elfNN_ia64_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 {
@@ -4740,10 +4744,12 @@ elfNN_ia64_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   flagword in_flags;
   bfd_boolean ok = TRUE;
 
-  /* Don't even pretend to support mixed-format linking.  */
-  if (bfd_get_flavour (ibfd) != bfd_target_elf_flavour
-      || bfd_get_flavour (obfd) != bfd_target_elf_flavour)
-    return FALSE;
+  /* FIXME: What should be checked when linking shared libraries?  */
+  if ((ibfd->flags & DYNAMIC) != 0)
+    return TRUE;
+
+  if (!is_ia64_elf (ibfd) || !is_ia64_elf (obfd))
+    return TRUE;
 
   in_flags  = elf_elfheader (ibfd)->e_flags;
   out_flags = elf_elfheader (obfd)->e_flags;
@@ -4880,7 +4886,7 @@ elfNN_ia64_object_p (bfd *abfd)
   flagword flags;
   const char *name;
   char *unwi_name, *unw_name;
-  bfd_size_type amt;
+  size_t amt;
 
   if (abfd->flags & DYNAMIC)
     return TRUE;
@@ -5013,6 +5019,11 @@ elfNN_hpux_backend_symbol_processing (bfd *abfd ATTRIBUTE_UNUSED,
       break;
     }
 }
+
+static void
+ignore_errors (const char *fmt ATTRIBUTE_UNUSED, ...)
+{
+}
 
 #define TARGET_LITTLE_SYM		ia64_elfNN_le_vec
 #define TARGET_LITTLE_NAME		"elfNN-ia64-little"
@@ -5110,7 +5121,7 @@ elfNN_hpux_backend_symbol_processing (bfd *abfd ATTRIBUTE_UNUSED,
    We don't want to flood users with so many error messages. We turn
    off the warning for now. It will be turned on later when the Intel
    compiler is fixed.   */
-#define elf_backend_link_order_error_handler NULL
+#define elf_backend_link_order_error_handler ignore_errors
 
 #include "elfNN-target.h"
 

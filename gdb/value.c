@@ -1,6 +1,6 @@
 /* Low level packing and unpacking of values for GDB, the GNU Debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -2291,7 +2291,7 @@ set_internalvar (struct internalvar *var, struct value *val)
          when accessing the value.
          If we keep it, we would still refer to the origin value.
          Remove the location property in case it exist.  */
-      remove_dyn_prop (DYN_PROP_DATA_LOCATION, value_type (new_data.value));
+      value_type (new_data.value)->remove_dyn_prop (DYN_PROP_DATA_LOCATION);
 
       break;
     }
@@ -3068,7 +3068,7 @@ value_fn_field (struct value **arg1p, struct fn_field *f,
       /* The minimal symbol might point to a function descriptor;
 	 resolve it to the actual code address instead.  */
       struct objfile *objfile = msym.objfile;
-      struct gdbarch *gdbarch = get_objfile_arch (objfile);
+      struct gdbarch *gdbarch = objfile->arch ();
 
       set_value_address (v,
 	gdbarch_convert_from_func_ptr_addr
@@ -3090,23 +3090,9 @@ value_fn_field (struct value **arg1p, struct fn_field *f,
 
 
 
-/* Unpack a bitfield of the specified FIELD_TYPE, from the object at
-   VALADDR, and store the result in *RESULT.
-   The bitfield starts at BITPOS bits and contains BITSIZE bits; if
-   BITSIZE is zero, then the length is taken from FIELD_TYPE.
+/* See value.h.  */
 
-   Extracting bits depends on endianness of the machine.  Compute the
-   number of least significant bits to discard.  For big endian machines,
-   we compute the total number of bits in the anonymous object, subtract
-   off the bit count from the MSB of the object to the MSB of the
-   bitfield, then the size of the bitfield, which leaves the LSB discard
-   count.  For little endian machines, the discard count is simply the
-   number of bits from the LSB of the anonymous object to the LSB of the
-   bitfield.
-
-   If the field is signed, we also do sign extension.  */
-
-static LONGEST
+LONGEST
 unpack_bits_as_long (struct type *field_type, const gdb_byte *valaddr,
 		     LONGEST bitpos, LONGEST bitsize)
 {
@@ -3491,7 +3477,10 @@ value_from_contents_and_address (struct type *type,
 				 const gdb_byte *valaddr,
 				 CORE_ADDR address)
 {
-  struct type *resolved_type = resolve_dynamic_type (type, valaddr, address);
+  gdb::array_view<const gdb_byte> view;
+  if (valaddr != nullptr)
+    view = gdb::make_array_view (valaddr, TYPE_LENGTH (type));
+  struct type *resolved_type = resolve_dynamic_type (type, view, address);
   struct type *resolved_type_no_typedef = check_typedef (resolved_type);
   struct value *v;
 
@@ -3962,7 +3951,7 @@ creal_internal_fn (struct gdbarch *gdbarch,
   type *ctype = check_typedef (value_type (cval));
   if (TYPE_CODE (ctype) != TYPE_CODE_COMPLEX)
     error (_("expected a complex number"));
-  return value_from_component (cval, TYPE_TARGET_TYPE (ctype), 0);
+  return value_real_part (cval);
 }
 
 /* Implementation of the convenience function $_cimag.  Extracts the
@@ -3981,8 +3970,7 @@ cimag_internal_fn (struct gdbarch *gdbarch,
   type *ctype = check_typedef (value_type (cval));
   if (TYPE_CODE (ctype) != TYPE_CODE_COMPLEX)
     error (_("expected a complex number"));
-  return value_from_component (cval, TYPE_TARGET_TYPE (ctype),
-			       TYPE_LENGTH (TYPE_TARGET_TYPE (ctype)));
+  return value_imaginary_part (cval);
 }
 
 #if GDB_SELF_TEST
@@ -4127,8 +4115,9 @@ test_insert_into_bit_range_vector ()
 } /* namespace selftests */
 #endif /* GDB_SELF_TEST */
 
+void _initialize_values ();
 void
-_initialize_values (void)
+_initialize_values ()
 {
   add_cmd ("convenience", no_class, show_convenience, _("\
 Debugger convenience (\"$foo\") variables and functions.\n\

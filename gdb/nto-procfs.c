@@ -1,7 +1,7 @@
 /* Machine independent support for QNX Neutrino /proc (process file system)
    for GDB.  Written by Colin Burgess at QNX Software Systems Limited.
 
-   Copyright (C) 2003-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2020 Free Software Foundation, Inc.
 
    Contributed by QNX Software Systems Ltd.
 
@@ -409,7 +409,7 @@ nto_procfs_target::update_thread_list ()
 	   (e.g. thread exited).  */
 	continue;
       ptid = ptid_t (pid, 0, tid);
-      new_thread = find_thread_ptid (ptid);
+      new_thread = find_thread_ptid (this, ptid);
       if (!new_thread)
 	new_thread = add_thread (ptid);
       update_thread_private_data (new_thread, tid, status.state, 0);
@@ -693,7 +693,6 @@ nto_procfs_target::pid_to_exec_file (const int pid)
 void
 nto_procfs_target::attach (const char *args, int from_tty)
 {
-  char *exec_file;
   int pid;
   struct inferior *inf;
 
@@ -704,7 +703,7 @@ nto_procfs_target::attach (const char *args, int from_tty)
 
   if (from_tty)
     {
-      exec_file = (char *) get_exec_file (0);
+      const char *exec_file = get_exec_file (0);
 
       if (exec_file)
 	printf_unfiltered ("Attaching to program `%s', %s\n", exec_file,
@@ -1215,7 +1214,7 @@ nto_procfs_target::create_inferior (const char *exec_file,
 
   argv = xmalloc ((allargs.size () / (unsigned) 2 + 2) *
 		  sizeof (*argv));
-  argv[0] = get_exec_file (1);
+  argv[0] = const_cast<char *> (get_exec_file (1));
   if (!argv[0])
     {
       if (exec_file)
@@ -1506,8 +1505,9 @@ init_procfs_targets (void)
 
 #define OSTYPE_NTO 1
 
+void _initialize_procfs ();
 void
-_initialize_procfs (void)
+_initialize_procfs ()
 {
   sigset_t set;
 

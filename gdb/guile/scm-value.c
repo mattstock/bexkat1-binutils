@@ -1,6 +1,6 @@
 /* Scheme interface to values.
 
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -256,6 +256,24 @@ vlscm_scm_from_value (struct value *value)
   value_smob *v_smob = (value_smob *) SCM_SMOB_DATA (v_scm);
 
   v_smob->value = release_value (value).release ();
+  vlscm_remember_scheme_value (v_smob);
+
+  return v_scm;
+}
+
+/* Create a new <gdb:value> object that encapsulates VALUE.
+   The value is not released from the all_values chain.  */
+
+SCM
+vlscm_scm_from_value_no_release (struct value *value)
+{
+  /* N.B. It's important to not cause any side-effects until we know the
+     conversion worked.  */
+  SCM v_scm = vlscm_make_value_smob ();
+  value_smob *v_smob = (value_smob *) SCM_SMOB_DATA (v_scm);
+
+  value_incref (value);
+  v_smob->value = value;
   vlscm_remember_scheme_value (v_smob);
 
   return v_scm;

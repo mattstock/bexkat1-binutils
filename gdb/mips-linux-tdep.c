@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux on MIPS processors.
 
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1642,8 +1642,9 @@ mips_linux_init_abi (struct gdbarch_info info,
     }
 }
 
+void _initialize_mips_linux_tdep ();
 void
-_initialize_mips_linux_tdep (void)
+_initialize_mips_linux_tdep ()
 {
   const struct bfd_arch_info *arch_info;
 

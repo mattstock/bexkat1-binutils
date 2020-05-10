@@ -1,6 +1,6 @@
 /* Native support code for PPC AIX, for GDB the GNU debugger.
 
-   Copyright (C) 2006-2019 Free Software Foundation, Inc.
+   Copyright (C) 2006-2020 Free Software Foundation, Inc.
 
    Free Software Foundation, Inc.
 
@@ -1177,8 +1177,9 @@ rs6000_aix_init_osabi (struct gdbarch_info info, struct gdbarch *gdbarch)
   frame_unwind_append_unwinder (gdbarch, &aix_sighandle_frame_unwind);
 }
 
+void _initialize_rs6000_aix_tdep ();
 void
-_initialize_rs6000_aix_tdep (void)
+_initialize_rs6000_aix_tdep ()
 {
   gdbarch_register_osabi_sniffer (bfd_arch_rs6000,
                                   bfd_target_xcoff_flavour,

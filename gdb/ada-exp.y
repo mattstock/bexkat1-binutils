@@ -1,5 +1,5 @@
 /* YACC parser for Ada expressions, for GDB.
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1456,8 +1456,9 @@ type_system_address (struct parser_state *par_state)
   return  type != NULL ? type : parse_type (par_state)->builtin_data_ptr;
 }
 
+void _initialize_ada_exp ();
 void
-_initialize_ada_exp (void)
+_initialize_ada_exp ()
 {
   obstack_init (&temp_parse_space);
 }

@@ -1,6 +1,6 @@
 /* Branch trace support for GDB, the GNU debugger.
 
-   Copyright (C) 2013-2019 Free Software Foundation, Inc.
+   Copyright (C) 2013-2020 Free Software Foundation, Inc.
 
    Contributed by Intel Corp. <markus.t.metzger@intel.com>
 
@@ -1533,7 +1533,7 @@ btrace_compute_ftrace_1 (struct thread_info *tp,
       return;
     }
 
-  internal_error (__FILE__, __LINE__, _("Unkown branch trace format."));
+  internal_error (__FILE__, __LINE__, _("Unknown branch trace format."));
 }
 
 static void
@@ -1592,7 +1592,8 @@ void
 btrace_enable (struct thread_info *tp, const struct btrace_config *conf)
 {
   if (tp->btrace.target != NULL)
-    return;
+    error (_("Recording already enabled on thread %s (%s)."),
+	   print_thread_id (tp), target_pid_to_str (tp->ptid).c_str ());
 
 #if !defined (HAVE_LIBIPT)
   if (conf->format == BTRACE_FORMAT_PT)
@@ -1604,9 +1605,9 @@ btrace_enable (struct thread_info *tp, const struct btrace_config *conf)
 
   tp->btrace.target = target_enable_btrace (tp->ptid, conf);
 
-  /* We're done if we failed to enable tracing.  */
   if (tp->btrace.target == NULL)
-    return;
+    error (_("Failed to enable recording on thread %s (%s)."),
+	   print_thread_id (tp), target_pid_to_str (tp->ptid).c_str ());
 
   /* We need to undo the enable in case of errors.  */
   try
@@ -1651,7 +1652,8 @@ btrace_disable (struct thread_info *tp)
   struct btrace_thread_info *btp = &tp->btrace;
 
   if (btp->target == NULL)
-    return;
+    error (_("Recording not enabled on thread %s (%s)."),
+	   print_thread_id (tp), target_pid_to_str (tp->ptid).c_str ());
 
   DEBUG ("disable thread %s (%s)", print_thread_id (tp),
 	 target_pid_to_str (tp->ptid).c_str ());
@@ -1791,7 +1793,7 @@ btrace_stitch_trace (struct btrace_data *btrace, struct thread_info *tp)
       return -1;
     }
 
-  internal_error (__FILE__, __LINE__, _("Unkown branch trace format."));
+  internal_error (__FILE__, __LINE__, _("Unknown branch trace format."));
 }
 
 /* Clear the branch trace histories in BTINFO.  */
@@ -3228,7 +3230,7 @@ maint_btrace_packet_history_cmd (const char *arg, int from_tty)
   struct btrace_thread_info *btinfo;
   unsigned int size, begin, end, from, to;
 
-  thread_info *tp = find_thread_ptid (inferior_ptid);
+  thread_info *tp = find_thread_ptid (current_inferior (), inferior_ptid);
   if (tp == NULL)
     error (_("No thread."));
 
@@ -3358,51 +3360,6 @@ maint_btrace_clear_cmd (const char *args, int from_tty)
   btrace_clear (tp);
 }
 
-/* The "maintenance btrace" command.  */
-
-static void
-maint_btrace_cmd (const char *args, int from_tty)
-{
-  help_list (maint_btrace_cmdlist, "maintenance btrace ", all_commands,
-	     gdb_stdout);
-}
-
-/* The "maintenance set btrace" command.  */
-
-static void
-maint_btrace_set_cmd (const char *args, int from_tty)
-{
-  help_list (maint_btrace_set_cmdlist, "maintenance set btrace ", all_commands,
-	     gdb_stdout);
-}
-
-/* The "maintenance show btrace" command.  */
-
-static void
-maint_btrace_show_cmd (const char *args, int from_tty)
-{
-  help_list (maint_btrace_show_cmdlist, "maintenance show btrace ",
-	     all_commands, gdb_stdout);
-}
-
-/* The "maintenance set btrace pt" command.  */
-
-static void
-maint_btrace_pt_set_cmd (const char *args, int from_tty)
-{
-  help_list (maint_btrace_pt_set_cmdlist, "maintenance set btrace pt ",
-	     all_commands, gdb_stdout);
-}
-
-/* The "maintenance show btrace pt" command.  */
-
-static void
-maint_btrace_pt_show_cmd (const char *args, int from_tty)
-{
-  help_list (maint_btrace_pt_show_cmdlist, "maintenance show btrace pt ",
-	     all_commands, gdb_stdout);
-}
-
 /* The "maintenance info btrace" command.  */
 
 static void
@@ -3471,36 +3428,39 @@ show_maint_btrace_pt_skip_pad  (struct ui_file *file, int from_tty,
 
 /* Initialize btrace maintenance commands.  */
 
+void _initialize_btrace ();
 void
-_initialize_btrace (void)
+_initialize_btrace ()
 {
   add_cmd ("btrace", class_maintenance, maint_info_btrace_cmd,
 	   _("Info about branch tracing data."), &maintenanceinfolist);
 
-  add_prefix_cmd ("btrace", class_maintenance, maint_btrace_cmd,
-		  _("Branch tracing maintenance commands."),
-		  &maint_btrace_cmdlist, "maintenance btrace ",
-		  0, &maintenancelist);
+  add_basic_prefix_cmd ("btrace", class_maintenance,
+			_("Branch tracing maintenance commands."),
+			&maint_btrace_cmdlist, "maintenance btrace ",
+			0, &maintenancelist);
 
-  add_prefix_cmd ("btrace", class_maintenance, maint_btrace_set_cmd, _("\
+  add_basic_prefix_cmd ("btrace", class_maintenance, _("\
 Set branch tracing specific variables."),
-                  &maint_btrace_set_cmdlist, "maintenance set btrace ",
-                  0, &maintenance_set_cmdlist);
+			&maint_btrace_set_cmdlist, "maintenance set btrace ",
+			0, &maintenance_set_cmdlist);
 
-  add_prefix_cmd ("pt", class_maintenance, maint_btrace_pt_set_cmd, _("\
+  add_basic_prefix_cmd ("pt", class_maintenance, _("\
 Set Intel Processor Trace specific variables."),
-                  &maint_btrace_pt_set_cmdlist, "maintenance set btrace pt ",
-                  0, &maint_btrace_set_cmdlist);
+			&maint_btrace_pt_set_cmdlist,
+			"maintenance set btrace pt ",
+			0, &maint_btrace_set_cmdlist);
 
-  add_prefix_cmd ("btrace", class_maintenance, maint_btrace_show_cmd, _("\
+  add_show_prefix_cmd ("btrace", class_maintenance, _("\
 Show branch tracing specific variables."),
-                  &maint_btrace_show_cmdlist, "maintenance show btrace ",
-                  0, &maintenance_show_cmdlist);
+		       &maint_btrace_show_cmdlist, "maintenance show btrace ",
+		       0, &maintenance_show_cmdlist);
 
-  add_prefix_cmd ("pt", class_maintenance, maint_btrace_pt_show_cmd, _("\
+  add_show_prefix_cmd ("pt", class_maintenance, _("\
 Show Intel Processor Trace specific variables."),
-                  &maint_btrace_pt_show_cmdlist, "maintenance show btrace pt ",
-                  0, &maint_btrace_show_cmdlist);
+		       &maint_btrace_pt_show_cmdlist,
+		       "maintenance show btrace pt ",
+		       0, &maint_btrace_show_cmdlist);
 
   add_setshow_boolean_cmd ("skip-pad", class_maintenance,
 			   &maint_btrace_pt_skip_pad, _("\

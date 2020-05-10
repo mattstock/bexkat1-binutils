@@ -1,6 +1,6 @@
 /* Target-dependent code for the NEC V850 for GDB, the GNU debugger.
 
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 #include "frame-base.h"
 #include "trad-frame.h"
 #include "frame-unwind.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "gdbtypes.h"
 #include "inferior.h"
 #include "gdbcore.h"
@@ -1453,8 +1453,9 @@ v850_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_v850_tdep ();
 void
-_initialize_v850_tdep (void)
+_initialize_v850_tdep ()
 {
   register_gdbarch_init (bfd_arch_v850, v850_gdbarch_init);
   register_gdbarch_init (bfd_arch_v850_rh850, v850_gdbarch_init);

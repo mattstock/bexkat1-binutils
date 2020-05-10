@@ -1,5 +1,5 @@
 /* Darwin support for GDB, the GNU debugger.
-   Copyright (C) 2008-2019 Free Software Foundation, Inc.
+   Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
    Contributed by AdaCore.
 
@@ -28,7 +28,6 @@
 #include "gdbcore.h"
 #include "mach-o.h"
 #include "aout/stab_gnu.h"
-#include "psympriv.h"
 #include "complaints.h"
 #include "gdb_bfd.h"
 #include <string>
@@ -494,7 +493,7 @@ macho_add_oso_symfile (oso_el *oso, const gdb_bfd_ref_ptr &abfd,
             {
               if (mach_o_debug_level > 4)
                 {
-                  struct gdbarch *arch = get_objfile_arch (main_objfile);
+                  struct gdbarch *arch = main_objfile->arch ();
                   printf_unfiltered
                     (_("Adding symbol %s (addr: %s)\n"),
                      sym->name, paddress (arch, sym->value));
@@ -568,7 +567,7 @@ macho_add_oso_symfile (oso_el *oso, const gdb_bfd_ref_ptr &abfd,
 
                   if (mach_o_debug_level > 3)
                     {
-                      struct gdbarch *arch = get_objfile_arch (main_objfile);
+                      struct gdbarch *arch = main_objfile->arch ();
                       printf_unfiltered
                         (_("resolve sect %s with %s (set to %s)\n"),
                          sec->name, sym->name,
@@ -907,12 +906,7 @@ macho_symfile_offsets (struct objfile *objfile,
   struct obj_section *osect;
 
   /* Allocate section_offsets.  */
-  objfile->num_sections = bfd_count_sections (objfile->obfd);
-  objfile->section_offsets = (struct section_offsets *)
-    obstack_alloc (&objfile->objfile_obstack,
-                   SIZEOF_N_SECTION_OFFSETS (objfile->num_sections));
-  memset (objfile->section_offsets, 0,
-          SIZEOF_N_SECTION_OFFSETS (objfile->num_sections));
+  objfile->section_offsets.assign (bfd_count_sections (objfile->obfd), 0);
 
   /* This code is run when we first add the objfile with
      symfile_add_with_addrs_or_offsets, when "addrs" not "offsets" are
@@ -966,8 +960,9 @@ static const struct sym_fns macho_sym_fns = {
   &psym_functions
 };
 
+void _initialize_machoread ();
 void
-_initialize_machoread (void)
+_initialize_machoread ()
 {
   add_symtab_fns (bfd_target_mach_o_flavour, &macho_sym_fns);
 

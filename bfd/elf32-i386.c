@@ -1,5 +1,5 @@
 /* Intel 80386/80486-specific support for 32-bit ELF
-   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+   Copyright (C) 1993-2020 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -1226,6 +1226,7 @@ elf_i386_convert_load_reloc (bfd *abfd, Elf_Internal_Shdr *symtab_hdr,
   bfd_vma nop_offset;
   bfd_boolean is_pic;
   bfd_boolean to_reloc_32;
+  bfd_boolean abs_symbol;
   unsigned int r_type;
   unsigned int r_symndx;
   bfd_vma roff = irel->r_offset;
@@ -1249,6 +1250,21 @@ elf_i386_convert_load_reloc (bfd *abfd, Elf_Internal_Shdr *symtab_hdr,
   modrm = bfd_get_8 (abfd, contents + roff - 1);
   baseless = (modrm & 0xc7) == 0x5;
 
+  if (h)
+    {
+      /* NB: Also set linker_def via SYMBOL_REFERENCES_LOCAL_P.  */
+      local_ref = SYMBOL_REFERENCES_LOCAL_P (link_info, h);
+      isym = NULL;
+      abs_symbol = ABS_SYMBOL_P (h);
+    }
+  else
+    {
+      local_ref = TRUE;
+      isym = bfd_sym_from_r_symndx (&htab->sym_cache, abfd,
+				    r_symndx);
+      abs_symbol = isym->st_shndx == SHN_ABS;
+    }
+
   if (baseless && is_pic)
     {
       /* For PIC, disallow R_386_GOT32X without a base register
@@ -1256,11 +1272,7 @@ elf_i386_convert_load_reloc (bfd *abfd, Elf_Internal_Shdr *symtab_hdr,
       const char *name;
 
       if (h == NULL)
-	{
-	  isym = bfd_sym_from_r_symndx (&htab->sym_cache, abfd,
-					r_symndx);
-	  name = bfd_elf_sym_name (abfd, symtab_hdr, isym, NULL);
-	}
+	name = bfd_elf_sym_name (abfd, symtab_hdr, isym, NULL);
       else
 	name = h->root.root.string;
 
@@ -1294,9 +1306,6 @@ elf_i386_convert_load_reloc (bfd *abfd, Elf_Internal_Shdr *symtab_hdr,
 	goto convert_load;
     }
 
-  /* NB: Also set linker_def via SYMBOL_REFERENCES_LOCAL_P.  */
-  local_ref = SYMBOL_REFERENCES_LOCAL_P (link_info, h);
-
   /* Undefined weak symbol is only bound locally in executable
      and its reference is resolved as 0.  */
   if (h->root.type == bfd_link_hash_undefweak
@@ -1327,7 +1336,7 @@ elf_i386_convert_load_reloc (bfd *abfd, Elf_Internal_Shdr *symtab_hdr,
 	  && local_ref)
 	{
 	  /* The function is locally defined.   */
-convert_branch:
+	convert_branch:
 	  /* Convert R_386_GOT32X to R_386_PC32.  */
 	  if (modrm == 0x15 || (modrm & 0xf8) == 0x90)
 	    {
@@ -1393,9 +1402,12 @@ convert_branch:
 	       || h->root.type == bfd_link_hash_defweak)
 	      && local_ref))
 	{
-convert_load:
+	convert_load:
 	  if (opcode == 0x8b)
 	    {
+	      if (abs_symbol && local_ref)
+		to_reloc_32 = TRUE;
+
 	      if (to_reloc_32)
 		{
 		  /* Convert "mov foo@GOT[(%reg1)], %reg2" to
@@ -1519,6 +1531,7 @@ elf_i386_check_relocs (bfd *abfd,
       Elf_Internal_Sym *isym;
       const char *name;
       bfd_boolean size_reloc;
+      bfd_boolean no_dynreloc;
 
       r_symndx = ELF32_R_SYM (rel->r_info);
       r_type = ELF32_R_TYPE (rel->r_info);
@@ -1586,6 +1599,10 @@ elf_i386_check_relocs (bfd *abfd,
 					    &converted, info))
 	    goto error_return;
 	}
+
+      if (!_bfd_elf_x86_valid_reloc_p (sec, info, htab, rel, h, isym,
+				       symtab_hdr, &no_dynreloc))
+	return FALSE;
 
       if (! elf_i386_tls_transition (info, abfd, sec, contents,
 				     symtab_hdr, sym_hashes,
@@ -1739,7 +1756,7 @@ elf_i386_check_relocs (bfd *abfd,
 
 	case R_386_GOTOFF:
 	case R_386_GOTPC:
-create_got:
+	create_got:
 	  if (r_type != R_386_TLS_IE)
 	    {
 	      if (eh != NULL)
@@ -1769,7 +1786,7 @@ create_got:
 	case R_386_PC32:
 	  if (eh != NULL && (sec->flags & SEC_CODE) != 0)
 	    eh->zero_undefweak |= 0x2;
-do_relocation:
+	do_relocation:
 	  /* We are called after all symbols have been resolved.  Only
 	     relocation against STT_GNU_IFUNC symbol must go through
 	     PLT.  */
@@ -1826,9 +1843,10 @@ do_relocation:
 	    }
 
 	  size_reloc = FALSE;
-do_size:
-	  if (NEED_DYNAMIC_RELOCATION_P (info, FALSE, h, sec, r_type,
-					 R_386_32))
+	do_size:
+	  if (!no_dynreloc
+	      && NEED_DYNAMIC_RELOCATION_P (info, FALSE, h, sec, r_type,
+					    R_386_32))
 	    {
 	      struct elf_dyn_relocs *p;
 	      struct elf_dyn_relocs **head;
@@ -1875,7 +1893,7 @@ do_size:
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 		  p = (struct elf_dyn_relocs *) bfd_alloc (htab->elf.dynobj,
 							   amt);
 		  if (p == NULL)
@@ -1931,7 +1949,7 @@ do_size:
 
   return TRUE;
 
-error_return:
+ error_return:
   if (elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
   sec->check_relocs_failed = 1;
@@ -2362,7 +2380,7 @@ elf_i386_relocate_section (bfd *output_bfd,
 	  switch (r_type)
 	    {
 	    default:
-bad_ifunc_reloc:
+	    bad_ifunc_reloc:
 	      if (h->root.root.string)
 		name = h->root.root.string;
 	      else
@@ -2386,7 +2404,7 @@ bad_ifunc_reloc:
 		  asection *sreloc;
 		  bfd_vma offset;
 
-do_ifunc_pointer:
+		do_ifunc_pointer:
 		  /* Need a dynamic relocation to get the real function
 		     adddress.  */
 		  offset = _bfd_elf_section_offset (output_bfd,
@@ -2449,7 +2467,7 @@ do_ifunc_pointer:
 	    }
 	}
 
-skip_ifunc:
+    skip_ifunc:
       resolved_to_zero = (eh != NULL
 			  && UNDEFINED_WEAK_RESOLVED_TO_ZERO (info, eh));
 
@@ -2551,7 +2569,7 @@ skip_ifunc:
 		     we don't know what the GOT base is.  */
 		  const char *name;
 
-disallow_got32:
+		disallow_got32:
 		  if (h == NULL || h->root.root.string == NULL)
 		    name = bfd_elf_sym_name (input_bfd, symtab_hdr, sym,
 					     NULL);
@@ -2704,7 +2722,7 @@ disallow_got32:
 	      || is_vxworks_tls)
 	    break;
 
-	  if (GENERATE_DYNAMIC_RELOCATION_P (info, eh, r_type,
+	  if (GENERATE_DYNAMIC_RELOCATION_P (info, eh, r_type, sec,
 					     FALSE, resolved_to_zero,
 					     (r_type == R_386_PC32)))
 	    {
@@ -3409,12 +3427,12 @@ disallow_got32:
 	  return FALSE;
 	}
 
-do_relocation:
+    do_relocation:
       r = _bfd_final_link_relocate (howto, input_bfd, input_section,
 				    contents, rel->r_offset,
 				    relocation, 0);
 
-check_relocation_error:
+    check_relocation_error:
       if (r != bfd_reloc_ok)
 	{
 	  const char *name;
@@ -3848,7 +3866,7 @@ elf_i386_finish_dynamic_symbol (bfd *output_bfd,
       else
 	{
 	  BFD_ASSERT((h->got.offset & 1) == 0);
-do_glob_dat:
+	do_glob_dat:
 	  bfd_put_32 (output_bfd, (bfd_vma) 0,
 		      htab->elf.sgot->contents + h->got.offset);
 	  rel.r_info = ELF32_R_INFO (h->dynindx, R_386_GLOB_DAT);

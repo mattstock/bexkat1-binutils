@@ -1,5 +1,5 @@
 /* Select disassembly routine for specified architecture.
-   Copyright (C) 1994-2019 Free Software Foundation, Inc.
+   Copyright (C) 1994-2020 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -21,7 +21,7 @@
 #include "sysdep.h"
 #include "disassemble.h"
 #include "safe-ctype.h"
-#include <assert.h>
+#include "opintl.h"
 
 #ifdef ARCH_all
 #define ARCH_aarch64
@@ -89,7 +89,6 @@
 #define ARCH_tic4x
 #define ARCH_tic54x
 #define ARCH_tic6x
-#define ARCH_tic80
 #define ARCH_tilegx
 #define ARCH_tilepro
 #define ARCH_v850
@@ -470,11 +469,6 @@ disassembler (enum bfd_architecture a,
       disassemble = print_insn_tic6x;
       break;
 #endif
-#ifdef ARCH_tic80
-    case bfd_arch_tic80:
-      disassemble = print_insn_tic80;
-      break;
-#endif
 #ifdef ARCH_ft32
     case bfd_arch_ft32:
       disassemble = print_insn_ft32;
@@ -843,4 +837,12 @@ disassembler_options_cmp (const char *s1, const char *s2)
   while (c1 == c2);
 
   return c1 - c2;
+}
+
+void
+opcodes_assert (const char *file, int line)
+{
+  opcodes_error_handler (_("assertion fail %s:%d"), file, line);
+  opcodes_error_handler (_("Please report this bug"));
+  abort ();
 }

@@ -1,6 +1,6 @@
 /* Header file for command creation.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ enum command_class
   no_class = -1, class_run = 0, class_vars, class_stack, class_files,
   class_support, class_info, class_breakpoint, class_trace,
   class_alias, class_bookmark, class_obscure, class_maintenance,
-  class_pseudo, class_tui, class_user, class_xdb,
+  class_tui, class_user, class_xdb,
   no_set_class	/* Used for "show" commands that have no corresponding
 		   "set" command.  */
 };
@@ -178,6 +178,20 @@ extern struct cmd_list_element *add_prefix_cmd (const char *, enum command_class
 						struct cmd_list_element **,
 						const char *, int,
 						struct cmd_list_element **);
+
+/* Like add_prefix_cmd, but sets the callback to a function that
+   simply calls help_list.  */
+
+extern struct cmd_list_element *add_basic_prefix_cmd
+  (const char *, enum command_class, const char *, struct cmd_list_element **,
+   const char *, int, struct cmd_list_element **);
+
+/* Like add_prefix_cmd, but useful for "show" prefixes.  This sets the
+   callback to a function that simply calls cmd_show_list.  */
+
+extern struct cmd_list_element *add_show_prefix_cmd
+  (const char *, enum command_class, const char *, struct cmd_list_element **,
+   const char *, int, struct cmd_list_element **);
 
 extern struct cmd_list_element *add_prefix_cmd_suppress_notification
 			(const char *name, enum command_class theclass,

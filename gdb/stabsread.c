@@ -1,6 +1,6 @@
 /* Support routines for decoding "stabs" debugging information format.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -369,7 +369,7 @@ dbx_alloc_type (int typenums[2], struct objfile *objfile)
 static struct type *
 dbx_init_float_type (struct objfile *objfile, int bits)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   const struct floatformat **format;
   struct type *type;
 
@@ -649,7 +649,7 @@ struct symbol *
 define_symbol (CORE_ADDR valu, const char *string, int desc, int type,
 	       struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   struct symbol *sym;
   const char *p = find_name_end (string);
   int deftype;
@@ -738,7 +738,7 @@ define_symbol (CORE_ADDR valu, const char *string, int desc, int type,
   else
     {
     normal:
-      std::string new_name;
+      gdb::unique_xmalloc_ptr<char> new_name;
 
       if (sym->language () == language_cplus)
 	{
@@ -748,15 +748,11 @@ define_symbol (CORE_ADDR valu, const char *string, int desc, int type,
 	  name[p - string] = '\0';
 	  new_name = cp_canonicalize_string (name);
 	}
-      if (!new_name.empty ())
-	{
-	  SYMBOL_SET_NAMES (sym,
-			    new_name,
-			    1, objfile);
-	}
+      if (new_name != nullptr)
+	sym->compute_and_set_names (new_name.get (), true, objfile->per_bfd);
       else
-	SYMBOL_SET_NAMES (sym, gdb::string_view (string, p - string), true,
-			  objfile);
+	sym->compute_and_set_names (gdb::string_view (string, p - string), true,
+				    objfile->per_bfd);
 
       if (sym->language () == language_cplus)
 	cp_scan_for_anonymous_namespaces (get_buildsym_compunit (), sym,
@@ -1641,10 +1637,10 @@ again:
 	      memcpy (name, *pp, p - *pp);
 	      name[p - *pp] = '\0';
 
-	      std::string new_name = cp_canonicalize_string (name);
-	      if (!new_name.empty ())
+	      gdb::unique_xmalloc_ptr<char> new_name = cp_canonicalize_string (name);
+	      if (new_name != nullptr)
 		type_name = obstack_strdup (&objfile->objfile_obstack,
-					    new_name);
+					    new_name.get ());
 	    }
 	  if (type_name == NULL)
 	    {
@@ -2190,12 +2186,12 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
       break;
     case 25:
       /* Complex type consisting of two IEEE single precision values.  */
-      rettype = init_complex_type (objfile, "complex",
+      rettype = init_complex_type ("complex",
 				   rs6000_builtin_type (12, objfile));
       break;
     case 26:
       /* Complex type consisting of two IEEE double precision values.  */
-      rettype = init_complex_type (objfile, "double complex",
+      rettype = init_complex_type ("double complex",
 				   rs6000_builtin_type (13, objfile));
       break;
     case 27:
@@ -2827,7 +2823,7 @@ read_one_struct_field (struct stab_field_info *fip, const char **pp,
 		       const char *p, struct type *type,
 		       struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
 
   fip->list->field.name
     = obstack_strndup (&objfile->objfile_obstack, *pp, p - *pp);
@@ -3585,7 +3581,7 @@ static struct type *
 read_enum_type (const char **pp, struct type *type,
 		struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   const char *p;
   char *name;
   long n;
@@ -3809,7 +3805,7 @@ read_sun_floating_type (const char **pp, int typenums[2],
       || details == NF_COMPLEX32)
     {
       rettype = dbx_init_float_type (objfile, nbits / 2);
-      return init_complex_type (objfile, NULL, rettype);
+      return init_complex_type (NULL, rettype);
     }
 
   return dbx_init_float_type (objfile, nbits);
@@ -4001,7 +3997,7 @@ static struct type *
 read_range_type (const char **pp, int typenums[2], int type_size,
                  struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = objfile->arch ();
   const char *orig_pp = *pp;
   int rangenums[2];
   long n2, n3;
@@ -4103,7 +4099,7 @@ read_range_type (const char **pp, int typenums[2], int type_size,
 	= dbx_init_float_type (objfile, n2 * TARGET_CHAR_BIT);
 
       if (self_subrange)
-	return init_complex_type (objfile, NULL, float_type);
+	return init_complex_type (NULL, float_type);
       else
 	return float_type;
     }
@@ -4783,8 +4779,9 @@ hashname (const char *name)
 
 /* Initializer for this module.  */
 
+void _initialize_stabsread ();
 void
-_initialize_stabsread (void)
+_initialize_stabsread ()
 {
   undef_types_allocated = 20;
   undef_types_length = 0;

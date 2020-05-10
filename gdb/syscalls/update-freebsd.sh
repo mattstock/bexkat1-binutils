@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (C) 2018-2019 Free Software Foundation, Inc.
+# Copyright (C) 2018-2020 Free Software Foundation, Inc.
 #
 # This file is part of GDB.
 #
@@ -69,7 +69,7 @@ awk '
 }
 /\/\* [0-9]* is freebsd[0-9]* [a-z_]* \*\// {
     printf "  <syscall name=\"%s_%s\" number=\"%s\" alias=\"%s\"/>\n", $4, $5, $2, $5
-}' $1 >> freebsd.xml.tmp
+}' "$1" >> freebsd.xml.tmp
 
 cat >> freebsd.xml.tmp <<EOF
 </syscalls_info>

@@ -1,6 +1,6 @@
 /* Self tests for the TUI
 
-   Copyright (C) 2019 Free Software Foundation, Inc.
+   Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -46,6 +46,7 @@ run_tests ()
 
 #endif /* TUI */
 
+void _initialize_tui_selftest ();
 void
 _initialize_tui_selftest ()
 {

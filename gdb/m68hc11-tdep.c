@@ -1,6 +1,6 @@
 /* Target-dependent code for Motorola 68HC11 & 68HC12
 
-   Copyright (C) 1999-2019 Free Software Foundation, Inc.
+   Copyright (C) 1999-2020 Free Software Foundation, Inc.
 
    Contributed by Stephane Carrez, stcarrez@nerim.fr
 
@@ -24,7 +24,7 @@
 #include "frame.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
-#include "dwarf2-frame.h"
+#include "dwarf2/frame.h"
 #include "trad-frame.h"
 #include "symtab.h"
 #include "gdbtypes.h"
@@ -1512,8 +1512,9 @@ m68hc11_gdbarch_init (struct gdbarch_info info,
   return gdbarch;
 }
 
+void _initialize_m68hc11_tdep ();
 void
-_initialize_m68hc11_tdep (void)
+_initialize_m68hc11_tdep ()
 {
   register_gdbarch_init (bfd_arch_m68hc11, m68hc11_gdbarch_init);
   register_gdbarch_init (bfd_arch_m68hc12, m68hc11_gdbarch_init);

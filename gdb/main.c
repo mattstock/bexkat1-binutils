@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2019 Free Software Foundation, Inc.
+   Copyright (C) 1986-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,7 +28,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
-#include "event-loop.h"
+#include "gdbsupport/event-loop.h"
 #include "ui-out.h"
 
 #include "interps.h"
@@ -53,6 +53,7 @@
 #include "gdbtk/generic/gdbtk.h"
 #endif
 #include "gdbsupport/alt-stack.h"
+#include "observable.h"
 
 /* The selected interpreter.  This will be used as a set command
    variable, so it should always be malloc'ed - since
@@ -124,7 +125,8 @@ set_gdb_data_directory (const char *new_datadir)
       print_sys_errmsg (new_datadir, save_errno);
     }
   else if (!S_ISDIR (st.st_mode))
-    warning (_("%s is not a directory."), new_datadir);
+    warning (_("%ps is not a directory."),
+	     styled_string (file_name_style.style (), new_datadir));
 
   gdb_datadir = gdb_realpath (new_datadir).get ();
 
@@ -333,6 +335,61 @@ get_init_files (std::vector<std::string> *system_gdbinit,
   *system_gdbinit = sysgdbinit;
   *home_gdbinit = homeinit;
   *local_gdbinit = localinit;
+}
+
+/* Start up the event loop.  This is the entry point to the event loop
+   from the command loop.  */
+
+static void
+start_event_loop ()
+{
+  /* Loop until there is nothing to do.  This is the entry point to
+     the event loop engine.  gdb_do_one_event will process one event
+     for each invocation.  It blocks waiting for an event and then
+     processes it.  */
+  while (1)
+    {
+      int result = 0;
+
+      try
+	{
+	  result = gdb_do_one_event ();
+	}
+      catch (const gdb_exception &ex)
+	{
+	  exception_print (gdb_stderr, ex);
+
+	  /* If any exception escaped to here, we better enable
+	     stdin.  Otherwise, any command that calls async_disable_stdin,
+	     and then throws, will leave stdin inoperable.  */
+	  SWITCH_THRU_ALL_UIS ()
+	    {
+	      async_enable_stdin ();
+	    }
+	  /* If we long-jumped out of do_one_event, we probably didn't
+	     get around to resetting the prompt, which leaves readline
+	     in a messed-up state.  Reset it here.  */
+	  current_ui->prompt_state = PROMPT_NEEDED;
+	  gdb::observers::command_error.notify ();
+	  /* This call looks bizarre, but it is required.  If the user
+	     entered a command that caused an error,
+	     after_char_processing_hook won't be called from
+	     rl_callback_read_char_wrapper.  Using a cleanup there
+	     won't work, since we want this function to be called
+	     after a new prompt is printed.  */
+	  if (after_char_processing_hook)
+	    (*after_char_processing_hook) ();
+	  /* Maybe better to set a flag to be checked somewhere as to
+	     whether display the prompt or not.  */
+	}
+
+      if (result < 0)
+	break;
+    }
+
+  /* We are done with the event loop.  There are no more event sources
+     to listen to.  So we exit GDB.  */
+  return;
 }
 
 /* Call command_loop.  */
@@ -574,14 +631,9 @@ captured_main_1 (struct captured_main_args *context)
   gdb_datadir = relocate_gdb_directory (GDB_DATADIR,
 					GDB_DATADIR_RELOCATABLE);
 
-#ifdef WITH_PYTHON_PATH
-  {
-    /* For later use in helping Python find itself.  */
-    char *tmp = concat (WITH_PYTHON_PATH, SLASH_STRING, "lib", (char *) NULL);
-
-    python_libdir = relocate_gdb_directory (tmp, PYTHON_PATH_RELOCATABLE);
-    xfree (tmp);
-  }
+#ifdef WITH_PYTHON_LIBDIR
+  python_libdir = relocate_gdb_directory (WITH_PYTHON_LIBDIR,
+					  PYTHON_LIBDIR_RELOCATABLE);
 #endif
 
 #ifdef RELOC_SRCDIR

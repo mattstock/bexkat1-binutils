@@ -1,5 +1,5 @@
 /* 32-bit ELF support for Nios II.
-   Copyright (C) 2012-2019 Free Software Foundation, Inc.
+   Copyright (C) 2012-2020 Free Software Foundation, Inc.
    Contributed by Nigel Gray (ngray@altera.com).
    Contributed by Mentor Graphics, Inc.
 
@@ -2228,7 +2228,7 @@ nios2_elf32_setup_section_lists (bfd *output_bfd, struct bfd_link_info *info)
   unsigned int top_id, top_index;
   asection *section;
   asection **input_list, **list;
-  bfd_size_type amt;
+  size_t amt;
   struct elf32_nios2_link_hash_table *htab = elf32_nios2_hash_table (info);
 
   /* Count the number of input BFDs and find the top input section id.  */
@@ -2490,6 +2490,17 @@ nios2_build_one_stub (struct bfd_hash_entry *gen_entry, void *in_arg ATTRIBUTE_U
     = (struct elf32_nios2_stub_hash_entry *) gen_entry;
   asection *stub_sec = hsh->stub_sec;
   bfd_vma sym_value;
+  struct bfd_link_info *info;
+
+  info = (struct bfd_link_info *) in_arg;
+
+  /* Fail if the target section could not be assigned to an output
+     section.  The user should fix his linker script.  */
+  if (hsh->target_section->output_section == NULL
+      && info->non_contiguous_regions)
+    info->callbacks->einfo (_("%F%P: Could not assign '%pA' to an output section. "
+			      "Retry without --enable-non-contiguous-regions.\n"),
+			    hsh->target_section);
 
   /* Make a note of the offset within the stubs for this entry.  */
   hsh->stub_offset = stub_sec->size;
@@ -2560,7 +2571,7 @@ get_local_syms (bfd *output_bfd ATTRIBUTE_UNUSED, bfd *input_bfd,
   /* We want to read in symbol extension records only once.  To do this
      we need to read in the local symbols in parallel and save them for
      later use; so hold pointers to the local symbols in an array.  */
-  bfd_size_type amt = sizeof (Elf_Internal_Sym *) * htab->bfd_count;
+  size_t amt = sizeof (Elf_Internal_Sym *) * htab->bfd_count;
   all_local_syms = bfd_zmalloc (amt);
   htab->all_local_syms = all_local_syms;
   if (all_local_syms == NULL)
@@ -3062,7 +3073,7 @@ nios2_elf_assign_gp (bfd *output_bfd, bfd_vma *pgp, struct bfd_link_info *info)
 
   h = bfd_hash_lookup (&info->hash->table, "_gp", FALSE, FALSE);
   lh = (struct bfd_link_hash_entry *) h;
-lookup:
+ lookup:
   if (lh)
     {
       switch (lh->type)
@@ -4539,10 +4550,10 @@ nios2_elf32_relocate_section (bfd *output_bfd,
 /* Implement elf-backend_section_flags:
    Convert NIOS2 specific section flags to bfd internal section flags.  */
 static bfd_boolean
-nios2_elf32_section_flags (flagword *flags, const Elf_Internal_Shdr *hdr)
+nios2_elf32_section_flags (const Elf_Internal_Shdr *hdr)
 {
   if (hdr->sh_flags & SHF_NIOS2_GPREL)
-    *flags |= SEC_SMALL_DATA;
+    hdr->bfd_section->flags |= SEC_SMALL_DATA;
 
   return TRUE;
 }
@@ -4943,7 +4954,7 @@ nios2_elf32_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 		  p = ((struct elf_dyn_relocs *)
 		       bfd_alloc (htab->root.dynobj, amt));
 		  if (p == NULL)
@@ -5961,7 +5972,7 @@ static struct bfd_link_hash_table *
 nios2_elf32_link_hash_table_create (bfd *abfd)
 {
   struct elf32_nios2_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf32_nios2_link_hash_table);
+  size_t amt = sizeof (struct elf32_nios2_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)

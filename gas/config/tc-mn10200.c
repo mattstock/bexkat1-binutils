@@ -1,5 +1,5 @@
 /* tc-mn10200.c -- Assembler code for the Matsushita 10200
-   Copyright (C) 1996-2019 Free Software Foundation, Inc.
+   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -1103,7 +1103,7 @@ md_assemble (char *str)
 	      break;
 	    }
 
-keep_going:
+	keep_going:
 	  str = input_line_pointer;
 	  input_line_pointer = hold;
 

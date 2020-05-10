@@ -1,6 +1,6 @@
 /* Target-dependent code for the Toshiba MeP for GDB, the GNU debugger.
 
-   Copyright (C) 2001-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2020 Free Software Foundation, Inc.
 
    Contributed by Red Hat, Inc.
 
@@ -2448,8 +2448,9 @@ mep_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_mep_tdep ();
 void
-_initialize_mep_tdep (void)
+_initialize_mep_tdep ()
 {
   mep_csr_reggroup = reggroup_new ("csr", USER_REGGROUP);
   mep_cr_reggroup  = reggroup_new ("cr", USER_REGGROUP); 

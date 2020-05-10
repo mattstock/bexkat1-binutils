@@ -1,5 +1,5 @@
 /* 32-bit ELF support for C-SKY.
-   Copyright (C) 1998-2019 Free Software Foundation, Inc.
+   Copyright (C) 1998-2020 Free Software Foundation, Inc.
    Contributed by C-SKY Microsystems and Mentor Graphics.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -1500,7 +1500,7 @@ static struct bfd_link_hash_table *
 csky_elf_link_hash_table_create (bfd *abfd)
 {
   struct csky_elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct csky_elf_link_hash_table);
+  size_t amt = sizeof (struct csky_elf_link_hash_table);
 
   ret = (struct csky_elf_link_hash_table*) bfd_zmalloc (amt);
   if (ret == NULL)
@@ -2712,7 +2712,7 @@ csky_elf_check_relocs (bfd * abfd,
 	      p = *head;
 	      if (p == NULL || p->sec != sec)
 		{
-		  bfd_size_type amt = sizeof *p;
+		  size_t amt = sizeof *p;
 		  p = ((struct elf_dyn_relocs *)
 		       bfd_alloc (htab->elf.dynobj, amt));
 		  if (p == NULL)
@@ -3413,7 +3413,7 @@ elf32_csky_size_stubs (bfd *output_bfd,
 		  if (r_type >= (unsigned int) R_CKCORE_MAX)
 		    {
 		      bfd_set_error (bfd_error_bad_value);
-error_ret_free_internal:
+		    error_ret_free_internal:
 		      if (elf_section_data (section)->relocs == NULL)
 			free (internal_relocs);
 		      goto error_ret_free_local;
@@ -3592,7 +3592,7 @@ error_ret_free_internal:
     }
 
   return TRUE;
-error_ret_free_local:
+ error_ret_free_local:
   return FALSE;
 }
 
@@ -3620,6 +3620,14 @@ csky_build_one_stub (struct bfd_hash_entry *gen_entry,
   /* Massage our args to the form they really have.  */
   stub_entry = (struct elf32_csky_stub_hash_entry *)gen_entry;
   info = (struct bfd_link_info *) in_arg;
+
+  /* Fail if the target section could not be assigned to an output
+     section.  The user should fix his linker script.  */
+  if (stub_entry->target_section->output_section == NULL
+      && info->non_contiguous_regions)
+    info->callbacks->einfo (_("%F%P: Could not assign '%pA' to an output section. "
+			      "Retry without --enable-non-contiguous-regions.\n"),
+			    stub_entry->target_section);
 
   globals = csky_elf_hash_table (info);
   if (globals == NULL)
@@ -3770,7 +3778,7 @@ elf32_csky_setup_section_lists (bfd *output_bfd,
   unsigned int top_id, top_index;
   asection *section;
   asection **input_list, **list;
-  bfd_size_type amt;
+  size_t amt;
   struct csky_elf_link_hash_table *htab = csky_elf_hash_table (info);
 
   if (!htab)

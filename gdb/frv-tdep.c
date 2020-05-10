@@ -1,6 +1,6 @@
 /* Target-dependent code for the Fujitsu FR-V, for GDB, the GNU Debugger.
 
-   Copyright (C) 2002-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1573,8 +1573,9 @@ frv_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
+void _initialize_frv_tdep ();
 void
-_initialize_frv_tdep (void)
+_initialize_frv_tdep ()
 {
   register_gdbarch_init (bfd_arch_frv, frv_gdbarch_init);
 }

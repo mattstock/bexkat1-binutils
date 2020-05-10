@@ -1,6 +1,6 @@
 /* Python interface to btrace instruction history.
 
-   Copyright 2016-2019 Free Software Foundation, Inc.
+   Copyright 2016-2020 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -808,7 +808,7 @@ recpy_bt_goto (PyObject *self, PyObject *args)
 
 struct PyMethodDef btpy_list_methods[] =
 {
-  { "count", btpy_list_count, METH_O, "count number of occurences"},
+  { "count", btpy_list_count, METH_O, "count number of occurrences"},
   { "index", btpy_list_index, METH_O, "index of entry"},
   {NULL}
 };

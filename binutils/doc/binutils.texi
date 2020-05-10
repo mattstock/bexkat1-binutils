@@ -10,7 +10,7 @@
 
 @copying
 @c man begin COPYRIGHT
-Copyright @copyright{} 1991-2019 Free Software Foundation, Inc.
+Copyright @copyright{} 1991-2020 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -154,6 +154,7 @@ in the section entitled ``GNU Free Documentation License''.
 * elfedit::                     Update ELF header and property of ELF files
 * Common Options::              Command-line options for all utilities
 * Selecting the Target System:: How these utilities determine the target
+* debuginfod::                  Using binutils with debuginfod
 * Reporting Bugs::              Reporting Bugs
 * GNU Free Documentation License::  GNU Free Documentation License
 * Binutils Index::              Binutils Index
@@ -1567,14 +1568,16 @@ done by increasing the size of the last section.  The extra space is
 filled in with the value specified by @option{--gap-fill} (default zero).
 
 @item --set-start @var{val}
-Set the start address of the new file to @var{val}.  Not all object file
-formats support setting the start address.
+Set the start address (also known as the entry address) of the new
+file to @var{val}.  Not all object file formats support setting the
+start address.
 
 @item --change-start @var{incr}
 @itemx --adjust-start @var{incr}
 @cindex changing start address
-Change the start address by adding @var{incr}.  Not all object file
-formats support setting the start address.
+Change the start address (also known as the entry address) by adding
+@var{incr}.  Not all object file formats support setting the start
+address.
 
 @item --change-addresses @var{incr}
 @itemx --adjust-vma @var{incr}
@@ -1643,11 +1646,13 @@ Set the flags for any sections matching @var{sectionpattern}.  The
 @var{flags} argument is a comma separated string of flag names.  The
 recognized names are @samp{alloc}, @samp{contents}, @samp{load},
 @samp{noload}, @samp{readonly}, @samp{code}, @samp{data}, @samp{rom},
-@samp{share}, and @samp{debug}.  You can set the @samp{contents} flag
-for a section which does not have contents, but it is not meaningful
-to clear the @samp{contents} flag of a section which does have
-contents--just remove the section instead.  Not all flags are
-meaningful for all object file formats.
+@samp{exclude}, @samp{share}, and @samp{debug}.  You can set the
+@samp{contents} flag for a section which does not have contents, but it
+is not meaningful to clear the @samp{contents} flag of a section which
+does have contents--just remove the section instead.  Not all flags are
+meaningful for all object file formats.  In particular the
+@samp{share} flag is only meaningful for COFF format files and not for
+ELF format files.
 
 @item --set-section-alignment @var{sectionpattern}=@var{align}
 Set the alignment for any sections matching @var{sectionpattern}.
@@ -1703,7 +1708,8 @@ Rename a section from @var{oldname} to @var{newname}, optionally
 changing the section's flags to @var{flags} in the process.  This has
 the advantage over using a linker script to perform the rename in that
 the output stays as an object file and does not become a linked
-executable.
+executable.  This option accepts the same set of flags as the
+@option{--sect-section-flags} option.
 
 This option is particularly helpful when the input format is binary,
 since this will always create a section called .data.  If for example,
@@ -2157,6 +2163,7 @@ objdump [@option{-a}|@option{--archive-headers}]
         [@option{-w}|@option{--wide}]
         [@option{--start-address=}@var{address}]
         [@option{--stop-address=}@var{address}]
+        [@option{--no-addresses}]
         [@option{--prefix-addresses}]
         [@option{--[no-]show-raw-insn}]
         [@option{--adjust-vma=}@var{offset}]
@@ -2168,6 +2175,7 @@ objdump [@option{-a}|@option{--archive-headers}]
         [@option{--prefix=}@var{prefix}]
         [@option{--prefix-strip=}@var{level}]
         [@option{--insn-width=}@var{width}]
+        [@option{--visualize-jumps[=color|=extended-color|=off]}
         [@option{-V}|@option{--version}]
         [@option{-H}|@option{--help}]
         @var{objfile}@dots{}
@@ -2260,7 +2268,7 @@ possible and any bug reports about such an event will be rejected.
 @itemx --debugging
 Display debugging information.  This attempts to parse STABS
 debugging format information stored in the file and print it out using
-a C like syntax.  If no STABS debuging was found this option
+a C like syntax.  If no STABS debugging was found this option
 falls back on the @option{-W} option to print any DWARF information in
 the file.
 
@@ -2308,6 +2316,11 @@ sections as if they were instructions.
 Note if the @option{--dwarf=follow-links} option has also been enabled
 then any symbol tables in linked debug info files will be read in and
 used when disassembling.
+
+@item --no-addresses
+When disassembling, don't print addresses on each line or for symbols
+and relocation offsets.  In combination with @option{--no-show-raw-insn}
+this may be useful for comparing compiler output.
 
 @item --prefix-addresses
 When disassembling, print the complete address on each line.  This is
@@ -2679,6 +2692,17 @@ This is the default when @option{--prefix-addresses} is used.
 @cindex Instruction width
 Display @var{width} bytes on a single line when disassembling
 instructions.
+
+@item --visualize-jumps[=color|=extended-color|=off]
+Visualize jumps that stay inside a function by drawing ASCII art between
+the start and target addresses.  The optional @option{=color} argument
+adds color to the output using simple terminal colors.  Alternatively
+the @option{=extended-color} argument will add color using 8bit
+colors, but these might not work on all terminals.
+
+If it is necessary to disable the @option{visualize-jumps} option
+after it has previously been enabled then use
+@option{visualize-jumps=off}.
 
 @item -W[lLiaprmfFsoRtUuTgAckK]
 @itemx --dwarf[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,=frames,=frames-interp,=str,=loc,=Ranges,=pubtypes,=trace_info,=trace_abbrev,=trace_aranges,=gdb_index,=addr,=cu_index,=links,=follow-links]
@@ -4684,6 +4708,7 @@ readelf [@option{-a}|@option{--all}]
         [@option{-V}|@option{--version-info}]
         [@option{-A}|@option{--arch-specific}]
         [@option{-D}|@option{--use-dynamic}]
+        [@option{-L}|@option{--lint}|@option{--enable-checks}]
         [@option{-x} <number or name>|@option{--hex-dump=}<number or name>]
         [@option{-p} <number or name>|@option{--string-dump=}<number or name>]
         [@option{-R} <number or name>|@option{--relocated-dump=}<number or name>]
@@ -4839,6 +4864,15 @@ symbol table sections.
 
 When displaying relocations, this option makes @command{readelf}
 display the dynamic relocations rather than the static relocations.
+
+@item -L
+@itemx --lint
+@itemx --enable-checks
+Displays warning messages about possible problems with the file(s)
+being examined.  If used on its own then all of the contents of the
+file(s) will be examined.  If used with one of the dumping options
+then the warning messages will only be produced for the things being
+displayed.
 
 @item -x <number or name>
 @itemx --hex-dump=<number or name>
@@ -5200,6 +5234,23 @@ Ways to specify:
 @item
 deduced from the input file
 @end enumerate
+
+@node debuginfod
+@chapter debuginfod
+@cindex separate debug files
+
+debuginfod is a web service that indexes ELF/DWARF debugging resources
+by build-id and serves them over HTTP.
+
+Binutils can be built with the debuginfod client library
+@code{libdebuginfod} using the @option{--with-debuginfod} configure option.
+This option is enabled by default if @code{libdebuginfod} is installed
+and found at configure time. This allows @command{objdump} and
+@command{readelf} to automatically query debuginfod servers for
+separate debug files when the files are otherwise not found.
+
+debuginfod is packaged with elfutils, starting with version 0.178.
+You can get the latest version from `https://sourceware.org/elfutils/'.
 
 @node Reporting Bugs
 @chapter Reporting Bugs

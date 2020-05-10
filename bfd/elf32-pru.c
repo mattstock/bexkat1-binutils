@@ -1,5 +1,5 @@
 /* 32-bit ELF support for TI PRU.
-   Copyright (C) 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2014-2020 Free Software Foundation, Inc.
    Contributed by Dimitar Dimitrov <dimitar@dinux.eu>
    Based on elf32-nios2.c
 
@@ -1529,7 +1529,7 @@ pru_elf32_relax_section (bfd * abfd, asection * sec,
 
   return TRUE;
 
-error_return:
+ error_return:
   if (isymbuf != NULL && symtab_hdr->contents != (unsigned char *) isymbuf)
     free (isymbuf);
   if (contents != NULL
@@ -1554,7 +1554,7 @@ static struct bfd_link_hash_table *
 pru_elf32_link_hash_table_create (bfd *abfd)
 {
   struct elf_link_hash_table *ret;
-  bfd_size_type amt = sizeof (struct elf_link_hash_table);
+  size_t amt = sizeof (struct elf_link_hash_table);
 
   ret = bfd_zmalloc (amt);
   if (ret == NULL)

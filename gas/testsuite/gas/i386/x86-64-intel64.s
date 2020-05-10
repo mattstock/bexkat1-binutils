@@ -10,8 +10,12 @@ _start:
 	lss	(%rdx), %rbx
 	lssq	(%rdx), %rbx
 
+	lcallq	*(%rax)
+	ljmpq	*(%rcx)
+
 	syscall
-	sysret
+	sysretl
+	sysretq
 
 	.intel_syntax noprefix
 	lfs	rax, [rcx]
@@ -20,3 +24,6 @@ _start:
 	lgs	rcx, tbyte ptr [rdx]
 	lss	rdx, [rbx]
 	lss	rdx, tbyte ptr [rbx]
+
+	call	tbyte ptr [rcx]
+	jmp	tbyte ptr [rdx]
