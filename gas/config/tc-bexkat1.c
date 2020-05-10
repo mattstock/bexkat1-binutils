@@ -197,6 +197,10 @@ md_assemble(char *str)
   case BEXKAT1_PUSH:
     if (opcode->args == 1 && opcode->opcode == 2) // bsr
       goto branch;
+    if (opcode->opcode == 3) { // pushcc
+      md_number_to_chars(p, iword, 4);
+      return;
+    }
     if (opcode->args == 1) {
       if (opcode->size) {
 	op_end = parse_exp_save_ilp(op_end, &arg);
@@ -271,6 +275,10 @@ md_assemble(char *str)
     }
     break;
   case BEXKAT1_POP:
+    if (opcode->opcode == 3) { // popcc
+      md_number_to_chars(p, iword, 4);
+      return;
+    }
     if (opcode->args == 0) {
       md_number_to_chars(p, iword, 4);
     }
