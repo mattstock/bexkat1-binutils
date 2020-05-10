@@ -70,7 +70,7 @@ mif_mkobject (bfd *abfd)
 
 /* Try to recognize a MIF file.  */
 
-static const bfd_target *
+static bfd_cleanup
 mif_object_p (bfd *abfd ATTRIBUTE_UNUSED)
 {
   return NULL;

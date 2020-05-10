@@ -136,7 +136,7 @@ md_assemble(char *str)
   
   pend = *op_end;
   *op_end = 0;
-  strncpy(op_name, op_start, 10);
+  strncpy(op_name, op_start, 9);
   *op_end = pend;
 
   if (nlen == 0)
