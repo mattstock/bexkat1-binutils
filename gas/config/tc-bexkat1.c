@@ -15,7 +15,7 @@ const char EXP_CHARS[] = "eE";
 const char FLT_CHARS[] = "rRsSfFdDxXpP";
 
 static int pending_reloc;
-static struct hash_control *opcode_hash_control;
+static htab_t opcode_hash_control;
 
 extern int target_big_endian;
 
@@ -36,13 +36,13 @@ md_begin (void)
 {
   int count;
   const bexkat1_opc_info_t *opcode;
-  opcode_hash_control = hash_new();
+  opcode_hash_control = str_htab_create();
 
   bfd_set_arch_mach(stdoutput, TARGET_ARCH, 0);
 
   opcode = bexkat1_opc_info;
   for (count=0; count < bexkat1_opc_count; count++) {
-    hash_insert(opcode_hash_control, opcode->name, (char *)opcode);
+    str_hash_insert(opcode_hash_control, opcode->name, (char *)opcode, 0);
     opcode++;
   }
 }
@@ -145,7 +145,7 @@ md_assemble(char *str)
   while (ISSPACE(*op_end))
     op_end++;
   
-  opcode = (bexkat1_opc_info_t *) hash_find(opcode_hash_control, op_name);
+  opcode = (bexkat1_opc_info_t *) str_hash_find(opcode_hash_control, op_name);
   if (opcode == NULL) {
     as_bad(_("unknown opcode %s"), op_name);
     return;
