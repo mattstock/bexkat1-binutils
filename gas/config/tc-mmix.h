@@ -1,5 +1,5 @@
 /* tc-mmix.h -- Header file for tc-mmix.c.
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001-2021 Free Software Foundation, Inc.
    Written by Hans-Peter Nilsson (hp@bitrange.com).
 
    This file is part of GAS, the GNU Assembler.
@@ -226,8 +226,7 @@ extern void mmix_md_do_align (int, char *, int, int);
    explicitly say one byte.  */
 #define DWARF2_LINE_MIN_INSN_LENGTH 1
 
-/* This target is buggy, and sets fix size too large.  */
-#define TC_FX_SIZE_SLACK(FIX) 6
-
 /* MMIX has global register symbols.  */
 #define TC_GLOBAL_REGISTER_SYMBOL_OK
+
+#define md_single_noop_insn "swym 0"

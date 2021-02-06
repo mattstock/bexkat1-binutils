@@ -1,6 +1,6 @@
 /* BFD back-end for VMS archive files.
 
-   Copyright (C) 2010-2020 Free Software Foundation, Inc.
+   Copyright (C) 2010-2021 Free Software Foundation, Inc.
    Written by Tristan Gingold <gingold@adacore.com>, AdaCore.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -277,7 +277,8 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs,
       unsigned int flags;
 
       /* Extract key length.  */
-      if (bfd_libdata (abfd)->ver == LBR_MAJORID)
+      if (bfd_libdata (abfd)->ver == LBR_MAJORID
+	  && offsetof (struct vms_idx, keyname) <= (size_t) (endp - p))
 	{
 	  struct vms_idx *ridx = (struct vms_idx *)p;
 
@@ -288,7 +289,8 @@ vms_traverse_index (bfd *abfd, unsigned int vbn, struct carsym_mem *cs,
 	  flags = 0;
 	  keyname = ridx->keyname;
 	}
-      else if (bfd_libdata (abfd)->ver == LBR_ELFMAJORID)
+      else if (bfd_libdata (abfd)->ver == LBR_ELFMAJORID
+	       && offsetof (struct vms_elfidx, keyname) <= (size_t) (endp - p))
 	{
 	  struct vms_elfidx *ridx = (struct vms_elfidx *)p;
 
@@ -1452,6 +1454,12 @@ _bfd_vms_lib_get_module (bfd *abfd, unsigned int modidx)
       break;
     }
   bfd_set_filename (res, newname);
+  free (newname);
+  if (bfd_get_filename (res) == NULL)
+    {
+      bfd_close (res);
+      return NULL;
+    }
 
   tdata->cache[modidx] = res;
 
@@ -1491,7 +1499,7 @@ bfd *
 _bfd_vms_lib_get_imagelib_file (bfd *el)
 {
   bfd *archive = el->my_archive;
-  const char *modname = el->filename;
+  const char *modname = bfd_get_filename (el);
   int modlen = strlen (modname);
   char *filename;
   int j;
@@ -1517,7 +1525,7 @@ _bfd_vms_lib_get_imagelib_file (bfd *el)
     {
       /* xgettext:c-format */
       _bfd_error_handler(_("could not open shared image '%s' from '%s'"),
-			 filename, archive->filename);
+			 filename, bfd_get_filename (archive));
       bfd_release (archive, filename);
       return NULL;
     }
@@ -2039,8 +2047,7 @@ _bfd_vms_lib_build_map (unsigned int nbr_modules,
 	{
 	  if (storage > syms_max)
 	    {
-	      if (syms_max > 0)
-		free (syms);
+	      free (syms);
 	      syms_max = storage;
 	      syms = (asymbol **) bfd_malloc (syms_max);
 	      if (syms == NULL)
@@ -2091,10 +2098,8 @@ _bfd_vms_lib_build_map (unsigned int nbr_modules,
   return TRUE;
 
  error_return:
-  if (syms_max > 0)
-    free (syms);
-  if (map != NULL)
-    free (map);
+  free (syms);
+  free (map);
   return FALSE;
 }
 
@@ -2152,7 +2157,7 @@ _bfd_vms_lib_write_archive_contents (bfd *arch)
       unsigned int nl;
 
       modules[i].abfd = current;
-      modules[i].name = vms_get_module_name (current->filename, FALSE);
+      modules[i].name = vms_get_module_name (bfd_get_filename (current), FALSE);
       modules[i].ref = 1;
 
       /* FIXME: silently truncate long names ?  */
@@ -2398,6 +2403,7 @@ const bfd_target alpha_vms_lib_txt_vec =
   ' ',				/* ar_pad_char.  */
   15,				/* ar_max_namelen.  */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
   bfd_getl32, bfd_getl_signed_32, bfd_putl32,
   bfd_getl16, bfd_getl_signed_16, bfd_putl16,

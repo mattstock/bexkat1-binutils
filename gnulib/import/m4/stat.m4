@@ -1,6 +1,6 @@
-# serial 16
+# serial 17
 
-# Copyright (C) 2009-2020 Free Software Foundation, Inc.
+# Copyright (C) 2009-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -15,7 +15,7 @@ AC_DEFUN([gl_FUNC_STAT],
     mingw*)
       dnl On this platform, the original stat() returns st_atime, st_mtime,
       dnl st_ctime values that are affected by the time zone.
-      REPLACE_STAT=1
+      dnl REPLACE_STAT=1
       ;;
     *)
       dnl AIX 7.1, Solaris 9, mingw64 mistakenly succeed on stat("file/").
@@ -70,5 +70,16 @@ AC_DEFUN([gl_FUNC_STAT],
 # Prerequisites of lib/stat.c and lib/stat-w32.c.
 AC_DEFUN([gl_PREREQ_STAT], [
   AC_REQUIRE([gl_HEADER_SYS_STAT_H])
+  AC_REQUIRE([gl_PREREQ_STAT_W32])
   :
+])
+
+# Prerequisites of lib/stat-w32.c.
+AC_DEFUN([gl_PREREQ_STAT_W32], [
+  AC_REQUIRE([AC_CANONICAL_HOST])
+  case "$host_os" in
+    mingw*)
+      AC_CHECK_HEADERS([sdkddkver.h])
+      ;;
+  esac
 ])

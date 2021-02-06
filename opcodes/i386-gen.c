@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2020 Free Software Foundation, Inc.
+/* Copyright (C) 2007-2021 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -103,6 +103,8 @@ static initializer cpu_flag_init[] =
     "CPU_GENERIC64_FLAGS|CpuFISTTP|CpuRdtscp|CpuCX16|CPU_AVX2_FLAGS|CpuSSE4A|CpuLZCNT|CpuPOPCNT|CpuSVME|CpuAES|CpuPCLMUL|CpuPRFCHW|CpuFMA|CpuBMI|CpuF16C|CpuXsaveopt|CpuFSGSBase|CpuMovbe|CpuBMI2|CpuRdRnd|CpuADX|CpuRdSeed|CpuSMAP|CpuSHA|CpuXSAVEC|CpuXSAVES|CpuClflushOpt|CpuCLZERO|CpuMWAITX" },
   { "CPU_ZNVER2_FLAGS",
     "CPU_ZNVER1_FLAGS|CpuCLWB|CpuRDPID|CpuRDPRU|CpuMCOMMIT|CpuWBNOINVD" },
+  { "CPU_ZNVER3_FLAGS",
+    "CPU_ZNVER2_FLAGS|CpuINVLPGB|CpuTLBSYNC|CpuVAES|CpuVPCLMULQDQ|CpuINVPCID|CpuSNP|CpuOSPKE" },
   { "CPU_BTVER1_FLAGS",
     "CPU_GENERIC64_FLAGS|CpuFISTTP|CpuCX16|CpuRdtscp|CPU_SSSE3_FLAGS|CpuSSE4A|CpuLZCNT|CpuPOPCNT|CpuPRFCHW|CpuCX16|CpuClflush|CpuFISTTP|CpuSVME" },
   { "CPU_BTVER2_FLAGS",
@@ -207,6 +209,8 @@ static initializer cpu_flag_init[] =
     "CPU_SSE4_2_FLAGS|CPU_XSAVE_FLAGS|CpuAVX" },
   { "CPU_AVX2_FLAGS",
     "CPU_AVX_FLAGS|CpuAVX2" },
+  { "CPU_AVX_VNNI_FLAGS",
+    "CPU_AVX2_FLAGS|CpuAVX_VNNI" },
   { "CPU_AVX512F_FLAGS",
     "CPU_AVX2_FLAGS|CpuAVX512F" },
   { "CPU_AVX512CD_FLAGS",
@@ -295,8 +299,16 @@ static initializer cpu_flag_init[] =
     "CpuPCONFIG" },
   { "CPU_WAITPKG_FLAGS",
     "CpuWAITPKG" },
+  { "CPU_UINTR_FLAGS",
+    "CpuUINTR" },
   { "CPU_CLDEMOTE_FLAGS",
     "CpuCLDEMOTE" },
+  { "CPU_AMX_INT8_FLAGS",
+    "CpuAMX_INT8" },
+  { "CPU_AMX_BF16_FLAGS",
+    "CpuAMX_BF16" },
+  { "CPU_AMX_TILE_FLAGS",
+    "CpuAMX_TILE" },
   { "CPU_MOVDIRI_FLAGS",
     "CpuMOVDIRI" },
   { "CPU_MOVDIR64B_FLAGS",
@@ -307,6 +319,8 @@ static initializer cpu_flag_init[] =
     "CpuSERIALIZE" },
   { "CPU_AVX512_VP2INTERSECT_FLAGS",
     "CpuAVX512_VP2INTERSECT" },
+  { "CPU_TDX_FLAGS",
+    "CpuTDX" },
   { "CPU_RDPRU_FLAGS",
     "CpuRDPRU" },
   { "CPU_MCOMMIT_FLAGS",
@@ -315,6 +329,18 @@ static initializer cpu_flag_init[] =
     "CpuSEV_ES" },
   { "CPU_TSXLDTRK_FLAGS",
     "CpuTSXLDTRK"},
+  { "CPU_KL_FLAGS",
+    "CpuKL" },
+  { "CPU_WIDEKL_FLAGS",
+    "CpuWideKL" },
+  { "CPU_HRESET_FLAGS",
+    "CpuHRESET"},
+  { "CPU_INVLPGB_FLAGS",
+    "CpuINVLPGB" },
+  { "CPU_TLBSYNC_FLAGS",
+    "CpuTLBSYNC" },
+  { "CPU_SNP_FLAGS",
+    "CpuSNP" },
   { "CPU_ANY_X87_FLAGS",
     "CPU_ANY_287_FLAGS|Cpu8087" },
   { "CPU_ANY_287_FLAGS",
@@ -383,8 +409,18 @@ static initializer cpu_flag_init[] =
     "CpuAVX512_BITALG" },
   { "CPU_ANY_AVX512_BF16_FLAGS",
     "CpuAVX512_BF16" },
+  { "CPU_ANY_AMX_INT8_FLAGS",
+    "CpuAMX_INT8" },
+  { "CPU_ANY_AMX_BF16_FLAGS",
+    "CpuAMX_BF16" },
+  { "CPU_ANY_AMX_TILE_FLAGS",
+    "CpuAMX_TILE|CpuAMX_INT8|CpuAMX_BF16" },
+  { "CPU_ANY_AVX_VNNI_FLAGS",
+    "CpuAVX_VNNI" },
   { "CPU_ANY_MOVDIRI_FLAGS",
     "CpuMOVDIRI" },
+  { "CPU_ANY_UINTR_FLAGS",
+    "CpuUINTR" },
   { "CPU_ANY_MOVDIR64B_FLAGS",
     "CpuMOVDIR64B" },
   { "CPU_ANY_ENQCMD_FLAGS",
@@ -393,8 +429,16 @@ static initializer cpu_flag_init[] =
     "CpuSERIALIZE" },
   { "CPU_ANY_AVX512_VP2INTERSECT_FLAGS",
     "CpuAVX512_VP2INTERSECT" },
+  { "CPU_ANY_TDX_FLAGS",
+    "CpuTDX" },
   { "CPU_ANY_TSXLDTRK_FLAGS",
     "CpuTSXLDTRK" },
+  { "CPU_ANY_KL_FLAGS",
+    "CpuKL|CpuWideKL" },
+  { "CPU_ANY_WIDEKL_FLAGS",
+    "CpuWideKL" },
+  { "CPU_ANY_HRESET_FLAGS",
+    "CpuHRESET" },
 };
 
 static initializer operand_type_init[] =
@@ -459,6 +503,8 @@ static initializer operand_type_init[] =
     "Class=RegSIMD|Ymmword" },
   { "OPERAND_TYPE_REGZMM",
     "Class=RegSIMD|Zmmword" },
+  { "OPERAND_TYPE_REGTMM",
+    "Class=RegSIMD|Tmmword" },
   { "OPERAND_TYPE_REGMASK",
     "Class=RegMask" },
   { "OPERAND_TYPE_REGBND",
@@ -597,6 +643,8 @@ static bitfield cpu_flags[] =
   BITFIELD (CpuAVX512_BITALG),
   BITFIELD (CpuAVX512_BF16),
   BITFIELD (CpuAVX512_VP2INTERSECT),
+  BITFIELD (CpuTDX),
+  BITFIELD (CpuAVX_VNNI),
   BITFIELD (CpuMWAITX),
   BITFIELD (CpuCLZERO),
   BITFIELD (CpuOSPKE),
@@ -610,7 +658,11 @@ static bitfield cpu_flags[] =
   BITFIELD (CpuWBNOINVD),
   BITFIELD (CpuPCONFIG),
   BITFIELD (CpuWAITPKG),
+  BITFIELD (CpuUINTR),
   BITFIELD (CpuCLDEMOTE),
+  BITFIELD (CpuAMX_INT8),
+  BITFIELD (CpuAMX_BF16),
+  BITFIELD (CpuAMX_TILE),
   BITFIELD (CpuMOVDIRI),
   BITFIELD (CpuMOVDIR64B),
   BITFIELD (CpuENQCMD),
@@ -619,6 +671,12 @@ static bitfield cpu_flags[] =
   BITFIELD (CpuMCOMMIT),
   BITFIELD (CpuSEV_ES),
   BITFIELD (CpuTSXLDTRK),
+  BITFIELD (CpuKL),
+  BITFIELD (CpuWideKL),
+  BITFIELD (CpuHRESET),
+  BITFIELD (CpuINVLPGB),
+  BITFIELD (CpuTLBSYNC),
+  BITFIELD (CpuSNP),
 #ifdef CpuUnused
   BITFIELD (CpuUnused),
 #endif
@@ -660,12 +718,13 @@ static bitfield opcode_modifiers[] =
   BITFIELD (ImmExt),
   BITFIELD (NoRex64),
   BITFIELD (Ugh),
+  BITFIELD (PseudoVexPrefix),
   BITFIELD (Vex),
   BITFIELD (VexVVVV),
   BITFIELD (VexW),
-  BITFIELD (VexOpcode),
+  BITFIELD (OpcodePrefix),
   BITFIELD (VexSources),
-  BITFIELD (VecSIB),
+  BITFIELD (SIB),
   BITFIELD (SSE2AVX),
   BITFIELD (NoAVX),
   BITFIELD (EVex),
@@ -676,6 +735,7 @@ static bitfield opcode_modifiers[] =
   BITFIELD (Disp8MemShift),
   BITFIELD (NoDefMask),
   BITFIELD (ImplicitQuadGroup),
+  BITFIELD (SwapSources),
   BITFIELD (Optimize),
   BITFIELD (ATTMnemonic),
   BITFIELD (ATTSyntax),
@@ -740,6 +800,7 @@ static bitfield operand_types[] =
   BITFIELD (Xmmword),
   BITFIELD (Ymmword),
   BITFIELD (Zmmword),
+  BITFIELD (Tmmword),
   BITFIELD (Unspecified),
 #ifdef OTUnused
   BITFIELD (OTUnused),
@@ -799,7 +860,7 @@ static void
 process_copyright (FILE *fp)
 {
   fprintf (fp, "/* This file is automatically generated by i386-gen.  Do not edit!  */\n\
-/* Copyright (C) 2007-2020 Free Software Foundation, Inc.\n\
+/* Copyright (C) 2007-2021 Free Software Foundation, Inc.\n\
 \n\
    This file is part of the GNU opcodes library.\n\
 \n\
@@ -1127,11 +1188,12 @@ adjust_broadcast_modifier (char **opnd)
   return bcst_type;
 }
 
-static void
+static int
 process_i386_opcode_modifier (FILE *table, char *mod, char **opnd, int lineno)
 {
   char *str, *next, *last;
   bitfield modifiers [ARRAY_SIZE (opcode_modifiers)];
+  unsigned int regular_encoding = 1;
 
   active_isstring = 0;
 
@@ -1150,9 +1212,22 @@ process_i386_opcode_modifier (FILE *table, char *mod, char **opnd, int lineno)
 	    {
 	      int val = 1;
 	      if (strcasecmp(str, "Broadcast") == 0)
+		{
 		  val = adjust_broadcast_modifier (opnd);
+		  regular_encoding = 0;
+		}
+	      else if (strcasecmp(str, "Vex") == 0
+		       || strncasecmp(str, "Vex=", 4) == 0
+		       || strcasecmp(str, "EVex") == 0
+		       || strncasecmp(str, "EVex=", 5) == 0
+		       || strncasecmp(str, "Disp8MemShift=", 14) == 0
+		       || strncasecmp(str, "Masking=", 8) == 0
+		       || strcasecmp(str, "SAE") == 0
+		       || strcasecmp(str, "IsPrefix") == 0)
+		regular_encoding = 0;
+
 	      set_bitfield (str, modifiers, val, ARRAY_SIZE (modifiers),
-			  lineno);
+			    lineno);
 	      if (strcasecmp(str, "IsString") == 0)
 		active_isstring = 1;
 
@@ -1181,6 +1256,8 @@ process_i386_opcode_modifier (FILE *table, char *mod, char **opnd, int lineno)
 		 filename, lineno);
     }
   output_opcode_modifier (table, modifiers, ARRAY_SIZE (modifiers));
+
+  return regular_encoding;
 }
 
 enum stage {
@@ -1362,7 +1439,42 @@ output_i386_opcode (FILE *table, const char *name, char *str,
 
   process_i386_cpu_flag (table, cpu_flags, 0, ",", "    ", lineno);
 
-  process_i386_opcode_modifier (table, opcode_modifier, operand_types, lineno);
+  if (process_i386_opcode_modifier (table, opcode_modifier,
+				    operand_types, lineno))
+    {
+      char *end;
+      unsigned long int length = strtoul (opcode_length, &end, 0);
+      unsigned long int opcode = strtoul (base_opcode, &end, 0);
+      switch (length)
+	{
+	case 4:
+	  break;
+	case 3:
+	  if ((opcode >> 24) != 0)
+	    fail (_("%s: %s: (base_opcode >> 24) != 0: %s\n"),
+		  filename, name, base_opcode);
+	  break;
+	case 2:
+	  if ((opcode >> 16) != 0)
+	    fail (_("%s: %s: (base_opcode >> 16) != 0: %s\n"),
+		  filename, name, base_opcode);
+	  break;
+	case 1:
+	  if ((opcode >> 8) != 0)
+	    fail (_("%s: %s: (base_opcode >> 8) != 0: %s\n"),
+		  filename, name, base_opcode);
+	  break;
+	case 0:
+	  if (opcode != 0)
+	    fail (_("%s: %s: base_opcode != 0: %s\n"),
+		  filename, name, base_opcode);
+	  break;
+	default:
+	  fail (_("%s: %s: invalid opcode length: %s\n"),
+		filename, name, opcode_length);
+	  break;
+	}
+    }
 
   fprintf (table, "    { ");
 
@@ -1464,6 +1576,8 @@ parse_template (char *buf, int lineno)
       *end++ = '\0';
 
       inst = xmalloc (sizeof (*inst));
+      inst->next = NULL;
+      inst->args = NULL;
 
       cur = next_field (buf, ':', &next, end);
       inst->name = xstrdup (cur);

@@ -1,14 +1,14 @@
-2020-01-18  Nick Clifton  <nickc@redhat.com>
+2021-01-09  Nick Clifton  <nickc@redhat.com>
 
-	Binutils 2.34 branch created.
+	* 2.36 release branch crated.
 
-2020-01-01  Alan Modra  <amodra@gmail.com>
+2021-01-01  Alan Modra  <amodra@gmail.com>
 
 	Update year range in copyright notice of all files.
 
-For older changes see ChangeLog-2019
+For older changes see ChangeLog-2020
 
-Copyright (C) 2020 Free Software Foundation, Inc.
+Copyright (C) 2021 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

@@ -1,5 +1,5 @@
 /* Convert multibyte character to wide character.
-   Copyright (C) 1999-2002, 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 1999-2002, 2005-2021 Free Software Foundation, Inc.
    Written by Bruno Haible <bruno@clisp.org>, 2008.
 
    This program is free software: you can redistribute it and/or modify
@@ -50,17 +50,10 @@
 
 # endif
 
+# include "attribute.h"
 # include "verify.h"
 # include "lc-charset-dispatch.h"
 # include "mbtowc-lock.h"
-
-# ifndef FALLTHROUGH
-#  if __GNUC__ < 7
-#   define FALLTHROUGH ((void) 0)
-#  else
-#   define FALLTHROUGH __attribute__ ((__fallthrough__))
-#  endif
-# endif
 
 verify (sizeof (mbstate_t) >= 4);
 static char internal_state[4];

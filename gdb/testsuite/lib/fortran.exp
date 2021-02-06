@@ -1,6 +1,6 @@
 # This test code is part of GDB, the GNU debugger.
 
-# Copyright 2010-2020 Free Software Foundation, Inc.
+# Copyright 2010-2021 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -99,6 +99,34 @@ proc fortran_complex4 {} {
     }
 }
 
+proc fortran_complex8 {} {
+    if {[test_compiler_info {gcc-4-[012]-*}]} {
+	return "complex8"
+    } elseif {[test_compiler_info {gcc-*}]} {
+	return "complex\\(kind=8\\)"
+    } elseif {[test_compiler_info {clang-*}]} {
+	return "double complex"
+    } elseif {[test_compiler_info {icc-*}]} {
+	return "COMPLEX\\(8\\)"
+    } else {
+	return "unknown"
+    }
+}
+
+proc fortran_complex16 {} {
+    if {[test_compiler_info {gcc-4-[012]-*}]} {
+	return "complex16"
+    } elseif {[test_compiler_info {gcc-*}]} {
+	return "complex\\(kind=16\\)"
+    } elseif {[test_compiler_info {clang-*}]} {
+	return "quad complex"
+    } elseif {[test_compiler_info {icc-*}]} {
+	return "COMPLEX\\(16\\)"
+    } else {
+	return "unknown"
+    }
+}
+
 proc fortran_logical4 {} {
     if {[test_compiler_info {gcc-4-[012]-*}]} {
 	return "logical4"
@@ -125,4 +153,24 @@ proc fortran_character1 {} {
     } else {
 	return "unknown"
     }
+}
+
+# Return name of the main procedure based on the compiler version.
+
+proc fortran_main {} {
+    if {[test_compiler_info {gcc-4-[012]-*}]
+         || [test_compiler_info {gcc-*}]
+         || [test_compiler_info {icc-*}]} {
+	return "MAIN__"
+    } elseif {[test_compiler_info {clang-*}]} {
+	return "MAIN_"
+    } else {
+	return "unknown"
+    }
+}
+
+# Fortran version of runto_main.
+
+proc fortran_runto_main { } {
+    return [runto [fortran_main]]
 }

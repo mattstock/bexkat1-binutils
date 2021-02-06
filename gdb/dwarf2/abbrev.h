@@ -1,6 +1,6 @@
 /* DWARF abbrev table
 
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994-2021 Free Software Foundation, Inc.
 
    Adapted by Gary Funck (gary@intrepid.com), Intrepid Technology,
    Inc.  with support from Florida State University (under contract
@@ -26,6 +26,8 @@
 
 #ifndef GDB_DWARF2_ABBREV_H
 #define GDB_DWARF2_ABBREV_H
+
+#include "hashtab.h"
 
 /* This data structure holds the information of an abbrev.  */
 struct abbrev_info
@@ -53,15 +55,25 @@ typedef std::unique_ptr<struct abbrev_table> abbrev_table_up;
 
 struct abbrev_table
 {
-  static abbrev_table_up read (struct objfile *objfile,
-			       struct dwarf2_section_info *section,
+  /* Read an abbrev table from the indicated section, at the given
+     offset.  The caller is responsible for ensuring that the section
+     has already been read.  */
+
+  static abbrev_table_up read (struct dwarf2_section_info *section,
 			       sect_offset sect_off);
 
   /* Look up an abbrev in the table.
      Returns NULL if the abbrev is not found.  */
 
-  struct abbrev_info *lookup_abbrev (unsigned int abbrev_number);
+  struct abbrev_info *lookup_abbrev (unsigned int abbrev_number)
+  {
+    struct abbrev_info search;
+    search.number = abbrev_number;
 
+    return (struct abbrev_info *) htab_find_with_hash (m_abbrevs.get (),
+						       &search,
+						       abbrev_number);
+  }
 
   /* Where the abbrev table came from.
      This is used as a sanity check when the table is used.  */
@@ -78,7 +90,7 @@ private:
   struct abbrev_info *alloc_abbrev ();
 
   /* Add an abbreviation to the table.  */
-  void add_abbrev (unsigned int abbrev_number, struct abbrev_info *abbrev);
+  void add_abbrev (struct abbrev_info *abbrev);
 
   /* Hash table of abbrevs.  */
   htab_up m_abbrevs;

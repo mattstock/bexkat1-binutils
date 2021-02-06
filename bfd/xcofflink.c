@@ -1,5 +1,5 @@
 /* POWER/PowerPC XCOFF linker support.
-   Copyright (C) 1995-2020 Free Software Foundation, Inc.
+   Copyright (C) 1995-2021 Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -227,8 +227,7 @@ xcoff_get_section_contents (bfd *abfd, asection *sec)
 
       if (! bfd_malloc_and_get_section (abfd, sec, &contents))
 	{
-	  if (contents != NULL)
-	    free (contents);
+	  free (contents);
 	  return FALSE;
 	}
       coff_section_data (abfd, sec)->contents = contents;
@@ -526,7 +525,7 @@ xcoff_get_archive_info (struct bfd_link_info *info, bfd *archive)
   entryp = *slot;
   if (!entryp)
     {
-      entryp = bfd_zalloc (archive, sizeof (entry));
+      entryp = bfd_zalloc (info->output_bfd, sizeof (entry));
       if (!entryp)
 	return NULL;
 
@@ -1000,7 +999,7 @@ xcoff_link_add_dynamic_symbols (bfd *abfd, struct bfd_link_info *info)
 
   if (abfd->my_archive == NULL || bfd_is_thin_archive (abfd->my_archive))
     {
-      if (!bfd_xcoff_split_import_path (abfd, abfd->filename,
+      if (!bfd_xcoff_split_import_path (abfd, bfd_get_filename (abfd),
 					&n->path, &n->file))
 	return FALSE;
       n->member = "";
@@ -1013,7 +1012,8 @@ xcoff_link_add_dynamic_symbols (bfd *abfd, struct bfd_link_info *info)
       if (!archive_info->impfile)
 	{
 	  if (!bfd_xcoff_split_import_path (archive_info->archive,
-					    archive_info->archive->filename,
+					    bfd_get_filename (archive_info
+							      ->archive),
 					    &archive_info->imppath,
 					    &archive_info->impfile))
 	    return FALSE;
@@ -2178,7 +2178,6 @@ xcoff_link_add_symbols (bfd *abfd, struct bfd_link_info *info)
 	  /* If we are not keeping memory, free the reloc information.  */
 	  if (! info->keep_memory
 	      && coff_section_data (abfd, o) != NULL
-	      && coff_section_data (abfd, o)->relocs != NULL
 	      && ! coff_section_data (abfd, o)->keep_relocs)
 	    {
 	      free (coff_section_data (abfd, o)->relocs);
@@ -2188,11 +2187,8 @@ xcoff_link_add_symbols (bfd *abfd, struct bfd_link_info *info)
 
       /* Free up the line numbers.  FIXME: We could cache these
 	 somewhere for the final link, to avoid reading them again.  */
-      if (reloc_info[o->target_index].linenos != NULL)
-	{
-	  free (reloc_info[o->target_index].linenos);
-	  reloc_info[o->target_index].linenos = NULL;
-	}
+      free (reloc_info[o->target_index].linenos);
+      reloc_info[o->target_index].linenos = NULL;
     }
 
   free (reloc_info);
@@ -2206,10 +2202,8 @@ xcoff_link_add_symbols (bfd *abfd, struct bfd_link_info *info)
     {
       for (o = abfd->sections; o != NULL; o = o->next)
 	{
-	  if (reloc_info[o->target_index].csects != NULL)
-	    free (reloc_info[o->target_index].csects);
-	  if (reloc_info[o->target_index].linenos != NULL)
-	    free (reloc_info[o->target_index].linenos);
+	  free (reloc_info[o->target_index].csects);
+	  free (reloc_info[o->target_index].linenos);
 	}
       free (reloc_info);
     }
@@ -2691,9 +2685,17 @@ xcoff_need_ldrel_p (struct bfd_link_info *info, struct internal_reloc *rel,
     case R_RLA:
       /* Absolute relocations against absolute symbols can be
 	 resolved statically.  */
-      if (h != NULL && bfd_is_abs_symbol (&h->root))
-	return FALSE;
-
+      if (h != NULL
+	  && (h->root.type == bfd_link_hash_defined
+	      || h->root.type == bfd_link_hash_defweak)
+	  && !h->root.rel_from_abs)
+	{
+	  asection *sec = h->root.u.def.section;
+	  if (bfd_is_abs_section (sec)
+	      || (sec != NULL
+		  && bfd_is_abs_section (sec->output_section)))
+	    return FALSE;
+	}
       return TRUE;
     }
 }
@@ -2904,7 +2906,7 @@ xcoff_mark_symbol_by_name (struct bfd_link_info *info,
 static bfd_boolean
 xcoff_mark (struct bfd_link_info *info, asection *sec)
 {
-  if (bfd_is_abs_section (sec)
+  if (bfd_is_const_section (sec)
       || (sec->flags & SEC_MARK) != 0)
     return TRUE;
 
@@ -2984,7 +2986,6 @@ xcoff_mark (struct bfd_link_info *info, asection *sec)
 
 	  if (! info->keep_memory
 	      && coff_section_data (sec->owner, sec) != NULL
-	      && coff_section_data (sec->owner, sec)->relocs != NULL
 	      && ! coff_section_data (sec->owner, sec)->keep_relocs)
 	    {
 	      free (coff_section_data (sec->owner, sec)->relocs);
@@ -3125,9 +3126,7 @@ bfd_xcoff_import_symbol (bfd *output_bfd,
 
   if (val != (bfd_vma) -1)
     {
-      if (h->root.type == bfd_link_hash_defined
-	  && (!bfd_is_abs_symbol (&h->root)
-	      || h->root.u.def.value != val))
+      if (h->root.type == bfd_link_hash_defined)
 	(*info->callbacks->multiple_definition) (info, &h->root, output_bfd,
 						 bfd_abs_section_ptr, val);
 
@@ -3217,7 +3216,13 @@ bfd_xcoff_link_count_reloc (bfd *output_bfd,
 }
 
 /* This function is called for each symbol to which the linker script
-   assigns a value.  */
+   assigns a value.
+   FIXME: In cases like the linker test ld-scripts/defined5 where a
+   symbol is defined both by an input object file and the script,
+   the script definition doesn't override the object file definition
+   as is usual for other targets.  At least not when the symbol is
+   output.  Other uses of the symbol value by the linker do use the
+   script value.  */
 
 bfd_boolean
 bfd_xcoff_record_link_assignment (bfd *output_bfd,
@@ -3403,7 +3408,7 @@ xcoff_post_gc_symbol (struct xcoff_link_hash_entry *h, void * p)
 }
 
 /* INPUT_BFD includes XCOFF symbol ISYM, which is associated with linker
-   hash table entry H and csect CSECT.  AUX contains ISYM's auxillary
+   hash table entry H and csect CSECT.  AUX contains ISYM's auxiliary
    csect information, if any.  NAME is the function's name if the name
    is stored in the .debug section, otherwise it is null.
 
@@ -3970,10 +3975,8 @@ bfd_xcoff_size_dynamic_sections (bfd *output_bfd,
   return TRUE;
 
  error_return:
-  if (ldinfo.strings != NULL)
-    free (ldinfo.strings);
-  if (debug_contents != NULL)
-    free (debug_contents);
+  free (ldinfo.strings);
+  free (debug_contents);
   return FALSE;
 }
 
@@ -5142,7 +5145,7 @@ xcoff_find_tc0 (bfd *output_bfd, struct xcoff_final_link_info *flinfo)
   irsym.n_numaux = 1;
   bfd_coff_swap_sym_out (output_bfd, &irsym, flinfo->outsyms);
 
-  /* Fill out the auxillary csect information.  */
+  /* Fill out the auxiliary csect information.  */
   memset (&iraux, 0, sizeof iraux);
   iraux.x_csect.x_smtyp = XTY_SD;
   iraux.x_csect.x_smclas = XMC_TC0;
@@ -6206,31 +6209,16 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
     }
 
   /* Free up the buffers used by xcoff_link_input_bfd.  */
-  if (flinfo.internal_syms != NULL)
-    {
-      free (flinfo.internal_syms);
-      flinfo.internal_syms = NULL;
-    }
-  if (flinfo.sym_indices != NULL)
-    {
-      free (flinfo.sym_indices);
-      flinfo.sym_indices = NULL;
-    }
-  if (flinfo.linenos != NULL)
-    {
-      free (flinfo.linenos);
-      flinfo.linenos = NULL;
-    }
-  if (flinfo.contents != NULL)
-    {
-      free (flinfo.contents);
-      flinfo.contents = NULL;
-    }
-  if (flinfo.external_relocs != NULL)
-    {
-      free (flinfo.external_relocs);
-      flinfo.external_relocs = NULL;
-    }
+  free (flinfo.internal_syms);
+  flinfo.internal_syms = NULL;
+  free (flinfo.sym_indices);
+  flinfo.sym_indices = NULL;
+  free (flinfo.linenos);
+  flinfo.linenos = NULL;
+  free (flinfo.contents);
+  flinfo.contents = NULL;
+  free (flinfo.external_relocs);
+  flinfo.external_relocs = NULL;
 
   /* The value of the last C_FILE symbol is supposed to be -1.  Write
      it out again.  */
@@ -6249,11 +6237,8 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
      input files.  */
   bfd_hash_traverse (&info->hash->table, xcoff_write_global_symbol, &flinfo);
 
-  if (flinfo.outsyms != NULL)
-    {
-      free (flinfo.outsyms);
-      flinfo.outsyms = NULL;
-    }
+  free (flinfo.outsyms);
+  flinfo.outsyms = NULL;
 
   /* Now that we have written out all the global symbols, we know the
      symbol indices to use for relocs against them, and we can finally
@@ -6335,11 +6320,8 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 	goto error_return;
     }
 
-  if (external_relocs != NULL)
-    {
-      free (external_relocs);
-      external_relocs = NULL;
-    }
+  free (external_relocs);
+  external_relocs = NULL;
 
   /* Free up the section information.  */
   if (flinfo.section_info != NULL)
@@ -6348,10 +6330,8 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 
       for (i = 0; i < abfd->section_count; i++)
 	{
-	  if (flinfo.section_info[i].relocs != NULL)
-	    free (flinfo.section_info[i].relocs);
-	  if (flinfo.section_info[i].rel_hashes != NULL)
-	    free (flinfo.section_info[i].rel_hashes);
+	  free (flinfo.section_info[i].relocs);
+	  free (flinfo.section_info[i].rel_hashes);
 	}
       free (flinfo.section_info);
       flinfo.section_info = NULL;
@@ -6359,7 +6339,9 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 
   /* Write out the loader section contents.  */
   o = xcoff_hash_table (info)->loader_section;
-  if (o)
+  if (o != NULL
+      && o->size != 0
+      && o->output_section != bfd_abs_section_ptr)
     {
       BFD_ASSERT ((bfd_byte *) flinfo.ldrel
 		  == (xcoff_hash_table (info)->loader_section->contents
@@ -6371,19 +6353,25 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 
   /* Write out the magic sections.  */
   o = xcoff_hash_table (info)->linkage_section;
-  if (o->size > 0
+  if (o != NULL
+      && o->size != 0
+      && o->output_section != bfd_abs_section_ptr
       && ! bfd_set_section_contents (abfd, o->output_section, o->contents,
 				     (file_ptr) o->output_offset,
 				     o->size))
     goto error_return;
   o = xcoff_hash_table (info)->toc_section;
-  if (o->size > 0
+  if (o != NULL
+      && o->size != 0
+      && o->output_section != bfd_abs_section_ptr
       && ! bfd_set_section_contents (abfd, o->output_section, o->contents,
 				     (file_ptr) o->output_offset,
 				     o->size))
     goto error_return;
   o = xcoff_hash_table (info)->descriptor_section;
-  if (o->size > 0
+  if (o != NULL
+      && o->size != 0
+      && o->output_section != bfd_abs_section_ptr
       && ! bfd_set_section_contents (abfd, o->output_section, o->contents,
 				     (file_ptr) o->output_offset,
 				     o->size))
@@ -6406,7 +6394,9 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 
   /* Write out the debugging string table.  */
   o = xcoff_hash_table (info)->debug_section;
-  if (o != NULL)
+  if (o != NULL
+      && o->size != 0
+      && o->output_section != bfd_abs_section_ptr)
     {
       struct bfd_strtab_hash *debug_strtab;
 
@@ -6436,27 +6426,18 @@ _bfd_xcoff_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 
       for (i = 0; i < abfd->section_count; i++)
 	{
-	  if (flinfo.section_info[i].relocs != NULL)
-	    free (flinfo.section_info[i].relocs);
-	  if (flinfo.section_info[i].rel_hashes != NULL)
-	    free (flinfo.section_info[i].rel_hashes);
+	  free (flinfo.section_info[i].relocs);
+	  free (flinfo.section_info[i].rel_hashes);
 	}
       free (flinfo.section_info);
     }
 
-  if (flinfo.internal_syms != NULL)
-    free (flinfo.internal_syms);
-  if (flinfo.sym_indices != NULL)
-    free (flinfo.sym_indices);
-  if (flinfo.outsyms != NULL)
-    free (flinfo.outsyms);
-  if (flinfo.linenos != NULL)
-    free (flinfo.linenos);
-  if (flinfo.contents != NULL)
-    free (flinfo.contents);
-  if (flinfo.external_relocs != NULL)
-    free (flinfo.external_relocs);
-  if (external_relocs != NULL)
-    free (external_relocs);
+  free (flinfo.internal_syms);
+  free (flinfo.sym_indices);
+  free (flinfo.outsyms);
+  free (flinfo.linenos);
+  free (flinfo.contents);
+  free (flinfo.external_relocs);
+  free (external_relocs);
   return FALSE;
 }

@@ -1,6 +1,6 @@
 /* Linux-dependent part of branch trace support for GDB, and GDBserver.
 
-   Copyright (C) 2013-2020 Free Software Foundation, Inc.
+   Copyright (C) 2013-2021 Free Software Foundation, Inc.
 
    Contributed by Intel Corp. <markus.t.metzger@intel.com>
 
@@ -90,6 +90,9 @@ btrace_this_cpu (void)
 		cpu.model += (cpuid >> 12) & 0xf0;
 	    }
 	}
+      else if (ebx == signature_AMD_ebx && ecx == signature_AMD_ecx
+	       && edx == signature_AMD_edx)
+	cpu.vendor = CV_AMD;
     }
 
   return cpu;
@@ -406,6 +409,9 @@ cpu_supports_bts (void)
 
     case CV_INTEL:
       return intel_supports_bts (&cpu);
+
+    case CV_AMD:
+      return 0;
     }
 }
 

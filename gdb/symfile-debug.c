@@ -1,6 +1,6 @@
 /* Debug logging for the symbol file functions for the GNU debugger, GDB.
 
-   Copyright (C) 2013-2020 Free Software Foundation, Inc.
+   Copyright (C) 2013-2021 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
@@ -475,7 +475,7 @@ debug_sym_offsets (struct objfile *objfile,
   debug_data->real_sf->sym_offsets (objfile, info);
 }
 
-static struct symfile_segment_data *
+static symfile_segment_data_up
 debug_sym_segments (bfd *abfd)
 {
   /* This API function is annoying, it doesn't take a "this" pointer.

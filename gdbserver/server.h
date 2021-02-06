@@ -1,5 +1,5 @@
 /* Common definitions for remote server for GDB.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,10 +30,6 @@
 #include <config.h>
 
 gdb_static_assert (sizeof (CORE_ADDR) >= sizeof (void *));
-
-#ifdef __MINGW32CE__
-#include "wincecompat.h"
-#endif
 
 #include "gdbsupport/version.h"
 

@@ -1,6 +1,6 @@
 /* gdb.c --- sim interface to GDB.
 
-Copyright (C) 2005-2020 Free Software Foundation, Inc.
+Copyright (C) 2005-2021 Free Software Foundation, Inc.
 Contributed by Red Hat, Inc.
 
 This file is part of the GNU simulators.
@@ -703,6 +703,12 @@ sim_do_command (SIM_DESC sd, const char *cmd)
 
 char **
 sim_complete_command (SIM_DESC sd, const char *text, const char *word)
+{
+  return NULL;
+}
+
+char *
+sim_memory_map (SIM_DESC sd)
 {
   return NULL;
 }

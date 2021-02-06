@@ -1,5 +1,5 @@
 /* ELF emulation code for targets using elf.em.
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright (C) 1991-2021 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -261,6 +261,8 @@ ldelf_try_needed (struct dt_needed *needed, int force, int is_linux)
 	info_msg (_("attempt to open %s failed\n"), name);
       return FALSE;
     }
+
+  track_dependency_files (name);
 
   /* Linker needs to decompress sections.  */
   abfd->flags |= BFD_DECOMPRESS;
@@ -783,8 +785,7 @@ ldelf_parse_ld_so_conf_include (struct ldelf_ld_so_conf *info,
   ldelf_parse_ld_so_conf (info, pattern);
 #endif
 
-  if (newp)
-    free (newp);
+  free (newp);
 }
 
 static bfd_boolean
@@ -1038,6 +1039,19 @@ ldelf_after_open (int use_libpath, int native, int is_linux, int is_freebsd,
     }
 
   get_elf_backend_data (link_info.output_bfd)->setup_gnu_properties (&link_info);
+
+  /* Do not allow executable files to be used as inputs to the link.  */
+  for (abfd = link_info.input_bfds; abfd; abfd = abfd->link.next)
+    {
+      if (abfd->xvec->flavour == bfd_target_elf_flavour
+	  && !bfd_input_just_syms (abfd)
+	  && elf_tdata (abfd) != NULL
+	  && elf_tdata (abfd)->elf_header != NULL
+	  /* FIXME: Maybe check for other non-supportable types as well ?  */
+	  && elf_tdata (abfd)->elf_header->e_type == ET_EXEC)
+	einfo (_("%F%P: cannot use executable file '%pB' as input to a link\n"),
+	       abfd);
+    }
 
   if (bfd_link_relocatable (&link_info))
     {
@@ -1576,6 +1590,8 @@ ldelf_before_allocation (char *audit, char *depaudit,
 		      (char *) &ehdr_start->u + sizeof ehdr_start->u.def.next,
 		      sizeof ehdr_start_save_u);
 	      ehdr_start->type = bfd_link_hash_defined;
+	      /* It will be converted to section-relative later.  */
+	      ehdr_start->rel_from_abs = 1;
 	      ehdr_start->u.def.section = bfd_abs_section_ptr;
 	      ehdr_start->u.def.value = 0;
 	    }
@@ -1990,7 +2006,7 @@ ldelf_place_orphan (asection *s, const char *secname, int constraint)
 	    && (elf_section_data (os->bfd_section)->this_hdr.sh_info
 		== elf_section_data (s)->this_hdr.sh_info))
 	    {
-	      lang_add_section (&os->children, s, NULL, os);
+	      lang_add_section (&os->children, s, NULL, NULL, os);
 	      return os;
 	    }
 
@@ -2033,7 +2049,7 @@ ldelf_place_orphan (asection *s, const char *secname, int constraint)
 			|| !elfoutput
 			|| elf_orphan_compatible (s, os->bfd_section)))))
 	  {
-	    lang_add_section (&os->children, s, NULL, os);
+	    lang_add_section (&os->children, s, NULL, NULL, os);
 	    return os;
 	  }
 
@@ -2047,7 +2063,7 @@ ldelf_place_orphan (asection *s, const char *secname, int constraint)
      unused one and use that.  */
   if (match_by_name)
     {
-      lang_add_section (&match_by_name->children, s, NULL, match_by_name);
+      lang_add_section (&match_by_name->children, s, NULL, NULL, match_by_name);
       return match_by_name;
     }
 
@@ -2072,7 +2088,7 @@ ldelf_place_orphan (asection *s, const char *secname, int constraint)
       && hold[orphan_text].os != NULL)
     {
       os = hold[orphan_text].os;
-      lang_add_section (&os->children, s, NULL, os);
+      lang_add_section (&os->children, s, NULL, NULL, os);
       return os;
     }
 
@@ -2172,13 +2188,21 @@ ldelf_before_place_orphans (void)
 	       been discarded.  */
 	    asection *linked_to_sec;
 	    for (linked_to_sec = elf_linked_to_section (isec);
-		 linked_to_sec != NULL;
+		 linked_to_sec != NULL && !linked_to_sec->linker_mark;
 		 linked_to_sec = elf_linked_to_section (linked_to_sec))
-	      if (discarded_section (linked_to_sec))
-		{
-		  isec->output_section = bfd_abs_section_ptr;
-		  break;
-		}
+	      {
+		if (discarded_section (linked_to_sec))
+		  {
+		    isec->output_section = bfd_abs_section_ptr;
+		    isec->flags |= SEC_EXCLUDE;
+		    break;
+		  }
+		linked_to_sec->linker_mark = 1;
+	      }
+	    for (linked_to_sec = elf_linked_to_section (isec);
+		 linked_to_sec != NULL && linked_to_sec->linker_mark;
+		 linked_to_sec = elf_linked_to_section (linked_to_sec))
+	      linked_to_sec->linker_mark = 0;
 	  }
       }
 }

@@ -1,5 +1,5 @@
 /* YACC parser for C expressions, for GDB.
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -976,19 +976,19 @@ exp     :	NSSTRING	/* ObjC NextStep NSString constant
 
 /* C++.  */
 exp     :       TRUEKEYWORD
-                        { write_exp_elt_opcode (pstate, OP_LONG);
-                          write_exp_elt_type (pstate,
+			{ write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_type (pstate,
 					  parse_type (pstate)->builtin_bool);
-                          write_exp_elt_longcst (pstate, (LONGEST) 1);
-                          write_exp_elt_opcode (pstate, OP_LONG); }
+			  write_exp_elt_longcst (pstate, (LONGEST) 1);
+			  write_exp_elt_opcode (pstate, OP_LONG); }
 	;
 
 exp     :       FALSEKEYWORD
-                        { write_exp_elt_opcode (pstate, OP_LONG);
-                          write_exp_elt_type (pstate,
+			{ write_exp_elt_opcode (pstate, OP_LONG);
+			  write_exp_elt_type (pstate,
 					  parse_type (pstate)->builtin_bool);
-                          write_exp_elt_longcst (pstate, (LONGEST) 0);
-                          write_exp_elt_opcode (pstate, OP_LONG); }
+			  write_exp_elt_longcst (pstate, (LONGEST) 0);
+			  write_exp_elt_opcode (pstate, OP_LONG); }
 	;
 
 /* end of C++.  */
@@ -1104,30 +1104,12 @@ variable:	qualified_name
 	|	COLONCOLON name_not_typename
 			{
 			  std::string name = copy_name ($2.stoken);
-			  struct symbol *sym;
-			  struct bound_minimal_symbol msymbol;
-
-			  sym
+			  struct block_symbol sym
 			    = lookup_symbol (name.c_str (),
 					     (const struct block *) NULL,
-					     VAR_DOMAIN, NULL).symbol;
-			  if (sym)
-			    {
-			      write_exp_elt_opcode (pstate, OP_VAR_VALUE);
-			      write_exp_elt_block (pstate, NULL);
-			      write_exp_elt_sym (pstate, sym);
-			      write_exp_elt_opcode (pstate, OP_VAR_VALUE);
-			      break;
-			    }
-
-			  msymbol = lookup_bound_minimal_symbol (name.c_str ());
-			  if (msymbol.minsym != NULL)
-			    write_exp_msymbol (pstate, msymbol);
-			  else if (!have_full_symbols () && !have_partial_symbols ())
-			    error (_("No symbol table is loaded.  Use the \"file\" command."));
-			  else
-			    error (_("No symbol \"%s\" in current context."),
-				   name.c_str ());
+					     VAR_DOMAIN, NULL);
+			  write_exp_symbol_reference (pstate, name.c_str (),
+						      sym);
 			}
 	;
 
@@ -1159,7 +1141,7 @@ variable:	name_not_typename
 			  else if ($1.is_a_field_of_this)
 			    {
 			      /* C++: it hangs off of `this'.  Must
-			         not inadvertently convert from a method call
+				 not inadvertently convert from a method call
 				 to data ref.  */
 			      pstate->block_tracker->update (sym);
 			      write_exp_elt_opcode (pstate, OP_THIS);
@@ -1431,13 +1413,13 @@ scalar_type:
 						0); }
 	|	UNSIGNED type_name
 			{ $$ = lookup_unsigned_typename (pstate->language (),
-							 TYPE_NAME($2.type)); }
+							 $2.type->name ()); }
 	|	UNSIGNED
 			{ $$ = lookup_unsigned_typename (pstate->language (),
 							 "int"); }
 	|	SIGNED_KEYWORD type_name
 			{ $$ = lookup_signed_typename (pstate->language (),
-						       TYPE_NAME($2.type)); }
+						       $2.type->name ()); }
 	|	SIGNED_KEYWORD
 			{ $$ = lookup_signed_typename (pstate->language (),
 						       "int"); }
@@ -1528,9 +1510,9 @@ typebase
 						       $2.length);
 			  $$ = NULL;
 			}
-                /* It appears that this rule for templates is never
-                   reduced; template recognition happens by lookahead
-                   in the token processing code in yylex. */
+		/* It appears that this rule for templates is never
+		   reduced; template recognition happens by lookahead
+		   in the token processing code in yylex. */
 	|	TEMPLATE name '<' type '>'
 			{ $$ = lookup_template_type
 			    (copy_name($2).c_str (), $4,
@@ -1852,10 +1834,10 @@ typename_stoken (const char *type)
 static int
 type_aggregate_p (struct type *type)
 {
-  return (TYPE_CODE (type) == TYPE_CODE_STRUCT
-	  || TYPE_CODE (type) == TYPE_CODE_UNION
-	  || TYPE_CODE (type) == TYPE_CODE_NAMESPACE
-	  || (TYPE_CODE (type) == TYPE_CODE_ENUM
+  return (type->code () == TYPE_CODE_STRUCT
+	  || type->code () == TYPE_CODE_UNION
+	  || type->code () == TYPE_CODE_NAMESPACE
+	  || (type->code () == TYPE_CODE_ENUM
 	      && TYPE_DECLARED_CLASS (type)));
 }
 
@@ -1870,7 +1852,7 @@ check_parameter_typelist (std::vector<struct type *> *params)
   for (ix = 0; ix < params->size (); ++ix)
     {
       type = (*params)[ix];
-      if (type != NULL && TYPE_CODE (check_typedef (type)) == TYPE_CODE_VOID)
+      if (type != NULL && check_typedef (type)->code () == TYPE_CODE_VOID)
 	{
 	  if (ix == 0)
 	    {
@@ -1973,7 +1955,7 @@ parse_number (struct parser_state *par_state,
       if (!parse_float (p, len,
 			putithere->typed_val_float.type,
 			putithere->typed_val_float.val))
-        return ERROR;
+	return ERROR;
 
       if (imaginary_p)
 	putithere->typed_val_float.type
@@ -2551,17 +2533,13 @@ static const struct token ident_tokens[] =
 
 
 static void
-scan_macro_expansion (char *expansion)
+scan_macro_expansion (const char *expansion)
 {
-  const char *copy;
-
   /* We'd better not be trying to push the stack twice.  */
   gdb_assert (! cpstate->macro_original_text);
 
-  /* Copy to the obstack, and then free the intermediate
-     expansion.  */
-  copy = obstack_strdup (&cpstate->expansion_obstack, expansion);
-  xfree (expansion);
+  /* Copy to the obstack.  */
+  const char *copy = obstack_strdup (&cpstate->expansion_obstack, expansion);
 
   /* Save the old lexptr value, so we can return to it when we're done
      parsing the expanded text.  */
@@ -2631,12 +2609,11 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
   /* Check if this is a macro invocation that we need to expand.  */
   if (! scanning_macro_expansion ())
     {
-      char *expanded = macro_expand_next (&pstate->lexptr,
-                                          standard_macro_lookup,
-                                          expression_macro_scope);
+      gdb::unique_xmalloc_ptr<char> expanded
+	= macro_expand_next (&pstate->lexptr, *expression_macro_scope);
 
-      if (expanded)
-        scan_macro_expansion (expanded);
+      if (expanded != nullptr)
+	scan_macro_expansion (expanded.get ());
     }
 
   pstate->prev_lexptr = pstate->lexptr;
@@ -2676,16 +2653,16 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
     {
     case 0:
       /* If we were just scanning the result of a macro expansion,
-         then we need to resume scanning the original text.
+	 then we need to resume scanning the original text.
 	 If we're parsing for field name completion, and the previous
 	 token allows such completion, return a COMPLETE token.
-         Otherwise, we were already scanning the original text, and
-         we're really done.  */
+	 Otherwise, we were already scanning the original text, and
+	 we're really done.  */
       if (scanning_macro_expansion ())
-        {
-          finished_macro_expansion ();
-          goto retry;
-        }
+	{
+	  finished_macro_expansion ();
+	  goto retry;
+	}
       else if (saw_name_at_eof)
 	{
 	  saw_name_at_eof = 0;
@@ -2694,7 +2671,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
       else if (par_state->parse_completion && saw_structop)
 	return COMPLETE;
       else
-        return 0;
+	return 0;
 
     case ' ':
     case '\t':
@@ -2721,8 +2698,8 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 
     case ',':
       if (pstate->comma_terminates
-          && paren_depth == 0
-          && ! scanning_macro_expansion ())
+	  && paren_depth == 0
+	  && ! scanning_macro_expansion ())
 	return 0;
       pstate->lexptr++;
       return c;
@@ -2748,7 +2725,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
     case '9':
       {
 	/* It's a number.  */
-	int got_dot = 0, got_e = 0, toktype;
+	int got_dot = 0, got_e = 0, got_p = 0, toktype;
 	const char *p = tokstart;
 	int hex = input_radix > 10;
 
@@ -2768,13 +2745,16 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	    /* This test includes !hex because 'e' is a valid hex digit
 	       and thus does not indicate a floating point number when
 	       the radix is hex.  */
-	    if (!hex && !got_e && (*p == 'e' || *p == 'E'))
+	    if (!hex && !got_e && !got_p && (*p == 'e' || *p == 'E'))
 	      got_dot = got_e = 1;
+	    else if (!got_e && !got_p && (*p == 'p' || *p == 'P'))
+	      got_dot = got_p = 1;
 	    /* This test does not include !hex, because a '.' always indicates
 	       a decimal floating point number regardless of the radix.  */
 	    else if (!got_dot && *p == '.')
 	      got_dot = 1;
-	    else if (got_e && (p[-1] == 'e' || p[-1] == 'E')
+	    else if (((got_e && (p[-1] == 'e' || p[-1] == 'E'))
+		      || (got_p && (p[-1] == 'p' || p[-1] == 'P')))
 		     && (*p == '-' || *p == '+'))
 	      /* This is the sign of the exponent, not the end of the
 		 number.  */
@@ -2787,8 +2767,8 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	      break;
 	  }
 	toktype = parse_number (par_state, tokstart, p - tokstart,
-				got_dot|got_e, &yylval);
-        if (toktype == ERROR)
+				got_dot | got_e | got_p, &yylval);
+	if (toktype == ERROR)
 	  {
 	    char *err_copy = (char *) alloca (p - tokstart + 1);
 
@@ -2971,7 +2951,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 			       pstate->expression_context_block,
 			       VAR_DOMAIN,
 			       (par_state->language ()->la_language
-			        == language_cplus ? &is_a_field_of_this
+				== language_cplus ? &is_a_field_of_this
 				: NULL)).symbol
 		!= NULL)
 	      {
@@ -3015,7 +2995,7 @@ static int popping;
 
 /* Temporary storage for c_lex; this holds symbol names as they are
    built up.  */
-auto_obstack name_obstack;
+static auto_obstack name_obstack;
 
 /* Classify a NAME token.  The contents of the token are in `yylval'.
    Updates yylval and returns the new token type.  BLOCK is the block
@@ -3038,7 +3018,7 @@ classify_name (struct parser_state *par_state, const struct block *block,
   memset (&is_a_field_of_this, 0, sizeof (is_a_field_of_this));
 
   bsym = lookup_symbol (copy.c_str (), block, VAR_DOMAIN,
-			par_state->language ()->la_name_of_this
+			par_state->language ()->name_of_this ()
 			? &is_a_field_of_this : NULL);
 
   if (bsym.symbol && SYMBOL_CLASS (bsym.symbol) == LOC_BLOCK)

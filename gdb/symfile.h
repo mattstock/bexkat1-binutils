@@ -1,6 +1,6 @@
 /* Definitions for reading symbol files into GDB.
 
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,6 +27,7 @@
 #include "objfile-flags.h"
 #include "gdb_bfd.h"
 #include "gdbsupport/function-view.h"
+#include "target-section.h"
 
 /* Opaque declarations.  */
 struct target_section;
@@ -80,25 +81,31 @@ typedef std::vector<other_sections> section_addr_info;
    each BFD section belongs to.  */
 struct symfile_segment_data
 {
-  /* How many segments are present in this file.  If there are
+  struct segment
+  {
+    segment (CORE_ADDR base, CORE_ADDR size)
+      : base (base), size (size)
+    {}
+
+    /* The original base address the segment.  */
+    CORE_ADDR base;
+
+    /* The memory size of the segment.  */
+    CORE_ADDR size;
+  };
+
+  /* The segments present in this file.  If there are
      two, the text segment is the first one and the data segment
      is the second one.  */
-  int num_segments;
+  std::vector<segment> segments;
 
-  /* If NUM_SEGMENTS is greater than zero, the original base address
-     of each segment.  */
-  CORE_ADDR *segment_bases;
-
-  /* If NUM_SEGMENTS is greater than zero, the memory size of each
-     segment.  */
-  CORE_ADDR *segment_sizes;
-
-  /* If NUM_SEGMENTS is greater than zero, this is an array of entries
-     recording which segment contains each BFD section.
-     SEGMENT_INFO[I] is S+1 if the I'th BFD section belongs to segment
+  /* This is an array of entries recording which segment contains each BFD
+     section.  SEGMENT_INFO[I] is S+1 if the I'th BFD section belongs to segment
      S, or zero if it is not in any segment.  */
-  int *segment_info;
+  std::vector<int> segment_info;
 };
+
+using symfile_segment_data_up = std::unique_ptr<symfile_segment_data>;
 
 /* Callback for quick_symbol_functions->map_symbol_filenames.  */
 
@@ -229,9 +236,9 @@ struct quick_symbol_functions
      strcmp_iw_ordered(x,y) == 0 --> MATCH(x,y) == 0.  ORDERED_COMPARE,
      if non-null, must be an ordering relation compatible with
      strcmp_iw_ordered in the sense that
-            strcmp_iw_ordered(x,y) == 0 --> ORDERED_COMPARE(x,y) == 0
+	    strcmp_iw_ordered(x,y) == 0 --> ORDERED_COMPARE(x,y) == 0
      and 
-            strcmp_iw_ordered(x,y) <= 0 --> ORDERED_COMPARE(x,y) <= 0
+	    strcmp_iw_ordered(x,y) <= 0 --> ORDERED_COMPARE(x,y) <= 0
      (allowing strcmp_iw_ordered(x,y) < 0 while ORDERED_COMPARE(x, y) == 0).
      CALLBACK returns true to indicate that the scan should continue, or
      false to indicate that the scan should be terminated.  */
@@ -360,7 +367,7 @@ struct sym_fns
      the segments of ABFD.  Each segment is a unit of the file
      which may be relocated independently.  */
 
-  struct symfile_segment_data *(*sym_segments) (bfd *abfd);
+  symfile_segment_data_up (*sym_segments) (bfd *abfd);
 
   /* This function should read the linetable from the objfile when
      the line table cannot be read while processing the debugging
@@ -401,13 +408,13 @@ extern void default_symfile_offsets (struct objfile *objfile,
 /* The default version of sym_fns.sym_segments for readers that don't
    do anything special.  */
 
-extern struct symfile_segment_data *default_symfile_segments (bfd *abfd);
+extern symfile_segment_data_up default_symfile_segments (bfd *abfd);
 
 /* The default version of sym_fns.sym_relocate for readers that don't
    do anything special.  */
 
 extern bfd_byte *default_symfile_relocate (struct objfile *objfile,
-                                           asection *sectp, bfd_byte *buf);
+					   asection *sectp, bfd_byte *buf);
 
 extern struct symtab *allocate_symtab (struct compunit_symtab *, const char *)
   ATTRIBUTE_NONNULL (1);
@@ -434,7 +441,7 @@ extern struct objfile *symbol_file_add (const char *, symfile_add_flags,
 
 extern struct objfile *symbol_file_add_from_bfd (bfd *, const char *, symfile_add_flags,
 						 section_addr_info *,
-                                                 objfile_flags, struct objfile *parent);
+						 objfile_flags, struct objfile *parent);
 
 extern void symbol_file_add_separate (bfd *, const char *, symfile_add_flags,
 				      struct objfile *);
@@ -445,10 +452,7 @@ extern std::string find_separate_debug_file_by_debuglink (struct objfile *);
    existing section table.  */
 
 extern section_addr_info
-   build_section_addr_info_from_section_table (const struct target_section
-					       *start,
-					       const struct target_section
-					       *end);
+    build_section_addr_info_from_section_table (const target_section_table &table);
 
 			/*   Variables   */
 
@@ -467,8 +471,6 @@ extern bool auto_solib_add;
 /* From symfile.c */
 
 extern void set_initial_language (void);
-
-extern void find_lowest_section (bfd *, asection *, void *);
 
 extern gdb_bfd_ref_ptr symfile_bfd_open (const char *);
 
@@ -530,8 +532,7 @@ extern int symfile_map_offsets_to_segments (bfd *,
 					    const struct symfile_segment_data *,
 					    section_offsets &,
 					    int, const CORE_ADDR *);
-struct symfile_segment_data *get_symfile_segment_data (bfd *abfd);
-void free_symfile_segment_data (struct symfile_segment_data *data);
+symfile_segment_data_up get_symfile_segment_data (bfd *abfd);
 
 extern scoped_restore_tmpl<int> increment_reading_symtab (void);
 
@@ -599,7 +600,7 @@ struct dwarf2_debug_sections {
 };
 
 extern int dwarf2_has_info (struct objfile *,
-                            const struct dwarf2_debug_sections *,
+			    const struct dwarf2_debug_sections *,
 			    bool = false);
 
 /* Dwarf2 sections that can be accessed by dwarf2_get_section_info.  */
@@ -609,7 +610,7 @@ enum dwarf2_section_enum {
 };
 
 extern void dwarf2_get_section_info (struct objfile *,
-                                     enum dwarf2_section_enum,
+				     enum dwarf2_section_enum,
 				     asection **, const gdb_byte **,
 				     bfd_size_type *);
 
@@ -632,8 +633,6 @@ extern bool dwarf2_initialize_objfile (struct objfile *objfile,
 extern void dwarf2_build_psymtabs (struct objfile *);
 extern void dwarf2_build_frame_info (struct objfile *);
 
-void dwarf2_free_objfile (struct objfile *);
-
 /* From minidebug.c.  */
 
 extern gdb_bfd_ref_ptr find_separate_debug_file_in_section (struct objfile *);
@@ -641,5 +640,13 @@ extern gdb_bfd_ref_ptr find_separate_debug_file_in_section (struct objfile *);
 /* True if we are printing debug output about separate debug info files.  */
 
 extern bool separate_debug_file_debug;
+
+/* Read full symbols immediately.  */
+
+extern int readnow_symbol_files;
+
+/* Never read full symbols.  */
+
+extern int readnever_symbol_files;
 
 #endif /* !defined(SYMFILE_H) */

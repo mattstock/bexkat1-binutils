@@ -1,5 +1,5 @@
 /* elfcomm.c -- common code for ELF format file.
-   Copyright (C) 2010-2020 Free Software Foundation, Inc.
+   Copyright (C) 2010-2021 Free Software Foundation, Inc.
 
    Originally developed by Eric Youngdale <eric@andante.jic.com>
    Modifications by Nick Clifton <nickc@redhat.com>
@@ -67,65 +67,30 @@ void (*byte_put) (unsigned char *, elf_vma, int);
 void
 byte_put_little_endian (unsigned char * field, elf_vma value, int size)
 {
-  switch (size)
+  if (size <= 0 || size > 8)
     {
-    case 8:
-      field[7] = (((value >> 24) >> 24) >> 8) & 0xff;
-      field[6] = ((value >> 24) >> 24) & 0xff;
-      field[5] = ((value >> 24) >> 16) & 0xff;
-      field[4] = ((value >> 24) >> 8) & 0xff;
-      /* Fall through.  */
-    case 4:
-      field[3] = (value >> 24) & 0xff;
-      /* Fall through.  */
-    case 3:
-      field[2] = (value >> 16) & 0xff;
-      /* Fall through.  */
-    case 2:
-      field[1] = (value >> 8) & 0xff;
-      /* Fall through.  */
-    case 1:
-      field[0] = value & 0xff;
-      break;
-
-    default:
       error (_("Unhandled data length: %d\n"), size);
       abort ();
+    }
+  while (size--)
+    {
+      *field++ = value & 0xff;
+      value >>= 8;
     }
 }
 
 void
 byte_put_big_endian (unsigned char * field, elf_vma value, int size)
 {
-  switch (size)
+  if (size <= 0 || size > 8)
     {
-    case 8:
-      field[7] = value & 0xff;
-      field[6] = (value >> 8) & 0xff;
-      field[5] = (value >> 16) & 0xff;
-      field[4] = (value >> 24) & 0xff;
-      value >>= 16;
-      value >>= 16;
-      /* Fall through.  */
-    case 4:
-      field[3] = value & 0xff;
-      value >>= 8;
-      /* Fall through.  */
-    case 3:
-      field[2] = value & 0xff;
-      value >>= 8;
-      /* Fall through.  */
-    case 2:
-      field[1] = value & 0xff;
-      value >>= 8;
-      /* Fall through.  */
-    case 1:
-      field[0] = value & 0xff;
-      break;
-
-    default:
       error (_("Unhandled data length: %d\n"), size);
       abort ();
+    }
+  while (size--)
+    {
+      field[size] = value & 0xff;
+      value >>= 8;
     }
 }
 
@@ -727,7 +692,10 @@ setup_nested_archive (struct archive_info *nested_arch,
 
   /* Close previous file and discard cached information.  */
   if (nested_arch->file != NULL)
-    fclose (nested_arch->file);
+    {
+      fclose (nested_arch->file);
+      nested_arch->file = NULL;
+    }
   release_archive (nested_arch);
 
   member_file = fopen (member_file_name, "rb");
@@ -744,14 +712,14 @@ setup_nested_archive (struct archive_info *nested_arch,
 void
 release_archive (struct archive_info * arch)
 {
-  if (arch->file_name != NULL)
-    free (arch->file_name);
-  if (arch->index_array != NULL)
-    free (arch->index_array);
-  if (arch->sym_table != NULL)
-    free (arch->sym_table);
-  if (arch->longnames != NULL)
-    free (arch->longnames);
+  free (arch->file_name);
+  free (arch->index_array);
+  free (arch->sym_table);
+  free (arch->longnames);
+  arch->file_name = NULL;
+  arch->index_array = NULL;
+  arch->sym_table = NULL;
+  arch->longnames = NULL;
 }
 
 /* Get the name of an archive member from the current archive header.

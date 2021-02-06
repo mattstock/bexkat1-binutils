@@ -1,6 +1,6 @@
 /* TUI window generic functions.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -240,7 +240,7 @@ translate (const char *name, struct tui_translate *table)
   while (table->name)
     {
       if (name && strcmp (table->name, name) == 0)
-        return table;
+	return table;
       table++;
     }
 
@@ -511,7 +511,7 @@ tui_resize_all (void)
       tui_set_term_width_to (screenwidth);
 
       /* erase + clearok are used instead of a straightforward clear as
-         AIX 5.3 does not define clear.  */
+	 AIX 5.3 does not define clear.  */
       erase ();
       clearok (curscr, TRUE);
       tui_apply_current_layout ();
@@ -576,7 +576,8 @@ tui_initialize_win (void)
 {
 #ifdef SIGWINCH
   tui_sigwinch_token
-    = create_async_signal_handler (tui_async_resize_screen, NULL);
+    = create_async_signal_handler (tui_async_resize_screen, NULL,
+				   "tui-sigwinch");
 
   {
 #ifdef HAVE_SIGACTION
@@ -660,21 +661,18 @@ tui_partial_win_by_name (gdb::string_view name)
 {
   struct tui_win_info *best = nullptr;
 
-  if (name != NULL)
+  for (tui_win_info *item : all_tui_windows ())
     {
-      for (tui_win_info *item : all_tui_windows ())
-	{
-	  const char *cur_name = item->name ();
+      const char *cur_name = item->name ();
 
-	  if (name == cur_name)
-	    return item;
-	  if (startswith (cur_name, name))
-	    {
-	      if (best != nullptr)
-		error (_("Window name \"%*s\" is ambiguous"),
-		       (int) name.size (), name.data ());
-	      best = item;
-	    }
+      if (name == cur_name)
+	return item;
+      if (startswith (cur_name, name))
+	{
+	  if (best != nullptr)
+	    error (_("Window name \"%*s\" is ambiguous"),
+		   (int) name.size (), name.data ());
+	  best = item;
 	}
     }
 
@@ -752,6 +750,8 @@ tui_refresh_all_command (const char *arg, int from_tty)
 
   tui_refresh_all_win ();
 }
+
+#define DEFAULT_TAB_LEN         8
 
 /* The tab width that should be used by the TUI.  */
 
@@ -919,7 +919,7 @@ tui_win_info::max_height () const
 /* See tui-data.h.  */
 
 int
-tui_gen_win_info::max_width () const
+tui_win_info::max_width () const
 {
   return tui_term_width () - 2;
 }
@@ -1004,7 +1004,7 @@ _initialize_tui_win ()
 		       0 /* allow-unknown */, &showlist);
 
   add_com ("refresh", class_tui, tui_refresh_all_command,
-           _("Refresh the terminal display."));
+	   _("Refresh the terminal display."));
 
   cmd = add_com ("tabset", class_tui, tui_set_tab_width_command, _("\
 Set the width (in characters) of tab stops.\n\

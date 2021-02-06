@@ -1,5 +1,5 @@
 /* tc-i386.c -- Assemble Intel syntax code for ix86/x86-64
-   Copyright (C) 2009-2020 Free Software Foundation, Inc.
+   Copyright (C) 2009-2021 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -122,6 +122,16 @@ const i386_types[] =
 operatorT i386_operator (const char *name, unsigned int operands, char *pc)
 {
   unsigned int j;
+
+#ifdef SVR4_COMMENT_CHARS
+  if (!name && operands == 2 && *input_line_pointer == '\\')
+    switch (input_line_pointer[1])
+      {
+      case '/': input_line_pointer += 2; return O_divide;
+      case '%': input_line_pointer += 2; return O_modulus;
+      case '*': input_line_pointer += 2; return O_multiply;
+      }
+#endif
 
   if (!intel_syntax)
     return O_absent;

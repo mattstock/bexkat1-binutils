@@ -1,7 +1,7 @@
 /* Functions to deal with the inferior being executed on GDB or
    GDBserver.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,6 +20,8 @@
 
 #ifndef COMMON_COMMON_INFERIOR_H
 #define COMMON_COMMON_INFERIOR_H
+
+#include "gdbsupport/array-view.h"
 
 /* Return the exec wrapper to be used when starting the inferior, or NULL
    otherwise.  */
@@ -57,5 +59,10 @@ extern void set_inferior_cwd (const char *cwd);
    The catch-exec traps expected during start-up will be one more if
    the target is started up with a shell.  */
 extern bool startup_with_shell;
+
+/* Compute command-line string given argument vector. This does the
+   same shell processing as fork_inferior.  */
+extern std::string
+construct_inferior_arguments (gdb::array_view<char * const>);
 
 #endif /* COMMON_COMMON_INFERIOR_H */

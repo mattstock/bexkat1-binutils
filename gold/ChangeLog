@@ -1,103 +1,52 @@
-2020-05-02  H.J. Lu  <hongjiu.lu@intel.com>
+2021-01-28  H.J. Lu  <hongjiu.lu@intel.com>
 
-	PR gold/25904
-	* testsuite/Makefile.am (COMMON_TEST_C_CFLAGS): New.
-	(common_test_1.o): New rule.
-	(common_test_2.o): Likewise.
-	(common_test_3.o): Likewise.
-	(plugin_common_test_1.o): Likewise.
-	(plugin_common_test_2.o): Likewise.
-	(common_test_1_v1.o): Likewise.
-	(common_test_1_v2.o): Likewise.
-	(common_test_2_pic.o): Compile with $(COMMON_TEST_C_CFLAGS).
-	(common_test_3_pic.o): Likewise.
-	* testsuite/Makefile.in: Regenerated.
+	PR gold/27246
+	* dwarf_reader.cc (Sized_dwarf_line_info::read_header_prolog):
+	Skip address size and segment selector for DWARF5.
 
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
+2021-01-19  Alan Modra  <amodra@gmail.com>
 
-	PR gold/25426
-	* x86_64.cc (Target_x86_64<size>::Relocate::tls_desc_gd_to_ie):
-	For x32, relax "rex leal foo@tlsdesc(%rip), %reg" to
-	"rex movl foo@gottpoff(%rip), %eax" and relax ""call *(%eax)"
-	to "nopl (%rax)".
-	(Target_x86_64<size>::Relocate::tls_desc_gd_to_le): For x32,
-	relax "rex leal foo@tlsdesc(%rip), %reg" to
-	"rex movl foo@tpoff, %eax" and relax "call *foo@tlscall(%eax)"
-	to "nopl (%rax)".
-	* testsuite/Makefile.am (tls_test_gnu2.o): Depend on
-	gcctestdir/as.
-	(tls_test_file2_gnu2.o): Likewise.
-	(tls_test_c_gnu2.o): Likewise.
-	* testsuite/Makefile.in: Regenerated.
+	PR 27203
+	* powerpc.cc (do_plt_fde_location): Remove doing_static_link
+	assertion.
 
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
+2021-01-17  H.J. Lu  <hongjiu.lu@intel.com>
 
-	PR gold/25473
-	* x86_64.cc (Target_x86_64<size>::Relocate::tls_desc_gd_to_ie):
-	Properly check r8 - r15 in "lea foo@TLSDESC(%rip), %reg".
-	(Target_x86_64<size>::Relocate::tls_desc_gd_to_le): Properly
-	relax r8 - r15 in "lea foo@TLSDESC(%rip), %reg".
-	* testsuite/Makefile.am (check_SCRIPTS): Add x86_64_gd_to_le.sh.
-	(check_DATA): Add x86_64_gd_to_le.stdout.
-	(MOSTLYCLEANFILES): Add x86_64_gd_to_le.
-	(x86_64_gd_to_le.o): New target.
-	(x86_64_gd_to_le): Likewise.
-	(x86_64_gd_to_le.stdout): Likewise.
-	* testsuite/Makefile.in: Regenerated.
-	* testsuite/x86_64_gd_to_le.s: New file.
-	* testsuite/x86_64_gd_to_le.sh: Likewise.
+	* testsuite/ifuncmain6pie.c: Remove non-JUMP_SLOT relocations
+	against foo in ifuncmod6.so.
+	* testsuite/ifuncmod6.c: Likewise.
 
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
+2021-01-14  Nick Clifton  <nickc@redhat.com>
 
-	* testsuite/odr_violation2.cc (Ordering::operator()): Make
-	expression even more complex.
+	* po/fr.po: Updated French translation.
 
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
+2021-01-11  Nick Clifton  <nickc@redhat.com>
 
-	* testsuite/ver_test_pr16504.sh: Updated.
-
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
-
-	PR gold/25872
-	* x86_64.cc (Output_data_plt_x86_64_bnd::do_write): Increment
-	plt_offset after setting the reserved TLSDESC PLT entry.
-	(Output_data_plt_x86_64_ibt<size>::do_write): Likewise.
-
-2020-05-01  H.J. Lu  <hongjiu.lu@intel.com>
-
-	PR gold/25872
-	* x86_64.cc (Output_data_plt_x86_64_bnd::do_address_for_local):
-	Handle local IFUNC symbol.
-	(Output_data_plt_x86_64_ibt::do_address_for_local): Likewise.
-
-2020-03-19  Fangrui Song  <maskray@google.com>
-
-    * options.h (General_options): Add --no-rosegment option.
-
-2020-02-24  Nick Clifton  <nickc@redhat.com>
-
-	* po/fr.po: Update French translation.
-
-2020-01-20  Nick Clifton  <nickc@redhat.com>
-
+	* po/sr.po: Updated Serbian translation.
 	* po/uk.po: Updated Ukranian translation.
 
-2020-01-18  Nick Clifton  <nickc@redhat.com>
+2021-01-09  Nick Clifton  <nickc@redhat.com>
 
-	* configure: Regenerate.
-	* po/gold.pot: Regenerate.
+	* 2.36 release branch crated.
 
-2020-01-18  Nick Clifton  <nickc@redhat.com>
+2021-01-03  Alan Modra  <amodra@gmail.com>
 
-	Binutils 2.34 branch created.
+	PR 27140
+	* powerpc.cc (Target_powerpc::Branch_info::make_stub): Only access
+	object->st_other() when 64-bit.
+	(Stub_table::add_long_branch_entry): Ignore "other" when 32-bit.
 
-2020-01-01  Alan Modra  <amodra@gmail.com>
+2021-01-01  Nicolas Boulenguez  <nicolas@debian.org>
+
+	* tilegx.cc: Correct comment spelling.
+
+2021-01-01  Alan Modra  <amodra@gmail.com>
 
 	Update year range in copyright notice of all files.
 
-For older changes see ChangeLog-2019
+For older changes see ChangeLog-2020
 
-Copyright (C) 2020 Free Software Foundation, Inc.
+Copyright (C) 2021 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

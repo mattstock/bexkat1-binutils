@@ -1,6 +1,6 @@
 /* Generate a core file for the inferior process.
 
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -46,7 +46,6 @@
 
 static const char *default_gcore_target (void);
 static enum bfd_architecture default_gcore_arch (void);
-static unsigned long default_gcore_mach (void);
 static int gcore_memory_sections (bfd *);
 
 /* create_gcore_bfd -- helper for gcore_command (exported).
@@ -60,7 +59,7 @@ create_gcore_bfd (const char *filename)
   if (obfd == NULL)
     error (_("Failed to open '%s' for output."), filename);
   bfd_set_format (obfd.get (), bfd_core);
-  bfd_set_arch_mach (obfd.get (), default_gcore_arch (), default_gcore_mach ());
+  bfd_set_arch_mach (obfd.get (), default_gcore_arch (), 0);
   return obfd;
 }
 
@@ -78,10 +77,10 @@ write_gcore_file_1 (bfd *obfd)
      generation should be converted to gdbarch_make_corefile_notes; at that
      point, the target vector method can be removed.  */
   if (!gdbarch_make_corefile_notes_p (target_gdbarch ()))
-    note_data.reset (target_make_corefile_notes (obfd, &note_size));
+    note_data = target_make_corefile_notes (obfd, &note_size);
   else
-    note_data.reset (gdbarch_make_corefile_notes (target_gdbarch (), obfd,
-						  &note_size));
+    note_data = gdbarch_make_corefile_notes (target_gdbarch (), obfd,
+					     &note_size);
 
   if (note_data == NULL || note_size == 0)
     error (_("Target does not support core file generation."));
@@ -129,7 +128,7 @@ gcore_command (const char *args, int from_tty)
   gdb::unique_xmalloc_ptr<char> corefilename;
 
   /* No use generating a corefile without a target process.  */
-  if (!target_has_execution)
+  if (!target_has_execution ())
     noprocess ();
 
   if (args && *args)
@@ -145,37 +144,24 @@ gcore_command (const char *args, int from_tty)
 		      "Opening corefile '%s' for output.\n",
 		      corefilename.get ());
 
-  /* Open the output file.  */
-  gdb_bfd_ref_ptr obfd (create_gcore_bfd (corefilename.get ()));
+  if (target_supports_dumpcore ())
+    target_dumpcore (corefilename.get ());
+  else
+    {
+      /* Open the output file.  */
+      gdb_bfd_ref_ptr obfd (create_gcore_bfd (corefilename.get ()));
 
-  /* Arrange to unlink the file on failure.  */
-  gdb::unlinker unlink_file (corefilename.get ());
+      /* Arrange to unlink the file on failure.  */
+      gdb::unlinker unlink_file (corefilename.get ());
 
-  /* Call worker function.  */
-  write_gcore_file (obfd.get ());
+      /* Call worker function.  */
+      write_gcore_file (obfd.get ());
 
-  /* Succeeded.  */
-  unlink_file.keep ();
+      /* Succeeded.  */
+      unlink_file.keep ();
+    }
 
   fprintf_filtered (gdb_stdout, "Saved corefile %s\n", corefilename.get ());
-}
-
-static unsigned long
-default_gcore_mach (void)
-{
-#if 1	/* See if this even matters...  */
-  return 0;
-#else
-
-  const struct bfd_arch_info *bfdarch = gdbarch_bfd_arch_info (target_gdbarch ());
-
-  if (bfdarch != NULL)
-    return bfdarch->mach;
-  if (exec_bfd == NULL)
-    error (_("Can't find default bfd machine type (need execfile)."));
-
-  return bfd_get_mach (exec_bfd);
-#endif /* 1 */
 }
 
 static enum bfd_architecture
@@ -185,10 +171,10 @@ default_gcore_arch (void)
 
   if (bfdarch != NULL)
     return bfdarch->arch;
-  if (exec_bfd == NULL)
+  if (current_program_space->exec_bfd () == NULL)
     error (_("Can't find bfd architecture for corefile (need execfile)."));
 
-  return bfd_get_arch (exec_bfd);
+  return bfd_get_arch (current_program_space->exec_bfd ());
 }
 
 static const char *
@@ -198,12 +184,12 @@ default_gcore_target (void)
   if (gdbarch_gcore_bfd_target_p (target_gdbarch ()))
     return gdbarch_gcore_bfd_target (target_gdbarch ());
 
-  /* Otherwise, try to fall back to the exec_bfd target.  This will probably
+  /* Otherwise, try to fall back to the exec target.  This will probably
      not work for non-ELF targets.  */
-  if (exec_bfd == NULL)
+  if (current_program_space->exec_bfd () == NULL)
     return NULL;
   else
-    return bfd_get_target (exec_bfd);
+    return bfd_get_target (current_program_space->exec_bfd ());
 }
 
 /* Derive a reasonable stack segment by unwinding the target stack,
@@ -219,7 +205,7 @@ derive_stack_segment (bfd_vma *bottom, bfd_vma *top)
   gdb_assert (top);
 
   /* Can't succeed without stack and registers.  */
-  if (!target_has_stack || !target_has_registers)
+  if (!target_has_stack () || !target_has_registers ())
     return 0;
 
   /* Can't succeed without current frame.  */
@@ -316,7 +302,7 @@ derive_heap_segment (bfd *abfd, bfd_vma *bottom, bfd_vma *top)
 
   /* This function depends on being able to call a function in the
      inferior.  */
-  if (!target_has_execution)
+  if (!target_has_execution ())
     return 0;
 
   /* The following code assumes that the link map is arranged as
@@ -359,7 +345,7 @@ derive_heap_segment (bfd *abfd, bfd_vma *bottom, bfd_vma *top)
 }
 
 static void
-make_output_phdrs (bfd *obfd, asection *osec, void *ignored)
+make_output_phdrs (bfd *obfd, asection *osec)
 {
   int p_flags = 0;
   int p_type = 0;
@@ -398,10 +384,10 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, int read,
   if (read == 0 && write == 0 && exec == 0 && modified == 0)
     {
       if (info_verbose)
-        {
-          fprintf_filtered (gdb_stdout, "Ignore segment, %s bytes at %s\n",
-                            plongest (size), paddress (target_gdbarch (), vaddr));
-        }
+	{
+	  fprintf_filtered (gdb_stdout, "Ignore segment, %s bytes at %s\n",
+			    plongest (size), paddress (target_gdbarch (), vaddr));
+	}
 
       return 0;
     }
@@ -514,7 +500,8 @@ objfile_find_memory_regions (struct target_ops *self,
 	     obfd);
 
   /* Make a heap segment.  */
-  if (derive_heap_segment (exec_bfd, &temp_bottom, &temp_top))
+  if (derive_heap_segment (current_program_space->exec_bfd (), &temp_bottom,
+			   &temp_top))
     (*func) (temp_bottom, temp_top - temp_bottom,
 	     1, /* Heap section will be readable.  */
 	     1, /* Heap section will be writable.  */
@@ -526,7 +513,7 @@ objfile_find_memory_regions (struct target_ops *self,
 }
 
 static void
-gcore_copy_callback (bfd *obfd, asection *osec, void *ignored)
+gcore_copy_callback (bfd *obfd, asection *osec)
 {
   bfd_size_type size, total_size = bfd_section_size (osec);
   file_ptr offset = 0;
@@ -582,12 +569,150 @@ gcore_memory_sections (bfd *obfd)
     }
 
   /* Record phdrs for section-to-segment mapping.  */
-  bfd_map_over_sections (obfd, make_output_phdrs, NULL);
+  for (asection *sect : gdb_bfd_sections (obfd))
+    make_output_phdrs (obfd, sect);
 
   /* Copy memory region contents.  */
-  bfd_map_over_sections (obfd, gcore_copy_callback, NULL);
+  for (asection *sect : gdb_bfd_sections (obfd))
+    gcore_copy_callback (obfd, sect);
 
   return 1;
+}
+
+/* Structure for passing information from GCORE_COLLECT_THREAD_REGISTERS
+   via an iterator to GCORE_COLLECT_REGSET_SECTION_CB. */
+
+struct gcore_collect_regset_section_cb_data
+{
+  gcore_collect_regset_section_cb_data (struct gdbarch *gdbarch,
+					const struct regcache *regcache,
+					bfd *obfd, ptid_t ptid,
+					gdb_signal stop_signal,
+					gdb::unique_xmalloc_ptr<char> *note_data,
+					int *note_size)
+
+    : gdbarch (gdbarch), regcache (regcache), obfd (obfd),
+      note_data (note_data), note_size (note_size),
+      stop_signal (stop_signal)
+  {
+    /* The LWP is often not available for bare metal target, in which case
+       use the tid instead.  */
+    if (ptid.lwp_p ())
+      lwp = ptid.lwp ();
+    else
+      lwp = ptid.tid ();
+  }
+
+  struct gdbarch *gdbarch;
+  const struct regcache *regcache;
+  bfd *obfd;
+  gdb::unique_xmalloc_ptr<char> *note_data;
+  int *note_size;
+  unsigned long lwp;
+  enum gdb_signal stop_signal;
+  bool abort_iteration = false;
+};
+
+/* Callback for ITERATE_OVER_REGSET_SECTIONS that records a single
+   regset in the core file note section.  */
+
+static void
+gcore_collect_regset_section_cb (const char *sect_name, int supply_size,
+				 int collect_size,
+				 const struct regset *regset,
+				 const char *human_name, void *cb_data)
+{
+  struct gcore_collect_regset_section_cb_data *data
+    = (struct gcore_collect_regset_section_cb_data *) cb_data;
+  bool variable_size_section = (regset != NULL
+				&& regset->flags & REGSET_VARIABLE_SIZE);
+
+  gdb_assert (variable_size_section || supply_size == collect_size);
+
+  if (data->abort_iteration)
+    return;
+
+  gdb_assert (regset != nullptr && regset->collect_regset != nullptr);
+
+  /* This is intentionally zero-initialized by using std::vector, so
+     that any padding bytes in the core file will show as 0.  */
+  std::vector<gdb_byte> buf (collect_size);
+
+  regset->collect_regset (regset, data->regcache, -1, buf.data (),
+			  collect_size);
+
+  /* PRSTATUS still needs to be treated specially.  */
+  if (strcmp (sect_name, ".reg") == 0)
+    data->note_data->reset (elfcore_write_prstatus
+			    (data->obfd, data->note_data->release (),
+			     data->note_size, data->lwp,
+			     gdb_signal_to_host (data->stop_signal),
+			     buf.data ()));
+  else
+    data->note_data->reset (elfcore_write_register_note
+			    (data->obfd, data->note_data->release (),
+			     data->note_size, sect_name, buf.data (),
+			     collect_size));
+
+  if (data->note_data == nullptr)
+    data->abort_iteration = true;
+}
+
+/* Records the register state of thread PTID out of REGCACHE into the note
+   buffer represented by *NOTE_DATA and NOTE_SIZE.  OBFD is the bfd into
+   which the core file is being created, and STOP_SIGNAL is the signal that
+   cause thread PTID to stop.  */
+
+static void
+gcore_collect_thread_registers (const struct regcache *regcache,
+				ptid_t ptid, bfd *obfd,
+				gdb::unique_xmalloc_ptr<char> *note_data,
+				int *note_size,
+				enum gdb_signal stop_signal)
+{
+  struct gdbarch *gdbarch = regcache->arch ();
+  gcore_collect_regset_section_cb_data data (gdbarch, regcache, obfd, ptid,
+					     stop_signal, note_data,
+					     note_size);
+  gdbarch_iterate_over_regset_sections (gdbarch,
+					gcore_collect_regset_section_cb,
+					&data, regcache);
+}
+
+/* See gcore.h.  */
+
+void
+gcore_build_thread_register_notes
+  (struct gdbarch *gdbarch, struct thread_info *info, gdb_signal stop_signal,
+   bfd *obfd, gdb::unique_xmalloc_ptr<char> *note_data, int *note_size)
+{
+  struct regcache *regcache
+    = get_thread_arch_regcache (info->inf->process_target (),
+				info->ptid, gdbarch);
+  target_fetch_registers (regcache, -1);
+  gcore_collect_thread_registers (regcache, info->ptid, obfd, note_data,
+				  note_size, stop_signal);
+}
+
+/* See gcore.h.  */
+
+thread_info *
+gcore_find_signalled_thread ()
+{
+  thread_info *curr_thr = inferior_thread ();
+  if (curr_thr->state != THREAD_EXITED
+      && curr_thr->suspend.stop_signal != GDB_SIGNAL_0)
+    return curr_thr;
+
+  for (thread_info *thr : current_inferior ()->non_exited_threads ())
+    if (thr->suspend.stop_signal != GDB_SIGNAL_0)
+      return thr;
+
+  /* Default to the current thread, unless it has exited.  */
+  if (curr_thr->state != THREAD_EXITED)
+    return curr_thr;
+
+  return nullptr;
 }
 
 void _initialize_gcore ();

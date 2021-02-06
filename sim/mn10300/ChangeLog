@@ -1,3 +1,38 @@
+2021-02-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (sim_open): Delete call to STATE_WATCHPOINTS.
+
+2021-02-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (sim_open): Delete STATE_WATCHPOINTS (sd)->sizeof_pc.
+
+2021-01-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+	* interp.c, op_utils.c: Delete HAVE_STRING_H, HAVE_STRINGS_H,
+	HAVE_STDLIB_H, HAVE_TIME_H, and strings.h include.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure.ac (SIM_AC_OPTION_WARNINGS): Pass "no".
+	* configure: Regenerate.
+
+2021-01-08  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2021-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
 2017-09-06  John Baldwin  <jhb@FreeBSD.org>
 
 	* configure: Regenerate.
@@ -1542,4 +1577,3 @@ Mon Nov 25 12:46:38 1996  Jeffrey A Law  (law@cygnus.com)
 
 	* Makefile.in, config.in, configure, configure.in: New files.
 	* gencode.c, interp.c, mn10300_sim.h, simops.c: New files.
-

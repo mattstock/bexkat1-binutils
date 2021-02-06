@@ -1,6 +1,6 @@
 /* External/Public TUI Header File.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -38,6 +38,7 @@ enum tui_win_type
   DISASSEM_WIN,
   DATA_WIN,
   CMD_WIN,
+  STATUS_WIN,
   /* This must ALWAYS be AFTER the major windows last.  */
   MAX_MAJOR_WINDOWS,
 };
@@ -49,9 +50,9 @@ extern bool tui_is_window_visible (enum tui_win_type type);
 extern bool tui_get_command_dimension (unsigned int *width,
 				       unsigned int *height);
 
-/* Initialize readline and configure the keymap for the switching
-   key shortcut.  */
-extern void tui_initialize_readline (void);
+/* Initialize readline and configure the keymap for the switching key
+   shortcut.  May be called more than once without issue.  */
+extern void tui_ensure_readline_initialized ();
 
 /* Enter in the tui mode (curses).  */
 extern void tui_enable (void);

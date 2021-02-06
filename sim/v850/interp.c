@@ -4,17 +4,8 @@
 #include "sim-assert.h"
 #include "itable.h"
 
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 
 #include "bfd.h"
 
@@ -211,8 +202,6 @@ sim_open (SIM_OPEN_KIND    kind,
   simulator = sd;
 
   /* FIXME: should be better way of setting up interrupts */
-  STATE_WATCHPOINTS (sd)->pc = &(PC);
-  STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PC);
   STATE_WATCHPOINTS (sd)->interrupt_handler = do_interrupt;
   STATE_WATCHPOINTS (sd)->interrupt_names = interrupt_names;
 

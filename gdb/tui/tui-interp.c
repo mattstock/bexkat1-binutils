@@ -1,6 +1,6 @@
 /* TUI Interpreter definitions for GDB, the GNU debugger.
 
-   Copyright (C) 2003-2020 Free Software Foundation, Inc.
+   Copyright (C) 2003-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -244,7 +244,7 @@ tui_interp::init (bool top_level)
   tui_initialize_io ();
   tui_initialize_win ();
   if (gdb_stdout->isatty ())
-    tui_initialize_readline ();
+    tui_ensure_readline_initialized ();
 }
 
 void

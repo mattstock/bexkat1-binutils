@@ -1,4 +1,4 @@
-# Copyright 2008-2020 Free Software Foundation, Inc.
+# Copyright 2008-2021 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ if { ! $no_frames } {
 	"backtrace from bar 2"
     gdb_test "up" "#1  .*func1 .* at .*" "up from bar 2"
     gdb_test "info frame" ".*inlined into frame.*" "func1 inlined 2"
-    set pass_re "array = {$decimal, \[^\r\n\]*}"
+    set pass_re "array = \\{0 <repeats 64 times>\\}"
     set kfail_re [multi_line $pass_re \
 		      "array = {<optimized out> <repeats 64 times>}"]
     gdb_test_multiple "info locals" "info locals above bar 2" {
@@ -95,7 +95,7 @@ if { ! $no_frames } {
     set pass_re "array = {$decimal, \[^\r\n\]*}"
     set kfail_re [multi_line $pass_re \
 		      "array = {<optimized out> <repeats 64 times>}"]
-    gdb_test_multiple "info locals" "info locals above bar 2" {
+    gdb_test_multiple "info locals" "info locals above bar 3" {
 	-re -wrap $pass_re {
 	    pass $gdb_test_name
 	}

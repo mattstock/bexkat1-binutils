@@ -1,5 +1,5 @@
 /* Generic BFD library interface and support routines.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -244,6 +244,10 @@ CODE_FRAGMENT
 .
 .  {* Set if this is a slim LTO object not loaded with a compiler plugin.  *}
 .  unsigned int lto_slim_object : 1;
+.
+.  {* Do not attempt to modify this file.  Set when detecting errors
+.     that BFD is not prepared to handle for objcopy/strip.  *}
+.  unsigned int read_only : 1;
 .
 .  {* Set to dummy BFD created when claimed by a compiler plug-in
 .     library.  *}
@@ -788,8 +792,8 @@ bfd_errmsg (bfd_error_type error_tag)
       char *buf;
       const char *msg = bfd_errmsg (input_error);
 
-      if (asprintf (&buf, _(bfd_errmsgs [error_tag]), input_bfd->filename, msg)
-	  != -1)
+      if (asprintf (&buf, _(bfd_errmsgs [error_tag]),
+		    bfd_get_filename (input_bfd), msg) != -1)
 	return buf;
 
       /* Ick, what to do on out of memory?  */
@@ -1115,10 +1119,10 @@ _bfd_doprnt (FILE *stream, const char *format, union _bfd_doprnt_args *args)
 		  else if (abfd->my_archive
 			   && !bfd_is_thin_archive (abfd->my_archive))
 		    result = fprintf (stream, "%s(%s)",
-				      abfd->my_archive->filename,
-				      abfd->filename);
+				      bfd_get_filename (abfd->my_archive),
+				      bfd_get_filename (abfd));
 		  else
-		    result = fprintf (stream, "%s", abfd->filename);
+		    result = fprintf (stream, "%s", bfd_get_filename (abfd));
 		}
 	      else
 		PRINT_TYPE (void *, p);
@@ -2332,49 +2336,6 @@ bfd_emul_get_maxpagesize (const char *emul)
   return 0;
 }
 
-static void
-bfd_elf_set_pagesize (const bfd_target *target, bfd_vma size,
-		      int offset, const bfd_target *orig_target)
-{
-  if (target->flavour == bfd_target_elf_flavour)
-    {
-      const struct elf_backend_data *bed;
-
-      bed = xvec_get_elf_backend_data (target);
-      *((bfd_vma *) ((char *) bed + offset)) = size;
-    }
-
-  if (target->alternative_target
-      && target->alternative_target != orig_target)
-    bfd_elf_set_pagesize (target->alternative_target, size, offset,
-			  orig_target);
-}
-
-/*
-FUNCTION
-	bfd_emul_set_maxpagesize
-
-SYNOPSIS
-	void bfd_emul_set_maxpagesize (const char *, bfd_vma);
-
-DESCRIPTION
-	For ELF, set the maximum page size for the emulation.  It is
-	a no-op for other formats.
-
-*/
-
-void
-bfd_emul_set_maxpagesize (const char *emul, bfd_vma size)
-{
-  const bfd_target *target;
-
-  target = bfd_find_target (emul, NULL);
-  if (target)
-    bfd_elf_set_pagesize (target, size,
-			  offsetof (struct elf_backend_data,
-				    maxpagesize), target);
-}
-
 /*
 FUNCTION
 	bfd_emul_get_commonpagesize
@@ -2408,31 +2369,6 @@ bfd_emul_get_commonpagesize (const char *emul, bfd_boolean relro)
 	return bed->commonpagesize;
     }
   return 0;
-}
-
-/*
-FUNCTION
-	bfd_emul_set_commonpagesize
-
-SYNOPSIS
-	void bfd_emul_set_commonpagesize (const char *, bfd_vma);
-
-DESCRIPTION
-	For ELF, set the common page size for the emulation.  It is
-	a no-op for other formats.
-
-*/
-
-void
-bfd_emul_set_commonpagesize (const char *emul, bfd_vma size)
-{
-  const bfd_target *target;
-
-  target = bfd_find_target (emul, NULL);
-  if (target)
-    bfd_elf_set_pagesize (target, size,
-			  offsetof (struct elf_backend_data,
-				    commonpagesize), target);
 }
 
 /*
@@ -2488,8 +2424,7 @@ bfd_demangle (bfd *abfd, const char *name, int options)
 
   res = cplus_demangle (name, options);
 
-  if (alloc != NULL)
-    free (alloc);
+  free (alloc);
 
   if (res == NULL)
     {
@@ -2556,6 +2491,7 @@ bfd_update_compression_header (bfd *abfd, bfd_byte *contents,
       if ((abfd->flags & BFD_COMPRESS_GABI) != 0)
 	{
 	  const struct elf_backend_data *bed = get_elf_backend_data (abfd);
+	  struct bfd_elf_section_data * esd = elf_section_data (sec);
 
 	  /* Set the SHF_COMPRESSED bit.  */
 	  elf_section_flags (sec) |= SHF_COMPRESSED;
@@ -2569,6 +2505,7 @@ bfd_update_compression_header (bfd *abfd, bfd_byte *contents,
 			  &echdr->ch_addralign);
 	      /* bfd_log2 (alignof (Elf32_Chdr)) */
 	      bfd_set_section_alignment (sec, 2);
+	      esd->this_hdr.sh_addralign = 4;
 	    }
 	  else
 	    {
@@ -2580,6 +2517,7 @@ bfd_update_compression_header (bfd *abfd, bfd_byte *contents,
 			  &echdr->ch_addralign);
 	      /* bfd_log2 (alignof (Elf64_Chdr)) */
 	      bfd_set_section_alignment (sec, 3);
+	      esd->this_hdr.sh_addralign = 8;
 	    }
 	  break;
 	}

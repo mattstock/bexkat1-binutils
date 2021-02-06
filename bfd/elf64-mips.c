@@ -1,5 +1,5 @@
 /* MIPS-specific support for 64-bit ELF
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Ian Lance Taylor, Cygnus Support
    Linker support added by Mark Mitchell, CodeSourcery, LLC.
    <mark@codesourcery.com>
@@ -4162,14 +4162,11 @@ mips_elf64_slurp_one_reloc_table (bfd *abfd, asection *asect,
 	}
     }
 
-  if (allocated != NULL)
-    free (allocated);
-
+  free (allocated);
   return TRUE;
 
  error_return:
-  if (allocated != NULL)
-    free (allocated);
+  free (allocated);
   return FALSE;
 }
 

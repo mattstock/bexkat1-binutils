@@ -1,6 +1,6 @@
 /* This file is part of SIS (SPARC instruction simulator)
 
-   Copyright (C) 1995-2020 Free Software Foundation, Inc.
+   Copyright (C) 1995-2021 Free Software Foundation, Inc.
    Contributed by Jiri Gaisler, European Space Agency
 
    This program is free software; you can redistribute it and/or modify
@@ -461,6 +461,12 @@ sim_do_command(sd, cmd)
 
 char **
 sim_complete_command (SIM_DESC sd, const char *text, const char *word)
+{
+  return NULL;
+}
+
+char *
+sim_memory_map (SIM_DESC sd)
 {
   return NULL;
 }

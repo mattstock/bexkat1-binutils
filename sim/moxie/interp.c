@@ -1,5 +1,5 @@
 /* Simulator for the moxie processor
-   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+   Copyright (C) 2008-2021 Free Software Foundation, Inc.
    Contributed by Anthony Green
 
 This file is part of GDB, the GNU debugger.
@@ -1203,9 +1203,6 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
       return 0;
     }
 
-  STATE_WATCHPOINTS (sd)->pc = &cpu.asregs.regs[PC_REGNO];
-  STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (word);
-
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)
     {
       free_state (sd);
@@ -1296,7 +1293,7 @@ SIM_RC
 sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd,
 		     char * const *argv, char * const *env)
 {
-  char ** avp;
+  char * const *avp;
   int l, argc, i, tp;
   sim_cpu *scpu = STATE_CPU (sd, 0); /* FIXME */
 

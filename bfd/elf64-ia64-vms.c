@@ -1,5 +1,5 @@
 /* IA-64 support for OpenVMS
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -170,8 +170,9 @@ struct elf64_ia64_allocate_data
 };
 
 #define elf64_ia64_hash_table(p) \
-  (elf_hash_table_id ((struct elf_link_hash_table *) ((p)->hash)) \
-  == IA64_ELF_DATA ? ((struct elf64_ia64_link_hash_table *) ((p)->hash)) : NULL)
+  ((is_elf_hash_table ((p)->hash)					\
+    && elf_hash_table_id (elf_hash_table (p)) == IA64_ELF_DATA)		\
+   ? (struct elf64_ia64_link_hash_table *) (p)->hash : NULL)
 
 struct elf64_ia64_vms_obj_tdata
 {
@@ -792,13 +793,11 @@ elf64_ia64_relax_section (bfd *abfd, asection *sec,
   return TRUE;
 
  error_return:
-  if (isymbuf != NULL && (unsigned char *) isymbuf != symtab_hdr->contents)
+  if ((unsigned char *) isymbuf != symtab_hdr->contents)
     free (isymbuf);
-  if (contents != NULL
-      && elf_section_data (sec)->this_hdr.contents != contents)
+  if (elf_section_data (sec)->this_hdr.contents != contents)
     free (contents);
-  if (internal_relocs != NULL
-      && elf_section_data (sec)->relocs != internal_relocs)
+  if (elf_section_data (sec)->relocs != internal_relocs)
     free (internal_relocs);
   return FALSE;
 }
@@ -883,6 +882,7 @@ elf64_ia64_add_symbol_hook (bfd *abfd,
 	  scomm = bfd_make_section_with_flags (abfd, ".scommon",
 					       (SEC_ALLOC
 						| SEC_IS_COMMON
+						| SEC_SMALL_DATA
 						| SEC_LINKER_CREATED));
 	  if (scomm == NULL)
 	    return FALSE;
@@ -999,14 +999,11 @@ elf64_ia64_global_dyn_info_free (void **xentry,
   if (entry->root.root.type == bfd_link_hash_warning)
     entry = (struct elf64_ia64_link_hash_entry *) entry->root.root.u.i.link;
 
-  if (entry->info)
-    {
-      free (entry->info);
-      entry->info = NULL;
-      entry->count = 0;
-      entry->sorted_count = 0;
-      entry->size = 0;
-    }
+  free (entry->info);
+  entry->info = NULL;
+  entry->count = 0;
+  entry->sorted_count = 0;
+  entry->size = 0;
 
   return TRUE;
 }
@@ -1020,14 +1017,11 @@ elf64_ia64_local_dyn_info_free (void **slot,
   struct elf64_ia64_local_hash_entry *entry
     = (struct elf64_ia64_local_hash_entry *) *slot;
 
-  if (entry->info)
-    {
-      free (entry->info);
-      entry->info = NULL;
-      entry->count = 0;
-      entry->sorted_count = 0;
-      entry->size = 0;
-    }
+  free (entry->info);
+  entry->info = NULL;
+  entry->count = 0;
+  entry->sorted_count = 0;
+  entry->size = 0;
 
   return TRUE;
 }
@@ -2844,7 +2838,7 @@ elf64_ia64_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
 					   elf_ia64_vms_ident (abfd)))
 	    return FALSE;
 
-	  soname = vms_get_module_name (abfd->filename, TRUE);
+	  soname = vms_get_module_name (bfd_get_filename (abfd), TRUE);
 	  if (soname == NULL)
 	    return FALSE;
 	  strindex = dynstrsec->size;
@@ -5242,11 +5236,8 @@ elf64_vms_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 	}
     }
 
-  if (isymbuf != NULL)
-    {
-      free (isymbuf);
-      isymbuf = NULL;
-    }
+  free (isymbuf);
+  isymbuf = NULL;
 
   /* If this object is the same format as the output object, and it is
      not a shared library, then let the backend look through the
@@ -5303,8 +5294,7 @@ elf64_vms_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 
  error_free_vers:
  error_free_sym:
-  if (isymbuf != NULL)
-    free (isymbuf);
+  free (isymbuf);
  error_return:
   return FALSE;
 }

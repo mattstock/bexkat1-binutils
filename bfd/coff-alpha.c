@@ -1,5 +1,5 @@
 /* BFD back-end for ALPHA Extended-Coff files.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
    Modified from coff-mips.c by Steve Chamberlain <sac@cygnus.com> and
    Ian Lance Taylor <ian@cygnus.com>.
 
@@ -1127,13 +1127,11 @@ alpha_ecoff_get_relocated_section_contents (bfd *abfd,
     abort ();
 
  successful_return:
-  if (reloc_vector != NULL)
-    free (reloc_vector);
+  free (reloc_vector);
   return data;
 
  error_return:
-  if (reloc_vector != NULL)
-    free (reloc_vector);
+  free (reloc_vector);
   return NULL;
 }
 
@@ -2171,8 +2169,7 @@ alpha_ecoff_get_elt_at_filepos (bfd *archive, file_ptr filepos)
   return nbfd;
 
  error_return:
-  if (buf != NULL)
-    free (buf);
+  free (buf);
   if (nbfd != NULL)
     bfd_close (nbfd);
   return NULL;
@@ -2430,6 +2427,7 @@ const bfd_target alpha_ecoff_le_vec =
   ' ',				/* ar_pad_char */
   15,				/* ar_max_namelen */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* data */

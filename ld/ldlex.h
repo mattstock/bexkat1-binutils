@@ -1,5 +1,5 @@
 /* ldlex.h -
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright (C) 1991-2021 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -81,6 +81,8 @@ enum option_values
   OPTION_DYNAMIC_LIST_CPP_NEW,
   OPTION_DYNAMIC_LIST_CPP_TYPEINFO,
   OPTION_DYNAMIC_LIST_DATA,
+  OPTION_EXPORT_DYNAMIC_SYMBOL,
+  OPTION_EXPORT_DYNAMIC_SYMBOL_LIST,
   OPTION_WARN_COMMON,
   OPTION_WARN_CONSTRUCTORS,
   OPTION_WARN_FATAL,
@@ -114,6 +116,9 @@ enum option_values
   OPTION_ALLOW_SHLIB_UNDEFINED,
   OPTION_NO_ALLOW_SHLIB_UNDEFINED,
   OPTION_ALLOW_MULTIPLE_DEFINITION,
+#if SUPPORT_ERROR_HANDLING_SCRIPT
+  OPTION_ERROR_HANDLING_SCRIPT,
+#endif
   OPTION_NO_UNDEFINED_VERSION,
   OPTION_DEFAULT_SYMVER,
   OPTION_DEFAULT_IMPORTED_SYMVER,
@@ -130,13 +135,13 @@ enum option_values
   OPTION_UNRESOLVED_SYMBOLS,
   OPTION_WARN_UNRESOLVED_SYMBOLS,
   OPTION_ERROR_UNRESOLVED_SYMBOLS,
-  OPTION_WARN_SHARED_TEXTREL,
+  OPTION_WARN_TEXTREL,
   OPTION_WARN_ALTERNATE_EM,
   OPTION_REDUCE_MEMORY_OVERHEADS,
-#ifdef ENABLE_PLUGINS
+#if BFD_SUPPORTS_PLUGINS
   OPTION_PLUGIN,
   OPTION_PLUGIN_OPT,
-#endif /* ENABLE_PLUGINS */
+#endif /* BFD_SUPPORTS_PLUGINS */
   OPTION_DEFAULT_SCRIPT,
   OPTION_PRINT_OUTPUT_FORMAT,
   OPTION_PRINT_SYSROOT,
@@ -152,6 +157,10 @@ enum option_values
   OPTION_NO_PRINT_MAP_DISCARDED,
   OPTION_NON_CONTIGUOUS_REGIONS,
   OPTION_NON_CONTIGUOUS_REGIONS_WARNINGS,
+  OPTION_DEPENDENCY_FILE,
+  OPTION_CTF_VARIABLES,
+  OPTION_NO_CTF_VARIABLES,
+  OPTION_CTF_SHARE_TYPES,
 };
 
 /* The initial parser states.  */
@@ -178,10 +187,10 @@ extern void ldlex_inputlist (void);
 extern void ldlex_mri_script (void);
 extern void ldlex_version_script (void);
 extern void ldlex_version_file (void);
-extern void ldlex_defsym (void);
 extern void ldlex_expression (void);
 extern void ldlex_both (void);
 extern void ldlex_popstate (void);
+extern void ldlex_backup (void);
 extern const char* ldlex_filename (void);
 
 /* In lexsup.c.  */

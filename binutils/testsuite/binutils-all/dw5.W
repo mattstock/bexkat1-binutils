@@ -3,6 +3,7 @@ Contents of the .debug_info section:
   Compilation Unit @ offset 0x0:
    Length:        0x160 \(32-bit\)
    Version:       5
+   Unit Type:     DW_UT_compile \(1\)
    Abbrev Offset: 0x0
    Pointer Size:  8
  <0><c>: Abbrev Number: 6 \(DW_TAG_compile_unit\)
@@ -350,10 +351,10 @@ CU: ./main.c:
 File name                            Line number    Starting address    View    Stmt
 main.c                                         6              0x1234               x
 main.c                                         6             0x12346               x
-main.c                                         6              0x1234               x
+main.c                                         -              0x1234
 
 main.c                                         5              0x1234               x
 main.c                                         5              0x1234               x
-main.c                                         5              0x1234               x
+main.c                                         -              0x1234
 
 

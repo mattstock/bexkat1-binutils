@@ -1,7 +1,7 @@
 /* Variables that describe the inferior process running under GDB:
    Where it is, why it stopped, and how to step it.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,6 +20,8 @@
 
 #if !defined (INFERIOR_H)
 #define INFERIOR_H 1
+
+#include <exception>
 
 struct target_waitstatus;
 struct frame_info;
@@ -52,11 +54,13 @@ struct thread_info;
 #include "symfile-add-flags.h"
 #include "gdbsupport/refcounted-object.h"
 #include "gdbsupport/forward-scope-exit.h"
+#include "gdbsupport/gdb_unique_ptr.h"
 
 #include "gdbsupport/common-inferior.h"
 #include "gdbthread.h"
 
 #include "process-stratum-target.h"
+#include "displaced-stepping.h"
 
 struct infcall_suspend_state;
 struct infcall_control_state;
@@ -79,7 +83,13 @@ struct infcall_suspend_state_deleter
 	/* If we are restoring the inferior state due to an exception,
 	   some error message will be printed.  So, only warn the user
 	   when we cannot restore during normal execution.  */
-	if (!std::uncaught_exception ())
+	bool unwinding;
+#if __cpp_lib_uncaught_exceptions
+	unwinding = std::uncaught_exceptions () > 0;
+#else
+	unwinding = std::uncaught_exception ();
+#endif
+	if (!unwinding)
 	  warning (_("Failed to restore inferior state: %s"), e.what ());
       }
   }
@@ -116,11 +126,6 @@ extern readonly_detached_regcache *
 extern void set_sigint_trap (void);
 
 extern void clear_sigint_trap (void);
-
-/* Set/get file name for default use for standard in/out in the inferior.  */
-
-extern void set_inferior_io_terminal (const char *terminal_name);
-extern const char *get_inferior_io_terminal (void);
 
 /* Collected pid, tid, etc. of the debugged inferior.  When there's
    no inferior, inferior_ptid.pid () will be 0.  */
@@ -184,8 +189,6 @@ extern void child_interrupt (struct target_ops *self);
    STARTUP_INFERIOR.  */
 extern ptid_t gdb_startup_inferior (pid_t pid, int num_traps);
 
-extern char *construct_inferior_arguments (int, char **);
-
 /* From infcmd.c */
 
 /* Initial inferior setup.  Determines the exec file is not yet known,
@@ -194,7 +197,7 @@ extern char *construct_inferior_arguments (int, char **);
 
 extern void setup_inferior (int from_tty);
 
-extern void post_create_inferior (struct target_ops *, int);
+extern void post_create_inferior (int from_tty);
 
 extern void attach_command (const char *, int);
 
@@ -375,7 +378,7 @@ public:
   { return m_target_stack.at (stratum); }
 
   bool has_execution ()
-  { return target_has_execution_1 (this); }
+  { return target_has_execution (this); }
 
   /* Pointer to next inferior in singly-linked list of inferiors.  */
   struct inferior *next = NULL;
@@ -411,6 +414,14 @@ public:
   */
   inline safe_inf_threads_range threads_safe ()
   { return safe_inf_threads_range (this->thread_list); }
+
+  /* Set/get file name for default use for standard in/out in the
+     inferior.  On Unix systems, we try to make TERMINAL_NAME the
+     inferior's controlling terminal.  If TERMINAL_NAME is nullptr or
+     the empty string, then the inferior inherits GDB's terminal (or
+     GDBserver's if spawning a remote process).  */
+  void set_tty (const char *terminal_name);
+  const char *tty ();
 
   /* Convenient handle (GDB inferior id).  Unique across all
      inferiors.  */
@@ -456,9 +467,6 @@ public:
   /* The current working directory that will be used when starting
      this inferior.  */
   gdb::unique_xmalloc_ptr<char> cwd;
-
-  /* The name of terminal device to use for I/O.  */
-  char *terminal = NULL;
 
   /* The terminal state as set by the last target_terminal::terminal_*
      call.  */
@@ -542,6 +550,9 @@ public:
 private:
   /* The inferior's target stack.  */
   target_stack m_target_stack;
+
+  /* The name of terminal device to use for I/O.  */
+  gdb::unique_xmalloc_ptr<char> m_terminal;
 };
 
 /* Keep a registry of per-inferior data-pointers required by other GDB

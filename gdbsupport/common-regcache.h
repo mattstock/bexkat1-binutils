@@ -1,6 +1,6 @@
 /* Cache and manage the values of registers
 
-   Copyright (C) 2014-2020 Free Software Foundation, Inc.
+   Copyright (C) 2014-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -55,6 +55,11 @@ extern int regcache_register_size (const struct regcache *regcache, int n);
    client.  */
 
 extern CORE_ADDR regcache_read_pc (struct regcache *regcache);
+
+/* Read the PC register.  If PC cannot be read, return 0.
+   This is a wrapper around 'regcache_read_pc'.  */
+
+extern CORE_ADDR regcache_read_pc_protected (regcache *regcache);
 
 /* Read a raw register into a unsigned integer.  */
 extern enum register_status regcache_raw_read_unsigned

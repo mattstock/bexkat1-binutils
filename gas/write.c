@@ -1,5 +1,5 @@
 /* write.c - emit .o file
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -737,7 +737,9 @@ resolve_reloc_expr_symbols (void)
 		 prevent the offset from overflowing the relocated field,
 	         unless it has enough bits to cover the whole address
 	         space.  */
-	      if (S_IS_LOCAL (sym) && !symbol_section_p (sym)
+	      if (S_IS_LOCAL (sym)
+		  && S_IS_DEFINED (sym)
+		  && !symbol_section_p (sym)
 		  && (sec->use_rela_p
 		      || (howto->partial_inplace
 			  && (!howto->pc_relative
@@ -848,7 +850,12 @@ adjust_reloc_syms (bfd *abfd ATTRIBUTE_UNUSED,
 	/* Since we're reducing to section symbols, don't attempt to reduce
 	   anything that's already using one.  */
 	if (symbol_section_p (sym))
-	  continue;
+	  {
+	    /* Mark the section symbol used in relocation so that it will
+	       be included in the symbol table.  */
+	    symbol_mark_used_in_reloc (sym);
+	    continue;
+	  }
 
 	symsec = S_GET_SEGMENT (sym);
 	if (symsec == NULL)
@@ -1625,7 +1632,7 @@ write_contents (bfd *abfd ATTRIBUTE_UNUSED,
 				"to section %s of %s: '%s'",
 				(long) f->fr_fix),
 		      (long) f->fr_fix,
-		      sec->name, stdoutput->filename,
+		      bfd_section_name (sec), bfd_get_filename (stdoutput),
 		      bfd_errmsg (bfd_get_error ()));
 	  offset += f->fr_fix;
 	}
@@ -1649,9 +1656,11 @@ write_contents (bfd *abfd ATTRIBUTE_UNUSED,
 				    "in section %s of %s: '%s'",
 				    "can't fill %ld bytes "
 				    "in section %s of %s: '%s'",
-				    (long) count), (long) count,
-				    sec->name, stdoutput->filename,
-				    bfd_errmsg (bfd_get_error ()));
+				    (long) count),
+			  (long) count,
+			  bfd_section_name (sec),
+			  bfd_get_filename (stdoutput),
+			  bfd_errmsg (bfd_get_error ()));
 	      offset += count;
 	      free (buf);
 	    }
@@ -1678,7 +1687,8 @@ write_contents (bfd *abfd ATTRIBUTE_UNUSED,
 					"in section %s of %s: '%s'",
 					(long) fill_size),
 			      (long) fill_size,
-			      sec->name, stdoutput->filename,
+			      bfd_section_name (sec),
+			      bfd_get_filename (stdoutput),
 			      bfd_errmsg (bfd_get_error ()));
 		  offset += fill_size;
 		}
@@ -1714,7 +1724,8 @@ write_contents (bfd *abfd ATTRIBUTE_UNUSED,
 					"in section %s of %s: '%s'",
 					(long) (n_per_buf * fill_size)),
 			      (long) (n_per_buf * fill_size),
-			      sec->name, stdoutput->filename,
+			      bfd_section_name (sec),
+			      bfd_get_filename (stdoutput),
 			      bfd_errmsg (bfd_get_error ()));
 		  offset += n_per_buf * fill_size;
 		}
@@ -1743,10 +1754,13 @@ set_symtab (void)
 
   /* Count symbols.  We can't rely on a count made by the loop in
      write_object_file, because *_frob_file may add a new symbol or
-     two.  */
+     two.  Generate unused section symbols only if needed.  */
   nsyms = 0;
   for (symp = symbol_rootP; symp; symp = symbol_next (symp))
-    nsyms++;
+    if (bfd_keep_unused_section_symbols (stdoutput)
+	|| !symbol_section_p (symp)
+	|| symbol_used_in_reloc_p (symp))
+      nsyms++;
 
   if (nsyms)
     {
@@ -1755,15 +1769,22 @@ set_symtab (void)
 
       asympp = (asymbol **) bfd_alloc (stdoutput, amt);
       symp = symbol_rootP;
-      for (i = 0; i < nsyms; i++, symp = symbol_next (symp))
-	{
-	  asympp[i] = symbol_get_bfdsym (symp);
-	  if (asympp[i]->flags != BSF_SECTION_SYM
-	      || !(bfd_is_const_section (asympp[i]->section)
-		   && asympp[i]->section->symbol == asympp[i]))
-	    asympp[i]->flags |= BSF_KEEP;
-	  symbol_mark_written (symp);
-	}
+      for (i = 0; i < nsyms; symp = symbol_next (symp))
+	if (bfd_keep_unused_section_symbols (stdoutput)
+	    || !symbol_section_p (symp)
+	    || symbol_used_in_reloc_p (symp))
+	  {
+	    asympp[i] = symbol_get_bfdsym (symp);
+	    if (asympp[i]->flags != BSF_SECTION_SYM
+		|| !(bfd_is_const_section (asympp[i]->section)
+		     && asympp[i]->section->symbol == asympp[i]))
+	      asympp[i]->flags |= BSF_KEEP;
+	    symbol_mark_written (symp);
+	    /* Include this section symbol in the symbol table.  */
+	    if (symbol_section_p (symp))
+	      asympp[i]->flags |= BSF_SECTION_SYM_USED;
+	    i++;
+	  }
     }
   else
     asympp = 0;
@@ -1893,6 +1914,7 @@ create_note_reloc (segT           sec,
 		   symbolS *      sym,
 		   bfd_size_type  note_offset,
 		   bfd_size_type  desc2_offset,
+		   offsetT        desc2_size,
 		   int            reloc_type,
 		   bfd_vma        addend,
 		   char *         note)
@@ -1927,15 +1949,21 @@ create_note_reloc (segT           sec,
 	 but still stores the addend in the word being relocated.  */
       || strstr (bfd_get_target (stdoutput), "-sh") != NULL)
     {
+      offsetT i;
+
+      /* Zero out the addend, since it is now stored in the note.  */
+      reloc->u.b.r.addend = 0;
+
       if (target_big_endian)
 	{
-	  if (bfd_arch_bits_per_address (stdoutput) <= 32)
-	    note[desc2_offset + 3] = addend;
-	  else
-	    note[desc2_offset + 7] = addend;
+	  for (i = desc2_size; addend != 0 && i > 0; addend >>= 8, i--)
+	    note[desc2_offset + i - 1] = (addend & 0xff);
 	}
       else
-	note[desc2_offset] = addend;
+	{
+	  for (i = 0; addend != 0 && i < desc2_size; addend >>= 8, i++)
+	    note[desc2_offset + i] = (addend & 0xff);
+	}
     }
 }
 
@@ -2021,14 +2049,14 @@ maybe_generate_build_notes (void)
 	if (target_big_endian)
 	  {
 	    note[3] = 8; /* strlen (name) + 1.  */
-	    note[7] = desc_size; /* Two 8-byte offsets.  */
+	    note[7] = desc_size; /* Two N-byte offsets.  */
 	    note[10] = NT_GNU_BUILD_ATTRIBUTE_OPEN >> 8;
 	    note[11] = NT_GNU_BUILD_ATTRIBUTE_OPEN & 0xff;
 	  }
 	else
 	  {
 	    note[0] = 8; /* strlen (name) + 1.  */
-	    note[4] = desc_size; /* Two 8-byte offsets.  */
+	    note[4] = desc_size; /* Two N-byte offsets.  */
 	    note[8] = NT_GNU_BUILD_ATTRIBUTE_OPEN & 0xff;
 	    note[9] = NT_GNU_BUILD_ATTRIBUTE_OPEN >> 8;
 	  }
@@ -2038,12 +2066,18 @@ maybe_generate_build_notes (void)
 	memcpy (note + 12, "GA$3a1", 8);
 
 	/* Create a relocation to install the start address of the note...  */
-	create_note_reloc (sec, sym, total_size, 20, desc_reloc, 0, note);
+	create_note_reloc (sec, sym, total_size, 20, desc_size / 2, desc_reloc, 0, note);
 
 	/* ...and another one to install the end address.  */
-	create_note_reloc (sec, sym, total_size, desc2_offset, desc_reloc,
+	create_note_reloc (sec, sym, total_size, desc2_offset,
+			   desc_size / 2,
+			   desc_reloc,
 			   bfd_section_size (bsym->section),
 			   note);
+
+	/* Mark the section symbol used in relocation so that it will be
+	   included in the symbol table.  */
+	symbol_mark_used_in_reloc (sym);
 
 	total_size += note_size;
 	/* FIXME: Maybe add a note recording the assembler command line and version ?  */
@@ -2936,7 +2970,7 @@ relax_segment (struct frag *segment_frag_root, segT segment, int pass)
 
 	      case rs_org:
 		{
-		  addressT target = offset;
+		  offsetT target = offset;
 		  addressT after;
 
 		  if (symbolP)
@@ -2956,7 +2990,7 @@ relax_segment (struct frag *segment_frag_root, segT segment, int pass)
 		  /* Growth may be negative, but variable part of frag
 		     cannot have fewer than 0 chars.  That is, we can't
 		     .org backwards.  */
-		  if (address + fragP->fr_fix > target)
+		  if ((offsetT) (address + fragP->fr_fix) > target)
 		    {
 		      growth = 0;
 
@@ -3004,7 +3038,7 @@ relax_segment (struct frag *segment_frag_root, segT segment, int pass)
 			|| ! S_IS_DEFINED (symbolP))
 		      {
 			as_bad_where (fragP->fr_file, fragP->fr_line,
-				      _(".space specifies non-absolute value"));
+				      _(".space, .nops or .fill specifies non-absolute value"));
 			/* Prevent repeat of this error message.  */
 			fragP->fr_symbol = 0;
 		      }

@@ -1,5 +1,5 @@
 /* Target operations for the remote server for GDB.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -27,6 +27,7 @@
 #include "target/wait.h"
 #include "target/waitstatus.h"
 #include "mem-break.h"
+#include "gdbsupport/array-view.h"
 #include "gdbsupport/btrace-common.h"
 #include <vector>
 
@@ -127,7 +128,7 @@ public:
      no child stop to report, return is
      null_ptid/TARGET_WAITKIND_IGNORE.  */
   virtual ptid_t wait (ptid_t ptid, target_waitstatus *status,
-		       int options) = 0;
+		       target_wait_flags options) = 0;
 
   /* Fetch registers from the inferior process.
 
@@ -315,8 +316,9 @@ public:
 			    unsigned char *myaddr, unsigned int len);
 
   /* Target specific qSupported support.  FEATURES is an array of
-     features with COUNT elements.  */
-  virtual void process_qsupported (char **features, int count);
+     features unsupported by the core of GDBserver.  */
+  virtual void process_qsupported
+    (gdb::array_view<const char * const> features);
 
   /* Return true if the target supports tracepoints, false otherwise.  */
   virtual bool supports_tracepoints ();
@@ -547,8 +549,8 @@ int kill_inferior (process_info *proc);
 #define target_async(enable) \
   the_target->async (enable)
 
-#define target_process_qsupported(features, count)	\
-  the_target->process_qsupported (features, count)
+#define target_process_qsupported(features) \
+  the_target->process_qsupported (features)
 
 #define target_supports_catch_syscall()              	\
   the_target->supports_catch_syscall ()
@@ -661,8 +663,8 @@ target_read_btrace_conf (struct btrace_target_info *tinfo,
 #define target_supports_software_single_step() \
   the_target->supports_software_single_step ()
 
-ptid_t mywait (ptid_t ptid, struct target_waitstatus *ourstatus, int options,
-	       int connected_wait);
+ptid_t mywait (ptid_t ptid, struct target_waitstatus *ourstatus,
+	       target_wait_flags options, int connected_wait);
 
 /* Prepare to read or write memory from the inferior process.  See the
    corresponding process_stratum_target methods for more details.  */

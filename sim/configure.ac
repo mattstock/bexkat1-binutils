@@ -10,8 +10,8 @@ AC_CHECK_TOOL(RANLIB, ranlib, :)
 AC_CANONICAL_SYSTEM
 AC_ARG_PROGRAM
 AC_PROG_CC
+AC_PROG_CPP
 AC_SUBST(CFLAGS)
-AC_SUBST(HDEFINES)
 AR=${AR-ar}
 AC_SUBST(AR)
 AC_PROG_RANLIB
@@ -42,13 +42,11 @@ m4_define([SIM_ARCH], [
   AC_CONFIG_SUBDIRS($1)
 ])
 if test "${enable_sim}" != no; then
-   sinclude(configure.tgt)
-   AC_CONFIG_SUBDIRS(testsuite)
-   if test "$sim_igen" = yes; then
-      AC_CONFIG_SUBDIRS(igen)
-   fi
+  sinclude(configure.tgt)
+  if test "$sim_igen" = yes; then
+    AC_CONFIG_SUBDIRS(igen)
+  fi
 fi
 
-AC_OUTPUT(Makefile)
-
-exit 0
+AC_CONFIG_FILES([Makefile testsuite/Makefile])
+AC_OUTPUT

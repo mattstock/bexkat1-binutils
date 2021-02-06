@@ -1,5 +1,5 @@
 /* windres.c -- a program to manipulate Windows resources
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997-2021 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
    Rewritten by Kai Tietz, Onevision.
 
@@ -527,6 +527,8 @@ extended_menuitems (const rc_menuitem *menuitems)
 		| MENUITEM_HELP
 		| MENUITEM_INACTIVE
 		| MENUITEM_MENUBARBREAK
+		| MENUITEM_BITMAP
+		| MENUITEM_OWNERDRAW
 		| MENUITEM_MENUBREAK))
 	  != 0)
 	return 1;
@@ -701,20 +703,44 @@ quot (const char *string)
   const char *src;
   char *dest;
 
-  if ((buflen < slen * 2 + 2) || ! buf)
+  if ((buflen < slen * 2 + 3) || ! buf)
     {
-      buflen = slen * 2 + 2;
-      if (buf)
-	free (buf);
+      buflen = slen * 2 + 3;
+      free (buf);
       buf = (char *) xmalloc (buflen);
     }
 
-  for (src=string, dest=buf; *src; src++, dest++)
+#if defined (_WIN32) && !defined (__CYGWIN__)
+  /* For Windows shells, quote "like this".   */
+  {
+    bfd_boolean quoted = FALSE;
+
+    dest = buf;
+    if (strchr (string, ' '))
+      {
+	quoted = TRUE;
+	*dest++ = '"';
+      }
+
+    for (src = string; *src; src++, dest++)
+      {
+	/* Escape-protect embedded double quotes.  */
+	if (quoted && *src == '"')
+	  *dest++ = '\\';
+	*dest = *src;
+      }
+
+    if (quoted)
+      *dest++ = '"';
+  }
+#else
+  for (src = string, dest = buf; *src; src++, dest++)
     {
       if (*src == '(' || *src == ')' || *src == ' ')
 	*dest++ = '\\';
       *dest = *src;
     }
+#endif
   *dest = 0;
   return buf;
 }
@@ -884,7 +910,13 @@ main (int argc, char **argv)
 	  break;
 
 	case OPTION_PREPROCESSOR:
-	  preprocessor = optarg;
+	  if (strchr (optarg, ' '))
+	    {
+	      if (asprintf (& preprocessor, "\"%s\"", optarg) == -1)
+		preprocessor = optarg;
+	    }
+	  else
+	    preprocessor = optarg;	    
 	  break;
 
 	case OPTION_PREPROCESSOR_ARG:

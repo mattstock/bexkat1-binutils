@@ -1,5 +1,5 @@
 /* vms.c -- BFD back-end for EVAX (openVMS/Alpha) files.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
 
    Initial version written by Klaus Kaempf (kkaempf@rmi.de)
    Major rewrite by Adacore.
@@ -34,6 +34,7 @@
 */
 
 #include "sysdep.h"
+#include <limits.h>
 #include "bfd.h"
 #include "bfdlink.h"
 #include "libbfd.h"
@@ -71,6 +72,9 @@
 
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
+#ifndef CHAR_BIT
+#define CHAR_BIT 8
+#endif
 
 /* The r_type field in a reloc is one of the following values.  */
 #define ALPHA_R_IGNORE		0
@@ -1390,14 +1394,13 @@ _bfd_vms_slurp_egsd (bfd *abfd)
 	    flagword old_flags;
 	    unsigned int nameoff = offsetof (struct vms_egst, namlng);
 
-	    old_flags = bfd_getl16 (egst->header.flags);
-
 	    if (nameoff >= gsd_size)
 	      goto too_small;
 	    entry = add_symbol (abfd, &egst->namlng, gsd_size - nameoff);
 	    if (entry == NULL)
 	      return FALSE;
 
+	    old_flags = bfd_getl16 (egst->header.flags);
 	    entry->typ = gsd_type;
 	    entry->data_type = egst->header.datyp;
 	    entry->flags = old_flags;
@@ -1925,11 +1928,12 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  return FALSE;
 	}
       ptr += 4;
+      cmd_length -= 4;
 
 #if VMS_DEBUG
       _bfd_vms_debug (4, "etir: %s(%d)\n",
 		      _bfd_vms_etir_name (cmd), cmd);
-      _bfd_hexdump (8, ptr, cmd_length - 4, 0);
+      _bfd_hexdump (8, ptr, cmd_length, 0);
 #endif
 
       switch (cmd)
@@ -1939,7 +1943,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 
 	     stack 32 bit value of symbol (high bits set to 0).  */
 	case ETIR__C_STA_GBL:
-	  _bfd_vms_get_value (abfd, ptr, maxptr, info, &op1, &h);
+	  _bfd_vms_get_value (abfd, ptr, ptr + cmd_length, info, &op1, &h);
 	  if (!_bfd_vms_push (abfd, op1, alpha_vms_sym_to_ctxt (h)))
 	    return FALSE;
 	  break;
@@ -1949,7 +1953,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 
 	     stack 32 bit value, sign extend to 64 bit.  */
 	case ETIR__C_STA_LW:
-	  if (ptr + 4 > maxptr)
+	  if (cmd_length < 4)
 	    goto corrupt_etir;
 	  if (!_bfd_vms_push (abfd, bfd_getl32 (ptr), RELC_NONE))
 	    return FALSE;
@@ -1960,7 +1964,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 
 	     stack 64 bit value of symbol.  */
 	case ETIR__C_STA_QW:
-	  if (ptr + 8 > maxptr)
+	  if (cmd_length < 8)
 	    goto corrupt_etir;
 	  if (!_bfd_vms_push (abfd, bfd_getl64 (ptr), RELC_NONE))
 	    return FALSE;
@@ -1976,7 +1980,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  {
 	    int psect;
 
-	    if (ptr + 12 > maxptr)
+	    if (cmd_length < 12)
 	      goto corrupt_etir;
 	    psect = bfd_getl32 (ptr);
 	    if ((unsigned int) psect >= PRIV (section_count))
@@ -2079,13 +2083,18 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  {
 	    int size;
 
-	    if (ptr + 4 > maxptr)
+	    if (cmd_length < 4)
 	      goto corrupt_etir;
 	    size = bfd_getl32 (ptr);
+	    if (size > cmd_length - 4)
+	      goto corrupt_etir;
 	    if (!_bfd_vms_pop (abfd, &op1, &rel1))
 	      return FALSE;
 	    if (rel1 != RELC_NONE)
 	      goto bad_context;
+	    if (size == 0)
+	      break;
+	    op1 &= 0xffffffff;
 	    while (op1-- > 0)
 	      if (!image_write (abfd, ptr + 4, size))
 		return FALSE;
@@ -2095,7 +2104,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  /* Store global: write symbol value
 	     arg: cs	global symbol name.  */
 	case ETIR__C_STO_GBL:
-	  _bfd_vms_get_value (abfd, ptr, maxptr, info, &op1, &h);
+	  _bfd_vms_get_value (abfd, ptr, ptr + cmd_length, info, &op1, &h);
 	  if (h && h->sym)
 	    {
 	      if (h->sym->typ == EGSD__C_SYMG)
@@ -2120,7 +2129,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  /* Store code address: write address of entry point
 	     arg: cs	global symbol name (procedure).  */
 	case ETIR__C_STO_CA:
-	  _bfd_vms_get_value (abfd, ptr, maxptr, info, &op1, &h);
+	  _bfd_vms_get_value (abfd, ptr, ptr + cmd_length, info, &op1, &h);
 	  if (h && h->sym)
 	    {
 	      if (h->sym->flags & EGSY__V_NORM)
@@ -2172,7 +2181,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  {
 	    unsigned int size;
 
-	    if (ptr + 4 > maxptr)
+	    if (cmd_length < 4)
 	      goto corrupt_etir;
 	    size = bfd_getl32 (ptr);
 	    if (!image_write (abfd, ptr + 4, size))
@@ -2187,7 +2196,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	     store global longword: store 32bit value of symbol
 	     arg: cs	symbol name.  */
 	case ETIR__C_STO_GBL_LW:
-	  _bfd_vms_get_value (abfd, ptr, maxptr, info, &op1, &h);
+	  _bfd_vms_get_value (abfd, ptr, ptr + cmd_length, info, &op1, &h);
 #if 0
 	  abort ();
 #endif
@@ -2241,7 +2250,9 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	     da	signature.  */
 
 	case ETIR__C_STC_LP_PSB:
-	  _bfd_vms_get_value (abfd, ptr + 4, maxptr, info, &op1, &h);
+	  if (cmd_length < 4)
+	    goto corrupt_etir;
+	  _bfd_vms_get_value (abfd, ptr + 4, ptr + cmd_length, info, &op1, &h);
 	  if (h && h->sym)
 	    {
 	      if (h->sym->typ == EGSD__C_SYMG)
@@ -2340,7 +2351,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  /* Augment relocation base: increment image location counter by offset
 	     arg: lw	offset value.  */
 	case ETIR__C_CTL_AUGRB:
-	  if (ptr + 4 > maxptr)
+	  if (cmd_length < 4)
 	    goto corrupt_etir;
 	  op1 = bfd_getl32 (ptr);
 	  image_inc_ptr (abfd, op1);
@@ -2512,10 +2523,27 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 				  _bfd_vms_etir_name (cmd));
 	      return FALSE;
 	    }
-	  if ((int)op2 < 0)		/* Shift right.  */
-	    op1 >>= -(int)op2;
-	  else			/* Shift left.  */
-	    op1 <<= (int)op2;
+	  if ((bfd_signed_vma) op2 < 0)
+	    {
+	      /* Shift right.  */
+	      bfd_vma sign;
+	      op2 = -op2;
+	      if (op2 >= CHAR_BIT * sizeof (op1))
+		op2 = CHAR_BIT * sizeof (op1) - 1;
+	      /* op1 = (bfd_signed_vma) op1 >> op2; */
+	      sign = op1 & ((bfd_vma) 1 << (CHAR_BIT * sizeof (op1) - 1));
+	      op1 >>= op2;
+	      sign >>= op2;
+	      op1 = (op1 ^ sign) - sign;
+	    }
+	  else
+	    {
+	      /* Shift left.  */
+	      if (op2 >= CHAR_BIT * sizeof (op1))
+		op1 = 0;
+	      else
+		op1 <<= op2;
+	    }
 	  if (!_bfd_vms_push (abfd, op1, RELC_NONE)) /* FIXME: sym.  */
 	    return FALSE;
 	  break;
@@ -2554,7 +2582,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 	  break;
 	}
 
-      ptr += cmd_length - 4;
+      ptr += cmd_length;
     }
 
   return TRUE;
@@ -2898,6 +2926,7 @@ static void
 _bfd_vms_write_emh (bfd *abfd)
 {
   struct vms_rec_wr *recwr = &PRIV (recwr);
+  unsigned char tbuf[18];
 
   _bfd_vms_output_alignment (recwr, 2);
 
@@ -2920,7 +2949,7 @@ _bfd_vms_write_emh (bfd *abfd)
     _bfd_vms_output_counted (recwr, "NONAME");
 
   _bfd_vms_output_counted (recwr, BFD_VERSION_STRING);
-  _bfd_vms_output_dump (recwr, get_vms_time_string (), EMH_DATE_LENGTH);
+  _bfd_vms_output_dump (recwr, get_vms_time_string (tbuf), EMH_DATE_LENGTH);
   _bfd_vms_output_fill (recwr, 0, EMH_DATE_LENGTH);
   _bfd_vms_output_end (abfd, recwr);
 }
@@ -3223,7 +3252,7 @@ alpha_vms_write_exec (bfd *abfd)
   bfd_putl32 (16, eihd.virt_mem_block_size);
   bfd_putl32 (0, eihd.ext_fixup_off);
   bfd_putl32 (0, eihd.noopt_psect_off);
-  bfd_putl32 (-1, eihd.alias);
+  bfd_putl16 (-1, eihd.alias);
 
   /* Alloc EIHA.  */
   eiha = (struct vms_eiha *)((char *) &eihd + PRIV (file_pos));
@@ -9763,6 +9792,7 @@ const bfd_target alpha_vms_vec =
   ' ',				/* ar_pad_char.  */
   15,				/* ar_max_namelen.  */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
   bfd_getl32, bfd_getl_signed_32, bfd_putl32,
   bfd_getl16, bfd_getl_signed_16, bfd_putl16,

@@ -1,5 +1,5 @@
 /* This module handles expression trees.
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright (C) 1991-2021 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support <sac@cygnus.com>.
 
    This file is part of the GNU Binutils.
@@ -547,8 +547,8 @@ fold_binary (etree_type *tree)
 	  {
 	    if (!seg->used
 		&& config.magic_demand_paged
-		&& config.maxpagesize != 0
-		&& (seg->value % config.maxpagesize) != 0)
+		&& link_info.maxpagesize != 0
+		&& (seg->value % link_info.maxpagesize) != 0)
 	      einfo (_("%P: warning: address of `%s' "
 		       "isn't multiple of maximum page size\n"),
 		     segment_name);
@@ -898,9 +898,9 @@ fold_name (etree_type *tree)
 
     case CONSTANT:
       if (strcmp (tree->name.name, "MAXPAGESIZE") == 0)
-	new_number (config.maxpagesize);
+	new_number (link_info.maxpagesize);
       else if (strcmp (tree->name.name, "COMMONPAGESIZE") == 0)
-	new_number (config.commonpagesize);
+	new_number (link_info.commonpagesize);
       else
 	einfo (_("%F%P:%pS: unknown constant `%s' referenced in expression\n"),
 	       tree, tree->name.name);
@@ -1217,15 +1217,19 @@ exp_fold_tree_1 (etree_type *tree)
 			bfd_link_hide_symbol (link_info.output_bfd,
 					      &link_info, h);
 
-		      /* Copy the symbol type if this is an expression only
+		      /* Copy the symbol type and set non_ir_ref_regular
+			 on the source if this is an expression only
 			 referencing a single symbol.  (If the expression
 			 contains ternary conditions, ignoring symbols on
 			 false branches.)  */
 		      if (expld.assign_src != NULL
 			  && (expld.assign_src
 			      != (struct bfd_link_hash_entry *) -1))
-			bfd_copy_link_hash_symbol_type (link_info.output_bfd,
-							h, expld.assign_src);
+			{
+			  bfd_copy_link_hash_symbol_type (link_info.output_bfd,
+							  h, expld.assign_src);
+			  expld.assign_src->non_ir_ref_regular = TRUE;
+			}
 		    }
 		}
 	    }

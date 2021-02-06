@@ -1,6 +1,6 @@
 /* TUI window generic functions.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -24,12 +24,6 @@
 
 #include "tui/tui-data.h"
 
-struct tui_win_info;
-
-extern void tui_scroll_forward (struct tui_win_info *, int);
-extern void tui_scroll_backward (struct tui_win_info *, int);
-extern void tui_scroll_left (struct tui_win_info *, int);
-extern void tui_scroll_right (struct tui_win_info *, int);
 extern void tui_set_win_focus_to (struct tui_win_info *);
 extern void tui_resize_all (void);
 extern void tui_refresh_all_win (void);

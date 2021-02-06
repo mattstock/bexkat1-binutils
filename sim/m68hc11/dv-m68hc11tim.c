@@ -1,5 +1,5 @@
 /*  dv-m68hc11tim.c -- Simulation of the 68HC11 timer devices.
-    Copyright (C) 1999-2020 Free Software Foundation, Inc.
+    Copyright (C) 1999-2021 Free Software Foundation, Inc.
     Written by Stephane Carrez (stcarrez@nerim.fr)
     (From a driver model Contributed by Cygnus Solutions.)
 
@@ -503,7 +503,7 @@ cycle_to_string (sim_cpu *cpu, signed64 t, int flags)
   if (t < LONG_MAX)
     sprintf (buf, "%9lu%s%s", (unsigned long) t, cycle_buf, time_buf);
   else
-    sprintf (buf, "%llu%s%s", t, cycle_buf, time_buf);
+    sprintf (buf, "%" PRIi64 "%s%s", t, cycle_buf, time_buf);
   return buf;
 }
 

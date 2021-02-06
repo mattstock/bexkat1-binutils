@@ -1,4 +1,4 @@
-# Copyright 2008-2020 Free Software Foundation, Inc.
+# Copyright 2008-2021 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 load_lib "ada.exp"
+
+if { [skip_ada_tests] } { return -1 }
 
 standard_ada_testfile comp_bug
 
@@ -47,7 +49,7 @@ foreach_with_prefix scenario {all minimal} {
 	}
 	-re -wrap $kfail_re {
 	    if {$scenario == "minimal"} {
-		setup_kfail "gnat compiler bug" *-*-*
+		setup_xfail "gnat compiler bug" *-*-*
 	    }
 	    fail $gdb_test_name
 	}
@@ -79,7 +81,7 @@ foreach_with_prefix scenario {all minimal} {
 	}
 	-re -wrap $kfail_re {
 	    if {$scenario == "minimal"} {
-		setup_kfail "gnat compiler bug" *-*-*
+		setup_xfail "gnat compiler bug" *-*-*
 	    }
 	    fail $gdb_test_name
 	}

@@ -1,6 +1,6 @@
 /* This testcase is part of GDB, the GNU debugger.
 
-   Copyright 2012-2020 Free Software Foundation, Inc.
+   Copyright 2012-2021 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -23,6 +23,10 @@
 
    and then massaging the output.
 */
+
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 	.text
 	.file	"llvm-link"
 	.globl	func
@@ -80,7 +84,7 @@ main:                                   # @main
 
 	.section	.debug_str,"MS",@progbits,1
 .Lskel_string0:
-	.asciz	"fission-multi-cu.dwo"  # string offset=0
+	.asciz	XSTR(DWO)  # string offset=0
 .Lskel_string1:
 	.asciz	"/tmp/src/gdb/testsuite" # string offset=21
 	.section	.debug_loc.dwo,"",@progbits
@@ -311,20 +315,6 @@ main:                                   # @main
 	.byte	0                       # EOM(1)
 	.byte	0                       # EOM(2)
 	.byte	0                       # EOM(3)
-	.section	.debug_line.dwo,"",@progbits
-.Ltmp4:
-	.long	(.Ltmp5-.Ltmp4)-4
-	.short	2
-	.long	(.Ltmp6-.Ltmp4)-10
-	.byte	1
-	.byte	1
-	.byte	-5
-	.byte	14
-	.byte	1
-	.byte	0
-	.byte	0
-.Ltmp6:
-.Ltmp5:
 	.section	.debug_addr,"",@progbits
 	.quad	.Lfunc_begin0
 	.quad	.Lfunc_begin1

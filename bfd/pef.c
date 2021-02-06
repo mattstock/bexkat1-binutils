@@ -1,5 +1,5 @@
 /* PEF support for BFD.
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright (C) 1999-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -505,13 +505,11 @@ bfd_pef_scan_start_address (bfd *abfd)
   abfd->start_address = section->vma + header.main_offset;
 
  end:
-  if (loaderbuf != NULL)
-    free (loaderbuf);
+  free (loaderbuf);
   return 0;
 
  error:
-  if (loaderbuf != NULL)
-    free (loaderbuf);
+  free (loaderbuf);
   return -1;
 }
 
@@ -868,18 +866,14 @@ bfd_pef_parse_function_stubs (bfd *abfd,
   goto end;
 
  end:
-  if (libraries != NULL)
-    free (libraries);
-  if (imports != NULL)
-    free (imports);
+  free (libraries);
+  free (imports);
   *nsym = count;
   return 0;
 
  error:
-  if (libraries != NULL)
-    free (libraries);
-  if (imports != NULL)
-    free (imports);
+  free (libraries);
+  free (imports);
   *nsym = count;
   return -1;
 }
@@ -941,12 +935,8 @@ bfd_pef_parse_symbols (bfd *abfd, asymbol **csym)
     csym[count] = NULL;
 
  end:
-  if (codebuf != NULL)
-    free (codebuf);
-
-  if (loaderbuf != NULL)
-    free (loaderbuf);
-
+  free (codebuf);
+  free (loaderbuf);
   return count;
 }
 
@@ -1025,6 +1015,7 @@ const bfd_target pef_vec =
   ' ',				/* AR_pad_char.  */
   16,				/* AR_max_namelen.  */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16,	/* Data.  */
@@ -1169,6 +1160,7 @@ const bfd_target pef_xlib_vec =
   ' ',				/* AR_pad_char.  */
   16,				/* AR_max_namelen.  */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16,	/* Data.  */

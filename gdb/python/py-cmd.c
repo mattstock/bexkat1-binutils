@@ -1,6 +1,6 @@
 /* gdb commands implemented in Python
 
-   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+   Copyright (C) 2008-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -65,8 +65,6 @@ struct cmdpy_object
      command, then this field is unused.  */
   struct cmd_list_element *sub_list;
 };
-
-typedef struct cmdpy_object cmdpy_object;
 
 extern PyTypeObject cmdpy_object_type
     CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("cmdpy_object");
@@ -390,7 +388,7 @@ gdbpy_parse_command_name (const char *name,
   std::string prefix_text (name, i + 1);
 
   prefix_text2 = prefix_text.c_str ();
-  elt = lookup_cmd_1 (&prefix_text2, *start_list, NULL, 1);
+  elt = lookup_cmd_1 (&prefix_text2, *start_list, NULL, NULL, 1);
   if (elt == NULL || elt == CMD_LIST_AMBIGUOUS)
     {
       PyErr_Format (PyExc_RuntimeError, _("Could not find command prefix %s."),

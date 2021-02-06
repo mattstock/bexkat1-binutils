@@ -1,5 +1,5 @@
 /* Print National Semiconductor 32000 instructions.
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -524,9 +524,7 @@ print_insn_arg (int d,
 	  /* Immediate.  */
 	  switch (d)
 	    {
-	    case 'I':
-	    case 'Z':
-	    case 'A':
+	    default:
 	      /* I and Z are output operands and can`t be immediate
 	         A is an address and we can`t have the address of
 	         an immediate either. We don't know how much to increase

@@ -1,5 +1,5 @@
 /* Target operations for the remote server for GDB.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -160,8 +160,8 @@ target_write_memory (CORE_ADDR memaddr, const unsigned char *myaddr,
 }
 
 ptid_t
-mywait (ptid_t ptid, struct target_waitstatus *ourstatus, int options,
-	int connected_wait)
+mywait (ptid_t ptid, struct target_waitstatus *ourstatus,
+	target_wait_flags options, int connected_wait)
 {
   ptid_t ret;
 
@@ -220,7 +220,8 @@ target_stop_and_wait (ptid_t ptid)
 /* See target/target.h.  */
 
 ptid_t
-target_wait (ptid_t ptid, struct target_waitstatus *status, int options)
+target_wait (ptid_t ptid, struct target_waitstatus *status,
+	     target_wait_flags options)
 {
   return the_target->wait (ptid, status, options);
 }
@@ -599,7 +600,8 @@ process_stratum_target::read_loadmap (const char *annex,
 }
 
 void
-process_stratum_target::process_qsupported (char **features, int count)
+process_stratum_target::process_qsupported
+  (gdb::array_view<const char * const> features)
 {
   /* Nop.  */
 }

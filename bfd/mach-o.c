@@ -1,5 +1,5 @@
 /* Mach-O support for BFD.
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright (C) 1999-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -618,10 +618,8 @@ cputype (unsigned long value)
 }
 
 static const char *
-cpusubtype (unsigned long cpu_type, unsigned long cpu_subtype)
+cpusubtype (unsigned long cpu_type, unsigned long cpu_subtype, char *buffer)
 {
-  static char buffer[128];
-
   buffer[0] = 0;
   switch (cpu_subtype & BFD_MACH_O_CPU_SUBTYPE_MASK)
     {
@@ -695,13 +693,14 @@ bfd_mach_o_bfd_print_private_bfd_data (bfd *abfd, void *ptr)
 {
   FILE * file = (FILE *) ptr;
   bfd_mach_o_data_struct *mdata = bfd_mach_o_get_data (abfd);
+  char buff[128];
 
   fprintf (file, _(" MACH-O header:\n"));
   fprintf (file, _("   magic:      %#lx\n"), (long) mdata->header.magic);
   fprintf (file, _("   cputype:    %#lx (%s)\n"), (long) mdata->header.cputype,
 	   cputype (mdata->header.cputype));
   fprintf (file, _("   cpusubtype: %#lx%s\n"), (long) mdata->header.cpusubtype,
-	   cpusubtype (mdata->header.cputype, mdata->header.cpusubtype));
+	   cpusubtype (mdata->header.cputype, mdata->header.cpusubtype, buff));
   fprintf (file, _("   filetype:   %#lx\n"), (long) mdata->header.filetype);
   fprintf (file, _("   ncmds:      %#lx\n"), (long) mdata->header.ncmds);
   fprintf (file, _("   sizeocmds:  %#lx\n"), (long) mdata->header.sizeofcmds);
@@ -5017,6 +5016,8 @@ bfd_mach_o_read_command (bfd *abfd, bfd_mach_o_load_command *command,
     case BFD_MACH_O_LC_DATA_IN_CODE:
     case BFD_MACH_O_LC_DYLIB_CODE_SIGN_DRS:
     case BFD_MACH_O_LC_LINKER_OPTIMIZATION_HINT:
+    case BFD_MACH_O_LC_DYLD_EXPORTS_TRIE:
+    case BFD_MACH_O_LC_DYLD_CHAINED_FIXUPS:
       if (!bfd_mach_o_read_linkedit (abfd, command))
 	return FALSE;
       break;
@@ -5573,26 +5574,23 @@ bfd_mach_o_fat_member_init (bfd *abfd,
   struct areltdata *areltdata;
   /* Create the member filename. Use ARCH_NAME.  */
   const bfd_arch_info_type *ap = bfd_lookup_arch (arch_type, arch_subtype);
-  char *filename;
+  const char *filename;
 
   if (ap)
     {
       /* Use the architecture name if known.  */
-      filename = bfd_strdup (ap->printable_name);
-      if (filename == NULL)
-	return FALSE;
+      filename = bfd_set_filename (abfd, ap->printable_name);
     }
   else
     {
       /* Forge a uniq id.  */
-      const size_t namelen = 2 + 8 + 1 + 2 + 8 + 1;
-      filename = bfd_malloc (namelen);
-      if (filename == NULL)
-	return FALSE;
-      snprintf (filename, namelen, "0x%lx-0x%lx",
+      char buf[2 + 8 + 1 + 2 + 8 + 1];
+      snprintf (buf, sizeof (buf), "0x%lx-0x%lx",
 		entry->cputype, entry->cpusubtype);
+      filename = bfd_set_filename (abfd, buf);
     }
-  bfd_set_filename (abfd, filename);
+  if (!filename)
+    return FALSE;
 
   areltdata = bfd_zmalloc (sizeof (struct areltdata));
   if (areltdata == NULL)
@@ -6075,12 +6073,12 @@ bfd_mach_o_follow_dsym (bfd *abfd)
   if (abfd->my_archive && !bfd_is_thin_archive (abfd->my_archive))
     base_bfd = abfd->my_archive;
   /* BFD may have been opened from a stream. */
-  if (base_bfd->filename == NULL)
+  if (bfd_get_filename (base_bfd) == NULL)
     {
       bfd_set_error (bfd_error_invalid_operation);
       return NULL;
     }
-  base_basename = lbasename (base_bfd->filename);
+  base_basename = lbasename (bfd_get_filename (base_bfd));
 
   uuid_cmd = bfd_mach_o_lookup_uuid_command (abfd);
   if (uuid_cmd == NULL)
@@ -6090,14 +6088,14 @@ bfd_mach_o_follow_dsym (bfd *abfd)
      It seems apple's GDB checks all files in the dSYM bundle directory.
      http://opensource.apple.com/source/gdb/gdb-1708/src/gdb/macosx/macosx-tdep.c
   */
-  dsym_filename = (char *)bfd_malloc (strlen (base_bfd->filename)
+  dsym_filename = (char *)bfd_malloc (strlen (bfd_get_filename (base_bfd))
 				       + strlen (dsym_subdir) + 1
 				       + strlen (base_basename) + 1);
   if (dsym_filename == NULL)
     return NULL;
 
   sprintf (dsym_filename, "%s%s/%s",
-	   base_bfd->filename, dsym_subdir, base_basename);
+	   bfd_get_filename (base_bfd), dsym_subdir, base_basename);
 
   dsym_bfd = bfd_mach_o_find_dsym (dsym_filename, uuid_cmd,
 				   bfd_get_arch_info (abfd));
@@ -6175,8 +6173,8 @@ bfd_mach_o_close_and_cleanup (bfd *abfd)
 	     but it is small, and happens when we are closing down, so it
 	     should not matter too much.  */
 	  char *dsym_filename = (char *)(fat_bfd
-					 ? fat_bfd->filename
-					 : mdata->dsym_bfd->filename);
+					 ? bfd_get_filename (fat_bfd)
+					 : bfd_get_filename (mdata->dsym_bfd));
 #endif
 	  bfd_close (mdata->dsym_bfd);
 	  mdata->dsym_bfd = NULL;

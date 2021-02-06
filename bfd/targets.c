@@ -1,5 +1,5 @@
 /* Generic target-file-type support for the BFD library.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -133,6 +133,11 @@ DESCRIPTION
 .   (bfd_assert (__FILE__,__LINE__), NULL))
 .#endif
 .
+.{* Defined to TRUE if unused section symbol should be kept.  *}
+.#ifndef TARGET_KEEP_UNUSED_SECTION_SYMBOLS
+.#define TARGET_KEEP_UNUSED_SECTION_SYMBOLS TRUE
+.#endif
+.
 	This is the structure which defines the type of BFD this is.  The
 	<<xvec>> member of the struct <<bfd>> itself points here.  Each
 	module that implements access to a different target under BFD,
@@ -215,6 +220,9 @@ DESCRIPTION
 .  {* How well this target matches, used to select between various
 .     possible targets when more than one target matches.  *}
 .  unsigned char match_priority;
+.
+. {* TRUE if unused section symbols should be kept.  *}
+.  bfd_boolean keep_unused_section_symbols;
 .
 .  {* Entries for byte swapping for data. These are different from the
 .     other entry points, since they don't take a BFD as the first argument.
@@ -656,6 +664,12 @@ to find an alternative output format that is suitable.
 .  return sy->the_bfd->xvec->flavour;
 .}
 .
+.static inline bfd_boolean
+.bfd_keep_unused_section_symbols (const bfd *abfd)
+.{
+.  return abfd->xvec->keep_unused_section_symbols;
+.}
+.
 */
 
 /* All known xvecs (even those that don't compile on all systems).
@@ -739,7 +753,6 @@ extern const bfd_target i386_coff_go32stubbed_vec;
 extern const bfd_target i386_coff_lynx_vec;
 extern const bfd_target i386_elf32_vec;
 extern const bfd_target i386_elf32_fbsd_vec;
-extern const bfd_target i386_elf32_nacl_vec;
 extern const bfd_target i386_elf32_sol2_vec;
 extern const bfd_target i386_elf32_vxworks_vec;
 extern const bfd_target i386_mach_o_vec;
@@ -842,14 +855,13 @@ extern const bfd_target powerpc_elf32_vxworks_vec;
 extern const bfd_target powerpc_elf64_vec;
 extern const bfd_target powerpc_elf64_le_vec;
 extern const bfd_target powerpc_elf64_fbsd_vec;
-extern const bfd_target powerpc_pe_vec;
-extern const bfd_target powerpc_pe_le_vec;
-extern const bfd_target powerpc_pei_vec;
-extern const bfd_target powerpc_pei_le_vec;
+extern const bfd_target powerpc_elf64_fbsd_le_vec;
 extern const bfd_target powerpc_xcoff_vec;
 extern const bfd_target pru_elf32_vec;
 extern const bfd_target riscv_elf32_vec;
 extern const bfd_target riscv_elf64_vec;
+extern const bfd_target riscv_elf32_be_vec;
+extern const bfd_target riscv_elf64_be_vec;
 extern const bfd_target rl78_elf32_vec;
 extern const bfd_target rs6000_xcoff64_vec;
 extern const bfd_target rs6000_xcoff64_aix_vec;
@@ -886,7 +898,6 @@ extern const bfd_target sparc_elf64_fbsd_vec;
 extern const bfd_target sparc_elf64_sol2_vec;
 extern const bfd_target spu_elf32_vec;
 extern const bfd_target sym_vec;
-extern const bfd_target tic30_aout_vec;
 extern const bfd_target tic30_coff_vec;
 extern const bfd_target tic4x_coff0_vec;
 extern const bfd_target tic4x_coff0_beh_vec;
@@ -922,11 +933,9 @@ extern const bfd_target wasm_vec;
 extern const bfd_target wasm32_elf32_vec;
 extern const bfd_target x86_64_coff_vec;
 extern const bfd_target x86_64_elf32_vec;
-extern const bfd_target x86_64_elf32_nacl_vec;
 extern const bfd_target x86_64_elf64_vec;
 extern const bfd_target x86_64_elf64_cloudabi_vec;
 extern const bfd_target x86_64_elf64_fbsd_vec;
-extern const bfd_target x86_64_elf64_nacl_vec;
 extern const bfd_target x86_64_elf64_sol2_vec;
 extern const bfd_target x86_64_mach_o_vec;
 extern const bfd_target x86_64_pe_vec;
@@ -1093,7 +1102,6 @@ static const bfd_target * const _bfd_target_vector[] =
 	&i386_coff_lynx_vec,
 	&i386_elf32_vec,
 	&i386_elf32_fbsd_vec,
-	&i386_elf32_nacl_vec,
 	&i386_elf32_sol2_vec,
 	&i386_elf32_vxworks_vec,
 	&i386_mach_o_vec,
@@ -1240,11 +1248,8 @@ static const bfd_target * const _bfd_target_vector[] =
 	&powerpc_elf64_vec,
 	&powerpc_elf64_le_vec,
 	&powerpc_elf64_fbsd_vec,
+	&powerpc_elf64_fbsd_le_vec,
 #endif
-	&powerpc_pe_vec,
-	&powerpc_pe_le_vec,
-	&powerpc_pei_vec,
-	&powerpc_pei_le_vec,
 #if 0
 	/* This has the same magic number as RS/6000.  */
 	&powerpc_xcoff_vec,
@@ -1255,6 +1260,8 @@ static const bfd_target * const _bfd_target_vector[] =
 #ifdef BFD64
 	&riscv_elf32_vec,
 	&riscv_elf64_vec,
+	&riscv_elf32_be_vec,
+	&riscv_elf64_be_vec,
 #endif
 	&rl78_elf32_vec,
 
@@ -1308,7 +1315,6 @@ static const bfd_target * const _bfd_target_vector[] =
 
 	&sym_vec,
 
-	&tic30_aout_vec,
 	&tic30_coff_vec,
 	&tic54x_coff0_beh_vec,
 	&tic54x_coff0_vec,
@@ -1344,11 +1350,9 @@ static const bfd_target * const _bfd_target_vector[] =
 #ifdef BFD64
 	&x86_64_coff_vec,
 	&x86_64_elf32_vec,
-	&x86_64_elf32_nacl_vec,
 	&x86_64_elf64_vec,
 	&x86_64_elf64_cloudabi_vec,
 	&x86_64_elf64_fbsd_vec,
-	&x86_64_elf64_nacl_vec,
 	&x86_64_elf64_sol2_vec,
 	&x86_64_mach_o_vec,
 	&x86_64_pe_vec,
@@ -1428,7 +1432,7 @@ static const bfd_target * const _bfd_target_vector[] =
 
 	NULL /* end of list marker */
 };
-const bfd_target * const *bfd_target_vector = _bfd_target_vector;
+const bfd_target *const *const bfd_target_vector = _bfd_target_vector;
 
 /* bfd_default_vector[0] contains either the address of the default vector,
    if there is one, or zero if there isn't.  */
@@ -1443,13 +1447,13 @@ const bfd_target *bfd_default_vector[] = {
 /* bfd_associated_vector[] contains the associated target vectors used
    to reduce the ambiguity in bfd_check_format_matches.  */
 
-static const bfd_target *_bfd_associated_vector[] = {
+static const bfd_target *const _bfd_associated_vector[] = {
 #ifdef ASSOCIATED_VECS
 	ASSOCIATED_VECS,
 #endif
 	NULL
 };
-const bfd_target * const *bfd_associated_vector = _bfd_associated_vector;
+const bfd_target *const *const bfd_associated_vector = _bfd_associated_vector;
 
 /* When there is an ambiguous match, bfd_check_format_matches puts the
    names of the matching targets in an array.  This variable is the maximum
@@ -1701,8 +1705,7 @@ bfd_get_target_info (const char *target_name, bfd *abfd,
 	    _bfd_find_arch_match (tname, arches, def_target_arch);
 	}
 
-      if (arches)
-	free (arches);
+      free (arches);
     }
   return target_vec;
 }

@@ -1,5 +1,5 @@
 /* Generic symbol-table support for the BFD library.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -306,6 +306,9 @@ CODE_FRAGMENT
 .     will make sure that in the entire process there is just one symbol
 .     with this name and type in use.  BSF_OBJECT must also be set.  *}
 .#define BSF_GNU_UNIQUE          (1 << 23)
+.
+.  {* This section symbol should be included in the symbol table.  *}
+.#define BSF_SECTION_SYM_USED    (1 << 24)
 .
 .  flagword flags;
 .
@@ -653,10 +656,10 @@ bfd_decode_symclass (asymbol *symbol)
 
   if (symbol->section && bfd_is_com_section (symbol->section))
     {
-      if (symbol->section == bfd_com_section_ptr)
-	return 'C';
-      else
+      if (symbol->section->flags & SEC_SMALL_DATA)
 	return 'c';
+      else
+	return 'C';
     }
   if (bfd_is_und_section (symbol->section))
     {
@@ -830,8 +833,7 @@ _bfd_generic_read_minisymbols (bfd *abfd,
 
  error_return:
   bfd_set_error (bfd_error_no_symbols);
-  if (syms != NULL)
-    free (syms);
+  free (syms);
   return -1;
 }
 
@@ -1054,8 +1056,7 @@ _bfd_stab_section_find_nearest_line (bfd *abfd,
 					    symbols);
       if (reloc_count < 0)
 	{
-	  if (reloc_vector != NULL)
-	    free (reloc_vector);
+	  free (reloc_vector);
 	  return FALSE;
 	}
       if (reloc_count > 0)
@@ -1086,8 +1087,7 @@ _bfd_stab_section_find_nearest_line (bfd *abfd,
 		  _bfd_error_handler
 		    (_("unsupported .stab relocation"));
 		  bfd_set_error (bfd_error_invalid_operation);
-		  if (reloc_vector != NULL)
-		    free (reloc_vector);
+		  free (reloc_vector);
 		  return FALSE;
 		}
 
@@ -1099,8 +1099,7 @@ _bfd_stab_section_find_nearest_line (bfd *abfd,
 	    }
 	}
 
-      if (reloc_vector != NULL)
-	free (reloc_vector);
+      free (reloc_vector);
 
       /* First time through this function, build a table matching
 	 function VM addresses to stabs, then sort based on starting

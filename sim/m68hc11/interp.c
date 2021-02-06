@@ -1,5 +1,5 @@
 /* interp.c -- Simulator for Motorola 68HC11/68HC12
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright (C) 1999-2021 Free Software Foundation, Inc.
    Written by Stephane Carrez (stcarrez@nerim.fr)
 
 This file is part of GDB, the GNU debugger.
@@ -100,7 +100,7 @@ sim_get_info (SIM_DESC sd, char *cmd)
 	  sim_io_eprintf (sd, "Valid devices: cpu timer sio eeprom\n");
 	  return;
 	}
-      hw_dev = sim_hw_parse (sd, dev_list[i].device);
+      hw_dev = sim_hw_parse (sd, "%s", dev_list[i].device);
       if (hw_dev == 0)
 	{
 	  sim_io_eprintf (sd, "Device '%s' not found\n", dev_list[i].device);
@@ -138,7 +138,7 @@ sim_board_reset (SIM_DESC sd)
       cpu_type = "/m68hc12";
     }
   
-  hw_cpu = sim_hw_parse (sd, cpu_type);
+  hw_cpu = sim_hw_parse (sd, "%s", cpu_type);
   if (hw_cpu == 0)
     {
       sim_io_eprintf (sd, "%s cpu not found in device tree.", cpu_type);

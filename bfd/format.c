@@ -1,5 +1,5 @@
 /* Generic BFD support for file formats.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -500,8 +500,7 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
       if (abfd->direction == both_direction)
 	abfd->output_has_begun = TRUE;
 
-      if (matching_vector)
-	free (matching_vector);
+      free (matching_vector);
       if (preserve_match.marker != NULL)
 	bfd_preserve_finish (abfd, &preserve_match);
       bfd_preserve_finish (abfd, &preserve);
@@ -519,8 +518,7 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
 	cleanup (abfd);
       abfd->xvec = save_targ;
       abfd->format = bfd_unknown;
-      if (matching_vector)
-	free (matching_vector);
+      free (matching_vector);
       if (preserve_match.marker != NULL)
 	bfd_preserve_finish (abfd, &preserve_match);
       bfd_preserve_restore (abfd, &preserve);
@@ -544,7 +542,7 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
 	  *(const char **) &matching_vector[match_count] = name;
 	}
     }
-  else if (matching_vector)
+  else
     free (matching_vector);
   if (cleanup)
     cleanup (abfd);

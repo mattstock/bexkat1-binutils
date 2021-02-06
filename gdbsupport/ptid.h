@@ -1,6 +1,6 @@
 /* The ptid_t type and common functions operating on it.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -31,6 +31,8 @@
    prefer using the ptid.lwp field, leaving the ptid.tid field for any
    thread_stratum target that might want to sit on top.
 */
+
+#include <functional>
 
 class ptid_t
 {
@@ -141,6 +143,20 @@ private:
 
   /* Thread id.  */
   long m_tid;
+};
+
+/* Functor to hash a ptid.  */
+
+struct hash_ptid
+{
+  size_t operator() (const ptid_t &ptid) const
+  {
+    std::hash<long> long_hash;
+
+    return (long_hash (ptid.pid ())
+	    + long_hash (ptid.lwp ())
+	    + long_hash (ptid.tid ()));
+  }
 };
 
 /* The null or zero ptid, often used to indicate no process. */

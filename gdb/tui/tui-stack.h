@@ -1,6 +1,6 @@
 /* TUI display locator.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -28,12 +28,13 @@ struct frame_info;
 
 /* Locator window class.  */
 
-struct tui_locator_window : public tui_gen_win_info
+struct tui_locator_window : public tui_win_info
 {
-  tui_locator_window ()
+  tui_locator_window () = default;
+
+  const char *name () const override
   {
-    full_name[0] = 0;
-    proc_name[0] = 0;
+    return STATUS_NAME;
   }
 
   int max_height () const override
@@ -46,25 +47,27 @@ struct tui_locator_window : public tui_gen_win_info
     return 1;
   }
 
+  bool can_box () const override
+  {
+    return false;
+  }
+
+  bool can_focus () const override
+  {
+    return false;
+  }
+
   void rerender () override;
 
-  /* Update the locator, with the provided arguments.
+protected:
 
-     Returns true if any of the locator's fields were actually
-     changed, and false otherwise.  */
-  bool set_locator_info (struct gdbarch *gdbarch,
-			 const struct symtab_and_line &sal,
-			 const char *procname);
+  void do_scroll_vertical (int n) override
+  {
+  }
 
-  /* Set the full_name portion of the locator.  */
-  void set_locator_fullname (const char *fullname);
-
-  std::string full_name;
-  std::string proc_name;
-  int line_no = 0;
-  CORE_ADDR addr = 0;
-  /* Architecture associated with code at this location.  */
-  struct gdbarch *gdbarch = nullptr;
+  void do_scroll_horizontal (int n) override
+  {
+  }
 
 private:
 
@@ -75,7 +78,6 @@ private:
   std::string make_status_line () const;
 };
 
-extern void tui_update_locator_fullname (struct symtab *symtab);
 extern void tui_show_locator_content (void);
 extern bool tui_show_frame_info (struct frame_info *);
 

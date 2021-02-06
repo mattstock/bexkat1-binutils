@@ -1,3 +1,187 @@
+2021-02-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-events.c: Include sim-cpu.h.
+	(sim_event_watchpoints): Define watch_pc.
+	(sim_events_watch_pc): New function.
+	(WATCH_SIM): Handle watch_pc.
+	* sim-events.h (sim_events_watch_pc): New prototype.
+	* sim-watch.c (schedule_watchpoint): Replace sim_events_watch_sim with
+	sim_events_watch_pc.
+	* sim-watch.h (sim_watchpoints): Delete pc.
+
+2021-02-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4 (SIM_AC_COMMON): Replace AC_CONFIG_HEADER with
+	AC_CONFIG_HEADERS.
+
+2021-02-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* Make-common.in (HDEFINES, TDEFINES): Delete.
+	(CONFIG_CFLAGS): Delete $(HDEFINES) $(TDEFINES).
+	* acinclude.m4 (SIM_AC_COMMON): Delete AC_SUBST(HDEFINES) and
+	bfd/configure.host sourcing.
+
+2021-02-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* gennltvals.py (TARGETS): Add riscv.
+	(TARGET_DIRS): Likewise.
+	* nltvals.def: Regenerate from the latest libgloss sources.
+
+2021-01-31  Mike Frysinger  <vapier@gentoo.org>
+
+	* cgen-trace.c (cgen_trace_insn): Add "%s" argument.
+
+2021-01-31  Stafford Horne  <shorne@gmail.com>
+
+	* cgen-accfp.c (fixsfsi): Change res from unsigned32 to signed32.
+	(fixdfsi): Change res from unsigned32 to signed32.
+	(fixdfdi): Change res from unsigned64 to signed64.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* gennltvals.sh: Replace shell script with ...
+	* gennltvals.py: ... this Python script.
+	* nltvals.def: Regenerate.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-watch.c (schedule_watchpoint): Change sizeof_pc to sizeof
+	sim_cia.
+	* sim-watch.h (struct _sim_watchpoints): Delete sizeof_pc.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-profile.c (profile_pc_init): Change 1 in shifts to 1ULL.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-hw.c (merge_device_file): Replace fgets with getline.
+
+2021-01-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* gennltvals.sh (gen_arches): Sort calls by first arg.
+	* nltvals.def: Regenerate.
+
+2021-01-18  Mike Frysinger  <vapier@gentoo.org>
+
+	* Make-common.in (version.c): Simplifiy args and call move-if-change.
+	* create-version.sh: Delete host & target alias logic.  Write to the
+	output directly.
+
+2021-01-18  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure, configure.ac, Makefile.in: Delete.
+
+2021-01-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-watch.c (default_interrupt_handler): Define.
+	(sim_watchpoint_install): Set default interrupt_handler to new
+	default_interrupt_handler.
+
+2021-01-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-watch.c (do_watchpoint_create): Parse arg+1 and assign to arg1.
+
+2021-01-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-events.c (sim_events_watch_sim): Change byte_order type to
+	enum bfd_endian.
+	(sim_events_watch_core): Likewise.
+	* sim-events.h (sim_events_watch_sim, sim_events_watch_core): Likewise.
+	* sim-watch.c (schedule_watchpoint): Change 0 to HOST_BYTE_ORDER in
+	call to sim_events_watch_sim.
+
+2021-01-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-profile.h [!WITH_PROFILE]: Rewrite to use #error.
+
+2021-01-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4 (SIM_AC_OUTPUT): Require SIM_AC_OPTION_WARNINGS.
+
+2021-01-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-core.c (sim_memory_map): Change %#x to PRIxTW.
+
+2021-01-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4 (SIM_AC_COMMON): Delete checks for stdlib.h, string.h,
+	strings.h, time.h, and errno.h.
+	* callback.c, cgen-scache.c, dv-glue.c, dv-pal.c, dv-sockser.c,
+	hw-alloc.c, hw-base.c, hw-device.c, hw-events.c, hw-handles.c,
+	hw-ports.c, hw-properties.c, hw-tree.c, nrun.c, sim-arange.c,
+	sim-events.c, sim-fpu.c, sim-hw.c, sim-load.c, sim-memopt.c,
+	sim-options.c, sim-profile.c, sim-trace.c, sim-utils.c,
+	sim-watch.c, syscall.c: Delete HAVE_ERRNO_H, HAVE_STDLIB_H,
+	HAVE_STRING_H, HAVE_STRINGS_H, HAVE_LIMITS_H, HAVE_TIME_H,
+	and strings.h include.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-basics.h [__CYGWIN32__] (vasprintf, asprintf): Delete.
+	* sim-core.c, sim-watch.c: Include libiberty.h.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4: Replace duplicate text with pointer to README-HACKING.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4 (SIM_AC_OPTION_WARNINGS): Document 1st argument.
+	Set WERROR_CFLAGS when first arg is not set or is "yes".
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* hw-base.c (full_name_of_hw): Delete full_name.  Replace
+	hw_strdup call with hw_malloc.
+
+2021-01-09  Mike Frysinger  <vapier@gentoo.org>
+
+	* cgen-par.c: Include stdlib.h.
+	* cgen-trace.c, hw-events.c, sim-abort.c: Likewise.
+
+2021-01-08  Mike Frysinger  <vapier@gentoo.org>
+
+	* Make-common.in (C_DIALECT): Define.
+	(COMPILE.pre): Append $(C_DIALECT).
+	* acinclude.m4 (SIM_AC_COMMON): Probe C11 to define C_DIALECT.
+
+2021-01-07  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-core.c (sim_memory_map): Define.
+
+2021-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* acinclude.m4 (ACX_BUGURL): Change http:// to https://.
+	* configure: Regenerate.
+
+2021-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-options.c (sim_print_version): Print out more details when
+	is_command is non-zero.
+
+2021-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-options.c (standard_option_handler): Call sim_print_version.
+	(sim_print_version): New function.
+	* sim-options.h (sim_print_version): New prototype.
+
+2021-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-config.c (print_sim_config): Rename to ...
+	(sim_config_print): ... this.
+	* sim-config.h: Likewise.
+
+2021-01-02  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-bits.h (_ALIGNa, _FLOORa, ALIGN_8, ALIGN_16, ALIGN_PAGE,
+	FLOOR_PAGE): Delete unused macros.
+	(align_up, align_down): Define.
+
+2020-08-10  Tom de Vries  <tdevries@suse.de>
+
+	* sim-cpu.c: Include stdlib.h for free.
+
 2020-01-19  Simon Marchi  <simon.marchi@polymtl.ca>
 
 	* nrun.c: Include stdlib.h.

@@ -1,6 +1,6 @@
 /* C language support definitions for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright (C) 1992-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,7 +28,6 @@ struct parser_state;
 
 #include "value.h"
 #include "macroexp.h"
-#include "parser-defs.h"
 #include "gdbsupport/enum-flags.h"
 
 
@@ -96,8 +95,6 @@ extern struct value *evaluate_subexp_c (struct type *expect_type,
 					int *pos,
 					enum noside noside);
 
-extern void c_printchar (int, struct type *, struct ui_file *);
-
 extern void c_printstr (struct ui_file * stream,
 			struct type *elttype,
 			const gdb_byte *string,
@@ -115,9 +112,6 @@ extern void c_emit_char (int c, struct type *type,
 			 struct ui_file *stream, int quoter);
 
 extern const struct op_print c_op_print_tab[];
-
-extern gdb::unique_xmalloc_ptr<char> c_watch_location_expression
-     (struct type *type, CORE_ADDR addr);
 
 /* These are in c-typeprint.c: */
 
@@ -153,26 +147,24 @@ extern bool c_is_string_type_p (struct type *type);
 
 extern int c_textual_element_type (struct type *, char);
 
-/* Create a new instance of the C compiler and return it.  The new
-   compiler is owned by the caller and must be freed using the destroy
-   method.  This function never returns NULL, but rather throws an
-   exception on failure.  This is suitable for use as the
-   la_get_compile_instance language method.  */
+/* Create a new instance of the C compiler and return it.  This
+   function never returns NULL, but rather throws an exception on
+   failure.  This is suitable for use as the
+   language_defn::get_compile_instance method.  */
 
-extern compile_instance *c_get_compile_context (void);
+extern std::unique_ptr<compile_instance> c_get_compile_context ();
 
-/* Create a new instance of the C++ compiler and return it.  The new
-   compiler is owned by the caller and must be freed using the destroy
-   method.  This function never returns NULL, but rather throws an
-   exception on failure.  This is suitable for use as the
-   la_get_compile_instance language method.  */
+/* Create a new instance of the C++ compiler and return it.  This
+   function never returns NULL, but rather throws an exception on
+   failure.  This is suitable for use as the
+   language_defn::get_compile_instance method.  */
 
-extern compile_instance *cplus_get_compile_context ();
+extern std::unique_ptr<compile_instance> cplus_get_compile_context ();
 
 /* This takes the user-supplied text and returns a new bit of code to
    compile.
 
-   This is used as the la_compute_program language method; see that
+   This is used as the compute_program language method; see that
    for a description of the arguments.  */
 
 extern std::string c_compute_program (compile_instance *inst,
@@ -183,7 +175,7 @@ extern std::string c_compute_program (compile_instance *inst,
 
 /* This takes the user-supplied text and returns a new bit of code to compile.
 
-   This is used as the la_compute_program language method; see that
+   This is used as the compute_program language method; see that
    for a description of the arguments.  */
 
 extern std::string cplus_compute_program (compile_instance *inst,

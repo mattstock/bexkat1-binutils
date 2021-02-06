@@ -1,6 +1,6 @@
 /* Do various things to symbol tables (other than lookup), for GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -39,16 +39,7 @@
 #include "readline/tilde.h"
 
 #include "psymtab.h"
-
-/* Unfortunately for debugging, stderr is usually a macro.  This is painful
-   when calling functions that take FILE *'s from the debugger.
-   So we make a variable which has the same value and which is accessible when
-   debugging GDB with itself.  Because stdin et al need not be constants,
-   we initialize them in the _initialize_symmisc function at the bottom
-   of the file.  */
-FILE *std_in;
-FILE *std_out;
-FILE *std_err;
+#include "psympriv.h"
 
 /* Prototypes for local functions */
 
@@ -73,6 +64,20 @@ print_symbol_bcache_statistics (void)
       }
 }
 
+/* Count the number of partial symbols in OBJFILE.  */
+
+static int
+count_psyms (struct objfile *objfile)
+{
+  int count = 0;
+  for (partial_symtab *pst : objfile->psymtabs ())
+    {
+      count += pst->global_psymbols.size ();
+      count += pst->static_psymbols.size ();
+    }
+  return count;
+}
+
 void
 print_objfile_statistics (void)
 {
@@ -89,9 +94,11 @@ print_objfile_statistics (void)
 	if (objfile->per_bfd->n_minsyms > 0)
 	  printf_filtered (_("  Number of \"minimal\" symbols read: %d\n"),
 			   objfile->per_bfd->n_minsyms);
-	if (OBJSTAT (objfile, n_psyms) > 0)
+
+	int n_psyms = count_psyms (objfile);
+	if (n_psyms > 0)
 	  printf_filtered (_("  Number of \"partial\" symbols read: %d\n"),
-			   OBJSTAT (objfile, n_psyms));
+			   n_psyms);
 	if (OBJSTAT (objfile, n_syms) > 0)
 	  printf_filtered (_("  Number of \"full\" symbols read: %d\n"),
 			   OBJSTAT (objfile, n_syms));
@@ -556,7 +563,7 @@ print_symbol (struct gdbarch *gdbarch, struct symbol *symbol,
 
   if (SYMBOL_DOMAIN (symbol) == STRUCT_DOMAIN)
     {
-      if (TYPE_NAME (SYMBOL_TYPE (symbol)))
+      if (SYMBOL_TYPE (symbol)->name ())
 	{
 	  LA_PRINT_TYPE (SYMBOL_TYPE (symbol), "", outfile, 1, depth,
 			 &type_print_raw_options);
@@ -564,9 +571,9 @@ print_symbol (struct gdbarch *gdbarch, struct symbol *symbol,
       else
 	{
 	  fprintf_filtered (outfile, "%s %s = ",
-			 (TYPE_CODE (SYMBOL_TYPE (symbol)) == TYPE_CODE_ENUM
+			 (SYMBOL_TYPE (symbol)->code () == TYPE_CODE_ENUM
 			  ? "enum"
-		     : (TYPE_CODE (SYMBOL_TYPE (symbol)) == TYPE_CODE_STRUCT
+		     : (SYMBOL_TYPE (symbol)->code () == TYPE_CODE_STRUCT
 			? "struct" : "union")),
 			    symbol->linkage_name ());
 	  LA_PRINT_TYPE (SYMBOL_TYPE (symbol), "", outfile, 1, depth,
@@ -583,7 +590,7 @@ print_symbol (struct gdbarch *gdbarch, struct symbol *symbol,
 	  /* Print details of types, except for enums where it's clutter.  */
 	  LA_PRINT_TYPE (SYMBOL_TYPE (symbol), symbol->print_name (),
 			 outfile,
-			 TYPE_CODE (SYMBOL_TYPE (symbol)) != TYPE_CODE_ENUM,
+			 SYMBOL_TYPE (symbol)->code () != TYPE_CODE_ENUM,
 			 depth,
 			 &type_print_raw_options);
 	  fprintf_filtered (outfile, "; ");
@@ -827,7 +834,7 @@ maintenance_info_symtabs (const char *regexp, int from_tty)
 			printf_filtered ("    blockvector"
 					 " ((struct blockvector *) %s)\n",
 					 host_address_to_string
-				         (COMPUNIT_BLOCKVECTOR (cust)));
+					 (COMPUNIT_BLOCKVECTOR (cust)));
 			printf_filtered ("    user"
 					 " ((struct compunit_symtab *) %s)\n",
 					 cust->user != nullptr
@@ -1085,10 +1092,6 @@ void _initialize_symmisc ();
 void
 _initialize_symmisc ()
 {
-  std_in = stdin;
-  std_out = stdout;
-  std_err = stderr;
-
   add_cmd ("symbols", class_maintenance, maintenance_print_symbols, _("\
 Print dump of current symbol definitions.\n\
 Usage: mt print symbols [-pc ADDRESS] [--] [OUTFILE]\n\

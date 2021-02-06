@@ -1,5 +1,5 @@
 /* Thread management interface, for the remote server for GDB.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -765,14 +765,6 @@ thread_db_init (void)
     }
 
   return 0;
-}
-
-static void
-switch_to_process (struct process_info *proc)
-{
-  int pid = pid_of (proc);
-
-  current_thread = find_any_thread_of_pid (pid);
 }
 
 /* Disconnect from libthread_db and free resources.  */

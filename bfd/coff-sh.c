@@ -1,5 +1,5 @@
 /* BFD back-end for Renesas Super-H COFF binaries.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
    Written by Steve Chamberlain, <sac@cygnus.com>.
    Relaxing code written by Ian Lance Taylor, <ian@cygnus.com>.
@@ -1056,10 +1056,9 @@ sh_relax_section (bfd *abfd,
   return TRUE;
 
  error_return:
-  if (internal_relocs != NULL
-      && internal_relocs != coff_section_data (abfd, sec)->relocs)
+  if (internal_relocs != coff_section_data (abfd, sec)->relocs)
     free (internal_relocs);
-  if (contents != NULL && contents != coff_section_data (abfd, sec)->contents)
+  if (contents != coff_section_data (abfd, sec)->contents)
     free (contents);
   return FALSE;
 }
@@ -2723,8 +2722,7 @@ sh_align_loads (bfd *abfd,
   return TRUE;
 
  error_return:
-  if (labels != NULL)
-    free (labels);
+  free (labels);
   return FALSE;
 }
 
@@ -2995,12 +2993,9 @@ sh_coff_get_relocated_section_contents (bfd *output_bfd,
   return data;
 
  error_return:
-  if (internal_relocs != NULL)
-    free (internal_relocs);
-  if (internal_syms != NULL)
-    free (internal_syms);
-  if (sections != NULL)
-    free (sections);
+  free (internal_relocs);
+  free (internal_syms);
+  free (sections);
   return NULL;
 }
 
@@ -3139,6 +3134,7 @@ const bfd_target sh_coff_small_vec =
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16, /* data */
@@ -3196,6 +3192,7 @@ const bfd_target sh_coff_small_le_vec =
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
   0,				/* match priority.  */
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
   bfd_getl32, bfd_getl_signed_32, bfd_putl32,
   bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* data */

@@ -1,6 +1,6 @@
 /* GDB parameters implemented in Python
 
-   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+   Copyright (C) 2008-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,13 +29,10 @@
 #include "arch-utils.h"
 
 /* Parameter constants and their values.  */
-struct parm_constant
-{
+static struct {
   const char *name;
   int value;
-};
-
-struct parm_constant parm_constants[] =
+} parm_constants[] =
 {
   { "PARAM_BOOLEAN", var_boolean }, /* ARI: var_boolean */
   { "PARAM_AUTO_BOOLEAN", var_auto_boolean },
@@ -90,8 +87,6 @@ struct parmpy_object
      NULL-terminated.  */
   const char **enumeration;
 };
-
-typedef struct parmpy_object parmpy_object;
 
 extern PyTypeObject parmpy_object_type
     CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("parmpy_object");
@@ -569,12 +564,12 @@ add_setshow_generic (int parmclass, enum command_class cmdclass,
   /* Lookup created parameter, and register Python object against the
      parameter context.  Perform this task against both lists.  */
   tmp_name = cmd_name;
-  param = lookup_cmd (&tmp_name, *show_list, "", 0, 1);
+  param = lookup_cmd (&tmp_name, *show_list, "", NULL, 0, 1);
   if (param)
     set_cmd_context (param, self);
 
   tmp_name = cmd_name;
-  param = lookup_cmd (&tmp_name, *set_list, "", 0, 1);
+  param = lookup_cmd (&tmp_name, *set_list, "", NULL, 0, 1);
   if (param)
     set_cmd_context (param, self);
 }

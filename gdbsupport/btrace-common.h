@@ -1,6 +1,6 @@
 /* Branch trace support for GDB, the GNU debugger.
 
-   Copyright (C) 2013-2020 Free Software Foundation, Inc.
+   Copyright (C) 2013-2021 Free Software Foundation, Inc.
 
    Contributed by Intel Corp. <markus.t.metzger@intel.com>.
 
@@ -74,7 +74,10 @@ enum btrace_cpu_vendor
   CV_UNKNOWN,
 
   /* Intel.  */
-  CV_INTEL
+  CV_INTEL,
+
+  /* AMD.  */
+  CV_AMD
 };
 
 /* A cpu identifier.  */

@@ -7,22 +7,12 @@
 #ifdef HAVE_UTIME_H
 #include <utime.h>
 #endif
-
-#ifdef HAVE_TIME_H
 #include <time.h>
-#endif
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-
-#ifdef HAVE_STRING_H
+#include <stdlib.h>
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 
 #include "targ-vals.h"
 
@@ -1915,7 +1905,7 @@ OP_10007E0 (void)
 	    store_mem (PARM1 + 4, 4, tms.tms_stime);
 	    store_mem (PARM1 + 8, 4, tms.tms_cutime);
 	    store_mem (PARM1 + 12, 4, tms.tms_cstime);
-	    reterr = errno;
+	    RETERR = errno;
 	    break;
 	  }
 #endif

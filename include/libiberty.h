@@ -1,6 +1,6 @@
 /* Function declarations for libiberty.
 
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997-2021 Free Software Foundation, Inc.
    
    Note - certain prototypes declared in this header file are for
    functions whoes implementation copyright does not belong to the
@@ -640,6 +640,13 @@ extern int pexecute (const char *, char * const *, const char *,
 /* Wait for pexecute to finish.  */
 
 extern int pwait (int, int *, int);
+
+/* Like bsearch, but takes and passes on an argument like qsort_r.  */
+
+extern void *bsearch_r (const void *, const void *,
+			size_t, size_t,
+			int (*)(const void *, const void *, void *),
+			void *);
 
 #if defined(HAVE_DECL_ASPRINTF) && !HAVE_DECL_ASPRINTF
 /* Like sprintf but provides a pointer to malloc'd storage, which must

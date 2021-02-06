@@ -1,6 +1,6 @@
 /* Branch trace support for GDB, the GNU debugger.
 
-   Copyright (C) 2013-2020 Free Software Foundation, Inc.
+   Copyright (C) 2013-2021 Free Software Foundation, Inc.
 
    Contributed by Intel Corp. <markus.t.metzger@intel.com>
 
@@ -62,7 +62,7 @@ static void btrace_add_pc (struct thread_info *tp);
   do									\
     {									\
       if (record_debug != 0)						\
-        fprintf_unfiltered (gdb_stdlog,					\
+	fprintf_unfiltered (gdb_stdlog,					\
 			    "[btrace] " msg "\n", ##args);		\
     }									\
   while (0)
@@ -265,7 +265,7 @@ ftrace_new_function (struct btrace_thread_info *btinfo,
 static void
 ftrace_update_caller (struct btrace_function *bfun,
 		      struct btrace_function *caller,
-		      enum btrace_function_flag flags)
+		      btrace_function_flags flags)
 {
   if (bfun->up != 0)
     ftrace_debug (bfun, "updating caller");
@@ -283,7 +283,7 @@ static void
 ftrace_fixup_caller (struct btrace_thread_info *btinfo,
 		     struct btrace_function *bfun,
 		     struct btrace_function *caller,
-		     enum btrace_function_flag flags)
+		     btrace_function_flags flags)
 {
   unsigned int prev, next;
 
@@ -1910,11 +1910,12 @@ btrace_fetch (struct thread_info *tp, const struct btrace_cpu *cpu)
   if (btinfo->replay != NULL)
     return;
 
-  /* With CLI usage, TP->PTID always equals INFERIOR_PTID here.  Now that we
-     can store a gdb.Record object in Python referring to a different thread
-     than the current one, temporarily set INFERIOR_PTID.  */
-  scoped_restore save_inferior_ptid = make_scoped_restore (&inferior_ptid);
-  inferior_ptid = tp->ptid;
+  /* With CLI usage, TP is always the current thread when we get here.
+     However, since we can also store a gdb.Record object in Python
+     referring to a different thread than the current one, we need to
+     temporarily set the current thread.  */
+  scoped_restore_current_thread restore_thread;
+  switch_to_thread (tp);
 
   /* We should not be called on running or exited threads.  */
   gdb_assert (can_access_registers_thread (tp));

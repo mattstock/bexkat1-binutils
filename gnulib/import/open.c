@@ -1,5 +1,5 @@
 /* Open a descriptor to a file.
-   Copyright (C) 2007-2020 Free Software Foundation, Inc.
+   Copyright (C) 2007-2021 Free Software Foundation, Inc.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -30,7 +30,11 @@
 static int
 orig_open (const char *filename, int flags, mode_t mode)
 {
+#if defined _WIN32 && !defined __CYGWIN__
+  return _open (filename, flags, mode);
+#else
   return open (filename, flags, mode);
+#endif
 }
 
 /* Specification.  */
@@ -110,7 +114,9 @@ open (const char *filename, int flags, ...)
          directories,
        - if O_WRONLY or O_RDWR is specified, open() must fail because the
          file does not contain a '.' directory.  */
-  if (flags & (O_CREAT | O_WRONLY | O_RDWR))
+  if ((flags & O_CREAT)
+      || (flags & O_ACCMODE) == O_RDWR
+      || (flags & O_ACCMODE) == O_WRONLY)
     {
       size_t len = strlen (filename);
       if (len > 0 && filename[len - 1] == '/')
@@ -122,7 +128,7 @@ open (const char *filename, int flags, ...)
 #endif
 
   fd = orig_open (filename,
-                  flags & ~(have_cloexec <= 0 ? O_CLOEXEC : 0), mode);
+                  flags & ~(have_cloexec < 0 ? O_CLOEXEC : 0), mode);
 
   if (flags & O_CLOEXEC)
     {

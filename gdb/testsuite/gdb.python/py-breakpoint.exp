@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2020 Free Software Foundation, Inc.
+# Copyright (C) 2010-2021 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -252,6 +252,29 @@ proc_with_prefix test_bkpt_invisible { } {
 	"Check maint info breakpoints shows invisible breakpoints"
 }
 
+proc_with_prefix test_hardware_breakpoints { } {
+    global srcfile testfile hex decimal
+
+    # Start with a fresh gdb.
+    clean_restart ${testfile}
+
+    if ![runto_main] then {
+	fail "cannot run to main."
+	return 0
+    }
+
+    delete_breakpoints
+
+    gdb_test "python hbp1 = gdb.Breakpoint(\"add\", type=gdb.BP_HARDWARE_BREAKPOINT)" \
+	".*Hardware assisted breakpoint ($decimal)+ at .*$srcfile, line ($decimal)+\." \
+	"Set hardware breakpoint"
+    gdb_test "python print (gdb.breakpoints()\[0\].type == gdb.BP_HARDWARE_BREAKPOINT)" \
+	"True" "Check hardware breakpoint type"
+    gdb_test "continue" \
+	".*Breakpoint ($decimal)+, add.*" \
+	"Test hardware breakpoint stop"
+}
+
 proc_with_prefix test_watchpoints { } {
     global srcfile testfile hex decimal
 
@@ -320,7 +343,7 @@ proc_with_prefix test_bkpt_eval_funcs { } {
     }
     delete_breakpoints
 
-    gdb_py_test_multiple "Sub-class a breakpoint" \
+    gdb_test_multiline "Sub-class a breakpoint" \
 	"python" "" \
 	"class bp_eval (gdb.Breakpoint):" "" \
 	"   inf_i = 0" "" \
@@ -333,7 +356,7 @@ proc_with_prefix test_bkpt_eval_funcs { } {
 	"      return False" "" \
 	"end" ""
 
-    gdb_py_test_multiple "Sub-class a second breakpoint" \
+    gdb_test_multiline "Sub-class a second breakpoint" \
 	"python" "" \
 	"class bp_also_eval (gdb.Breakpoint):" "" \
 	"   count = 0" "" \
@@ -344,7 +367,7 @@ proc_with_prefix test_bkpt_eval_funcs { } {
 	"      return False" "" \
 	"end" ""
 
-    gdb_py_test_multiple "Sub-class a third breakpoint" \
+    gdb_test_multiline "Sub-class a third breakpoint" \
 	"python" "" \
 	"class basic (gdb.Breakpoint):" "" \
 	"   count = 0" "" \
@@ -381,7 +404,7 @@ proc_with_prefix test_bkpt_eval_funcs { } {
 	"Set breakpoint" 0
     gdb_py_test_silent_cmd "python eval_bp2.condition = \"1==1\"" \
 	"Set a condition" 0
-    gdb_py_test_multiple "Construct an eval function" \
+    gdb_test_multiline "Construct an eval function" \
 	"python" "" \
 	"def stop_func ():" "" \
 	"   return True" "" \
@@ -402,7 +425,7 @@ proc_with_prefix test_bkpt_eval_funcs { } {
     gdb_test "python print (check_eval.count)" "1" \
 	"Test that evaluate function is run when location also has normal bp"
 
-    gdb_py_test_multiple "Sub-class a watchpoint" \
+    gdb_test_multiline "Sub-class a watchpoint" \
 	"python" "" \
 	"class wp_eval (gdb.Breakpoint):" "" \
 	"   def stop (self):" "" \
@@ -434,7 +457,7 @@ proc_with_prefix test_bkpt_temporary { } {
     }
     delete_breakpoints
 
-    gdb_py_test_multiple "Sub-class and check temporary breakpoint" \
+    gdb_test_multiline "Sub-class and check temporary breakpoint" \
 	"python" "" \
 	"class temp_bp (gdb.Breakpoint):" "" \
 	"   count = 0" "" \
@@ -521,7 +544,7 @@ proc_with_prefix test_bkpt_events {} {
 
     clean_restart ${testfile}
 
-    gdb_py_test_multiple "Create event handler" \
+    gdb_test_multiline "Create event handler" \
 	"python" "" \
 	"def note_event(arg):" "" \
 	"  global last_bp_event" "" \
@@ -718,6 +741,7 @@ test_bkpt_basic
 test_bkpt_deletion
 test_bkpt_cond_and_cmds
 test_bkpt_invisible
+test_hardware_breakpoints
 test_watchpoints
 test_bkpt_internal
 test_bkpt_eval_funcs

@@ -1,6 +1,6 @@
 /* Memory-access and commands for "inferior" process, for GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -64,7 +64,7 @@ static void until_next_command (int);
 static void step_1 (int, int, const char *);
 
 #define ERROR_NO_INFERIOR \
-   if (!target_has_execution) error (_("The program is not being run."));
+   if (!target_has_execution ()) error (_("The program is not being run."));
 
 /* Scratch area where string containing arguments to give to the
    program will be stored by 'set args'.  As soon as anything is
@@ -100,27 +100,6 @@ enum stop_stack_kind stop_stack_dummy;
 int stopped_by_random_signal;
 
 
-/* Accessor routines.  */
-
-/* Set the io terminal for the current inferior.  Ownership of
-   TERMINAL_NAME is not transferred.  */
-
-void 
-set_inferior_io_terminal (const char *terminal_name)
-{
-  xfree (current_inferior ()->terminal);
-
-  if (terminal_name != NULL && *terminal_name != '\0')
-    current_inferior ()->terminal = xstrdup (terminal_name);
-  else
-    current_inferior ()->terminal = NULL;
-}
-
-const char *
-get_inferior_io_terminal (void)
-{
-  return current_inferior ()->terminal;
-}
 
 static void
 set_inferior_tty_command (const char *args, int from_tty,
@@ -128,7 +107,7 @@ set_inferior_tty_command (const char *args, int from_tty,
 {
   /* CLI has assigned the user-provided value to inferior_io_terminal_scratch.
      Now route it to current inferior.  */
-  set_inferior_io_terminal (inferior_io_terminal_scratch);
+  current_inferior ()->set_tty (inferior_io_terminal_scratch);
 }
 
 static void
@@ -137,13 +116,13 @@ show_inferior_tty_command (struct ui_file *file, int from_tty,
 {
   /* Note that we ignore the passed-in value in favor of computing it
      directly.  */
-  const char *inferior_io_terminal = get_inferior_io_terminal ();
+  const char *inferior_tty = current_inferior ()->tty ();
 
-  if (inferior_io_terminal == NULL)
-    inferior_io_terminal = "";
+  if (inferior_tty == nullptr)
+    inferior_tty = "";
   fprintf_filtered (gdb_stdout,
 		    _("Terminal for future runs of program being debugged "
-		      "is \"%s\".\n"), inferior_io_terminal);
+		      "is \"%s\".\n"), inferior_tty);
 }
 
 const char *
@@ -151,12 +130,10 @@ get_inferior_args (void)
 {
   if (current_inferior ()->argc != 0)
     {
-      char *n;
-
-      n = construct_inferior_arguments (current_inferior ()->argc,
-					current_inferior ()->argv);
-      set_inferior_args (n);
-      xfree (n);
+      gdb::array_view<char * const> args (current_inferior ()->argv,
+					  current_inferior ()->argc);
+      std::string n = construct_inferior_arguments (args);
+      set_inferior_args (n.c_str ());
     }
 
   if (current_inferior ()->args == NULL)
@@ -259,130 +236,6 @@ server's cwd if remote debugging.\n"));
 			"when starting the inferior is \"%s\".\n"), cwd);
 }
 
-
-/* Compute command-line string given argument vector.  This does the
-   same shell processing as fork_inferior.  */
-
-char *
-construct_inferior_arguments (int argc, char **argv)
-{
-  char *result;
-
-  /* ARGC should always be at least 1, but we double check this
-     here.  This is also needed to silence -Werror-stringop
-     warnings.  */
-  gdb_assert (argc > 0);
-
-  if (startup_with_shell)
-    {
-#ifdef __MINGW32__
-      /* This holds all the characters considered special to the
-	 Windows shells.  */
-      static const char special[] = "\"!&*|[]{}<>?`~^=;, \t\n";
-      static const char quote = '"';
-#else
-      /* This holds all the characters considered special to the
-	 typical Unix shells.  We include `^' because the SunOS
-	 /bin/sh treats it as a synonym for `|'.  */
-      static const char special[] = "\"!#$&*()\\|[]{}<>?'`~^; \t\n";
-      static const char quote = '\'';
-#endif
-      int i;
-      int length = 0;
-      char *out, *cp;
-
-      /* We over-compute the size.  It shouldn't matter.  */
-      for (i = 0; i < argc; ++i)
-	length += 3 * strlen (argv[i]) + 1 + 2 * (argv[i][0] == '\0');
-
-      result = (char *) xmalloc (length);
-      out = result;
-
-      for (i = 0; i < argc; ++i)
-	{
-	  if (i > 0)
-	    *out++ = ' ';
-
-	  /* Need to handle empty arguments specially.  */
-	  if (argv[i][0] == '\0')
-	    {
-	      *out++ = quote;
-	      *out++ = quote;
-	    }
-	  else
-	    {
-#ifdef __MINGW32__
-	      int quoted = 0;
-
-	      if (strpbrk (argv[i], special))
-		{
-		  quoted = 1;
-		  *out++ = quote;
-		}
-#endif
-	      for (cp = argv[i]; *cp; ++cp)
-		{
-		  if (*cp == '\n')
-		    {
-		      /* A newline cannot be quoted with a backslash (it
-			 just disappears), only by putting it inside
-			 quotes.  */
-		      *out++ = quote;
-		      *out++ = '\n';
-		      *out++ = quote;
-		    }
-		  else
-		    {
-#ifdef __MINGW32__
-		      if (*cp == quote)
-#else
-		      if (strchr (special, *cp) != NULL)
-#endif
-			*out++ = '\\';
-		      *out++ = *cp;
-		    }
-		}
-#ifdef __MINGW32__
-	      if (quoted)
-		*out++ = quote;
-#endif
-	    }
-	}
-      *out = '\0';
-    }
-  else
-    {
-      /* In this case we can't handle arguments that contain spaces,
-	 tabs, or newlines -- see breakup_args().  */
-      int i;
-      int length = 0;
-
-      for (i = 0; i < argc; ++i)
-	{
-	  char *cp = strchr (argv[i], ' ');
-	  if (cp == NULL)
-	    cp = strchr (argv[i], '\t');
-	  if (cp == NULL)
-	    cp = strchr (argv[i], '\n');
-	  if (cp != NULL)
-	    error (_("can't handle command-line "
-		     "argument containing whitespace"));
-	  length += strlen (argv[i]) + 1;
-	}
-
-      result = (char *) xmalloc (length);
-      result[0] = '\0';
-      for (i = 0; i < argc; ++i)
-	{
-	  if (i > 0)
-	    strcat (result, " ");
-	  strcat (result, argv[i]);
-	}
-    }
-
-  return result;
-}
-
 
 /* This function strips the '&' character (indicating background
    execution) that is added as *the last* of the arguments ARGS of a
@@ -426,7 +279,7 @@ strip_bg_char (const char *args, int *bg_char_p)
    should be stopped.  */
 
 void
-post_create_inferior (struct target_ops *target, int from_tty)
+post_create_inferior (int from_tty)
 {
 
   /* Be sure we own the terminal in case write operations are performed.  */ 
@@ -455,7 +308,7 @@ post_create_inferior (struct target_ops *target, int from_tty)
 	throw;
     }
 
-  if (exec_bfd)
+  if (current_program_space->exec_bfd ())
     {
       const unsigned solib_add_generation
 	= current_program_space->solib_add_generation;
@@ -494,7 +347,7 @@ post_create_inferior (struct target_ops *target, int from_tty)
      if the now pushed target supports hardware watchpoints.  */
   breakpoint_re_set ();
 
-  gdb::observers::inferior_created.notify (target, from_tty);
+  gdb::observers::inferior_created.notify (current_inferior ());
 }
 
 /* Kill the inferior if already running.  This function is designed
@@ -505,7 +358,7 @@ post_create_inferior (struct target_ops *target, int from_tty)
 static void
 kill_if_already_running (int from_tty)
 {
-  if (inferior_ptid != null_ptid && target_has_execution)
+  if (inferior_ptid != null_ptid && target_has_execution ())
     {
       /* Bail out before killing the program if we will not be able to
 	 restart it.  */
@@ -667,7 +520,7 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
 
   /* Pass zero for FROM_TTY, because at this point the "run" command
      has done its thing; now we are setting up the running program.  */
-  post_create_inferior (current_top_target (), 0);
+  post_create_inferior (0);
 
   /* Queue a pending event so that the program stops immediately.  */
   if (run_how == RUN_STOP_AT_FIRST_INSN)
@@ -1054,7 +907,7 @@ step_1 (int skip_subroutines, int single_inst, const char *count_string)
       thr->thread_fsm->clean_up (thr);
       proceeded = normal_stop ();
       if (!proceeded)
-	inferior_event_handler (INF_EXEC_COMPLETE, NULL);
+	inferior_event_handler (INF_EXEC_COMPLETE);
       all_uis_check_sync_execution_done ();
     }
 }
@@ -1589,7 +1442,7 @@ get_return_value (struct value *function, struct type *value_type)
   struct value *value;
 
   value_type = check_typedef (value_type);
-  gdb_assert (TYPE_CODE (value_type) != TYPE_CODE_VOID);
+  gdb_assert (value_type->code () != TYPE_CODE_VOID);
 
   /* FIXME: 2003-09-27: When returning from a nested inferior function
      call, it's possible (with no help from the architecture vector)
@@ -1680,7 +1533,7 @@ void
 print_return_value (struct ui_out *uiout, struct return_value_info *rv)
 {
   if (rv->type == NULL
-      || TYPE_CODE (check_typedef (rv->type)) == TYPE_CODE_VOID)
+      || check_typedef (rv->type)->code () == TYPE_CODE_VOID)
     return;
 
   try
@@ -1744,7 +1597,7 @@ finish_command_fsm::should_stop (struct thread_info *tp)
 	internal_error (__FILE__, __LINE__,
 			_("finish_command: function has no target type"));
 
-      if (TYPE_CODE (check_typedef (rv->type)) != TYPE_CODE_VOID)
+      if (check_typedef (rv->type)->code () != TYPE_CODE_VOID)
 	{
 	  struct value *func;
 
@@ -2008,7 +1861,7 @@ info_program_command (const char *args, int from_tty)
   ptid_t ptid;
   process_stratum_target *proc_target;
 
-  if (!target_has_execution)
+  if (!target_has_execution ())
     {
       printf_filtered (_("The program being debugged is not being run.\n"));
       return;
@@ -2043,7 +1896,7 @@ info_program_command (const char *args, int from_tty)
   else if (stat != 0)
     {
       /* There may be several breakpoints in the same place, so this
-         isn't as strange as it seems.  */
+	 isn't as strange as it seems.  */
       while (stat != 0)
 	{
 	  if (stat < 0)
@@ -2119,14 +1972,14 @@ set_environment_command (const char *arg, int from_tty)
   if (p != 0 && val != 0)
     {
       /* We have both a space and an equals.  If the space is before the
-         equals, walk forward over the spaces til we see a nonspace 
-         (possibly the equals).  */
+	 equals, walk forward over the spaces til we see a nonspace 
+	 (possibly the equals).  */
       if (p > val)
 	while (*val == ' ')
 	  val++;
 
       /* Now if the = is after the char following the spaces,
-         take the char following the spaces.  */
+	 take the char following the spaces.  */
       if (p > val)
 	p = val - 1;
     }
@@ -2171,7 +2024,7 @@ unset_environment_command (const char *var, int from_tty)
   if (var == 0)
     {
       /* If there is no argument, delete all environment variables.
-         Ask for confirmation if reading from the terminal.  */
+	 Ask for confirmation if reading from the terminal.  */
       if (!from_tty || query (_("Delete all environment variables? ")))
 	current_inferior ()->environment.clear ();
     }
@@ -2238,7 +2091,7 @@ default_print_one_register_info (struct ui_file *file,
     {
       value_column_1 = 15,
       /* Give enough room for "0x", 16 hex digits and two spaces in
-         preceding column.  */
+	 preceding column.  */
       value_column_2 = value_column_1 + 2 + 16 + 2,
     };
 
@@ -2250,8 +2103,8 @@ default_print_one_register_info (struct ui_file *file,
 
   /* If virtual format is floating, print it that way, and in raw
      hex.  */
-  if (TYPE_CODE (regtype) == TYPE_CODE_FLT
-      || TYPE_CODE (regtype) == TYPE_CODE_DECFLOAT)
+  if (regtype->code () == TYPE_CODE_FLT
+      || regtype->code () == TYPE_CODE_DECFLOAT)
     {
       struct value_print_options opts;
       const gdb_byte *valaddr = value_contents_for_printing (val);
@@ -2281,7 +2134,7 @@ default_print_one_register_info (struct ui_file *file,
       common_val_print (val, &format_stream, 0, &opts, current_language);
       /* If not a vector register, print it also according to its
 	 natural format.  */
-      if (print_raw_format && TYPE_VECTOR (regtype) == 0)
+      if (print_raw_format && regtype->is_vector () == 0)
 	{
 	  pad_to_column (format_stream, value_column_2);
 	  get_user_print_options (&opts);
@@ -2317,7 +2170,7 @@ default_print_registers_info (struct gdbarch *gdbarch,
   for (i = 0; i < numregs; i++)
     {
       /* Decide between printing all regs, non-float / vector regs, or
-         specific reg.  */
+	 specific reg.  */
       if (regnum == -1)
 	{
 	  if (print_all)
@@ -2338,7 +2191,7 @@ default_print_registers_info (struct gdbarch *gdbarch,
 	}
 
       /* If the register name is empty, it is undefined for this
-         processor, so don't display anything.  */
+	 processor, so don't display anything.  */
       if (gdbarch_register_name (gdbarch, i) == NULL
 	  || *(gdbarch_register_name (gdbarch, i)) == '\0')
 	continue;
@@ -2355,7 +2208,7 @@ registers_info (const char *addr_exp, int fpregs)
   struct frame_info *frame;
   struct gdbarch *gdbarch;
 
-  if (!target_has_registers)
+  if (!target_has_registers ())
     error (_("The program has no registers now."));
   frame = get_selected_frame (NULL);
   gdbarch = get_frame_arch (frame);
@@ -2376,7 +2229,7 @@ registers_info (const char *addr_exp, int fpregs)
       addr_exp = skip_spaces (addr_exp);
 
       /* Discard any leading ``$''.  Check that there is something
-         resembling a register following it.  */
+	 resembling a register following it.  */
       if (addr_exp[0] == '$')
 	addr_exp++;
       if (isspace ((*addr_exp)) || (*addr_exp) == '\0')
@@ -2496,7 +2349,7 @@ print_vector_info (struct ui_file *file,
 static void
 info_vector_command (const char *args, int from_tty)
 {
-  if (!target_has_registers)
+  if (!target_has_registers ())
     error (_("The program has no registers now."));
 
   print_vector_info (gdb_stdout, get_selected_frame (NULL), args);
@@ -2579,7 +2432,7 @@ setup_inferior (int from_tty)
   /* Take any necessary post-attaching actions for this platform.  */
   target_post_attach (inferior_ptid.pid ());
 
-  post_create_inferior (current_top_target (), from_tty);
+  post_create_inferior (from_tty);
 }
 
 /* What to do after the first program stops after attaching.  */
@@ -2716,7 +2569,7 @@ attach_command (const char *args, int from_tty)
     /* Don't complain if all processes share the same symbol
        space.  */
     ;
-  else if (target_has_execution)
+  else if (target_has_execution ())
     {
       if (query (_("A program is being debugged already.  Kill it? ")))
 	target_kill ();
@@ -2766,7 +2619,6 @@ attach_command (const char *args, int from_tty)
   /* Set up execution context to know that we should return from
      wait_for_inferior as soon as the target reports a stop.  */
   init_wait_for_inferior ();
-  clear_proceed_status (0);
 
   inferior->needs_setup = 1;
 
@@ -2898,6 +2750,16 @@ detach_command (const char *args, int from_tty)
 
   disconnect_tracing ();
 
+  /* Hold a strong reference to the target while (maybe)
+     detaching the parent.  Otherwise detaching could close the
+     target.  */
+  auto target_ref
+    = target_ops_ref::new_reference (current_inferior ()->process_target ());
+
+  /* Save this before detaching, since detaching may unpush the
+     process_stratum target.  */
+  bool was_non_stop_p = target_is_non_stop_p ();
+
   target_detach (current_inferior (), from_tty);
 
   /* The current inferior process was just detached successfully.  Get
@@ -2914,6 +2776,9 @@ detach_command (const char *args, int from_tty)
 
   if (deprecated_detach_hook)
     deprecated_detach_hook ();
+
+  if (!was_non_stop_p)
+    restart_after_all_stop_detach (as_process_stratum_target (target_ref.get ()));
 }
 
 /* Disconnect from the current target without resuming it (leaving it
@@ -3034,7 +2899,7 @@ info_float_command (const char *args, int from_tty)
 {
   struct frame_info *frame;
 
-  if (!target_has_registers)
+  if (!target_has_registers ())
     error (_("The program has no registers now."));
 
   frame = get_selected_frame (NULL);
@@ -3178,9 +3043,9 @@ is restored."),
 				     show_inferior_tty_command,
 				     &setlist, &showlist);
   cmd_name = "inferior-tty";
-  c = lookup_cmd (&cmd_name, setlist, "", -1, 1);
+  c = lookup_cmd (&cmd_name, setlist, "", NULL, -1, 1);
   gdb_assert (c != NULL);
-  add_alias_cmd ("tty", c, class_alias, 0, &cmdlist);
+  add_alias_cmd ("tty", c, class_run, 0, &cmdlist);
 
   cmd_name = "args";
   add_setshow_string_noescape_cmd (cmd_name, class_run,
@@ -3191,7 +3056,7 @@ Follow this command with any number of args, to be passed to the program."),
 				   set_args_command,
 				   show_args_command,
 				   &setlist, &showlist);
-  c = lookup_cmd (&cmd_name, setlist, "", -1, 1);
+  c = lookup_cmd (&cmd_name, setlist, "", NULL, -1, 1);
   gdb_assert (c != NULL);
   set_cmd_completer (c, filename_completer);
 
@@ -3210,7 +3075,7 @@ working directory."),
 				   set_cwd_command,
 				   show_cwd_command,
 				   &setlist, &showlist);
-  c = lookup_cmd (&cmd_name, setlist, "", -1, 1);
+  c = lookup_cmd (&cmd_name, setlist, "", NULL, -1, 1);
   gdb_assert (c != NULL);
   set_cmd_completer (c, filename_completer);
 
@@ -3318,14 +3183,14 @@ Step one instruction exactly.\n\
 Usage: stepi [N]\n\
 Argument N means step N times (or till program stops for another \
 reason)."));
-  add_com_alias ("si", "stepi", class_alias, 0);
+  add_com_alias ("si", "stepi", class_run, 0);
 
   add_com ("nexti", class_run, nexti_command, _("\
 Step one instruction, but proceed through subroutine calls.\n\
 Usage: nexti [N]\n\
 Argument N means step N times (or till program stops for another \
 reason)."));
-  add_com_alias ("ni", "nexti", class_alias, 0);
+  add_com_alias ("ni", "nexti", class_run, 0);
 
   add_com ("finish", class_run, finish_command, _("\
 Execute until selected stack frame returns.\n\

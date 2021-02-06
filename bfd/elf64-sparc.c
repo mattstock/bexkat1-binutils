@@ -1,5 +1,5 @@
 /* SPARC-specific support for 64-bit ELF
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -161,14 +161,11 @@ elf64_sparc_slurp_one_reloc_table (bfd *abfd, asection *asect,
 
   canon_reloc_count (asect) += relent - relents;
 
-  if (allocated != NULL)
-    free (allocated);
-
+  free (allocated);
   return TRUE;
 
  error_return:
-  if (allocated != NULL)
-    free (allocated);
+  free (allocated);
   return FALSE;
 }
 

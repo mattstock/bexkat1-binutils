@@ -8,18 +8,8 @@
 #include "bfd.h"
 #include "sim-assert.h"
 
-
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 
 #include "bfd.h"
 
@@ -112,8 +102,6 @@ sim_open (SIM_OPEN_KIND kind,
   /* FIXME: should be better way of setting up interrupts.  For
      moment, only support watchpoints causing a breakpoint (gdb
      halt). */
-  STATE_WATCHPOINTS (sd)->pc = &(PC);
-  STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PC);
   STATE_WATCHPOINTS (sd)->interrupt_handler = NULL;
   STATE_WATCHPOINTS (sd)->interrupt_names = NULL;
 

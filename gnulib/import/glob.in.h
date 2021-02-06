@@ -1,6 +1,6 @@
 /* glob.h -- Find a path matching a pattern.
 
-   Copyright (C) 2005-2007, 2009-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2007, 2009-2021 Free Software Foundation, Inc.
 
    Written by Derek Price <derek@ximbiot.com> & Paul Eggert <eggert@CS.UCLA.EDU>
 
@@ -38,16 +38,19 @@
 
 /* The definition of _GL_WARN_ON_USE is copied here.  */
 
-/* GCC 2.95 and later have "__restrict"; C99 compilers have
+/* For plain 'restrict', use glibc's __restrict if defined.
+   Otherwise, GCC 2.95 and later have "__restrict"; C99 compilers have
    "restrict", and "configure" may have defined "restrict".
    Other compilers use __restrict, __restrict__, and _Restrict, and
    'configure' might #define 'restrict' to those words, so pick a
    different name.  */
 #ifndef _Restrict_
-# if 199901L <= __STDC_VERSION__
-#  define _Restrict_ restrict
-# elif 2 < __GNUC__ || (2 == __GNUC__ && 95 <= __GNUC_MINOR__)
+# if defined __restrict \
+     || 2 < __GNUC__ + (95 <= __GNUC_MINOR__) \
+     || __clang_major__ >= 3
 #  define _Restrict_ __restrict
+# elif 199901L <= __STDC_VERSION__ || defined restrict
+#  define _Restrict_ restrict
 # else
 #  define _Restrict_
 # endif

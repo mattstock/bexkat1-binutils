@@ -1,4 +1,4 @@
-/* Copyright (C) 2008-2020 Free Software Foundation, Inc.
+/* Copyright (C) 2008-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -104,6 +104,10 @@ enum
   CYGWIN_SIGUSR1 = 30,
   CYGWIN_SIGUSR2 = 31,
 };
+
+/* These constants are defined by Cygwin's core_dump.h */
+static constexpr unsigned int NOTE_INFO_MODULE = 3;
+static constexpr unsigned int NOTE_INFO_MODULE64 = 4;
 
 struct cmd_list_element *info_w32_cmdlist;
 
@@ -230,7 +234,7 @@ windows_get_tlb_type (struct gdbarch *gdbarch)
   /* list entry */
 
   list_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_STRUCT);
-  TYPE_NAME (list_type) = xstrdup ("list");
+  list_type->set_name (xstrdup ("list"));
 
   module_list_ptr_type = void_ptr_type;
 
@@ -242,7 +246,7 @@ windows_get_tlb_type (struct gdbarch *gdbarch)
   /* Structured Exception Handler */
 
   seh_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_STRUCT);
-  TYPE_NAME (seh_type) = xstrdup ("seh");
+  seh_type->set_name (xstrdup ("seh"));
 
   seh_ptr_type = arch_type (gdbarch, TYPE_CODE_PTR,
 			    TYPE_LENGTH (void_ptr_type) * TARGET_CHAR_BIT,
@@ -255,7 +259,7 @@ windows_get_tlb_type (struct gdbarch *gdbarch)
 
   /* struct _PEB_LDR_DATA */
   peb_ldr_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_STRUCT);
-  TYPE_NAME (peb_ldr_type) = xstrdup ("peb_ldr_data");
+  peb_ldr_type->set_name (xstrdup ("peb_ldr_data"));
 
   append_composite_type_field (peb_ldr_type, "length", dword32_type);
   append_composite_type_field (peb_ldr_type, "initialized", dword32_type);
@@ -324,7 +328,7 @@ windows_get_tlb_type (struct gdbarch *gdbarch)
 
   /* struct process environment block */
   peb_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_STRUCT);
-  TYPE_NAME (peb_type) = xstrdup ("peb");
+  peb_type->set_name (xstrdup ("peb"));
 
   /* First bytes contain several flags.  */
   append_composite_type_field (peb_type, "flags", dword_ptr_type);
@@ -343,7 +347,7 @@ windows_get_tlb_type (struct gdbarch *gdbarch)
 
   /* struct thread information block */
   tib_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_STRUCT);
-  TYPE_NAME (tib_type) = xstrdup ("tib");
+  tib_type->set_name (xstrdup ("tib"));
 
   /* uint32_t current_seh;			%fs:0x0000 */
   append_composite_type_field (tib_type, "current_seh", seh_ptr_type);
@@ -431,7 +435,7 @@ static const struct lval_funcs tlb_value_funcs =
 static struct value *
 tlb_make_value (struct gdbarch *gdbarch, struct internalvar *var, void *ignore)
 {
-  if (target_has_stack && inferior_ptid != null_ptid)
+  if (target_has_stack () && inferior_ptid != null_ptid)
     {
       struct type *type = windows_get_tlb_type (gdbarch);
       return allocate_computed_value (type, &tlb_value_funcs, NULL);
@@ -537,7 +541,7 @@ windows_xfer_shared_library (const char* so_name, CORE_ADDR load_addr,
 
   if (!text_offset)
     {
-      gdb_bfd_ref_ptr dll (gdb_bfd_open (so_name, gnutarget, -1));
+      gdb_bfd_ref_ptr dll (gdb_bfd_open (so_name, gnutarget));
       /* The following calls are OK even if dll is NULL.
 	 The default value 0x1000 is returned by pe_text_section_offset
 	 in that case.  */
@@ -751,15 +755,15 @@ create_enum (struct gdbarch *gdbarch, int bit, const char *name,
   int i;
 
   type = arch_type (gdbarch, TYPE_CODE_ENUM, bit, name);
-  TYPE_NFIELDS (type) = count;
-  TYPE_FIELDS (type) = (struct field *)
-    TYPE_ZALLOC (type, sizeof (struct field) * count);
-  TYPE_UNSIGNED (type) = 1;
+  type->set_num_fields (count);
+  type->set_fields
+    ((struct field *) TYPE_ZALLOC (type, sizeof (struct field) * count));
+  type->set_is_unsigned (true);
 
   for (i = 0; i < count; i++)
   {
     TYPE_FIELD_NAME (type, i) = values[i].name;
-    SET_FIELD_ENUMVAL (TYPE_FIELD (type, i), values[i].value);
+    SET_FIELD_ENUMVAL (type->field (i), values[i].value);
   }
 
   return type;
@@ -898,7 +902,7 @@ windows_solib_create_inferior_hook (int from_tty)
     }
   CORE_ADDR tlb;
   gdb_byte buf[8];
-  if (target_has_execution
+  if (target_has_execution ()
       && target_get_tib_address (inferior_ptid, &tlb)
       && !target_read_memory (tlb + peb_offset, buf, ptr_bytes))
     {
@@ -908,11 +912,13 @@ windows_solib_create_inferior_hook (int from_tty)
     }
 
   /* Rebase executable if the base address changed because of ASLR.  */
-  if (symfile_objfile != nullptr && exec_base != 0)
+  if (current_program_space->symfile_object_file != nullptr && exec_base != 0)
     {
-      CORE_ADDR vmaddr = pe_data (exec_bfd)->pe_opthdr.ImageBase;
+      CORE_ADDR vmaddr
+	= pe_data (current_program_space->exec_bfd ())->pe_opthdr.ImageBase;
       if (vmaddr != exec_base)
-	objfile_rebase (symfile_objfile, exec_base - vmaddr);
+	objfile_rebase (current_program_space->symfile_object_file,
+			exec_base - vmaddr);
     }
 }
 
@@ -1060,7 +1066,7 @@ section's range [0x%" BFD_VMA_FMT "x, 0x%" BFD_VMA_FMT "x[."),
       bfd_vma name_va = dir_entry->name_rva;
 
       /* If the name's virtual address is smaller than the section's virtual
-         address, there's a problem.  */
+	 address, there's a problem.  */
       if (name_va < idata_section_va || name_va >= idata_section_end_va)
 	{
 	  warning (_("\
@@ -1086,6 +1092,116 @@ range [0x%" BFD_VMA_FMT "x, 0x%" BFD_VMA_FMT "x[."),
     }
 
   return false;
+}
+
+struct cpms_data
+{
+  struct gdbarch *gdbarch;
+  struct obstack *obstack;
+  int module_count;
+};
+
+static void
+core_process_module_section (bfd *abfd, asection *sect, void *obj)
+{
+  struct cpms_data *data = (struct cpms_data *) obj;
+  enum bfd_endian byte_order = gdbarch_byte_order (data->gdbarch);
+
+  unsigned int data_type;
+  char *module_name;
+  size_t module_name_size;
+  size_t module_name_offset;
+  CORE_ADDR base_addr;
+
+  gdb_byte *buf = NULL;
+
+  if (!startswith (sect->name, ".module"))
+    return;
+
+  buf = (gdb_byte *) xmalloc (bfd_section_size (sect) + 1);
+  if (!buf)
+    {
+      printf_unfiltered ("memory allocation failed for %s\n", sect->name);
+      goto out;
+    }
+  if (!bfd_get_section_contents (abfd, sect,
+				 buf, 0, bfd_section_size (sect)))
+    goto out;
+
+
+
+  /* A DWORD (data_type) followed by struct windows_core_module_info.  */
+  data_type = extract_unsigned_integer (buf, 4, byte_order);
+
+  if (data_type == NOTE_INFO_MODULE)
+    {
+      base_addr = extract_unsigned_integer (buf + 4, 4, byte_order);
+      module_name_size = extract_unsigned_integer (buf + 8, 4, byte_order);
+      module_name_offset = 12;
+    }
+  else if (data_type == NOTE_INFO_MODULE64)
+    {
+      base_addr = extract_unsigned_integer (buf + 4, 8, byte_order);
+      module_name_size = extract_unsigned_integer (buf + 12, 4, byte_order);
+      module_name_offset = 16;
+    }
+  else
+    goto out;
+
+  if (module_name_offset + module_name_size > bfd_section_size (sect))
+    goto out;
+  module_name = (char *) buf + module_name_offset;
+
+  /* The first module is the .exe itself.  */
+  if (data->module_count != 0)
+    windows_xfer_shared_library (module_name, base_addr,
+				 NULL, data->gdbarch, data->obstack);
+  data->module_count++;
+
+out:
+  xfree (buf);
+  return;
+}
+
+ULONGEST
+windows_core_xfer_shared_libraries (struct gdbarch *gdbarch,
+				  gdb_byte *readbuf,
+				  ULONGEST offset, ULONGEST len)
+{
+  struct obstack obstack;
+  const char *buf;
+  ULONGEST len_avail;
+  struct cpms_data data = { gdbarch, &obstack, 0 };
+
+  obstack_init (&obstack);
+  obstack_grow_str (&obstack, "<library-list>\n");
+  bfd_map_over_sections (core_bfd,
+			 core_process_module_section,
+			 &data);
+  obstack_grow_str0 (&obstack, "</library-list>\n");
+
+  buf = (const char *) obstack_finish (&obstack);
+  len_avail = strlen (buf);
+  if (offset >= len_avail)
+    return 0;
+
+  if (len > len_avail - offset)
+    len = len_avail - offset;
+  memcpy (readbuf, buf + offset, len);
+
+  obstack_free (&obstack, NULL);
+  return len;
+}
+
+/* This is how we want PTIDs from core files to be printed.  */
+
+std::string
+windows_core_pid_to_str (struct gdbarch *gdbarch, ptid_t ptid)
+{
+  if (ptid.lwp () != 0)
+    return string_printf ("Thread 0x%lx", ptid.lwp ());
+
+  return normal_pid_to_str (ptid);
 }
 
 void _initialize_windows_tdep ();

@@ -1,6 +1,6 @@
 /* DWARF 2 debugging format support for GDB.
 
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -204,9 +204,7 @@ file_entry::include_dir (const line_header *lh) const
    and must not be freed.  */
 
 extern line_header_up dwarf_decode_line_header
-  (sect_offset sect_off, bool is_dwz,
-   struct dwarf2_per_objfile *dwarf2_per_objfile,
-   struct dwarf2_section_info *section,
-   const struct comp_unit_head *cu_header);
+  (sect_offset sect_off, bool is_dwz, dwarf2_per_objfile *per_objfile,
+   struct dwarf2_section_info *section, const struct comp_unit_head *cu_header);
 
 #endif /* DWARF2_LINE_HEADER_H */

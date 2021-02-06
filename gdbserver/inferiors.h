@@ -1,5 +1,5 @@
 /* Inferior process information for the remote server for GDB.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -119,7 +119,7 @@ find_process (Func func)
       next++;
 
       if (func (*cur))
-        return *cur;
+	return *cur;
 
       cur = next;
     }
@@ -137,6 +137,9 @@ void remove_process (struct process_info *process);
 struct process_info *find_process_pid (int pid);
 int have_started_inferiors_p (void);
 int have_attached_inferiors_p (void);
+
+/* Switch to a thread of PROC.  */
+void switch_to_process (process_info *proc);
 
 void clear_inferiors (void);
 

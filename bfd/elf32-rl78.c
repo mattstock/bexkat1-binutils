@@ -1,5 +1,5 @@
 /* Renesas RL78 specific support for 32-bit ELF.
-   Copyright (C) 2011-2020 Free Software Foundation, Inc.
+   Copyright (C) 2011-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -923,7 +923,7 @@ rl78_elf_relocate_section
 
 	case R_RL78_RH_SADDR:
 	  RANGE (0xffe20, 0xfff1f);
-	  OP (0) = relocation & 0xff;
+	  OP (0) = (relocation - 0x20) & 0xff;
 	  break;
 
 	  /* Complex reloc handling:  */
@@ -1982,7 +1982,7 @@ rl78_offset_for_reloc (bfd *			abfd,
     }
 }
 
-struct {
+const struct {
   int prefix;		/* or -1 for "no prefix" */
   int insn;		/* or -1 for "end of list" */
   int insn_for_saddr;	/* or -1 for "no alternative" */
@@ -2552,11 +2552,8 @@ rl78_elf_relax_section
   return TRUE;
 
  error_return:
-  if (free_relocs != NULL)
-    free (free_relocs);
-
-  if (free_contents != NULL)
-    free (free_contents);
+  free (free_relocs);
+  free (free_contents);
 
   if (shndx_buf != NULL)
     {
@@ -2564,8 +2561,7 @@ rl78_elf_relax_section
       free (shndx_buf);
     }
 
-  if (free_intsyms != NULL)
-    free (free_intsyms);
+  free (free_intsyms);
 
   return TRUE;
 }

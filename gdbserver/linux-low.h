@@ -1,5 +1,5 @@
 /* Internal interfaces for the GNU/Linux specific target code for gdbserver.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,6 +30,8 @@
 #include "nat/linux-ptrace.h"
 #include "target/waitstatus.h" /* For enum target_stop_reason.  */
 #include "tracepoint.h"
+
+#include <list>
 
 #define PTRACE_XFER_TYPE long
 
@@ -155,7 +157,7 @@ public:
   void resume (thread_resume *resume_info, size_t n) override;
 
   ptid_t wait (ptid_t ptid, target_waitstatus *status,
-	       int options) override;
+	       target_wait_flags options) override;
 
   void fetch_registers (regcache *regcache, int regno) override;
 
@@ -354,7 +356,7 @@ private:
 
   /* Wait for process, returns status.  */
   ptid_t wait_1 (ptid_t ptid, target_waitstatus *ourstatus,
-		 int target_options);
+		 target_wait_flags target_options);
 
   /* Stop all lwps that aren't stopped yet, except EXCEPT, if not NULL.
      If SUSPEND, then also increase the suspend count of every LWP,
@@ -695,6 +697,18 @@ extern linux_process_target *the_linux_target;
 #define get_thread_lwp(thr) ((struct lwp_info *) (thread_target_data (thr)))
 #define get_lwp_thread(lwp) ((lwp)->thread)
 
+/* Information about a signal that is to be delivered to a thread.  */
+
+struct pending_signal
+{
+  pending_signal (int signal)
+    : signal {signal}
+  {};
+
+  int signal;
+  siginfo_t info;
+};
+
 /* This struct is recorded in the target_data field of struct thread_info.
 
    On linux ``all_threads'' is keyed by the LWP ID, which we use as the
@@ -786,9 +800,8 @@ struct lwp_info
      next time we see this LWP stop.  */
   int must_set_ptrace_flags;
 
-  /* If this is non-zero, it points to a chain of signals which need to
-     be delivered to this process.  */
-  struct pending_signals *pending_signals;
+  /* A chain of signals that need to be delivered to this process.  */
+  std::list<pending_signal> pending_signals;
 
   /* A link used when resuming.  It is initialized from the resume request,
      and then processed and cleared in linux_resume_one_lwp.  */
@@ -800,10 +813,10 @@ struct lwp_info
      if a signal arrives to this lwp while it is collecting.  */
   fast_tpoint_collect_result collecting_fast_tracepoint;
 
-  /* If this is non-zero, it points to a chain of signals which need
-     to be reported to GDB.  These were deferred because the thread
-     was doing a fast tracepoint collect when they arrived.  */
-  struct pending_signals *pending_signals_to_report;
+  /* A chain of signals that need to be reported to GDB.  These were
+     deferred because the thread was doing a fast tracepoint collect
+     when they arrived.  */
+  std::list<pending_signal> pending_signals_to_report;
 
   /* When collecting_fast_tracepoint is first found to be 1, we insert
      a exit-jump-pad-quickly breakpoint.  This is it.  */

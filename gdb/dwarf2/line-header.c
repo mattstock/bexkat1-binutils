@@ -1,6 +1,6 @@
 /* DWARF 2 debugging format support for GDB.
 
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -32,9 +32,9 @@ line_header::add_include_dir (const char *include_dir)
     {
       size_t new_size;
       if (version >= 5)
-        new_size = m_include_dirs.size ();
+	new_size = m_include_dirs.size ();
       else
-        new_size = m_include_dirs.size () + 1;
+	new_size = m_include_dirs.size () + 1;
       fprintf_unfiltered (gdb_stdlog, "Adding dir %zu: %s\n",
 			  new_size, include_dir);
     }
@@ -51,9 +51,9 @@ line_header::add_file_name (const char *name,
     {
       size_t new_size;
       if (version >= 5)
-        new_size = file_names_size ();
+	new_size = file_names_size ();
       else
-        new_size = file_names_size () + 1;
+	new_size = file_names_size () + 1;
       fprintf_unfiltered (gdb_stdlog, "Adding file %zu: %s\n",
 			  new_size, name);
     }
@@ -82,15 +82,15 @@ line_header::file_file_name (int file) const
   else
     {
       /* The compiler produced a bogus file number.  We can at least
-         record the macro definitions made in the file, even if we
-         won't be able to find the file by name.  */
+	 record the macro definitions made in the file, even if we
+	 won't be able to find the file by name.  */
       char fake_name[80];
 
       xsnprintf (fake_name, sizeof (fake_name),
 		 "<bad macro file number %d>", file);
 
       complaint (_("bad file number in macro information (%d)"),
-                 file);
+		 file);
 
       return make_unique_xstrdup (fake_name);
     }
@@ -154,9 +154,8 @@ read_checked_initial_length_and_offset (bfd *abfd, const gdb_byte *buf,
    format.  */
 
 static void
-read_formatted_entries (struct dwarf2_per_objfile *dwarf2_per_objfile,
-			bfd *abfd, const gdb_byte **bufp,
-			struct line_header *lh,
+read_formatted_entries (dwarf2_per_objfile *per_objfile, bfd *abfd,
+			const gdb_byte **bufp, struct line_header *lh,
 			const struct comp_unit_head *cu_header,
 			void (*callback) (struct line_header *lh,
 					  const char *name,
@@ -208,9 +207,7 @@ read_formatted_entries (struct dwarf2_per_objfile *dwarf2_per_objfile,
 
 	    case DW_FORM_line_strp:
 	      string.emplace
-		(dwarf2_per_objfile->read_line_string (buf,
-						       cu_header,
-						       &bytes_read));
+		(per_objfile->read_line_string (buf, cu_header, &bytes_read));
 	      buf += bytes_read;
 	      break;
 
@@ -286,7 +283,7 @@ read_formatted_entries (struct dwarf2_per_objfile *dwarf2_per_objfile,
 
 line_header_up
 dwarf_decode_line_header  (sect_offset sect_off, bool is_dwz,
-			   struct dwarf2_per_objfile *dwarf2_per_objfile,
+			   dwarf2_per_objfile *per_objfile,
 			   struct dwarf2_section_info *section,
 			   const struct comp_unit_head *cu_header)
 {
@@ -393,7 +390,7 @@ dwarf_decode_line_header  (sect_offset sect_off, bool is_dwz,
   if (lh->version >= 5)
     {
       /* Read directory table.  */
-      read_formatted_entries (dwarf2_per_objfile, abfd, &line_ptr, lh.get (),
+      read_formatted_entries (per_objfile, abfd, &line_ptr, lh.get (),
 			      cu_header,
 			      [] (struct line_header *header, const char *name,
 				  dir_index d_index, unsigned int mod_time,
@@ -403,7 +400,7 @@ dwarf_decode_line_header  (sect_offset sect_off, bool is_dwz,
 	});
 
       /* Read file name table.  */
-      read_formatted_entries (dwarf2_per_objfile, abfd, &line_ptr, lh.get (),
+      read_formatted_entries (per_objfile, abfd, &line_ptr, lh.get (),
 			      cu_header,
 			      [] (struct line_header *header, const char *name,
 				  dir_index d_index, unsigned int mod_time,

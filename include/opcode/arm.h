@@ -1,5 +1,5 @@
 /* ARM assembler/disassembler support.
-   Copyright (C) 2004-2020 Free Software Foundation, Inc.
+   Copyright (C) 2004-2021 Free Software Foundation, Inc.
 
    This file is part of GDB and GAS.
 
@@ -88,6 +88,7 @@
 #define ARM_EXT2_CDE5	     0x10000000 /* Using CDE coproc 5.	   */
 #define ARM_EXT2_CDE6	     0x20000000 /* Using CDE coproc 6.	   */
 #define ARM_EXT2_CDE7	     0x40000000 /* Using CDE coproc 7.	   */
+#define ARM_EXT2_V8R	     0x80000000	/* Arm V8R.	               */
 
 /* Co-processor space extensions.  */
 #define ARM_CEXT_XSCALE	     0x00000001	/* Allow MIA etc.	 	   */
@@ -191,7 +192,7 @@
 #define ARM_AEXT2_V8M_MAIN	(ARM_AEXT2_V8M_BASE | ARM_EXT2_V8M_MAIN)
 #define ARM_AEXT2_V8M_MAIN_DSP	 ARM_AEXT2_V8M_MAIN
 #define ARM_AEXT_V8R		 ARM_AEXT_V8A
-#define ARM_AEXT2_V8R		 ARM_AEXT2_V8AR
+#define ARM_AEXT2_V8R		 (ARM_EXT2_V8R | ARM_AEXT2_V8AR)
 #define ARM_AEXT_V8_1M_MAIN	 ARM_AEXT_V8M_MAIN
 #define ARM_AEXT2_V8_1M_MAIN	(ARM_AEXT2_V8M_MAIN | ARM_EXT2_V8_1M_MAIN     \
 						    | ARM_EXT2_FP16_INST)

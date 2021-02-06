@@ -1,5 +1,5 @@
 /* bfdlink.h -- header file for BFD link routines
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright (C) 1993-2021 Free Software Foundation, Inc.
    Written by Steve Chamberlain and Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -273,6 +273,18 @@ enum report_method
   RM_DIAGNOSE,
 };
 
+/* How to handle DT_TEXTREL.  */
+
+enum textrel_check_method
+{
+  textrel_check_none,
+  textrel_check_warning,
+  textrel_check_error
+};
+
+#define bfd_link_textrel_check(info) \
+  (info->textrel_check != textrel_check_none)
+
 typedef enum {with_flags, without_flags} flag_type;
 
 /* A section flag list.  */
@@ -349,6 +361,9 @@ struct bfd_link_info
   /* TRUE if the LTO plugin is active.  */
   unsigned int lto_plugin_active: 1;
 
+  /* TRUE if all LTO IR symbols have been read.  */
+  unsigned int lto_all_symbols_read : 1;
+
   /* TRUE if global symbols in discarded sections should be stripped.  */
   unsigned int strip_discarded: 1;
 
@@ -410,11 +425,8 @@ struct bfd_link_info
      should be created.  1 for DWARF2 tables, 2 for compact tables.  */
   unsigned int eh_frame_hdr_type: 2;
 
-  /* TRUE if we should warn when adding a DT_TEXTREL to a shared object.  */
-  unsigned int warn_shared_textrel: 1;
-
-  /* TRUE if we should error when adding a DT_TEXTREL.  */
-  unsigned int error_textrel: 1;
+  /* What to do with DT_TEXTREL in output.  */
+  ENUM_BITFIELD (textrel_check_method) textrel_check: 2;
 
   /* TRUE if .hash section should be created.  */
   unsigned int emit_hash: 1;
@@ -511,6 +523,9 @@ struct bfd_link_info
      the linker.  */
   unsigned int non_contiguous_regions_warnings : 1;
 
+  /* TRUE if all symbol names should be unique.  */
+  unsigned int unique_symbol : 1;
+
   /* Char that may appear as the first char of a symbol, but should be
      skipped (like symbol_leading_char) when looking up symbols in
      wrap_hash.  Used by PowerPC Linux for 'dot' symbols.  */
@@ -533,10 +548,10 @@ struct bfd_link_info
      Normally these optimizations are disabled by default but some targets
      prefer to enable them by default.  So this field is a tri-state variable.
      The values are:
-     
+
      zero: Enable the optimizations (either from --relax being specified on
        the command line or the backend's before_allocation emulation function.
-       
+
      positive: The user has requested that these optimizations be disabled.
        (Via the --no-relax command line option).
 
@@ -640,6 +655,18 @@ struct bfd_link_info
   /* May be used to set DT_FLAGS_1 for ELF. */
   bfd_vma flags_1;
 
+  /* May be used to set DT_GNU_FLAGS_1 for ELF. */
+  bfd_vma gnu_flags_1;
+
+  /* May be used to set ELF visibility for __start_* / __stop_.  */
+  unsigned int start_stop_visibility;
+
+  /* The maximum page size for ELF.  */
+  bfd_vma maxpagesize;
+
+  /* The common page size for ELF.  */
+  bfd_vma commonpagesize;
+
   /* Start and end of RELRO region.  */
   bfd_vma relro_start, relro_end;
 
@@ -653,7 +680,7 @@ struct bfd_link_info
 /* Some forward-definitions used by some callbacks.  */
 
 struct elf_strtab_hash;
-struct elf_sym_strtab;
+struct elf_internal_sym;
 
 /* This structures holds a set of callback functions.  These are called
    by the BFD linker routines.  */
@@ -777,11 +804,17 @@ struct bfd_link_callbacks
      asection * current_section, asection * previous_section,
      bfd_boolean new_segment);
   /* This callback provides a chance for callers of the BFD to examine the
-     ELF string table and symbol table once they are complete and indexes and
-     offsets assigned.  */
+     ELF (dynamic) string table once it is complete.  */
   void (*examine_strtab)
-    (struct elf_sym_strtab *syms, bfd_size_type symcount,
-     struct elf_strtab_hash *symstrtab);
+    (struct elf_strtab_hash *symstrtab);
+  /* This callback is called just before a symbol is swapped out, so that the
+     CTF machinery can look up symbols during construction.  The name is
+     already an external strtab offset at this point.  */
+  void (*ctf_new_symbol)
+    (int symidx, struct elf_internal_sym *sym);
+  /* Likewise, for dynamic symbols.  */
+  void (*ctf_new_dynsym)
+    (int symidx, struct elf_internal_sym *sym);
   /* This callback should emit the CTF section into a non-loadable section in
      the output BFD named .ctf or a name beginning with ".ctf.".  */
   void (*emit_ctf)

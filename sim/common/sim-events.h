@@ -1,6 +1,6 @@
 /* The common simulator framework for GDB, the GNU Debugger.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002-2021 Free Software Foundation, Inc.
 
    Contributed by Andrew Cagney and Red Hat.
 
@@ -149,6 +149,17 @@ extern sim_event *sim_events_watch_clock
  void *data);
 
 
+/* Schedule an event when a PC matches a range.  */
+
+extern sim_event *sim_events_watch_pc
+(SIM_DESC sd,
+ int is_within,
+ unsigned64 lb,
+ unsigned64 ub,
+ sim_event_handler *handler,
+ void *data);
+
+
 /* Schedule an event when the test (IS_WITHIN == (VAL >= LB && VAL <=
    UB)) of the NR_BYTES value at HOST_ADDR with BYTE_ORDER endian is
    true.
@@ -161,7 +172,7 @@ extern sim_event *sim_events_watch_sim
 (SIM_DESC sd,
  void *host_addr,
  int nr_bytes,
- int byte_order,
+ enum bfd_endian byte_order,
  int is_within,
  unsigned64 lb,
  unsigned64 ub,
@@ -182,7 +193,7 @@ extern sim_event *sim_events_watch_core
  address_word core_addr,
  unsigned map,
  int nr_bytes,
- int byte_order,
+ enum bfd_endian byte_order,
  int is_within,
  unsigned64 lb,
  unsigned64 ub,

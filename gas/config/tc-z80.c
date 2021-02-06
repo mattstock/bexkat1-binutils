@@ -1,5 +1,5 @@
 /* tc-z80.c -- Assemble code for the Zilog Z80, Z180, EZ80 and ASCII R800
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2021 Free Software Foundation, Inc.
    Contributed by Arnold Metselaar <arnold_m@operamail.com>
 
    This file is part of GAS, the GNU Assembler.
@@ -216,7 +216,7 @@ setup_march (const char *name, int *ok, int *err, int *mode)
 	    break;
 	  }
       if (i >= ARRAY_SIZE (match_ext_table))
-	as_fatal (_("Invalid EXTENTION is specified: %s"), name);
+	as_fatal (_("Invalid EXTENSION is specified: %s"), name);
     }
 }
 
@@ -409,8 +409,8 @@ Compatibility options:\n\
   -local-prefix=TEXT\t  treat labels prefixed by TEXT as local\n\
   -colonless\t\t  permit colonless labels\n\
   -sdcc\t\t\t  accept SDCC specific instruction syntax\n\
-  -fp-s=FORMAT\t\t  set single precission FP numbers format\n\
-  -fp-d=FORMAT\t\t  set double precission FP numbers format\n\
+  -fp-s=FORMAT\t\t  set single precision FP numbers format\n\
+  -fp-d=FORMAT\t\t  set double precision FP numbers format\n\
 Where FORMAT one of:\n\
   ieee754\t\t  IEEE754 compatible (depends on directive)\n\
   half\t\t\t  IEEE754 half precision (16 bit)\n\
@@ -491,6 +491,9 @@ md_begin (void)
   char * p;
   unsigned int i, j, k;
   char buf[BUFLEN];
+
+  memset (&reg, 0, sizeof (reg));
+  memset (&nul, 0, sizeof (nul));
 
   if (ins_ok & INS_EZ80)   /* if select EZ80 cpu then */
     listing_lhs_width = 6; /* use 6 bytes per line in the listing */
@@ -612,9 +615,16 @@ z80_start_line_hook (void)
 	      return 1;
 	    }
 	  break;
-	case '#':
-	  if (sdcc_compat)
-	    *p = (*skip_space (p + 1) == '(') ? '+' : ' ';
+	case '#': /* force to use next expression as immediate value in SDCC */
+	  if (!sdcc_compat)
+	   break;
+	  if (ISSPACE(p[1]) && *skip_space (p + 1) == '(')
+	    { /* ld a,# (expr)... -> ld a,0+(expr)... */
+	      *p++ = '0';
+	      *p = '+';
+	    }
+	  else /* ld a,#(expr)... -> ld a,+(expr); ld a,#expr -> ld a, expr */
+	    *p = (p[1] == '(') ? '+' : ' ';
 	  break;
 	}
     }
@@ -871,6 +881,7 @@ parse_exp_not_indexed (const char *s, expressionS *op)
   int indir;
   int make_shift = -1;
 
+  memset (op, 0, sizeof (*op));
   p = skip_space (s);
   if (sdcc_compat && (*p == '<' || *p == '>'))
     {
@@ -887,7 +898,11 @@ parse_exp_not_indexed (const char *s, expressionS *op)
       p = skip_space (p);
     }
 
-  op->X_md = indir = is_indir (p);
+  if (make_shift == -1)
+    indir = is_indir (p);
+  else
+    indir = 0;
+  op->X_md = indir;
   if (indir && (ins_ok & INS_GBZ80))
     { /* check for instructions like ld a,(hl+), ld (hl-),a */
       p = skip_space (p+1);
@@ -950,10 +965,9 @@ unify_indexed (expressionS *op)
   if (O_subtract == op->X_op)
     {
       expressionS minus;
+      memset (&minus, 0, sizeof (minus));
       minus.X_op = O_uminus;
-      minus.X_add_number = 0;
       minus.X_add_symbol = op->X_op_symbol;
-      minus.X_op_symbol = 0;
       op->X_op_symbol = make_expr_symbol (&minus);
       op->X_op = O_add;
     }
@@ -966,7 +980,6 @@ unify_indexed (expressionS *op)
       add.X_op = O_symbol;
       add.X_add_number = op->X_add_number;
       add.X_add_symbol = op->X_op_symbol;
-      add.X_op_symbol = 0;
       op->X_add_symbol = make_expr_symbol (&add);
     }
   else
@@ -2390,7 +2403,6 @@ emit_ld_r_n (expressionS *dst, expressionS *src)
       break;
     default:
       ill_op ();
-//      return;
     }
 
   q = frag_more (prefix ? 2 : 1);
@@ -3433,6 +3445,15 @@ area (int arg)
     psect (arg);
 }
 
+/* Handle the .bss pseudo-op.  */
+
+static void
+s_bss (int ignore ATTRIBUTE_UNUSED)
+{
+  subseg_set (bss_section, 0);
+  demand_empty_rest_of_line ();
+}
+
 /* Port specific pseudo ops.  */
 const pseudo_typeS md_pseudo_table[] =
 {
@@ -3445,8 +3466,10 @@ const pseudo_typeS md_pseudo_table[] =
   { ".r800", set_inss, INS_R800},
   { ".set", s_set, 0},
   { ".z180", set_inss, INS_Z180},
+  { ".hd64", set_inss, INS_Z180},
   { ".z80", set_inss, INS_Z80},
   { ".z80n", set_inss, INS_Z80N},
+  { "bss", s_bss, 0},
   { "db" , emit_data, 1},
   { "d24", z80_cons, 3},
   { "d32", z80_cons, 4},
@@ -3654,7 +3677,7 @@ md_assemble (char *str)
 static int
 is_overflow (long value, unsigned bitsize)
 {
-  long fieldmask = (1 << bitsize) - 1;
+  long fieldmask = (2UL << (bitsize - 1)) - 1;
   long signmask = ~fieldmask;
   long a = value & fieldmask;
   long ss = a & signmask;
@@ -3888,7 +3911,7 @@ str_to_broken_float (bfd_boolean *signP, bfd_uint64_t *mantissaP, int *expP)
   if (*p == '.')
     {
       p++;
-      if (!exponent) /* If no precission overflow.  */
+      if (!exponent) /* If no precision overflow.  */
 	{
 	  for (; ISDIGIT (*p); ++p, --exponent)
 	    {

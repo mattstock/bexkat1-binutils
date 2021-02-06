@@ -1,6 +1,6 @@
 /* Concatenate two arbitrary file names.
 
-   Copyright (C) 1996-2007, 2009-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2007, 2009-2021 Free Software Foundation, Inc.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -25,7 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dirname.h"
+#include "basename-lgpl.h"
+#include "filename.h"
 
 #if ! HAVE_MEMPCPY && ! defined mempcpy
 # define mempcpy(D, S, N) ((void *) ((char *) memcpy (D, S, N) + (N)))
@@ -41,7 +42,7 @@
    *BASE_IN_RESULT to point to the copy of BASE at the end of the
    returned concatenation.
 
-   Return NULL if malloc fails.  */
+   If malloc fails, return NULL with errno set.  */
 
 char *
 mfile_name_concat (char const *dir, char const *base, char **base_in_result)
@@ -68,20 +69,22 @@ mfile_name_concat (char const *dir, char const *base, char **base_in_result)
     }
 
   char *p_concat = malloc (dirlen + (sep != '\0')  + baselen + 1);
-  char *p;
-
   if (p_concat == NULL)
     return NULL;
 
-  p = mempcpy (p_concat, dir, dirlen);
-  *p = sep;
-  p += sep != '\0';
+  {
+    char *p;
 
-  if (base_in_result)
-    *base_in_result = p;
+    p = mempcpy (p_concat, dir, dirlen);
+    *p = sep;
+    p += sep != '\0';
 
-  p = mempcpy (p, base, baselen);
-  *p = '\0';
+    if (base_in_result)
+      *base_in_result = p;
+
+    p = mempcpy (p, base, baselen);
+    *p = '\0';
+  }
 
   return p_concat;
 }

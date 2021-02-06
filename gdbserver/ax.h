@@ -1,5 +1,5 @@
 /* Data structures and functions associated with agent expressions in GDB.
-   Copyright (C) 2009-2020 Free Software Foundation, Inc.
+   Copyright (C) 2009-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,6 +22,7 @@
 #include "regcache.h"
 
 #ifdef IN_PROCESS_AGENT
+#include "gdbsupport/agent.h"
 #define debug_threads debug_agent
 #endif
 

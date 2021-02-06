@@ -1,4 +1,4 @@
-# Copyright 2019-2020 Free Software Foundation, Inc.
+# Copyright 2019-2021 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,23 +35,35 @@ gdb_test "ptype z1" " = complex double"
 gdb_test "ptype z2" " = complex float"
 gdb_test "ptype z3" " = complex long double"
 
-gdb_test "p \$_cimag (z1)" " = 4.5"
-gdb_test "ptype \$" " = double"
+with_test_prefix "double imaginary" {
+    gdb_test "p \$_cimag (z1)" " = 4.5"
+    gdb_test "ptype \$" " = double"
+}
 
-gdb_test "p \$_cimag (z2)" " = -5.5"
-gdb_test "ptype \$" " = float"
+with_test_prefix "float imaginary" {
+    gdb_test "p \$_cimag (z2)" " = -5.5"
+    gdb_test "ptype \$" " = float"
+}
 
-gdb_test "p \$_cimag (z3)" " = 6.5"
-gdb_test "ptype \$" " = long double"
+with_test_prefix "long double imaginary" {
+    gdb_test "p \$_cimag (z3)" " = 6.5"
+    gdb_test "ptype \$" " = long double"
+}
 
-gdb_test "p \$_creal (z1)" " = 1.5"
-gdb_test "ptype \$" " = double"
+with_test_prefix "double real" {
+    gdb_test "p \$_creal (z1)" " = 1.5"
+    gdb_test "ptype \$" " = double"
+}
 
-gdb_test "p \$_creal (z2)" " = 2.5"
-gdb_test "ptype \$" " = float"
+with_test_prefix "float real" {
+    gdb_test "p \$_creal (z2)" " = 2.5"
+    gdb_test "ptype \$" " = float"
+}
 
-gdb_test "p \$_creal (z3)" " = 3.5"
-gdb_test "ptype \$" " = long double"
+with_test_prefix "long double real" {
+    gdb_test "p \$_creal (z3)" " = 3.5"
+    gdb_test "ptype \$" " = long double"
+}
 
 gdb_test "p \$_cimag (d1)" "expected a complex number"
 gdb_test "p \$_cimag (f1)" "expected a complex number"
@@ -91,3 +103,14 @@ gdb_test "print (_Complex int) 4" " = 4 \\+ 0i"
 gdb_test "print (_Complex float) 4.5" " = 4.5 \\+ 0i"
 gdb_test "ptype __complex__ short" " = _Complex short"
 gdb_test "print (_Complex int) (23.75 + 8.88i)" " = 23 \\+ 8i"
+
+set re_reject_arg "Argument to complex arithmetic operation not supported\\."
+gdb_test "print (void *)0 + 5i" $re_reject_arg
+gdb_test "print (_Decimal32)0 + 5i" $re_reject_arg
+
+# Set language to c++.  Avoid warning by not having current frame.
+clean_restart
+gdb_test_no_output "set language c++"
+
+# C++ type tests.
+gdb_test "print (bool)1 + 1i" " = 1 \\+ 1i"

@@ -2,7 +2,7 @@
    convert to internal format, for GDB. Used as a last resort if no
    debugging symbols recognized.
 
-   Copyright (C) 2003-2020 Free Software Foundation, Inc.
+   Copyright (C) 2003-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -133,7 +133,7 @@ get_section_vmas (bfd *abfd, asection *sectp, void *context)
   if (sectix != PE_SECTION_INDEX_INVALID)
     {
       /* Data within the section start at rva_start in the pe and at
-         bfd_get_section_vma() within memory.  Store the offset.  */
+	 bfd_get_section_vma() within memory.  Store the offset.  */
 
       sections[sectix].vma_offset
 	= bfd_section_vma (sectp) - sections[sectix].rva_start;
@@ -342,7 +342,7 @@ read_pe_exported_syms (minimal_symbol_reader &reader,
   unsigned long exp_funcbase;
   unsigned char *expdata, *erva;
   unsigned long name_rvas, ordinals, nexp, ordbase;
-  char *dll_name = (char *) dll->filename;
+  char *dll_name = (char *) bfd_get_filename (dll);
   int otherix = PE_SECTION_TABLE_SIZE;
   int is_pe64 = 0;
   int is_pe32 = 0;
@@ -549,7 +549,7 @@ read_pe_exported_syms (minimal_symbol_reader &reader,
       /* Pointer to the function address vector.  */
       /* This is relative to ordinal value. */
       unsigned long func_rva = pe_as32 (erva + exp_funcbase +
-                                        ordinal * 4);
+					ordinal * 4);
 
       /* Find this symbol's section in our own array.  */
       int sectix = 0;

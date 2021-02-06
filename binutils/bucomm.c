@@ -1,5 +1,5 @@
 /* bucomm.c -- Bin Utils COMmon code.
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright (C) 1991-2021 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -532,7 +532,7 @@ template_in_dir (const char *path)
    as FILENAME.  */
 
 char *
-make_tempname (const char *filename)
+make_tempname (const char *filename, int *ofd)
 {
   char *tmpname = template_in_dir (filename);
   int fd;
@@ -550,7 +550,7 @@ make_tempname (const char *filename)
       free (tmpname);
       return NULL;
     }
-  close (fd);
+  *ofd = fd;
   return tmpname;
 }
 
@@ -623,6 +623,21 @@ get_file_size (const char * file_name)
   else if (statbuf.st_size < 0)
     non_fatal (_("Warning: '%s' has negative size, probably it is too large"),
                file_name);
+#if defined (_WIN32) && !defined (__CYGWIN__)
+  else if (statbuf.st_size == 0)
+    {
+      /* MS-Windows 'stat' reports the null device as a regular file;
+	 fix that.  */
+      int fd = open (file_name, O_RDONLY | O_BINARY);
+      if (isatty (fd))
+	{
+	  close (fd);
+	  non_fatal (_("Warning: '%s' is not an ordinary file"),
+		     /* libtool wants to see /dev/null in the output.  */
+		     strcasecmp (file_name, "nul") ? file_name : "/dev/null");
+	}
+    }
+#endif
   else
     return statbuf.st_size;
 

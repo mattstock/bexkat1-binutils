@@ -1,5 +1,5 @@
 /* BFD back-end for Intel 386 COFF files (DJGPP variant with a stub).
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997-2021 Free Software Foundation, Inc.
    Written by Robert Hoehne.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -249,8 +249,7 @@ go32exe_cleanup (bfd *abfd)
 {
   abfd->origin = 0;
 
-  if (go32exe_temp_stub != NULL)
-    free (go32exe_temp_stub);
+  free (go32exe_temp_stub);
   go32exe_temp_stub = NULL;
   go32exe_temp_stub_size = 0;
 }

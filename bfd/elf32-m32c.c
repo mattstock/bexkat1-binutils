@@ -1,5 +1,5 @@
 /* M16C/M32C specific support for 32-bit ELF.
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2021 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -1347,7 +1347,7 @@ static int bytes_to_reloc[] = {
 /* If the displacement is within the given range and the new encoding
    differs from the old encoding (the index), then the insn can be
    relaxed to the new encoding.  */
-typedef struct {
+typedef const struct {
   int bytes;
   unsigned int max_disp;
   unsigned char new_encoding;
@@ -1445,7 +1445,8 @@ m32c_elf_relax_section
   bfd_byte *shndx_buf = NULL;
   int machine;
 
-  if (abfd == elf_hash_table (link_info)->dynobj
+  if (is_elf_hash_table (link_info->hash)
+      && abfd == elf_hash_table (link_info)->dynobj
       && (sec->flags & SEC_LINKER_CREATED) != 0
       && strcmp (sec->name, ".plt") == 0)
     return m32c_elf_relax_plt_section (sec, link_info, again);
@@ -1901,11 +1902,8 @@ m32c_elf_relax_section
 
     } /* next relocation */
 
-  if (free_relocs != NULL)
-    {
-      free (free_relocs);
-      free_relocs = NULL;
-    }
+  free (free_relocs);
+  free_relocs = NULL;
 
   if (free_contents != NULL)
     {
@@ -1931,7 +1929,7 @@ m32c_elf_relax_section
       /* Cache the symbols for elf_link_input_bfd.  */
       else
 	{
-	symtab_hdr->contents = NULL /* (unsigned char *) intsyms*/;
+	  symtab_hdr->contents = NULL /* (unsigned char *) intsyms*/;
 	}
 
       free_intsyms = NULL;
@@ -1940,17 +1938,14 @@ m32c_elf_relax_section
   return TRUE;
 
  error_return:
-  if (free_relocs != NULL)
-    free (free_relocs);
-  if (free_contents != NULL)
-    free (free_contents);
+  free (free_relocs);
+  free (free_contents);
   if (shndx_buf != NULL)
     {
       shndx_hdr->contents = NULL;
       free (shndx_buf);
     }
-  if (free_intsyms != NULL)
-    free (free_intsyms);
+  free (free_intsyms);
   return FALSE;
 }
 
@@ -2078,7 +2073,6 @@ m32c_elf_relax_delete_bytes
   symcount = (symtab_hdr->sh_size / sizeof (Elf32_External_Sym)
 	      - symtab_hdr->sh_info);
   sym_hashes = elf_sym_hashes (abfd);
-  //  sym_hashes += symtab_hdr->sh_info;
   end_hashes = sym_hashes + symcount;
 
   for (; sym_hashes < end_hashes; sym_hashes ++)

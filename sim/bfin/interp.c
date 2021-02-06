@@ -1,6 +1,6 @@
 /* Simulator for Analog Devices Blackfin processors.
 
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2021 Free Software Foundation, Inc.
    Contributed by Analog Devices, Inc.
 
    This file is part of simulators.
@@ -289,7 +289,7 @@ bfin_syscall (SIM_CPU *cpu)
 	sc.result = heap;
 	heap += sc.arg2;
 	/* Keep it page aligned.  */
-	heap = ALIGN (heap, 4096);
+	heap = align_up (heap, 4096);
 
 	break;
       }
@@ -729,13 +729,6 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
       return 0;
     }
 
-  {
-    /* XXX: Only first core gets profiled ?  */
-    SIM_CPU *cpu = STATE_CPU (sd, 0);
-    STATE_WATCHPOINTS (sd)->pc = &PCREG;
-    STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PCREG);
-  }
-
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)
     {
       free_state (sd);
@@ -948,7 +941,8 @@ bfin_fdpic_load (SIM_DESC sd, SIM_CPU *cpu, struct bfd *abfd, bu32 *sp,
       }
 
   /* Update the load offset with a few extra pages.  */
-  fdpic_load_offset = ALIGN (max (max_load_addr, fdpic_load_offset), 0x10000);
+  fdpic_load_offset = align_up (max (max_load_addr, fdpic_load_offset),
+				0x10000);
   fdpic_load_offset += 0x10000;
 
   /* Push the summary loadmap info onto the stack last.  */
@@ -1074,7 +1068,7 @@ bfin_user_init (SIM_DESC sd, SIM_CPU *cpu, struct bfd *abfd,
     env_flat += strlen (env[i]);
 
   /* Push the Auxiliary Vector Table between argv/env and actual strings.  */
-  sp_flat = sp = ALIGN (SPREG - argv_flat - env_flat - 4, 4);
+  sp_flat = sp = align_up (SPREG - argv_flat - env_flat - 4, 4);
   if (auxvt)
     {
 # define AT_PUSH(at, val) \

@@ -1,5 +1,5 @@
 /* wrstabs.c -- Output stabs debugging information
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>.
 
    This file is part of GNU Binutils.
@@ -1224,8 +1224,7 @@ stab_method_type (void *p, bfd_boolean domainp, int argcount,
     }
   strcat (buf, ";");
 
-  if (args != NULL)
-    free (args);
+  free (args);
 
   if (! stab_push_string (info, buf, 0, definition, 0))
     return FALSE;

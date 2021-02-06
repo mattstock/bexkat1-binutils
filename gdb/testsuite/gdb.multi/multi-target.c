@@ -1,6 +1,6 @@
 /* This testcase is part of GDB, the GNU debugger.
 
-   Copyright 2017-2020 Free Software Foundation, Inc.
+   Copyright 2017-2021 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,12 +26,14 @@
 
 static pthread_barrier_t barrier;
 
+volatile int exit_thread;
+
 static void *
 thread_start (void *arg)
 {
   pthread_barrier_wait (&barrier);
 
-  while (1)
+  while (!exit_thread)
     sleep (1);
   return NULL;
 }

@@ -1,6 +1,6 @@
 /* Generic code for supporting multiple C++ ABI's
 
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -226,7 +226,7 @@ struct language_pass_by_ref_info
 cp_pass_by_reference (struct type *type)
 {
   if ((current_cp_abi.pass_by_reference) == NULL)
-    return default_pass_by_reference (type);
+    return {};
   return (*current_cp_abi.pass_by_reference) (type);
 }
 
@@ -273,10 +273,8 @@ set_cp_abi_as_auto_default (const char *short_name)
 		    _("Cannot find C++ ABI \"%s\" to set it as auto default."),
 		    short_name);
 
-  if (auto_cp_abi.longname != NULL)
-    xfree ((char *) auto_cp_abi.longname);
-  if (auto_cp_abi.doc != NULL)
-    xfree ((char *) auto_cp_abi.doc);
+  xfree ((char *) auto_cp_abi.longname);
+  xfree ((char *) auto_cp_abi.doc);
 
   auto_cp_abi = *abi;
 

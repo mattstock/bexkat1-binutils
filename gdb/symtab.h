@@ -1,6 +1,6 @@
 /* Symbol table definitions for GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -472,7 +472,7 @@ struct general_symbol_info
   void compute_and_set_names (gdb::string_view linkage_name, bool copy_name,
 			      struct objfile_per_bfd_storage *per_bfd,
 			      gdb::optional<hashval_t> hash
-			        = gdb::optional<hashval_t> ());
+				= gdb::optional<hashval_t> ());
 
   /* Name of the symbol.  This is a required field.  Storage for the
      name is allocated on the objfile_obstack for the associated
@@ -1022,7 +1022,7 @@ struct symbol_computed_ops
 
   void (*generate_c_location) (struct symbol *symbol, string_file *stream,
 			       struct gdbarch *gdbarch,
-			       unsigned char *registers_used,
+			       std::vector<bool> &registers_used,
 			       CORE_ADDR pc, const char *result_name);
 
 };
@@ -1107,24 +1107,26 @@ struct symbol : public general_symbol_info, public allocate_on_obstack
     /* Class-initialization of bitfields is only allowed in C++20.  */
     : domain (UNDEF_DOMAIN),
       aclass_index (0),
-      is_objfile_owned (0),
+      is_objfile_owned (1),
       is_argument (0),
       is_inlined (0),
       maybe_copied (0),
       subclass (SYMBOL_NONE)
     {
       /* We can't use an initializer list for members of a base class, and
-         general_symbol_info needs to stay a POD type.  */
+	 general_symbol_info needs to stay a POD type.  */
       m_name = nullptr;
       value.ivalue = 0;
       language_specific.obstack = nullptr;
       m_language = language_unknown;
       ada_mangled = 0;
-      section = 0;
+      section = -1;
       /* GCC 4.8.5 (on CentOS 7) does not correctly compile class-
-         initialization of unions, so we initialize it manually here.  */
+	 initialization of unions, so we initialize it manually here.  */
       owner.symtab = nullptr;
     }
+
+  symbol (const symbol &) = default;
 
   /* Data type of value */
 
@@ -1412,18 +1414,18 @@ struct symtab
    This is recorded as:
 
    objfile -> foo.c(cu) -> bar.c(cu) -> NULL
-                |            |
-                v            v
-              foo.c        bar.c
-                |            |
-                v            v
-              foo1.h       foo1.h
-                |            |
-                v            v
-              foo2.h       bar.h
-                |            |
-                v            v
-               NULL         NULL
+		|            |
+		v            v
+	      foo.c        bar.c
+		|            |
+		v            v
+	      foo1.h       foo1.h
+		|            |
+		v            v
+	      foo2.h       bar.h
+		|            |
+		v            v
+	       NULL         NULL
 
    where "foo.c(cu)" and "bar.c(cu)" are struct compunit_symtab objects,
    and the files foo.c, etc. are struct symtab objects.  */
@@ -1642,16 +1644,6 @@ extern struct block_symbol lookup_symbol_search_name (const char *search_name,
 						      const struct block *block,
 						      domain_enum domain);
 
-/* A default version of lookup_symbol_nonlocal for use by languages
-   that can't think of anything better to do.
-   This implements the C lookup rules.  */
-
-extern struct block_symbol
-  basic_lookup_symbol_nonlocal (const struct language_defn *langdef,
-				const char *,
-				const struct block *,
-				const domain_enum);
-
 /* Some helper functions for languages that need to write their own
    lookup_symbol_nonlocal functions.  */
 
@@ -1776,6 +1768,14 @@ extern struct symbol *find_symbol_at_address (CORE_ADDR);
 extern bool find_pc_partial_function (CORE_ADDR pc, const char **name,
 				      CORE_ADDR *address, CORE_ADDR *endaddr,
 				      const struct block **block = nullptr);
+
+/* Like find_pc_partial_function, above, but returns the underlying
+   general_symbol_info (rather than the name) as an out parameter.  */
+
+extern bool find_pc_partial_function_sym
+  (CORE_ADDR pc, const general_symbol_info **sym,
+   CORE_ADDR *address, CORE_ADDR *endaddr,
+   const struct block **block = nullptr);
 
 /* Like find_pc_partial_function, above, but *ADDRESS and *ENDADDR are
    set to start and end addresses of the range containing the entry pc.
@@ -1950,13 +1950,6 @@ extern void default_collect_symbol_completion_matches_break_on
    symbol_name_match_type name_match_type,
    const char *text, const char *word, const char *break_on,
    enum type_code code);
-extern void default_collect_symbol_completion_matches
-  (completion_tracker &tracker,
-   complete_symbol_mode,
-   symbol_name_match_type name_match_type,
-   const char *,
-   const char *,
-   enum type_code);
 extern void collect_symbol_completion_matches
   (completion_tracker &tracker,
    complete_symbol_mode mode,
@@ -2133,7 +2126,7 @@ public:
 private:
   /* The kind of symbols are we searching for.
      VARIABLES_DOMAIN - Search all symbols, excluding functions, type
-                        names, and constants (enums).
+			names, and constants (enums).
      FUNCTIONS_DOMAIN - Search all functions..
      TYPES_DOMAIN     - Search all type names.
      MODULES_DOMAIN   - Search all Fortran modules.
@@ -2236,10 +2229,6 @@ bool producer_is_realview (const char *producer);
 void fixup_section (struct general_symbol_info *ginfo,
 		    CORE_ADDR addr, struct objfile *objfile);
 
-/* Look up objfile containing BLOCK.  */
-
-struct objfile *lookup_objfile_from_block (const struct block *block);
-
 extern unsigned int symtab_create_debug;
 
 extern unsigned int symbol_lookup_debug;
@@ -2331,17 +2320,12 @@ const char *
   demangle_for_lookup (const char *name, enum language lang,
 		       demangle_result_storage &storage);
 
-struct symbol *allocate_symbol (struct objfile *);
-
-void initialize_objfile_symbol (struct symbol *);
-
-struct template_symbol *allocate_template_symbol (struct objfile *);
-
 /* Test to see if the symbol of language SYMBOL_LANGUAGE specified by
    SYMNAME (which is already demangled for C++ symbols) matches
    SYM_TEXT in the first SYM_TEXT_LEN characters.  If so, add it to
-   the current completion list.  */
-void completion_list_add_name (completion_tracker &tracker,
+   the current completion list and return true.  Otherwise, return
+   false.  */
+bool completion_list_add_name (completion_tracker &tracker,
 			       language symbol_language,
 			       const char *symname,
 			       const lookup_name_info &lookup_name,

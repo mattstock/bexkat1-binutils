@@ -1,5 +1,5 @@
 /* Support for the generic parts of most COFF variants, for BFD.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -444,14 +444,6 @@ static void * coff_mkobject_hook
 #ifdef COFF_WITH_PE
 static flagword handle_COMDAT
   (bfd *, flagword, void *, const char *, asection *);
-#endif
-#ifdef COFF_IMAGE_WITH_PE
-static bfd_boolean coff_read_word
-  (bfd *, unsigned int *);
-static unsigned int coff_compute_checksum
-  (bfd *);
-static bfd_boolean coff_apply_checksum
-  (bfd *);
 #endif
 #ifdef TICOFF
 static bfd_boolean ticoff0_bad_format_hook
@@ -2136,11 +2128,6 @@ coff_set_arch_mach_hook (bfd *abfd, void * filehdr)
   machine = 0;
   switch (internal_f->f_magic)
     {
-#ifdef PPCMAGIC
-    case PPCMAGIC:
-      arch = bfd_arch_powerpc;
-      break;
-#endif
 #ifdef I386MAGIC
     case I386MAGIC:
     case I386PTXMAGIC:
@@ -2666,8 +2653,7 @@ coff_write_relocs (bfd * abfd, int first_undef)
 	}
 
 #ifdef TARG_AUX
-      if (p != NULL)
-	free (p);
+      free (p);
 #endif
     }
 
@@ -2791,12 +2777,6 @@ coff_set_flags (bfd * abfd,
       return TRUE;
 #endif
 
-#ifdef PPCMAGIC
-    case bfd_arch_powerpc:
-      *magicp = PPCMAGIC;
-      return TRUE;
-#endif
-
 #if defined(I386MAGIC) || defined(AMD64MAGIC)
     case bfd_arch_i386:
 #if defined(I386MAGIC)
@@ -2849,9 +2829,7 @@ coff_set_flags (bfd * abfd,
 
 #ifdef RS6000COFF_C
     case bfd_arch_rs6000:
-#ifndef PPCMAGIC
     case bfd_arch_powerpc:
-#endif
       BFD_ASSERT (bfd_get_flavour (abfd) == bfd_target_xcoff_flavour);
       *magicp = bfd_xcoff_magic_number (abfd);
       return TRUE;
@@ -3288,11 +3266,8 @@ coff_compute_section_file_positions (bfd * abfd)
 
 #ifdef COFF_IMAGE_WITH_PE
 
-static unsigned int pelength;
-static unsigned int peheader;
-
 static bfd_boolean
-coff_read_word (bfd *abfd, unsigned int *value)
+coff_read_word (bfd *abfd, unsigned int *value, unsigned int *pelength)
 {
   unsigned char b[2];
   int status;
@@ -3309,13 +3284,13 @@ coff_read_word (bfd *abfd, unsigned int *value)
   else
     *value = (unsigned int) (b[0] + (b[1] << 8));
 
-  pelength += (unsigned int) status;
+  *pelength += status;
 
   return TRUE;
 }
 
 static unsigned int
-coff_compute_checksum (bfd *abfd)
+coff_compute_checksum (bfd *abfd, unsigned int *pelength)
 {
   bfd_boolean more_data;
   file_ptr filepos;
@@ -3323,7 +3298,7 @@ coff_compute_checksum (bfd *abfd)
   unsigned int total;
 
   total = 0;
-  pelength = 0;
+  *pelength = 0;
   filepos = (file_ptr) 0;
 
   do
@@ -3331,7 +3306,7 @@ coff_compute_checksum (bfd *abfd)
       if (bfd_seek (abfd, filepos, SEEK_SET) != 0)
 	return 0;
 
-      more_data = coff_read_word (abfd, &value);
+      more_data = coff_read_word (abfd, &value, pelength);
       total += value;
       total = 0xffff & (total + (total >> 0x10));
       filepos += 2;
@@ -3346,11 +3321,13 @@ coff_apply_checksum (bfd *abfd)
 {
   unsigned int computed;
   unsigned int checksum = 0;
+  unsigned int peheader;
+  unsigned int pelength;
 
   if (bfd_seek (abfd, 0x3c, SEEK_SET) != 0)
     return FALSE;
 
-  if (!coff_read_word (abfd, &peheader))
+  if (!coff_read_word (abfd, &peheader, &pelength))
     return FALSE;
 
   if (bfd_seek (abfd, peheader + 0x58, SEEK_SET) != 0)
@@ -3362,7 +3339,7 @@ coff_apply_checksum (bfd *abfd)
   if (bfd_seek (abfd, peheader, SEEK_SET) != 0)
     return FALSE;
 
-  computed = coff_compute_checksum (abfd);
+  computed = coff_compute_checksum (abfd, &pelength);
 
   checksum = computed + pelength;
 
@@ -3891,11 +3868,6 @@ coff_write_object_contents (bfd * abfd)
     internal_a.magic = ZMAGIC;
 #endif
 
-#if defined(PPC_PE)
-#define __A_MAGIC_SET__
-    internal_a.magic = IMAGE_NT_OPTIONAL_HDR_MAGIC;
-#endif
-
 #if defined MCORE_PE
 #define __A_MAGIC_SET__
     internal_a.magic = IMAGE_NT_OPTIONAL_HDR_MAGIC;
@@ -3977,24 +3949,6 @@ coff_write_object_contents (bfd * abfd)
 	return FALSE;
     }
 #endif
-#ifdef COFF_IMAGE_WITH_PE
-#ifdef PPC_PE
-  else if ((abfd->flags & EXEC_P) != 0)
-    {
-      bfd_byte b;
-
-      /* PowerPC PE appears to require that all executable files be
-	 rounded up to the page size.  */
-      b = 0;
-      if (bfd_seek (abfd,
-		    (file_ptr) BFD_ALIGN (sym_base, COFF_PAGE_SIZE) - 1,
-		    SEEK_SET) != 0
-	  || bfd_bwrite (&b, (bfd_size_type) 1, abfd) != 1)
-	return FALSE;
-    }
-#endif
-#endif
-
   /* If bfd_get_symcount (abfd) != 0, then we are not using the COFF
      backend linker, and obj_raw_syment_count is not valid until after
      coff_write_symbols is called.  */
@@ -4905,6 +4859,12 @@ coff_classify_symbol (bfd *abfd,
     case C_THUMBEXT:
     case C_THUMBEXTFUNC:
 #endif
+#ifdef RS6000COFF_C
+    case C_HIDEXT:
+#if ! defined _AIX52 && ! defined AIX_WEAK_SUPPORT
+    case C_AIX_WEAKEXT:
+#endif
+#endif
 #ifdef C_SYSTEM
     case C_SYSTEM:
 #endif
@@ -4918,6 +4878,10 @@ coff_classify_symbol (bfd *abfd,
 	  else
 	    return COFF_SYMBOL_COMMON;
 	}
+#ifdef RS6000COFF_C
+      if (syment->n_sclass == C_HIDEXT)
+	return COFF_SYMBOL_LOCAL;
+#endif
       return COFF_SYMBOL_GLOBAL;
 
     default:
@@ -5856,6 +5820,7 @@ const bfd_target VAR =							\
   '/',				/* AR_pad_char.  */			\
   15,				/* AR_max_namelen.  */			\
   0,				/* match priority.  */			\
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */ \
 									\
   /* Data conversion functions.  */					\
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,				\
@@ -5917,6 +5882,7 @@ const bfd_target VAR =							\
   '/',				/* AR_pad_char.  */			\
   15,				/* AR_max_namelen.  */			\
   0,				/* match priority.  */			\
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */ \
 									\
   /* Data conversion functions.  */					\
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,				\
@@ -5978,6 +5944,7 @@ const bfd_target VAR =							\
   '/',				/* AR_pad_char.  */			\
   15,				/* AR_max_namelen.  */			\
   0,				/* match priority.  */			\
+  TARGET_KEEP_UNUSED_SECTION_SYMBOLS, /* keep unused section symbols.  */ \
 									\
   /* Data conversion functions.  */					\
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,				\

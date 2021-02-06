@@ -1,6 +1,6 @@
 /* Machine independent variables that describe the core file under GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -87,12 +87,6 @@ extern ULONGEST read_code_unsigned_integer (CORE_ADDR memaddr,
 					    int len,
 					    enum bfd_endian byte_order);
 
-/* Read a null-terminated string from the debuggee's memory, given
-   address, a buffer into which to place the string, and the maximum
-   available space.  */
-
-extern void read_memory_string (CORE_ADDR, char *, int);
-
 /* Read the pointer of type TYPE at ADDR, and return the address it
    represents.  */
 
@@ -112,13 +106,13 @@ extern void write_memory_with_notification (CORE_ADDR memaddr,
 
 /* Store VALUE at ADDR in the inferior as a LEN-byte unsigned integer.  */
 extern void write_memory_unsigned_integer (CORE_ADDR addr, int len,
-                                           enum bfd_endian byte_order,
+					   enum bfd_endian byte_order,
 					   ULONGEST value);
 
 /* Store VALUE at ADDR in the inferior as a LEN-byte unsigned integer.  */
 extern void write_memory_signed_integer (CORE_ADDR addr, int len,
-                                         enum bfd_endian byte_order,
-                                         LONGEST value);
+					 enum bfd_endian byte_order,
+					 LONGEST value);
 
 /* Hook for `exec_file_command' command to call.  */
 

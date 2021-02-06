@@ -1,6 +1,6 @@
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -38,9 +38,8 @@
 
 #include "dis-asm.h"
 
-int
-default_displaced_step_hw_singlestep (struct gdbarch *gdbarch,
-				      struct displaced_step_closure *closure)
+bool
+default_displaced_step_hw_singlestep (struct gdbarch *gdbarch)
 {
   return !gdbarch_software_single_step_p (gdbarch);
 }
@@ -211,7 +210,7 @@ legacy_virtual_frame_pointer (struct gdbarch *gdbarch,
     *frame_regnum = gdbarch_deprecated_fp_regnum (gdbarch);
   else if (gdbarch_sp_regnum (gdbarch) >= 0
 	   && gdbarch_sp_regnum (gdbarch)
-	        < gdbarch_num_regs (gdbarch))
+		< gdbarch_num_regs (gdbarch))
     *frame_regnum = gdbarch_sp_regnum (gdbarch);
   else
     /* Should this be an internal error?  I guess so, it is reflecting
@@ -317,17 +316,17 @@ show_endian (struct ui_file *file, int from_tty, struct cmd_list_element *c,
   if (target_byte_order_user == BFD_ENDIAN_UNKNOWN)
     if (gdbarch_byte_order (get_current_arch ()) == BFD_ENDIAN_BIG)
       fprintf_unfiltered (file, _("The target endianness is set automatically "
-				  "(currently big endian)\n"));
+				  "(currently big endian).\n"));
     else
       fprintf_unfiltered (file, _("The target endianness is set automatically "
-				  "(currently little endian)\n"));
+				  "(currently little endian).\n"));
   else
     if (target_byte_order_user == BFD_ENDIAN_BIG)
       fprintf_unfiltered (file,
-			  _("The target is assumed to be big endian\n"));
+			  _("The target is set to big endian.\n"));
     else
       fprintf_unfiltered (file,
-			  _("The target is assumed to be little endian\n"));
+			  _("The target is set to little endian.\n"));
 }
 
 static void
@@ -476,11 +475,11 @@ show_architecture (struct ui_file *file, int from_tty,
 		   struct cmd_list_element *c, const char *value)
 {
   if (target_architecture_user == NULL)
-    fprintf_filtered (file, _("The target architecture is set "
-			      "automatically (currently %s)\n"),
+    fprintf_filtered (file, _("The target architecture is set to "
+			      "\"auto\" (currently \"%s\").\n"),
 		      gdbarch_bfd_arch_info (get_current_arch ())->printable_name);
   else
-    fprintf_filtered (file, _("The target architecture is assumed to be %s\n"),
+    fprintf_filtered (file, _("The target architecture is set to \"%s\".\n"),
 		      set_architecture_string);
 }
 
@@ -527,7 +526,7 @@ gdbarch_update_p (struct gdbarch_info info)
 
   /* Check for the current file.  */
   if (info.abfd == NULL)
-    info.abfd = exec_bfd;
+    info.abfd = current_program_space->exec_bfd ();
   if (info.abfd == NULL)
     info.abfd = core_bfd;
 
@@ -989,7 +988,7 @@ default_print_insn (bfd_vma memaddr, disassemble_info *info)
   disassembler_ftype disassemble_fn;
 
   disassemble_fn = disassembler (info->arch, info->endian == BFD_ENDIAN_BIG,
-				 info->mach, exec_bfd);
+				 info->mach, current_program_space->exec_bfd ());
 
   gdb_assert (disassemble_fn != NULL);
   return (*disassemble_fn) (memaddr, info);
@@ -1034,6 +1033,21 @@ std::string
 default_get_pc_address_flags (frame_info *frame, CORE_ADDR pc)
 {
   return "";
+}
+
+/* See arch-utils.h.  */
+void
+default_read_core_file_mappings (struct gdbarch *gdbarch,
+				 struct bfd *cbfd,
+				 gdb::function_view<void (ULONGEST count)>
+				   pre_loop_cb,
+				 gdb::function_view<void (int num,
+							  ULONGEST start,
+							  ULONGEST end,
+							  ULONGEST file_ofs,
+							  const char *filename)>
+				   loop_cb)
+{
 }
 
 void _initialize_gdbarch_utils ();

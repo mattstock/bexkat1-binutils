@@ -1,6 +1,6 @@
 /* Definitions for frame unwinder, for GDB, the GNU debugger.
 
-   Copyright (C) 2003-2020 Free Software Foundation, Inc.
+   Copyright (C) 2003-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -117,9 +117,11 @@ frame_unwind_append_unwinder (struct gdbarch *gdbarch,
 
 static int
 frame_unwind_try_unwinder (struct frame_info *this_frame, void **this_cache,
-                          const struct frame_unwind *unwinder)
+			  const struct frame_unwind *unwinder)
 {
   int res = 0;
+
+  unsigned int entry_generation = get_frame_cache_generation ();
 
   frame_prepare_for_sniffer (this_frame, unwinder);
 
@@ -130,9 +132,14 @@ frame_unwind_try_unwinder (struct frame_info *this_frame, void **this_cache,
   catch (const gdb_exception &ex)
     {
       /* Catch all exceptions, caused by either interrupt or error.
-	 Reset *THIS_CACHE.  */
-      *this_cache = NULL;
-      frame_cleanup_after_sniffer (this_frame);
+	 Reset *THIS_CACHE, unless something reinitialized the frame
+	 cache meanwhile, in which case THIS_FRAME/THIS_CACHE are now
+	 dangling.  */
+      if (get_frame_cache_generation () == entry_generation)
+	{
+	  *this_cache = NULL;
+	  frame_cleanup_after_sniffer (this_frame);
+	}
 
       if (ex.error == NOT_AVAILABLE_ERROR)
 	{
@@ -173,13 +180,13 @@ frame_unwind_find_by_frame (struct frame_info *this_frame, void **this_cache)
   unwinder_from_target = target_get_unwinder ();
   if (unwinder_from_target != NULL
       && frame_unwind_try_unwinder (this_frame, this_cache,
-                                   unwinder_from_target))
+				   unwinder_from_target))
     return;
 
   unwinder_from_target = target_get_tailcall_unwinder ();
   if (unwinder_from_target != NULL
       && frame_unwind_try_unwinder (this_frame, this_cache,
-                                   unwinder_from_target))
+				   unwinder_from_target))
     return;
 
   for (entry = table->list; entry != NULL; entry = entry->next)
@@ -244,18 +251,8 @@ frame_unwind_got_optimized (struct frame_info *frame, int regnum)
 {
   struct gdbarch *gdbarch = frame_unwind_arch (frame);
   struct type *type = register_type (gdbarch, regnum);
-  struct value *val;
 
-  /* Return an lval_register value, so that we print it as
-     "<not saved>".  */
-  val = allocate_value_lazy (type);
-  set_value_lazy (val, 0);
-  mark_value_bytes_optimized_out (val, 0, TYPE_LENGTH (type));
-  VALUE_LVAL (val) = lval_register;
-  VALUE_REGNUM (val) = regnum;
-  VALUE_NEXT_FRAME_ID (val)
-    = get_frame_id (get_next_frame_sentinel_okay (frame));
-  return val;
+  return allocate_optimized_out_value (type);
 }
 
 /* Return a value which indicates that FRAME copied REGNUM into
@@ -299,7 +296,7 @@ frame_unwind_got_constant (struct frame_info *frame, int regnum,
 }
 
 struct value *
-frame_unwind_got_bytes (struct frame_info *frame, int regnum, gdb_byte *buf)
+frame_unwind_got_bytes (struct frame_info *frame, int regnum, const gdb_byte *buf)
 {
   struct gdbarch *gdbarch = frame_unwind_arch (frame);
   struct value *reg_val;

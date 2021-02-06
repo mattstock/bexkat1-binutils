@@ -1,6 +1,6 @@
 /* Multi-process control for GDB, the GNU debugger.
 
-   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+   Copyright (C) 2008-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -51,12 +51,12 @@ bool print_inferior_events = true;
 /* The Current Inferior.  This is a strong reference.  I.e., whenever
    an inferior is the current inferior, its refcount is
    incremented.  */
-static struct inferior *current_inferior_ = NULL;
+static inferior_ref current_inferior_;
 
 struct inferior*
 current_inferior (void)
 {
-  return current_inferior_;
+  return current_inferior_.get ();
 }
 
 void
@@ -65,9 +65,7 @@ set_current_inferior (struct inferior *inf)
   /* There's always an inferior.  */
   gdb_assert (inf != NULL);
 
-  inf->incref ();
-  current_inferior_->decref ();
-  current_inferior_ = inf;
+  current_inferior_ = inferior_ref::new_reference (inf);
 }
 
 private_inferior::~private_inferior () = default;
@@ -79,7 +77,6 @@ inferior::~inferior ()
   discard_all_inferior_continuations (inf);
   inferior_free_data (inf);
   xfree (inf->args);
-  xfree (inf->terminal);
   target_desc_info_free (inf->tdesc_info);
 }
 
@@ -92,6 +89,21 @@ inferior::inferior (int pid_)
   inferior_alloc_data (this);
 
   m_target_stack.push (get_dummy_target ());
+}
+
+void
+inferior::set_tty (const char *terminal_name)
+{
+  if (terminal_name != nullptr && *terminal_name != '\0')
+    m_terminal = make_unique_xstrdup (terminal_name);
+  else
+    m_terminal = NULL;
+}
+
+const char *
+inferior::tty ()
+{
+  return m_terminal.get ();
 }
 
 struct inferior *
@@ -161,7 +173,7 @@ delete_inferior (struct inferior *todel)
   gdb::observers::inferior_removed.notify (inf);
 
   /* If this program space is rendered useless, remove it. */
-  if (program_space_empty_p (inf->pspace))
+  if (inf->pspace->empty ())
     delete inf->pspace;
 
   delete inf;
@@ -401,7 +413,7 @@ void
 print_selected_inferior (struct ui_out *uiout)
 {
   struct inferior *inf = current_inferior ();
-  const char *filename = inf->pspace->pspace_exec_filename;
+  const char *filename = inf->pspace->exec_filename.get ();
 
   if (filename == NULL)
     filename = _("<noexec>");
@@ -504,8 +516,8 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
       std::string conn = uiout_field_connection (inf->process_target ());
       uiout->field_string ("connection-id", conn.c_str ());
 
-      if (inf->pspace->pspace_exec_filename != NULL)
-	uiout->field_string ("exec", inf->pspace->pspace_exec_filename);
+      if (inf->pspace->exec_filename != nullptr)
+	uiout->field_string ("exec", inf->pspace->exec_filename.get ());
       else
 	uiout->field_skip ("exec");
 
@@ -532,6 +544,8 @@ detach_inferior_command (const char *args, int from_tty)
 {
   if (!args || !*args)
     error (_("Requires argument (inferior id(s) to detach)"));
+
+  scoped_restore_current_thread restore_thread;
 
   number_or_range_parser parser (args);
   while (!parser.finished ())
@@ -569,6 +583,8 @@ kill_inferior_command (const char *args, int from_tty)
 {
   if (!args || !*args)
     error (_("Requires argument (inferior id(s) to kill)"));
+
+  scoped_restore_current_thread restore_thread;
 
   number_or_range_parser parser (args);
   while (!parser.finished ())
@@ -619,34 +635,50 @@ inferior_command (const char *args, int from_tty)
   struct inferior *inf;
   int num;
 
-  num = parse_and_eval_long (args);
-
-  inf = find_inferior_id (num);
-  if (inf == NULL)
-    error (_("Inferior ID %d not known."), num);
-
-  if (inf->pid != 0)
+  if (args == nullptr)
     {
-      if (inf != current_inferior ())
-	{
-	  thread_info *tp = any_thread_of_inferior (inf);
-	  if (tp == NULL)
-	    error (_("Inferior has no threads."));
+      inf = current_inferior ();
+      gdb_assert (inf != nullptr);
+      const char *filename = inf->pspace->exec_filename.get ();
 
-	  switch_to_thread (tp);
-	}
+      if (filename == nullptr)
+	filename = _("<noexec>");
 
-      gdb::observers::user_selected_context_changed.notify
-	(USER_SELECTED_INFERIOR
-	 | USER_SELECTED_THREAD
-	 | USER_SELECTED_FRAME);
+      printf_filtered (_("[Current inferior is %d [%s] (%s)]\n"),
+		       inf->num, inferior_pid_to_str (inf->pid).c_str (),
+		       filename);
     }
   else
     {
-      switch_to_inferior_no_thread (inf);
+      num = parse_and_eval_long (args);
 
-      gdb::observers::user_selected_context_changed.notify
-	(USER_SELECTED_INFERIOR);
+      inf = find_inferior_id (num);
+      if (inf == NULL)
+	error (_("Inferior ID %d not known."), num);
+
+      if (inf->pid != 0)
+	{
+	  if (inf != current_inferior ())
+	    {
+	      thread_info *tp = any_thread_of_inferior (inf);
+	      if (tp == NULL)
+		error (_("Inferior has no threads."));
+
+	      switch_to_thread (tp);
+	    }
+
+	  gdb::observers::user_selected_context_changed.notify
+	    (USER_SELECTED_INFERIOR
+	     | USER_SELECTED_THREAD
+	     | USER_SELECTED_FRAME);
+	}
+      else
+	{
+	  switch_to_inferior_no_thread (inf);
+
+	  gdb::observers::user_selected_context_changed.notify
+	    (USER_SELECTED_INFERIOR);
+	}
     }
 }
 
@@ -944,8 +976,7 @@ initialize_inferiors (void)
      can only allocate an inferior when all those modules have done
      that.  Do this after initialize_progspace, due to the
      current_program_space reference.  */
-  current_inferior_ = add_inferior_silent (0);
-  current_inferior_->incref ();
+  set_current_inferior (add_inferior_silent (0));
   current_inferior_->pspace = current_program_space;
   current_inferior_->aspace = current_program_space->aspace;
   /* The architecture will be initialized shortly, by
@@ -1000,12 +1031,12 @@ The new inferior ID must be currently known."),
 	   &cmdlist);
 
   add_setshow_boolean_cmd ("inferior-events", no_class,
-         &print_inferior_events, _("\
+	 &print_inferior_events, _("\
 Set printing of inferior events (such as inferior start and exit)."), _("\
 Show printing of inferior events (such as inferior start and exit)."), NULL,
-         NULL,
-         show_print_inferior_events,
-         &setprintlist, &showprintlist);
+	 NULL,
+	 show_print_inferior_events,
+	 &setprintlist, &showprintlist);
 
   create_internalvar_type_lazy ("_inferior", &inferior_funcs, NULL);
 }

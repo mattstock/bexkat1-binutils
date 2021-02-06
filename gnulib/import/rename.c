@@ -1,6 +1,6 @@
 /* Work around rename bugs in some systems.
 
-   Copyright (C) 2001-2003, 2005-2006, 2009-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001-2003, 2005-2006, 2009-2021 Free Software Foundation, Inc.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -38,6 +38,10 @@
 # include <windows.h>
 
 # include "dirname.h"
+
+/* Don't assume that UNICODE is not defined.  */
+# undef MoveFileEx
+# define MoveFileEx MoveFileExA
 
 /* Rename the file SRC to DST.  This replacement is necessary on
    Windows, on which the system rename function will not replace

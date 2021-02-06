@@ -1,5 +1,5 @@
 /* Target description definitions for remote server for GDB.
-   Copyright (C) 2012-2020 Free Software Foundation, Inc.
+   Copyright (C) 2012-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,7 +27,7 @@
 /* A target description.  Inherit from tdesc_feature so that target_desc
    can be used as tdesc_feature.  */
 
-struct target_desc : tdesc_element
+struct target_desc final : tdesc_element
 {
   /* A vector of elements of register definitions that
      describe the inferior's register set.  */

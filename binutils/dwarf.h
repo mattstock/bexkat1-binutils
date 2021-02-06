@@ -1,5 +1,5 @@
 /* dwarf.h - DWARF support header file
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2021 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -211,6 +211,7 @@ extern int do_debug_frames;
 extern int do_debug_frames_interp;
 extern int do_debug_macinfo;
 extern int do_debug_str;
+extern int do_debug_str_offsets;
 extern int do_debug_loc;
 extern int do_gdb_index;
 extern int do_trace_info;

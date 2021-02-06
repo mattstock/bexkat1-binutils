@@ -1,5 +1,5 @@
 /* Main simulator entry points specific to the M32R.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
    This file is part of GDB, the GNU debugger.
@@ -22,16 +22,8 @@
 #include "libiberty.h"
 #include "bfd.h"
 
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
 
 #include "dv-m32r_uart.h"
 
@@ -68,15 +60,6 @@ sim_open (kind, callback, abfd, argv)
       free_state (sd);
       return 0;
     }
-
-#if 0 /* FIXME: pc is in mach-specific struct */
-  /* FIXME: watchpoints code shouldn't need this */
-  {
-    SIM_CPU *current_cpu = STATE_CPU (sd, 0);
-    STATE_WATCHPOINTS (sd)->pc = &(PC);
-    STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PC);
-  }
-#endif
 
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)
     {

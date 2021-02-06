@@ -1,6 +1,6 @@
 /* Definitions for symbol file management in GDB.
 
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright (C) 1992-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -36,6 +36,7 @@
 #include "bcache.h"
 #include "gdbarch.h"
 #include "gdbsupport/refcounted-object.h"
+#include "jit.h"
 
 struct htab;
 struct objfile_data;
@@ -193,9 +194,6 @@ struct obj_section
 
 struct objstats
 {
-  /* Number of partial symbols read.  */
-  int n_psyms = 0;
-
   /* Number of full symbols read.  */
   int n_syms = 0;
 
@@ -576,7 +574,7 @@ public:
 
   /* The partial symbol tables.  */
 
-  std::unique_ptr<psymtab_storage> partial_symtabs;
+  std::shared_ptr<psymtab_storage> partial_symtabs;
 
   /* The object file's BFD.  Can be null if the objfile contains only
      minimal symbols, e.g. the run time common symbols for SunOS4.  */
@@ -697,6 +695,20 @@ public:
      store these here rather than in struct block.  Static links must be
      allocated on the objfile's obstack.  */
   htab_up static_links;
+
+  /* JIT-related data for this objfile, if the objfile is a JITer;
+     that is, it produces JITed objfiles.  */
+  std::unique_ptr<jiter_objfile_data> jiter_data = nullptr;
+
+  /* JIT-related data for this objfile, if the objfile is JITed;
+     that is, it was produced by a JITer.  */
+  std::unique_ptr<jited_objfile_data> jited_data = nullptr;
+
+  /* A flag that is set to true if the JIT interface symbols are not
+     found in this objfile, so that we can skip the symbol lookup the
+     next time.  If an objfile does not have the symbols, it will
+     never have them.  */
+  bool skip_jit_symbol_lookup = false;
 };
 
 /* A deleter for objfile.  */
@@ -741,13 +753,16 @@ extern void objfile_set_sym_fns (struct objfile *objfile,
 
 extern void objfiles_changed (void);
 
-extern int is_addr_in_objfile (CORE_ADDR addr, const struct objfile *objfile);
+/* Return true if ADDR maps into one of the sections of OBJFILE and false
+   otherwise.  */
+
+extern bool is_addr_in_objfile (CORE_ADDR addr, const struct objfile *objfile);
 
 /* Return true if ADDRESS maps into one of the sections of a
    OBJF_SHARED objfile of PSPACE and false otherwise.  */
 
-extern int shared_objfile_contains_address_p (struct program_space *pspace,
-					      CORE_ADDR address);
+extern bool shared_objfile_contains_address_p (struct program_space *pspace,
+					       CORE_ADDR address);
 
 /* This operation deletes all objfile entries that represent solibs that
    weren't explicitly loaded by the user, via e.g., the add-symbol-file
@@ -771,7 +786,8 @@ extern int pc_in_section (CORE_ADDR, const char *);
 static inline int
 in_plt_section (CORE_ADDR pc)
 {
-  return pc_in_section (pc, ".plt");
+  return (pc_in_section (pc, ".plt")
+	  || pc_in_section (pc, ".plt.sec"));
 }
 
 /* Keep a registry of per-objfile data-pointers required by other GDB

@@ -623,7 +623,6 @@ ac_subst_vars='LTLIBOBJS
 LIBOBJS
 RANLIB
 AR
-LIBIBERTY_LIB
 RANLIB_FOR_BUILD
 CFLAGS_FOR_BUILD
 CC_FOR_BUILD
@@ -2073,18 +2072,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # SIM_AC_OUTPUT is a cover function to AC_OUTPUT to generate the Makefile.
 # It is intended to be invoked last.
 #
-# The simulator's configure.ac should look like:
-#
-# dnl Process this file with autoconf to produce a configure script.
-# AC_PREREQ(2.64)dnl
-# AC_INIT(Makefile.in)
-# sinclude(../common/aclocal.m4)
-#
-# SIM_AC_COMMON
-#
-# ... target specific stuff ...
-#
-# SIM_AC_OUTPUT
+# See README-HACKING for more details.
 
 # Include global overrides and fixes for Autoconf.
 
@@ -4810,11 +4798,9 @@ if test "${GCC}" = yes -a -z "${ERROR_ON_WARNING}" ; then
 fi
 
 WERROR_CFLAGS=""
-if test "${ERROR_ON_WARNING}" = yes ; then
-# NOTE: Disabled in the sim dir due to most sims generating warnings.
-#    WERROR_CFLAGS="-Werror"
-     true
-fi
+  if test "${ERROR_ON_WARNING}" = yes ; then
+    WERROR_CFLAGS="-Werror"
+  fi
 
 build_warnings="-Wall -Wdeclaration-after-statement -Wpointer-arith \
 -Wpointer-sign \
@@ -4903,14 +4889,12 @@ if test "x$cross_compiling" = "xno" -a "x$host" != "xi386-windows"; then
   CC_FOR_BUILD='$(CC)'
   CFLAGS_FOR_BUILD='$(CFLAGS)'
   RANLIB_FOR_BUILD='$(RANLIB)'
-  LIBIBERTY_LIB=../../libiberty/libiberty.a
 else
   AR_FOR_BUILD=${AR_FOR_BUILD-ar}
   AR_FLAGS_FOR_BUILD=${AR_FLAGS_FOR_BUILD-rc}
   CC_FOR_BUILD=${CC_FOR_BUILD-gcc}
   CFLAGS_FOR_BUILD=${CFLAGS_FOR_BUILD-"-g"}
   RANLIB_FOR_BUILD=${RANLIB_FOR_BUILD-ranlib}
-  LIBIBERTY_LIB=
 fi
 
 
@@ -5036,11 +5020,10 @@ ac_script='s/[\\$]/&&/g;s/;s,x,x,$//'
 program_transform_name=`$as_echo "$program_transform_name" | sed "$ac_script"`
 
 
-. ${srcdir}/../../bfd/configure.host
-
 ac_config_headers="$ac_config_headers config.h:config.in"
 
 
+# NB: You can assume C11 headers exist.
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
 ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
@@ -5438,7 +5421,7 @@ fi
 done
 
 
-for ac_header in stdlib.h string.h strings.h sys/stat.h sys/types.h unistd.h
+for ac_header in sys/stat.h sys/types.h unistd.h
 do :
   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -5608,7 +5591,6 @@ if test "$ac_res" != no; then :
 fi
 
 fi
-
 
 
 

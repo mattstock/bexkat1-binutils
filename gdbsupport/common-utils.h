@@ -1,6 +1,6 @@
 /* Shared general utility routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -59,7 +59,11 @@ xfree (T *ptr)
 data type.  Use operator delete instead.");
 
   if (ptr != NULL)
-    free (ptr);		/* ARI: free */
+#ifdef GNULIB_NAMESPACE
+    GNULIB_NAMESPACE::free (ptr);	/* ARI: free */
+#else
+    free (ptr);				/* ARI: free */
+#endif
 }
 
 
@@ -154,10 +158,6 @@ extern const char *skip_to_space (const char *inp);
    freeing all the elements.  */
 extern void free_vector_argv (std::vector<char *> &v);
 
-/* Given a vector of arguments ARGV, return a string equivalent to
-   joining all the arguments with a whitespace separating them.  */
-extern std::string stringify_argv (const std::vector<char *> &argv);
-
 /* Return true if VALUE is in [LOW, HIGH].  */
 
 template <typename T>
@@ -167,7 +167,7 @@ in_inclusive_range (T value, T low, T high)
   return value >= low && value <= high;
 }
 
-/* Ensure that V is aligned to an N byte boundary (B's assumed to be a
+/* Ensure that V is aligned to an N byte boundary (N's assumed to be a
    power of 2).  Round up/down when necessary.  Examples of correct
    use include:
 

@@ -1,5 +1,5 @@
 /* C preprocessor macro expansion commands for GDB.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of GDB.
@@ -47,9 +47,6 @@ macro_inform_no_debuginfo (void)
 static void
 macro_expand_command (const char *exp, int from_tty)
 {
-  gdb::unique_xmalloc_ptr<struct macro_scope> ms;
-  gdb::unique_xmalloc_ptr<char> expanded;
-
   /* You know, when the user doesn't specify any expression, it would be
      really cool if this defaulted to the last expression evaluated.
      Then it would be easy to ask, "Hey, what did I just evaluate?"  But
@@ -57,13 +54,15 @@ macro_expand_command (const char *exp, int from_tty)
      evaluated, just its value.  */
   if (! exp || ! *exp)
     error (_("You must follow the `macro expand' command with the"
-           " expression you\n"
-           "want to expand."));
+	   " expression you\n"
+	   "want to expand."));
 
-  ms = default_macro_scope ();
-  if (ms)
+  gdb::unique_xmalloc_ptr<macro_scope> ms = default_macro_scope ();
+
+  if (ms != nullptr)
     {
-      expanded = macro_expand (exp, standard_macro_lookup, ms.get ());
+      gdb::unique_xmalloc_ptr<char> expanded = macro_expand (exp, *ms);
+
       fputs_filtered ("expands to: ", gdb_stdout);
       fputs_filtered (expanded.get (), gdb_stdout);
       fputs_filtered ("\n", gdb_stdout);
@@ -76,9 +75,6 @@ macro_expand_command (const char *exp, int from_tty)
 static void
 macro_expand_once_command (const char *exp, int from_tty)
 {
-  gdb::unique_xmalloc_ptr<struct macro_scope> ms;
-  gdb::unique_xmalloc_ptr<char> expanded;
-
   /* You know, when the user doesn't specify any expression, it would be
      really cool if this defaulted to the last expression evaluated.
      And it should set the once-expanded text as the new `last
@@ -86,13 +82,15 @@ macro_expand_once_command (const char *exp, int from_tty)
      see the expression expanded one level at a time.  */
   if (! exp || ! *exp)
     error (_("You must follow the `macro expand-once' command with"
-           " the expression\n"
-           "you want to expand."));
+	   " the expression\n"
+	   "you want to expand."));
 
-  ms = default_macro_scope ();
-  if (ms)
+  gdb::unique_xmalloc_ptr<macro_scope> ms = default_macro_scope ();
+
+  if (ms != nullptr)
     {
-      expanded = macro_expand_once (exp, standard_macro_lookup, ms.get ());
+      gdb::unique_xmalloc_ptr<char> expanded = macro_expand_once (exp, *ms);
+
       fputs_filtered ("expands to: ", gdb_stdout);
       fputs_filtered (expanded.get (), gdb_stdout);
       fputs_filtered ("\n", gdb_stdout);
@@ -107,8 +105,8 @@ macro_expand_once_command (const char *exp, int from_tty)
     the splay tree so that it can be safely used while iterating.  */
 static void
 show_pp_source_pos (struct ui_file *stream,
-                    struct macro_source_file *file,
-                    int line)
+		    struct macro_source_file *file,
+		    int line)
 {
   std::string fullname = macro_source_fullname (file);
   fprintf_filtered (stream, "%ps:%d\n",
@@ -186,8 +184,8 @@ info_macro_command (const char *args, int from_tty)
 	  || strncmp (arg_start, "-all", p - arg_start) == 0)
 	show_all_macros_named = 1;
       else if (strncmp (arg_start, "--", p - arg_start) == 0)
-          /* Our macro support seems rather C specific but this would
-             seem necessary for languages allowing - in macro names.
+	  /* Our macro support seems rather C specific but this would
+	     seem necessary for languages allowing - in macro names.
 	     e.g. Scheme's (defmacro ->foo () "bar\n")  */
 	processing_args = 0;
       else
@@ -230,12 +228,12 @@ info_macro_command (const char *args, int from_tty)
 	  print_macro_definition (name, d, file, line);
 	}
       else
-        {
-          fprintf_filtered (gdb_stdout,
-                            "The symbol `%s' has no definition as a C/C++"
-                            " preprocessor macro\n"
-                            "at ", name);
-          show_pp_source_pos (gdb_stdout, ms->file, ms->line);
+	{
+	  fprintf_filtered (gdb_stdout,
+			    "The symbol `%s' has no definition as a C/C++"
+			    " preprocessor macro\n"
+			    "at ", name);
+	  show_pp_source_pos (gdb_stdout, ms->file, ms->line);
 	}
     }
 }

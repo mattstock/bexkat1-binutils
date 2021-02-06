@@ -1,6 +1,6 @@
 /* Routines for name->symbol lookups in GDB.
    
-   Copyright (C) 2003-2020 Free Software Foundation, Inc.
+   Copyright (C) 2003-2021 Free Software Foundation, Inc.
 
    Contributed by David Carlton <carlton@bactrian.org> and by Kealia,
    Inc.
@@ -584,7 +584,7 @@ iter_match_first_hashed (const struct dictionary *dict,
   unsigned int hash_index = (name.search_name_hash (lang->la_language)
 			     % DICT_HASHED_NBUCKETS (dict));
   symbol_name_matcher_ftype *matches_name
-    = get_symbol_name_matcher (lang, name);
+    = lang->get_symbol_name_matcher (name);
   struct symbol *sym;
 
   DICT_ITERATOR_DICT (iterator) = dict;
@@ -612,7 +612,7 @@ iter_match_next_hashed (const lookup_name_info &name,
 {
   const language_defn *lang = DICT_LANGUAGE (DICT_ITERATOR_DICT (iterator));
   symbol_name_matcher_ftype *matches_name
-    = get_symbol_name_matcher (lang, name);
+    = lang->get_symbol_name_matcher (name);
   struct symbol *next;
 
   for (next = DICT_ITERATOR_CURRENT (iterator)->hash_next;
@@ -719,7 +719,7 @@ expand_hashtable (struct dictionary *dict)
 /* See dictionary.h.  */
 
 unsigned int
-default_search_name_hash (const char *string0)
+language_defn::search_name_hash (const char *string0) const
 {
   /* The Ada-encoded version of a name P1.P2...Pn has either the form
      P1__P2__...Pn<suffix> or _ada_P1__P2__...Pn<suffix> (where the Pi
@@ -760,6 +760,13 @@ default_search_name_hash (const char *string0)
 	  if (string[1] == '_' && string != string0)
 	    {
 	      int c = string[2];
+
+	      if (c == 'B' && string[3] == '_')
+		{
+		  for (string += 4; ISDIGIT (*string); ++string)
+		    ;
+		  continue;
+		}
 
 	      if ((c < 'a' || c > 'z') && c != 'O')
 		return hash;
@@ -828,7 +835,7 @@ iter_match_next_linear (const lookup_name_info &name,
   const struct dictionary *dict = DICT_ITERATOR_DICT (iterator);
   const language_defn *lang = DICT_LANGUAGE (dict);
   symbol_name_matcher_ftype *matches_name
-    = get_symbol_name_matcher (lang, name);
+    = lang->get_symbol_name_matcher (name);
 
   int i, nsyms = DICT_LINEAR_NSYMS (dict);
   struct symbol *sym, *retval = NULL;

@@ -1,4 +1,4 @@
-# Copyright 2016-2020 Free Software Foundation, Inc.
+# Copyright 2016-2021 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,21 +19,17 @@ if {![dwarf2_support]} {
     return 0
 }
 
-standard_testfile main-subprogram.c enum-type-dw.S
+standard_testfile .c -dw.S
 
 # Make some DWARF for the test.
 set asm_file [standard_output_file $srcfile2]
 Dwarf::assemble $asm_file {
-    global srcdir subdir srcfile
-
-    set range [function_range mymain ${srcdir}/${subdir}/${srcfile}]
-    set mymain_start [lindex $range 0]
-    set mymain_length [lindex $range 1]
+    global srcfile
 
     cu {} {
 	DW_TAG_compile_unit {
                 {DW_AT_language @DW_LANG_C}
-                {DW_AT_name     main-subprogram.c}
+                {DW_AT_name     $srcfile}
                 {DW_AT_comp_dir /tmp}
         } {
 	    declare_labels type
@@ -45,9 +41,7 @@ Dwarf::assemble $asm_file {
             }
 
 	    DW_TAG_subprogram {
-		{name mymain}
-		{low_pc $mymain_start addr}
-                {high_pc "$mymain_start + $mymain_length" addr}
+		{MACRO_AT_func {mymain}}
 		{type :$type}
 		{DW_AT_main_subprogram 1 flag}
 	    } {
@@ -61,6 +55,8 @@ if {[prepare_for_testing "failed to prepare" ${testfile} \
     return -1
 }
 
+set have_index [exec_has_index_section $binfile]
+
 # Test that the "start" command stops in the "mymain" function.
 # This should happen because we used DW_AT_main_subprogram to tell gdb
 # that this was the real "main".
@@ -70,4 +66,14 @@ if {[gdb_start_cmd] < 0} {
     return -1
 }
 
-gdb_test "" "Temporary breakpoint .* mymain.*" "stopped at mymain"
+gdb_test_multiple "" "stopped at mymain" {
+    -re -wrap "Temporary breakpoint .* mymain.*" {
+	pass $gdb_test_name
+    }
+    -re -wrap "Temporary breakpoint .* main.*" {
+	if { $have_index } {
+	    setup_kfail "gdb/24549" *-*-*
+	}
+	fail $gdb_test_name
+    }
+}

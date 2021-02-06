@@ -1,5 +1,5 @@
 /* Main simulator entry points specific to the IQ2000.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of the GNU simulators.
@@ -18,9 +18,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "sim-main.h"
-#ifdef HAVE_STDLIB_H
+
 #include <stdlib.h>
-#endif
+
 #include "sim-options.h"
 #include "libiberty.h"
 #include "bfd.h"
@@ -66,15 +66,6 @@ sim_open (kind, callback, abfd, argv)
       free_state (sd);
       return 0;
     }
-
-#if 0 /* FIXME: pc is in mach-specific struct */
-  /* FIXME: watchpoints code shouldn't need this */
-  {
-    SIM_CPU *current_cpu = STATE_CPU (sd, 0);
-    STATE_WATCHPOINTS (sd)->pc = &(PC);
-    STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PC);
-  }
-#endif
 
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)
     {

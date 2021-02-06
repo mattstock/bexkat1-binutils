@@ -1,6 +1,6 @@
 /* DWARF 2 abbreviations
 
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994-2021 Free Software Foundation, Inc.
 
    Adapted by Gary Funck (gary@intrepid.com), Intrepid Technology,
    Inc.  with support from Florida State University (under contract
@@ -36,6 +36,8 @@ static hashval_t
 hash_abbrev (const void *item)
 {
   const struct abbrev_info *info = (const struct abbrev_info *) item;
+  /* Warning: if you change this next line, you must also update the
+     other code in this class using the _with_hash functions.  */
   return info->number;
 }
 
@@ -79,30 +81,17 @@ abbrev_table::alloc_abbrev ()
 /* Add an abbreviation to the table.  */
 
 void
-abbrev_table::add_abbrev (unsigned int abbrev_number,
-			  struct abbrev_info *abbrev)
+abbrev_table::add_abbrev (struct abbrev_info *abbrev)
 {
-  void **slot = htab_find_slot (m_abbrevs.get (), abbrev, INSERT);
+  void **slot = htab_find_slot_with_hash (m_abbrevs.get (), abbrev,
+					  abbrev->number, INSERT);
   *slot = abbrev;
-}
-
-/* Look up an abbrev in the table.
-   Returns NULL if the abbrev is not found.  */
-
-struct abbrev_info *
-abbrev_table::lookup_abbrev (unsigned int abbrev_number)
-{
-  struct abbrev_info search;
-  search.number = abbrev_number;
-
-  return (struct abbrev_info *) htab_find (m_abbrevs.get (), &search);
 }
 
 /* Read in an abbrev table.  */
 
 abbrev_table_up
-abbrev_table::read (struct objfile *objfile,
-		    struct dwarf2_section_info *section,
+abbrev_table::read (struct dwarf2_section_info *section,
 		    sect_offset sect_off)
 {
   bfd *abfd = section->get_bfd_owner ();
@@ -114,7 +103,8 @@ abbrev_table::read (struct objfile *objfile,
 
   abbrev_table_up abbrev_table (new struct abbrev_table (sect_off));
 
-  section->read (objfile);
+  /* Caller must ensure this.  */
+  gdb_assert (section->readin);
   abbrev_ptr = section->buffer + to_underlying (sect_off);
   abbrev_number = read_unsigned_leb128 (abfd, abbrev_ptr, &bytes_read);
   abbrev_ptr += bytes_read;
@@ -172,15 +162,15 @@ abbrev_table::read (struct objfile *objfile,
 	memcpy (cur_abbrev->attrs, cur_attrs.data (),
 		cur_abbrev->num_attrs * sizeof (struct attr_abbrev));
 
-      abbrev_table->add_abbrev (abbrev_number, cur_abbrev);
+      abbrev_table->add_abbrev (cur_abbrev);
 
       /* Get next abbreviation.
-         Under Irix6 the abbreviations for a compilation unit are not
-         always properly terminated with an abbrev number of 0.
-         Exit loop if we encounter an abbreviation which we have
-         already read (which means we are about to read the abbreviations
-         for the next compile unit) or if the end of the abbreviation
-         table is reached.  */
+	 Under Irix6 the abbreviations for a compilation unit are not
+	 always properly terminated with an abbrev number of 0.
+	 Exit loop if we encounter an abbreviation which we have
+	 already read (which means we are about to read the abbreviations
+	 for the next compile unit) or if the end of the abbreviation
+	 table is reached.  */
       if ((unsigned int) (abbrev_ptr - section->buffer) >= section->size)
 	break;
       abbrev_number = read_unsigned_leb128 (abfd, abbrev_ptr, &bytes_read);

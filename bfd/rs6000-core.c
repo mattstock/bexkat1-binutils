@@ -1,5 +1,5 @@
 /* IBM RS/6000 "XCOFF" back-end for BFD.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright (C) 1990-2021 Free Software Foundation, Inc.
    Written by Metin G. Ozisik, Mimi Phuong-Thao Vo, and John Gilmore.
    Archive support from Damon A. Permezel.
    Contributed by IBM Corporation and Cygnus Support.
@@ -759,11 +759,11 @@ rs6000coff_core_file_matches_executable_p (bfd *core_bfd, bfd *exec_bfd)
     }
 
   str1 = strrchr (path, '/');
-  str2 = strrchr (exec_bfd->filename, '/');
+  str2 = strrchr (bfd_get_filename (exec_bfd), '/');
 
   /* step over character '/' */
   str1 = str1 != NULL ? str1 + 1 : path;
-  str2 = str2 != NULL ? str2 + 1 : exec_bfd->filename;
+  str2 = str2 != NULL ? str2 + 1 : bfd_get_filename (exec_bfd);
 
   if (strcmp (str1, str2) == 0)
     ret = TRUE;

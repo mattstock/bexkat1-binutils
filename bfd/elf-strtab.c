@@ -1,5 +1,5 @@
 /* ELF strtab with GC and suffix merging support.
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001-2021 Free Software Foundation, Inc.
    Written by Jakub Jelinek <jakub@redhat.com>.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -443,8 +443,7 @@ _bfd_elf_strtab_finalize (struct elf_strtab_hash *tab)
     }
 
  alloc_failure:
-  if (array)
-    free (array);
+  free (array);
 
   /* Assign positions to the strings we want to keep.  */
   sec_size = 1;

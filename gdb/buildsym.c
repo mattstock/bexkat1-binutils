@@ -1,5 +1,5 @@
 /* Support routines for building symbol tables in GDB's internal format.
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -254,7 +254,7 @@ buildsym_compunit::finish_block_internal
       SYMBOL_BLOCK_VALUE (symbol) = block;
       BLOCK_FUNCTION (block) = symbol;
 
-      if (TYPE_NFIELDS (ftype) <= 0)
+      if (ftype->num_fields () <= 0)
 	{
 	  /* No parameter type information is recorded with the
 	     function's type.  Set that from the type of the
@@ -271,9 +271,10 @@ buildsym_compunit::finish_block_internal
 	    }
 	  if (nparams > 0)
 	    {
-	      TYPE_NFIELDS (ftype) = nparams;
-	      TYPE_FIELDS (ftype) = (struct field *)
-		TYPE_ALLOC (ftype, nparams * sizeof (struct field));
+	      ftype->set_num_fields (nparams);
+	      ftype->set_fields
+		((struct field *)
+		 TYPE_ALLOC (ftype, nparams * sizeof (struct field)));
 
 	      iparams = 0;
 	      /* Here we want to directly access the dictionary, because
@@ -285,7 +286,7 @@ buildsym_compunit::finish_block_internal
 
 		  if (SYMBOL_IS_ARGUMENT (sym))
 		    {
-		      TYPE_FIELD_TYPE (ftype, iparams) = SYMBOL_TYPE (sym);
+		      ftype->field (iparams).set_type (SYMBOL_TYPE (sym));
 		      TYPE_FIELD_ARTIFICIAL (ftype, iparams) = 0;
 		      iparams++;
 		    }
@@ -620,15 +621,15 @@ buildsym_compunit::patch_subfile_names (struct subfile *subfile,
       set_last_source_file (name);
 
       /* Default the source language to whatever can be deduced from
-         the filename.  If nothing can be deduced (such as for a C/C++
-         include file with a ".h" extension), then inherit whatever
-         language the previous subfile had.  This kludgery is
-         necessary because there is no standard way in some object
-         formats to record the source language.  Also, when symtabs
-         are allocated we try to deduce a language then as well, but
-         it is too late for us to use that information while reading
-         symbols, since symtabs aren't allocated until after all the
-         symbols have been processed for a given source file.  */
+	 the filename.  If nothing can be deduced (such as for a C/C++
+	 include file with a ".h" extension), then inherit whatever
+	 language the previous subfile had.  This kludgery is
+	 necessary because there is no standard way in some object
+	 formats to record the source language.  Also, when symtabs
+	 are allocated we try to deduce a language then as well, but
+	 it is too late for us to use that information while reading
+	 symbols, since symtabs aren't allocated until after all the
+	 symbols have been processed for a given source file.  */
 
       subfile->language = deduce_language_from_filename (subfile->name);
       if (subfile->language == language_unknown
@@ -706,13 +707,18 @@ buildsym_compunit::record_line (struct subfile *subfile, int line,
      anyway.  */
   if (line == 0)
     {
+      struct linetable_entry *last = nullptr;
       while (subfile->line_vector->nitems > 0)
 	{
-	  e = subfile->line_vector->item + subfile->line_vector->nitems - 1;
-	  if (e->pc != pc)
+	  last = subfile->line_vector->item + subfile->line_vector->nitems - 1;
+	  if (last->pc != pc)
 	    break;
 	  subfile->line_vector->nitems--;
 	}
+
+      /* Ignore an end-of-sequence marker marking an empty sequence.  */
+      if (last == nullptr || last->line == 0)
+	return;
     }
 
   e = subfile->line_vector->item + subfile->line_vector->nitems++;
@@ -942,6 +948,10 @@ buildsym_compunit::end_symtab_with_blockvector (struct block *static_block,
 	    = [] (const linetable_entry &ln1,
 		  const linetable_entry &ln2) -> bool
 	      {
+		if (ln1.pc == ln2.pc
+		    && ((ln1.line == 0) != (ln2.line == 0)))
+		  return ln1.line == 0;
+
 		return (ln1.pc < ln2.pc);
 	      };
 

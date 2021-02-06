@@ -1,6 +1,6 @@
 /* Support for printing D values for GDB, the GNU debugger.
 
-   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+   Copyright (C) 2008-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -34,8 +34,8 @@ dynamic_array_type (struct type *type,
 		    struct value *val,
 		    const struct value_print_options *options)
 {
-  if (TYPE_NFIELDS (type) == 2
-      && TYPE_CODE (TYPE_FIELD_TYPE (type, 0)) == TYPE_CODE_INT
+  if (type->num_fields () == 2
+      && type->field (0).type ()->code () == TYPE_CODE_INT
       && strcmp (TYPE_FIELD_NAME (type, 0), "length") == 0
       && strcmp (TYPE_FIELD_NAME (type, 1), "ptr") == 0
       && !value_bits_any_optimized_out (val,
@@ -52,7 +52,7 @@ dynamic_array_type (struct type *type,
 
       length = unpack_field_as_long (type, valaddr + embedded_offset, 0);
 
-      ptr_type = TYPE_FIELD_TYPE (type, 1);
+      ptr_type = type->field (1).type ();
       elttype = check_typedef (TYPE_TARGET_TYPE (ptr_type));
       addr = unpack_pointer (ptr_type,
 			     valaddr + TYPE_FIELD_BITPOS (type, 1) / 8
@@ -78,7 +78,7 @@ d_value_print_inner (struct value *val, struct ui_file *stream, int recurse,
   int ret;
 
   struct type *type = check_typedef (value_type (val));
-  switch (TYPE_CODE (type))
+  switch (type->code ())
     {
       case TYPE_CODE_STRUCT:
 	ret = dynamic_array_type (type, value_embedded_offset (val),

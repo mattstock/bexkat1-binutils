@@ -36,6 +36,9 @@
 /* Define to BFD's default target vector. */
 #undef DEFAULT_BFD_VEC
 
+/* Handle .ctf type-info sections */
+#undef ENABLE_LIBCTF
+
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
 #undef ENABLE_NLS
@@ -208,11 +211,8 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if your system has the kinfo_getfile function. */
+/* Define to 1 if you have the `kinfo_getfile' function. */
 #undef HAVE_KINFO_GETFILE
-
-/* Define to 1 if your system has the kinfo_getvmmap function. */
-#undef HAVE_KINFO_GETVMMAP
 
 /* Define if you have <langinfo.h> and nl_langinfo(CODESET). */
 #undef HAVE_LANGINFO_CODESET
@@ -228,6 +228,9 @@
 
 /* Define if you have the expat library. */
 #undef HAVE_LIBEXPAT
+
+/* Define if you have the gmp library. */
+#undef HAVE_LIBGMP
 
 /* Define to 1 if you have the `libiconvlist' function. */
 #undef HAVE_LIBICONVLIST
@@ -565,6 +568,9 @@
 /* Define to 1 if you have the `wresize' function. */
 #undef HAVE_WRESIZE
 
+/* Define to 1 if you have the <ws2tcpip.h> header file. */
+#undef HAVE_WS2TCPIP_H
+
 /* Define to 1 if you have the `XML_StopParser' function. */
 #undef HAVE_XML_STOPPARSER
 
@@ -792,6 +798,9 @@
 
 /* Define to 1 if you need to in order for `stat' and other things to work. */
 #undef _POSIX_SOURCE
+
+/* Use structured /proc on Solaris. */
+#undef _STRUCTURED_PROC
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
