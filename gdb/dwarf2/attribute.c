@@ -190,9 +190,18 @@ attribute::form_is_unsigned () const
 /* See attribute.h.  */
 
 bool
+attribute::form_is_signed () const
+{
+  return form == DW_FORM_sdata || form == DW_FORM_implicit_const;
+}
+
+/* See attribute.h.  */
+
+bool
 attribute::form_requires_reprocessing () const
 {
-  return (form == DW_FORM_strx1
+  return (form == DW_FORM_strx
+	  || form == DW_FORM_strx1
 	  || form == DW_FORM_strx2
 	  || form == DW_FORM_strx3
 	  || form == DW_FORM_strx4

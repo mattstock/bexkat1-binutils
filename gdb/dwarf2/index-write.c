@@ -94,13 +94,10 @@ file_write (FILE *file, const std::vector<Elem, Alloc> &vec)
 class data_buf
 {
 public:
-  /* Copy DATA to the end of the buffer.  */
-  template<typename T>
-  void append_data (const T &data)
+  /* Copy ARRAY to the end of the buffer.  */
+  void append_array (gdb::array_view<const gdb_byte> array)
   {
-    std::copy (reinterpret_cast<const gdb_byte *> (&data),
-	       reinterpret_cast<const gdb_byte *> (&data + 1),
-	       grow (sizeof (data)));
+    std::copy (array.begin (), array.end (), grow (array.size ()));
   }
 
   /* Copy CSTR (a zero-terminated string) to the end of buffer.  The
@@ -120,7 +117,7 @@ public:
 	input >>= 7;
 	if (input)
 	  output |= 0x80;
-	append_data (output);
+	m_vec.push_back (output);
 	if (input == 0)
 	  break;
       }
@@ -131,6 +128,12 @@ public:
   void append_uint (size_t len, bfd_endian byte_order, ULONGEST val)
   {
     ::store_unsigned_integer (grow (len), len, byte_order, val);
+  }
+
+  /* Copy VALUE to the end of the buffer, little-endian.  */
+  void append_offset (offset_type value)
+  {
+    append_uint (sizeof (value), BFD_ENDIAN_LITTLE, value);
   }
 
   /* Return the size of the buffer.  */
@@ -371,9 +374,9 @@ write_hash_table (mapped_symtab *symtab, data_buf &output, data_buf &cpool)
 
 	symbol_hash_table.emplace (entry.cu_indices, cpool.size ());
 	entry.index_offset = cpool.size ();
-	cpool.append_data (MAYBE_SWAP (entry.cu_indices.size ()));
+	cpool.append_offset (entry.cu_indices.size ());
 	for (const auto index : entry.cu_indices)
-	  cpool.append_data (MAYBE_SWAP (index));
+	  cpool.append_offset (index);
       }
   }
 
@@ -399,8 +402,8 @@ write_hash_table (mapped_symtab *symtab, data_buf &output, data_buf &cpool)
 	  vec_off = 0;
 	}
 
-      output.append_data (MAYBE_SWAP (str_off));
-      output.append_data (MAYBE_SWAP (vec_off));
+      output.append_offset (str_off);
+      output.append_offset (vec_off);
     }
 }
 
@@ -413,7 +416,6 @@ struct addrmap_index_data
     : addr_vec (addr_vec_), cu_index_htab (cu_index_htab_)
   {}
 
-  struct objfile *objfile;
   data_buf &addr_vec;
   psym_index_map &cu_index_htab;
 
@@ -430,12 +432,12 @@ struct addrmap_index_data
 /* Write an address entry to ADDR_VEC.  */
 
 static void
-add_address_entry (struct objfile *objfile, data_buf &addr_vec,
+add_address_entry (data_buf &addr_vec,
 		   CORE_ADDR start, CORE_ADDR end, unsigned int cu_index)
 {
   addr_vec.append_uint (8, BFD_ENDIAN_LITTLE, start);
   addr_vec.append_uint (8, BFD_ENDIAN_LITTLE, end);
-  addr_vec.append_data (MAYBE_SWAP (cu_index));
+  addr_vec.append_offset (cu_index);
 }
 
 /* Worker function for traversing an addrmap to build the address table.  */
@@ -447,7 +449,7 @@ add_address_entry_worker (void *datap, CORE_ADDR start_addr, void *obj)
   partial_symtab *pst = (partial_symtab *) obj;
 
   if (data->previous_valid)
-    add_address_entry (data->objfile, data->addr_vec,
+    add_address_entry (data->addr_vec,
 		       data->previous_cu_start, start_addr,
 		       data->previous_cu_index);
 
@@ -465,12 +467,12 @@ add_address_entry_worker (void *datap, CORE_ADDR start_addr, void *obj)
   return 0;
 }
 
-/* Write OBJFILE's address map to ADDR_VEC.
+/* Write PER_BFD's address map to ADDR_VEC.
    CU_INDEX_HTAB is used to map addrmap entries to their CU indices
    in the index file.  */
 
 static void
-write_address_map (struct objfile *objfile, data_buf &addr_vec,
+write_address_map (dwarf2_per_bfd *per_bfd, data_buf &addr_vec,
 		   psym_index_map &cu_index_htab)
 {
   struct addrmap_index_data addrmap_index_data (addr_vec, cu_index_htab);
@@ -479,10 +481,9 @@ write_address_map (struct objfile *objfile, data_buf &addr_vec,
      the addrmap iterator only provides the start of a region; we have to
      wait until the next invocation to get the start of the next region.  */
 
-  addrmap_index_data.objfile = objfile;
   addrmap_index_data.previous_valid = 0;
 
-  addrmap_foreach (objfile->partial_symtabs->psymtabs_addrmap,
+  addrmap_foreach (per_bfd->partial_symtabs->psymtabs_addrmap,
 		   add_address_entry_worker, &addrmap_index_data);
 
   /* It's highly unlikely the last entry (end address = 0xff...ff)
@@ -491,7 +492,7 @@ write_address_map (struct objfile *objfile, data_buf &addr_vec,
      doesn't work here.  To cope we pass 0xff...ff, this is a rare situation
      anyway.  */
   if (addrmap_index_data.previous_valid)
-    add_address_entry (objfile, addr_vec,
+    add_address_entry (addr_vec,
 		       addrmap_index_data.previous_cu_start, (CORE_ADDR) -1,
 		       addrmap_index_data.previous_cu_index);
 }
@@ -1376,26 +1377,26 @@ write_gdbindex_1 (FILE *out_file,
   offset_type total_len = size_of_header;
 
   /* The version number.  */
-  contents.append_data (MAYBE_SWAP (8));
+  contents.append_offset (8);
 
   /* The offset of the CU list from the start of the file.  */
-  contents.append_data (MAYBE_SWAP (total_len));
+  contents.append_offset (total_len);
   total_len += cu_list.size ();
 
   /* The offset of the types CU list from the start of the file.  */
-  contents.append_data (MAYBE_SWAP (total_len));
+  contents.append_offset (total_len);
   total_len += types_cu_list.size ();
 
   /* The offset of the address table from the start of the file.  */
-  contents.append_data (MAYBE_SWAP (total_len));
+  contents.append_offset (total_len);
   total_len += addr_vec.size ();
 
   /* The offset of the symbol table from the start of the file.  */
-  contents.append_data (MAYBE_SWAP (total_len));
+  contents.append_offset (total_len);
   total_len += symtab_vec.size ();
 
   /* The offset of the constant pool from the start of the file.  */
-  contents.append_data (MAYBE_SWAP (total_len));
+  contents.append_offset (total_len);
   total_len += constant_pool.size ();
 
   gdb_assert (contents.size () == size_of_header);
@@ -1463,7 +1464,7 @@ write_gdbindex (dwarf2_per_objfile *per_objfile, FILE *out_file,
 
   /* Dump the address map.  */
   data_buf addr_vec;
-  write_address_map (objfile, addr_vec, cu_index_htab);
+  write_address_map (per_objfile->per_bfd, addr_vec, cu_index_htab);
 
   /* Write out the .debug_type entries, if any.  */
   data_buf types_cu_list;
@@ -1613,7 +1614,7 @@ write_debug_names (dwarf2_per_objfile *per_objfile,
      string.  This value is rounded up to a multiple of 4.  */
   static_assert (sizeof (dwarf5_gdb_augmentation) % 4 == 0, "");
   header.append_uint (4, dwarf5_byte_order, sizeof (dwarf5_gdb_augmentation));
-  header.append_data (dwarf5_gdb_augmentation);
+  header.append_array (dwarf5_gdb_augmentation);
 
   gdb_assert (header.size () == bytes_of_header);
 
@@ -1686,6 +1687,7 @@ write_psymtabs_to_index (dwarf2_per_objfile *per_objfile, const char *dir,
 			 const char *basename, const char *dwz_basename,
 			 dw_index_kind index_kind)
 {
+  dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
   struct objfile *objfile = per_objfile->objfile;
 
   if (per_objfile->per_bfd->using_index)
@@ -1694,8 +1696,9 @@ write_psymtabs_to_index (dwarf2_per_objfile *per_objfile, const char *dir,
   if (per_objfile->per_bfd->types.size () > 1)
     error (_("Cannot make an index when the file has multiple .debug_types sections"));
 
-  if (!objfile->partial_symtabs->psymtabs
-      || !objfile->partial_symtabs->psymtabs_addrmap)
+  if (per_bfd->partial_symtabs == nullptr
+      || !per_bfd->partial_symtabs->psymtabs
+      || !per_bfd->partial_symtabs->psymtabs_addrmap)
     return;
 
   struct stat st;

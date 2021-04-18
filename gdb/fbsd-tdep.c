@@ -32,7 +32,7 @@
 
 #include "elf-bfd.h"
 #include "fbsd-tdep.h"
-#include "gcore.h"
+#include "gcore-elf.h"
 
 /* This enum is derived from FreeBSD's <sys/signal.h>.  */
 
@@ -593,7 +593,7 @@ static gdb::optional<gdb::byte_vector>
 fbsd_make_note_desc (enum target_object object, uint32_t structsize)
 {
   gdb::optional<gdb::byte_vector> buf =
-    target_read_alloc (current_top_target (), object, NULL);
+    target_read_alloc (current_inferior ()->top_target (), object, NULL);
   if (!buf || buf->empty ())
     return {};
 
@@ -660,17 +660,16 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
 	signalled_thr = curr_thr;
     }
 
-  gcore_build_thread_register_notes (gdbarch, signalled_thr,
-				     signalled_thr->suspend.stop_signal,
-				     obfd, &note_data, note_size);
+  enum gdb_signal stop_signal = signalled_thr->suspend.stop_signal;
+  gcore_elf_build_thread_register_notes (gdbarch, signalled_thr, stop_signal,
+					 obfd, &note_data, note_size);
   for (thread_info *thr : current_inferior ()->non_exited_threads ())
     {
       if (thr == signalled_thr)
 	continue;
 
-      gcore_build_thread_register_notes (gdbarch, thr,
-					 signalled_thr->suspend.stop_signal,
-					 obfd, &note_data, note_size);
+      gcore_elf_build_thread_register_notes (gdbarch, thr, stop_signal,
+					     obfd, &note_data, note_size);
     }
 
   /* Auxiliary vector.  */
@@ -712,6 +711,9 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
       if (!note_data)
 	return NULL;
     }
+
+  /* Include the target description when possible.  */
+  gcore_elf_make_tdesc_note (obfd, &note_data, note_size);
 
   return note_data;
 }

@@ -43,7 +43,7 @@ extern int deterministic;
 static bfd *obfd;
 static char *real_name;
 static char *temp_name;
-static int real_ofd;
+static int temp_fd;
 static FILE *outfile;
 
 static void
@@ -74,7 +74,7 @@ map_over_list (bfd *arch, void (*function) (bfd *, bfd *), struct list *list)
 	 want to hack multiple references.  */
       for (ptr = list; ptr; ptr = ptr->next)
 	{
-	  bfd_boolean found = FALSE;
+	  bool found = false;
 	  bfd *prev = arch;
 
 	  for (head = arch->archive_next; head; head = head->archive_next)
@@ -82,7 +82,7 @@ map_over_list (bfd *arch, void (*function) (bfd *, bfd *), struct list *list)
 	      if (bfd_get_filename (head) != NULL
 		  && FILENAME_CMP (ptr->name, bfd_get_filename (head)) == 0)
 		{
-		  found = TRUE;
+		  found = true;
 		  function (head, prev);
 		}
 	      prev = head;
@@ -98,7 +98,7 @@ map_over_list (bfd *arch, void (*function) (bfd *, bfd *), struct list *list)
 static void
 ar_directory_doer (bfd *abfd, bfd *ignore ATTRIBUTE_UNUSED)
 {
-  print_arelt_descr(outfile, abfd, verbose, FALSE);
+  print_arelt_descr(outfile, abfd, verbose, false);
 }
 
 void
@@ -152,7 +152,7 @@ void
 ar_open (char *name, int t)
 {
   real_name = xstrdup (name);
-  temp_name = make_tempname (real_name, &real_ofd);
+  temp_name = make_tempname (real_name, &temp_fd);
 
   if (temp_name == NULL)
     {
@@ -162,7 +162,7 @@ ar_open (char *name, int t)
       return;
     }
 
-  obfd = bfd_fdopenw (temp_name, NULL, real_ofd);
+  obfd = bfd_fdopenw (temp_name, NULL, temp_fd);
 
   if (!obfd)
     {
@@ -343,18 +343,12 @@ ar_save (void)
     }
   else
     {
-      bfd_boolean skip_stat = FALSE;
       struct stat target_stat;
-      int ofd = real_ofd;
 
       if (deterministic > 0)
         obfd->flags |= BFD_DETERMINISTIC_OUTPUT;
 
-#if !defined (_WIN32) || defined (__CYGWIN32__)
-      /* It's OK to fail; at worst it will result in SMART_RENAME using a slow
-         copy fallback to write the output.  */
-      ofd = dup (ofd);
-#endif
+      temp_fd = dup (temp_fd);
       bfd_close (obfd);
 
       if (stat (real_name, &target_stat) != 0)
@@ -363,9 +357,6 @@ ar_save (void)
 	     Create the real empty output file here so smart_rename will
 	     update the mode according to the process umask.  */
 	  obfd = bfd_openw (real_name, NULL);
-	  if (obfd == NULL
-	      || bfd_stat (obfd, &target_stat) != 0)
-	    skip_stat = TRUE;
 	  if (obfd != NULL)
 	    {
 	      bfd_set_format (obfd, bfd_archive);
@@ -373,8 +364,7 @@ ar_save (void)
 	    }
 	}
 
-      smart_rename (temp_name, real_name, ofd,
-		    skip_stat ? NULL : &target_stat, 0);
+      smart_rename (temp_name, real_name, temp_fd, NULL, false);
       obfd = 0;
       free (temp_name);
       free (real_name);

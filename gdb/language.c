@@ -374,26 +374,17 @@ set_language (enum language lang)
 }
 
 
-/* Print out the current language settings: language, range and
-   type checking.  If QUIETLY, print only what has changed.  */
+/* See language.h.  */
 
 void
-language_info (int quietly)
+language_info ()
 {
-  if (quietly && expected_language == current_language)
+  if (expected_language == current_language)
     return;
 
   expected_language = current_language;
   printf_unfiltered (_("Current language:  %s\n"), language);
   show_language_command (NULL, 1, NULL, NULL);
-
-  if (!quietly)
-    {
-      printf_unfiltered (_("Range checking:    %s\n"), range);
-      show_range_command (NULL, 1, NULL, NULL);
-      printf_unfiltered (_("Case sensitivity:  %s\n"), case_sensitive);
-      show_case_command (NULL, 1, NULL, NULL);
-    }
 }
 
 
@@ -774,14 +765,6 @@ language_defn::varobj_ops () const
   return &c_varobj_ops;
 }
 
-/* See language.h.  */
-
-const struct exp_descriptor *
-language_defn::expression_ops () const
-{
-  return &exp_descriptor_standard;
-}
-
 /* Parent class for both the "auto" and "unknown" languages.  These two
    pseudo-languages are very similar so merging their implementations like
    this makes sense.  */
@@ -901,18 +884,6 @@ public:
 
   const char *name_of_this () const override
   { return "this"; }
-
-  /* See language.h.  */
-
-  const struct op_print *opcode_print_table () const override
-  {
-    static const struct op_print unk_op_print_tab[] =
-      {
-	{NULL, OP_NULL, PREC_NULL, 0}
-      };
-
-    return unk_op_print_tab;
-  }
 };
 
 /* Class representing the fake "auto" language.  */
@@ -1052,7 +1023,7 @@ language_arch_info::type_and_symbol::alloc_type_symbol
   symbol->set_language (lang, nullptr);
   symbol->owner.arch = gdbarch;
   SYMBOL_OBJFILE_OWNED (symbol) = 0;
-  SYMBOL_SECTION (symbol) = 0;
+  symbol->set_section_index (0);
   SYMBOL_TYPE (symbol) = type;
   SYMBOL_DOMAIN (symbol) = VAR_DOMAIN;
   SYMBOL_ACLASS_INDEX (symbol) = LOC_TYPEDEF;
