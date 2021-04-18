@@ -32,7 +32,7 @@ const bfd_arch_info_type bfd_bexkat1_arch =
     "bexkat1",
     "bexkat1",
     4, /* section alignment power */
-    TRUE,
+    true,
     bfd_default_compatible,
     bfd_default_scan,
     bfd_arch_default_fill,

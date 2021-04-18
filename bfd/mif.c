@@ -53,19 +53,19 @@ struct mif_data_struct
 
 /* Create a mif object.  */
 
-static bfd_boolean
+static bool
 mif_mkobject (bfd *abfd)
 {
   struct mif_data_struct *tdata;
 
   tdata = (struct mif_data_struct *) bfd_alloc (abfd, sizeof (* tdata));
   if (tdata == NULL)
-    return FALSE;
+    return false;
 
   abfd->tdata.mif_data = tdata;
   tdata->head = NULL;
   tdata->tail = NULL;
-  return TRUE;
+  return true;
 }
 
 /* Try to recognize a MIF file.  */
@@ -78,7 +78,7 @@ mif_object_p (bfd *abfd ATTRIBUTE_UNUSED)
 
 /* Write a record out to a MIF file.  */
 
-static bfd_boolean
+static bool
 mif_write_record (bfd *abfd,
 		  size_t count,
 		  unsigned int addr,
@@ -99,14 +99,14 @@ mif_write_record (bfd *abfd,
   buf[j] = '\0';
 
   if (bfd_bwrite (buf, (bfd_size_type) strlen(buf), abfd) != strlen(buf))
-    return FALSE;
+    return false;
 
-  return TRUE;
+  return true;
 }
 
 /* Write out a MIF file.  */
 
-static bfd_boolean
+static bool
 mif_write_object_contents (bfd *abfd)
 {
   struct mif_data_list *l;
@@ -116,7 +116,7 @@ mif_write_object_contents (bfd *abfd)
   // This is hacked to solve a specific problem.  It can be adapted to
   // support additional MIF depths, but right now I just need 32k x 32.
   if (bfd_bwrite (begin, (bfd_size_type) strlen(begin), abfd) != strlen(begin))
-    return FALSE;
+    return false;
 
   for (l = abfd->tdata.mif_data->head; l != NULL; l = l->next)
     {
@@ -137,7 +137,7 @@ mif_write_object_contents (bfd *abfd)
 	    now = 4;
 
 	  if (! mif_write_record (abfd, now, where - abfd->start_address, p))
-	    return FALSE;
+	    return false;
 
 	  where += now;
 	  p += now;
@@ -146,15 +146,15 @@ mif_write_object_contents (bfd *abfd)
     }
 
 if (bfd_bwrite (end, (bfd_size_type) strlen(end), abfd) != strlen(end))
-    return FALSE;
+    return false;
   
-  return TRUE;
+  return true;
 }
 
 /* Set the architecture for the output file.  The architecture is
    irrelevant, so we ignore errors about unknown architectures.  */
 
-static bfd_boolean
+static bool
 mif_set_arch_mach (bfd *abfd,
 		    enum bfd_architecture arch,
 		    unsigned long mach)
@@ -162,9 +162,9 @@ mif_set_arch_mach (bfd *abfd,
   if (! bfd_default_set_arch_mach (abfd, arch, mach))
     {
       if (arch != bfd_arch_unknown)
-	return FALSE;
+	return false;
     }
-  return TRUE;
+  return true;
 }
 
 /* Get the size of the headers, for the linker.  */
@@ -176,7 +176,7 @@ mif_sizeof_headers (bfd *abfd ATTRIBUTE_UNUSED,
   return 0;
 }
 
-static bfd_boolean
+static bool
 mif_set_section_contents (bfd *abfd,
                            asection *section,
                            const void * location,
@@ -190,15 +190,15 @@ mif_set_section_contents (bfd *abfd,
   if (count == 0
       || (section->flags & SEC_ALLOC) == 0
       || (section->flags & SEC_LOAD) == 0)
-    return TRUE;
+    return true;
 
   n = (struct mif_data_list *) bfd_alloc (abfd, sizeof (* n));
   if (n == NULL)
-    return FALSE;
+    return false;
 
   data = (bfd_byte *) bfd_alloc (abfd, count);
   if (data == NULL)
-    return FALSE;
+    return false;
   memcpy (data, location, (size_t) count);
 
   n->data = data;
@@ -229,17 +229,17 @@ mif_set_section_contents (bfd *abfd,
 	tdata->tail = n;
     }
 
-  return TRUE;
+  return true;
 }
 
-static bfd_boolean
+static bool
 mif_get_section_contents (bfd *abfd ATTRIBUTE_UNUSED,
                            asection *section ATTRIBUTE_UNUSED,
                            void * location ATTRIBUTE_UNUSED,
                            file_ptr offset ATTRIBUTE_UNUSED,
 			  bfd_size_type count ATTRIBUTE_UNUSED)
 {
-  return FALSE;
+  return false;
 }
 
 /* Some random definitions for the target vector.  */

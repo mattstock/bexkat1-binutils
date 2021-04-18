@@ -42,13 +42,13 @@
 static bfd_reloc_status_type
 bexkat1_elf_reloc (bfd *, arelent *, asymbol *, void *,
 			asection *, bfd *, char **);
-static bfd_boolean
+static bool
 bexkat1_elf_new_section_hook (bfd *abfd, asection *sec);
-static bfd_boolean
+static bool
 bexkat1_elf_relax_section (bfd *abfd,
 			   asection *sec,
 			   struct bfd_link_info *link_info,
-			   bfd_boolean *again);
+			   bool *again);
 
 static reloc_howto_type bexkat1_elf_howto_table[] =
   {
@@ -57,54 +57,54 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  0,                      /* rightshift */
 	  2,                      /* size */
 	  32,                     /* bitsize */
-	  FALSE,                  /* pc_relative */
+	  false,                  /* pc_relative */
 	  0,                      /* bitpos */
 	  complain_overflow_dont, /* complain_on_overflow */
 	  bexkat1_elf_reloc,      /* special_function */
 	  "R_BEXKAT1_NONE",       /* name */
-	  FALSE,                  /* partial_inplace */
+	  false,                  /* partial_inplace */
 	  0,                      /* src_mask */
 	  0,                      /* dst_mask */
-	  FALSE),                 /* pcrel_offset */
+	  false),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_15,           /* type */
 	  0,                      /* rightshift */
 	  2,                      /* size */
 	  15,                     /* bitsize */
-	  FALSE,                  /* pc_relative */
+	  false,                  /* pc_relative */
 	  1,                      /* bitpos */
 	  complain_overflow_bitfield, /* complain_on_overflow */
 	  bexkat1_elf_reloc,      /* special_function */
 	  "R_BEXKAT1_15",         /* name */
-	  FALSE,                  /* partial_inplace */
+	  false,                  /* partial_inplace */
 	  0x0000fffe,             /* src_mask */
 	  0x0000fffe,             /* dst_mask */
-	  FALSE),                 /* pcrel_offset */
+	  false),                 /* pcrel_offset */
     HOWTO(R_BEXKAT1_PCREL_15,     /* type */
 	  2,                      /* rightshift */
 	  2,                      /* size */
 	  15,                     /* bitsize */
-	  TRUE,                   /* pc_relative */
+	  true,                   /* pc_relative */
 	  1,                      /* bitpos */
 	  complain_overflow_signed, /* complain_on_overflow */
 	  bexkat1_elf_reloc,      /* special_function */
 	  "R_BEXKAT1_PCREL_15",   /* name */
-	  FALSE,                  /* partial_inplace */
+	  false,                  /* partial_inplace */
 	  0x0000fffe,             /* src_mask */
 	  0x0000fffe,             /* dst_mask */
-	  TRUE),                  /* pcrel_offset */
+	  true),                  /* pcrel_offset */
     HOWTO(R_BEXKAT1_32,           /* type */
 	  0,                      /* rightshift */
 	  2,                      /* size */
 	  32,                     /* bitsize */
-	  FALSE,                  /* pc_relative */
+	  false,                  /* pc_relative */
 	  0,                      /* bitops */
 	  complain_overflow_bitfield, /* complain_on_overflow */
 	  bexkat1_elf_reloc,      /* special_function */
 	  "R_BEXKAT1_32",         /* name */
-	  FALSE,                  /* partial_inplace */
+	  false,                  /* partial_inplace */
 	  0,                      /* src_mask */
 	  0xffffffff,             /* dst_mask */
-	  FALSE)                  /* pcrel_offset */
+	  false)                  /* pcrel_offset */
   };
 
 struct elf_bexkat1_reloc_map
@@ -137,7 +137,7 @@ static const struct elf_bexkat1_reloc_map bexkat1_reloc_map[] =
     { BFD_RELOC_32,        R_BEXKAT1_32 }
   };
 
-static bfd_boolean
+static bool
 bexkat1_elf_new_section_hook (bfd *abfd, asection *sec)
 {
   if (!sec->used_by_bfd)
@@ -147,7 +147,7 @@ bexkat1_elf_new_section_hook (bfd *abfd, asection *sec)
 
       sdata = bfd_zalloc (abfd, amt);
       if (sdata == NULL)
-	return FALSE;
+	return false;
       sec->used_by_bfd = sdata;
     }
 
@@ -402,7 +402,7 @@ bexkat1_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
                                    error_message);
 }
 
-static bfd_boolean
+static bool
 bexkat1_elf_info_to_howto_rela(bfd *abfd,
 			       arelent *cache_ptr,
 			       Elf_Internal_Rela *dst)
@@ -416,14 +416,14 @@ bexkat1_elf_info_to_howto_rela(bfd *abfd,
       _bfd_error_handler (_("%pB: unsupported relocation type %#x"),
 			  abfd, r);
       bfd_set_error (bfd_error_bad_value);
-      return FALSE;
+      return false;
     }
 
   cache_ptr->howto = &bexkat1_elf_howto_table[r];
-  return TRUE;
+  return true;
 }
 
-static bfd_boolean
+static int
 bexkat1_elf_relocate_section (bfd *output_bfd,
 			      struct bfd_link_info *info,
 			      bfd *input_bfd,
@@ -473,7 +473,7 @@ bexkat1_elf_relocate_section (bfd *output_bfd,
 	}
       else
 	{
-	  bfd_boolean unresolved_reloc, warned, ignored;
+	  bool unresolved_reloc, warned, ignored;
 
 	  RELOC_FOR_GLOBAL_SYMBOL (info, input_bfd, input_section, rel,
 				   r_symndx, symtab_hdr, sym_hashes,
@@ -520,7 +520,7 @@ bexkat1_elf_relocate_section (bfd *output_bfd,
 	    case bfd_reloc_undefined:
 	      (*info->callbacks->undefined_symbol)
 		(info, name, input_bfd, input_section, rel->r_offset,
-		 TRUE);
+		 true);
 	      break;
 
 	    case bfd_reloc_outofrange:
@@ -546,10 +546,10 @@ bexkat1_elf_relocate_section (bfd *output_bfd,
 	}
     }
 
-  return TRUE;
+  return true;
 }
 
-static bfd_boolean
+static bool
 bexkat1_elf_check_relocs (bfd *abfd,
 			  struct bfd_link_info *info,
 			  asection *sec,
@@ -561,7 +561,7 @@ bexkat1_elf_check_relocs (bfd *abfd,
   const Elf_Internal_Rela *rel_end;
 
   if (bfd_link_relocatable (info))
-    return TRUE;
+    return true;
 
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
   sym_hashes = elf_sym_hashes (abfd);
@@ -601,24 +601,24 @@ bexkat1_elf_check_relocs (bfd *abfd,
 		     * sizeof (bexkat1_elf_section_data (sec)
 			       ->stubs.stub_size[0]));
       if (bexkat1_elf_section_data (sec)->stubs.stub_size == NULL)
-	return FALSE;
+	return false;
 
       for (i = 0; i < bexkat1_elf_section_data (sec)->stubs.n_relocs; i++)
 	bexkat1_elf_section_data (sec)->stubs.stub_size[i] = MAX_STUB_SIZE;
 
     }
   
-  return TRUE;
+  return true;
 }
 
-static bfd_boolean
+static bool
 bexkat1_elf_relax_section (bfd *abfd ATTRIBUTE_UNUSED,
 			   asection *sec ATTRIBUTE_UNUSED,
 			   struct bfd_link_info *link_info ATTRIBUTE_UNUSED,
-			   bfd_boolean *again ATTRIBUTE_UNUSED)
+			   bool *again ATTRIBUTE_UNUSED)
 {
   fprintf(stderr, "bexkat1_elf_relax_section()\n");
-  return TRUE;
+  return true;
 }
 
 #define elf_backend_may_use_rel_p       0
