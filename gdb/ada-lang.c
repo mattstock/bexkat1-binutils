@@ -95,8 +95,6 @@ static struct type *desc_index_type (struct type *, int);
 
 static int desc_arity (struct type *);
 
-static int ada_type_match (struct type *, struct type *, int);
-
 static int ada_args_match (struct symbol *, struct value **, int);
 
 static struct value *make_array_descriptor (struct type *, struct value *);
@@ -2171,9 +2169,9 @@ decode_constrained_packed_array (struct value *arr)
       && ada_is_modular_type (value_type (arr)))
     {
        /* This is a (right-justified) modular type representing a packed
- 	 array with no wrapper.  In order to interpret the value through
- 	 the (left-justified) packed array type we just built, we must
- 	 first left-justify it.  */
+	  array with no wrapper.  In order to interpret the value through
+	  the (left-justified) packed array type we just built, we must
+	  first left-justify it.  */
       int bit_size, bit_pos;
       ULONGEST mod;
 
@@ -2879,8 +2877,11 @@ ada_index_type (struct type *type, int n, const char *name)
       int i;
 
       for (i = 1; i < n; i += 1)
-	type = TYPE_TARGET_TYPE (type);
-      result_type = TYPE_TARGET_TYPE (type->index_type ());
+	{
+	  type = ada_check_typedef (type);
+	  type = TYPE_TARGET_TYPE (type);
+	}
+      result_type = TYPE_TARGET_TYPE (ada_check_typedef (type)->index_type ());
       /* FIXME: The stabs type r(0,0);bound;bound in an array type
 	 has a target type of TYPE_CODE_UNDEF.  We compensate here, but
 	 perhaps stabsread.c would make more sense.  */
@@ -3492,14 +3493,12 @@ ada_resolve_variable (struct symbol *sym, const struct block *block,
   return candidates[i];
 }
 
-/* Return non-zero if formal type FTYPE matches actual type ATYPE.  If
-   MAY_DEREF is non-zero, the formal may be a pointer and the actual
-   a non-pointer.  */
+/* Return non-zero if formal type FTYPE matches actual type ATYPE.  */
 /* The term "match" here is rather loose.  The match is heuristic and
    liberal.  */
 
 static int
-ada_type_match (struct type *ftype, struct type *atype, int may_deref)
+ada_type_match (struct type *ftype, struct type *atype)
 {
   ftype = ada_check_typedef (ftype);
   atype = ada_check_typedef (atype);
@@ -3514,12 +3513,13 @@ ada_type_match (struct type *ftype, struct type *atype, int may_deref)
     default:
       return ftype->code () == atype->code ();
     case TYPE_CODE_PTR:
-      if (atype->code () == TYPE_CODE_PTR)
-	return ada_type_match (TYPE_TARGET_TYPE (ftype),
-			       TYPE_TARGET_TYPE (atype), 0);
-      else
-	return (may_deref
-		&& ada_type_match (TYPE_TARGET_TYPE (ftype), atype, 0));
+      if (atype->code () != TYPE_CODE_PTR)
+	return 0;
+      atype = TYPE_TARGET_TYPE (atype);
+      /* This can only happen if the actual argument is 'null'.  */
+      if (atype->code () == TYPE_CODE_INT && TYPE_LENGTH (atype) == 0)
+	return 1;
+      return ada_type_match (TYPE_TARGET_TYPE (ftype), atype);
     case TYPE_CODE_INT:
     case TYPE_CODE_ENUM:
     case TYPE_CODE_RANGE:
@@ -3580,7 +3580,7 @@ ada_args_match (struct symbol *func, struct value **actuals, int n_actuals)
 	  struct type *ftype = ada_check_typedef (func_type->field (i).type ());
 	  struct type *atype = ada_check_typedef (value_type (actuals[i]));
 
-	  if (!ada_type_match (ftype, atype, 1))
+	  if (!ada_type_match (ftype, atype))
 	    return 0;
 	}
     }
@@ -11552,8 +11552,6 @@ static void
 create_excep_cond_exprs (struct ada_catchpoint *c,
 			 enum ada_exception_catchpoint_kind ex)
 {
-  struct bp_location *bl;
-
   /* Nothing to do if there's no specific exception to catch.  */
   if (c->excep_string.empty ())
     return;
@@ -11569,7 +11567,7 @@ create_excep_cond_exprs (struct ada_catchpoint *c,
 
   /* Iterate over all the catchpoint's locations, and parse an
      expression for each.  */
-  for (bl = c->loc; bl != NULL; bl = bl->next)
+  for (bp_location *bl : c->locations ())
     {
       struct ada_catchpoint_location *ada_loc
 	= (struct ada_catchpoint_location *) bl;
@@ -11865,7 +11863,7 @@ print_mention_exception (struct breakpoint *b)
 	  {
 	    std::string info = string_printf (_("`%s' Ada exception"),
 					      c->excep_string.c_str ());
-	    uiout->text (info.c_str ());
+	    uiout->text (info);
 	  }
 	else
 	  uiout->text (_("all Ada exceptions"));
@@ -11881,7 +11879,7 @@ print_mention_exception (struct breakpoint *b)
 	    std::string info
 	      = string_printf (_("`%s' Ada exception handlers"),
 			       c->excep_string.c_str ());
-	    uiout->text (info.c_str ());
+	    uiout->text (info);
 	  }
 	else
 	  uiout->text (_("all Ada exceptions handlers"));
@@ -13389,11 +13387,11 @@ _initialize_ada_language ()
 
   add_basic_prefix_cmd ("ada", no_class,
 			_("Prefix command for changing Ada-specific settings."),
-			&set_ada_list, "set ada ", 0, &setlist);
+			&set_ada_list, 0, &setlist);
 
   add_show_prefix_cmd ("ada", no_class,
 		       _("Generic command for showing Ada-specific settings."),
-		       &show_ada_list, "show ada ", 0, &showlist);
+		       &show_ada_list, 0, &showlist);
 
   add_setshow_boolean_cmd ("trust-PAD-over-XVS", class_obscure,
 			   &trust_pad_over_xvs, _("\
@@ -13472,12 +13470,12 @@ the regular expression are listed."));
 
   add_basic_prefix_cmd ("ada", class_maintenance,
 			_("Set Ada maintenance-related variables."),
-			&maint_set_ada_cmdlist, "maintenance set ada ",
+			&maint_set_ada_cmdlist,
 			0/*allow-unknown*/, &maintenance_set_cmdlist);
 
   add_show_prefix_cmd ("ada", class_maintenance,
 		       _("Show Ada maintenance-related variables."),
-		       &maint_show_ada_cmdlist, "maintenance show ada ",
+		       &maint_show_ada_cmdlist,
 		       0/*allow-unknown*/, &maintenance_show_cmdlist);
 
   add_setshow_boolean_cmd
@@ -13490,11 +13488,12 @@ When enabled, the debugger will stop using the DW_AT_GNAT_descriptive_type\n\
 DWARF attribute."),
      NULL, NULL, &maint_set_ada_cmdlist, &maint_show_ada_cmdlist);
 
-  decoded_names_store = htab_create_alloc (256, htab_hash_string, streq_hash,
+  decoded_names_store = htab_create_alloc (256, htab_hash_string,
+					   htab_eq_string,
 					   NULL, xcalloc, xfree);
 
   /* The ada-lang observers.  */
-  gdb::observers::new_objfile.attach (ada_new_objfile_observer);
-  gdb::observers::free_objfile.attach (ada_free_objfile_observer);
-  gdb::observers::inferior_exit.attach (ada_inferior_exit);
+  gdb::observers::new_objfile.attach (ada_new_objfile_observer, "ada-lang");
+  gdb::observers::free_objfile.attach (ada_free_objfile_observer, "ada-lang");
+  gdb::observers::inferior_exit.attach (ada_inferior_exit, "ada-lang");
 }

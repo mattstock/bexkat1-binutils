@@ -17,14 +17,16 @@
    You should have received a copy of the GNU General Public License 
    along with this program. If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include "bfd.h"
-#include "gdb/callback.h"
-#include "gdb/remote-sim.h"
+#include "sim/callback.h"
+#include "sim/sim.h"
 
 #include "sim-main.h"
 #include "sim-options.h"
@@ -330,7 +332,7 @@ do_run (SIM_DESC sd, SIM_CPU *cpu, uint64 mcode)
 
 #ifdef DEBUG
   if ((cr16_debug & DEBUG_INSTRUCTION) != 0)
-    sim_io_printf (sd, "do_long 0x%x\n", mcode);
+    sim_io_printf (sd, "do_long 0x%" PRIx64 "\n", mcode);
 #endif
 
    h = lookup_hash (sd, cpu, mcode, 1);
@@ -543,8 +545,9 @@ sim_open (SIM_OPEN_KIND kind, struct host_callback_struct *cb,
                else 
                  h = &hash_table[hash(s->opcode, 0)];
                break;
+
             default:
-              break;
+              continue;
             }
       
           /* go to the last entry in the chain.  */
@@ -671,7 +674,8 @@ sim_create_inferior (SIM_DESC sd, struct bfd *abfd,
     start_address = 0x0;
 #ifdef DEBUG
   if (cr16_debug)
-    sim_io_printf (sd, "sim_create_inferior:  PC=0x%lx\n", (long) start_address);
+    sim_io_printf (sd, "sim_create_inferior:  PC=0x%" BFD_VMA_FMT "x\n",
+		   start_address);
 #endif
   {
     SIM_CPU *cpu = STATE_CPU (sd, 0);

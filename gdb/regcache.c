@@ -184,15 +184,18 @@ reg_buffer::reg_buffer (gdbarch *gdbarch, bool has_pseudo)
   gdb_assert (gdbarch != NULL);
   m_descr = regcache_descr (gdbarch);
 
+  /* We don't zero-initialize the M_REGISTERS array, as the bytes it contains
+     aren't meaningful as long as the corresponding register status is not
+     REG_VALID.  */
   if (has_pseudo)
     {
-      m_registers.reset (new gdb_byte[m_descr->sizeof_cooked_registers] ());
+      m_registers.reset (new gdb_byte[m_descr->sizeof_cooked_registers]);
       m_register_status.reset
 	(new register_status[m_descr->nr_cooked_registers] ());
     }
   else
     {
-      m_registers.reset (new gdb_byte[m_descr->sizeof_raw_registers] ());
+      m_registers.reset (new gdb_byte[m_descr->sizeof_raw_registers]);
       m_register_status.reset
 	(new register_status[gdbarch_num_regs (gdbarch)] ());
     }
@@ -2084,25 +2087,28 @@ _initialize_regcache ()
   regcache_descr_handle
     = gdbarch_data_register_post_init (init_regcache_descr);
 
-  gdb::observers::target_changed.attach (regcache_observer_target_changed);
-  gdb::observers::thread_ptid_changed.attach (regcache_thread_ptid_changed);
+  gdb::observers::target_changed.attach (regcache_observer_target_changed,
+					 "regcache");
+  gdb::observers::thread_ptid_changed.attach (regcache_thread_ptid_changed,
+					      "regcache");
 
-  add_cmd ("register-cache", class_maintenance, reg_flush_command,
-	   _("Force gdb to flush its register and frame cache."),
-	   &maintenanceflushlist);
-  c = add_com_alias ("flushregs", "maintenance flush register-cache",
+  cmd_list_element *maintenance_flush_register_cache_cmd
+    = add_cmd ("register-cache", class_maintenance, reg_flush_command,
+	       _("Force gdb to flush its register and frame cache."),
+	       &maintenanceflushlist);
+  c = add_com_alias ("flushregs", maintenance_flush_register_cache_cmd,
 		     class_maintenance, 0);
   deprecate_cmd (c, "maintenance flush register-cache");
 
 #if GDB_SELF_TEST
   selftests::register_test ("get_thread_arch_aspace_regcache",
-  			    selftests::get_thread_arch_aspace_regcache_test);
+			    selftests::get_thread_arch_aspace_regcache_test);
   selftests::register_test ("registers_changed_ptid_all",
 			    selftests::registers_changed_ptid_all_test);
   selftests::register_test ("registers_changed_ptid_target",
-  			    selftests::registers_changed_ptid_target_test);
+			    selftests::registers_changed_ptid_target_test);
   selftests::register_test ("registers_changed_ptid_target_pid",
-  			    selftests::registers_changed_ptid_target_pid_test);
+			    selftests::registers_changed_ptid_target_pid_test);
   selftests::register_test ("registers_changed_ptid_target_ptid",
 			    selftests::registers_changed_ptid_target_ptid_test);
 

@@ -95,6 +95,7 @@ public:
   ptid_t wait (ptid_t, struct target_waitstatus *, target_wait_flags) override;
   void resume (ptid_t, int, enum gdb_signal) override;
   void mourn_inferior () override;
+  void follow_exec (inferior *, ptid_t, const char *) override;
   void update_thread_list () override;
   std::string pid_to_str (ptid_t) override;
   CORE_ADDR get_thread_local_address (ptid_t ptid,
@@ -1384,6 +1385,7 @@ thread_db_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
     case TARGET_WAITKIND_EXITED:
     case TARGET_WAITKIND_THREAD_EXITED:
     case TARGET_WAITKIND_SIGNALLED:
+    case TARGET_WAITKIND_EXECD:
       return ptid;
     }
 
@@ -1392,16 +1394,6 @@ thread_db_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
   /* If this process isn't using thread_db, we're done.  */
   if (info == NULL)
     return ptid;
-
-  if (ourstatus->kind == TARGET_WAITKIND_EXECD)
-    {
-      /* New image, it may or may not end up using thread_db.  Assume
-	 not unless we find otherwise.  */
-      delete_thread_db_info (beneath, ptid.pid ());
-      current_inferior ()->unpush_target (this);
-
-      return ptid;
-    }
 
   /* Fill in the thread's user-level thread id and status.  */
   thread_from_lwp (find_thread_ptid (beneath, ptid), ptid);
@@ -1421,6 +1413,19 @@ thread_db_target::mourn_inferior ()
 
   /* Detach the thread_db target from this inferior.  */
   current_inferior ()->unpush_target (this);
+}
+
+void
+thread_db_target::follow_exec (inferior *follow_inf, ptid_t ptid,
+			       const char *execd_pathname)
+{
+  process_stratum_target *beneath
+    = as_process_stratum_target (this->beneath ());
+
+  delete_thread_db_info (beneath, ptid.pid ());
+
+  current_inferior ()->unpush_target (this);
+  beneath->follow_exec (follow_inf, ptid, execd_pathname);
 }
 
 struct callback_data
@@ -1930,7 +1935,7 @@ info_auto_load_libthread_db (const char *args, int from_tty)
 	    i++;
 	  }
 
-	uiout->field_string ("pids", pids.c_str ());
+	uiout->field_string ("pids", pids);
 
 	uiout->text ("\n");
       }
@@ -2028,10 +2033,11 @@ as they are loaded."),
 			   &maintenance_show_cmdlist);
 
   /* Add ourselves to objfile event chain.  */
-  gdb::observers::new_objfile.attach (thread_db_new_objfile);
+  gdb::observers::new_objfile.attach (thread_db_new_objfile, "linux-thread-db");
 
   /* Add ourselves to inferior_created event chain.
      This is needed to handle debugging statically linked programs where
      the new_objfile observer won't get called for libpthread.  */
-  gdb::observers::inferior_created.attach (thread_db_inferior_created);
+  gdb::observers::inferior_created.attach (thread_db_inferior_created,
+					   "linux-thread-db");
 }

@@ -18,7 +18,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#include "gdb/callback.h"
+#include "sim/callback.h"
 #include "gdb/signals.h"
 #include "sim-main.h"
 #include "sim-syscall.h"
@@ -457,10 +458,6 @@ bfin_syscall (SIM_CPU *cpu)
       sc.result = setgid (sc.arg1);
       goto sys_finish;
 
-    case CB_SYS_getpid:
-      tbuf += sprintf (tbuf, "getpid()");
-      sc.result = getpid ();
-      goto sys_finish;
     case CB_SYS_kill:
       tbuf += sprintf (tbuf, "kill(%u, %i)", args[0], args[1]);
       /* Only let the app kill itself.  */
@@ -720,7 +717,8 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
 {
   char c;
   int i;
-  SIM_DESC sd = sim_state_alloc (kind, callback);
+  SIM_DESC sd = sim_state_alloc_extra (kind, callback,
+				       sizeof (struct bfin_board_data));
 
   /* The cpu data is kept in a separately allocated chunk of memory.  */
   if (sim_cpu_alloc_all (sd, 1) != SIM_RC_OK)
@@ -739,17 +737,6 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   if (STATE_ENVIRONMENT (sd) == ALL_ENVIRONMENT)
     STATE_ENVIRONMENT (sd) = VIRTUAL_ENVIRONMENT;
 
-  /* These options override any module options.
-     Obviously ambiguity should be avoided, however the caller may wish to
-     augment the meaning of an option.  */
-#define e_sim_add_option_table(sd, options) \
-  do { \
-    extern const OPTION options[]; \
-    sim_add_option_table (sd, NULL, options); \
-  } while (0)
-  e_sim_add_option_table (sd, bfin_mmu_options);
-  e_sim_add_option_table (sd, bfin_mach_options);
-
   /* The parser will print an error message for us, so we silently return.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
@@ -762,7 +749,7 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   if (sim_core_read_buffer (sd, NULL, read_map, &c, 4, 1) == 0)
     {
       bu16 emuexcpt = 0x25;
-      sim_do_commandf (sd, "memory-size 0x%lx", BFIN_DEFAULT_MEM_SIZE);
+      sim_do_commandf (sd, "memory-size 0x%x", BFIN_DEFAULT_MEM_SIZE);
       sim_write (sd, 0, (void *)&emuexcpt, 2);
     }
 

@@ -84,6 +84,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module fd-hook:
   # Code from module fd-safer-flag:
   # Code from module fdopendir:
+  # Code from module ffs:
   # Code from module filename:
   # Code from module filenamecat-lgpl:
   # Code from module flexmember:
@@ -99,9 +100,12 @@ AC_DEFUN([gl_EARLY],
   # Code from module frexpl:
   # Code from module fstat:
   # Code from module fstatat:
+  # Code from module gendocs:
   # Code from module getcwd:
   # Code from module getcwd-lgpl:
+  # Code from module getdelim:
   # Code from module getdtablesize:
+  # Code from module getline:
   # Code from module getlogin_r:
   # Code from module getprogname:
   # Code from module getrandom:
@@ -191,6 +195,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module strerror-override:
   # Code from module strerror_r-posix:
   # Code from module string:
+  # Code from module strings:
   # Code from module strnlen:
   # Code from module strnlen1:
   # Code from module strstr:
@@ -326,6 +331,11 @@ AC_DEFUN([gl_INIT],
   fi
   gl_DIRENT_MODULE_INDICATOR([fdopendir])
   gl_MODULE_INDICATOR([fdopendir])
+  gl_FUNC_FFS
+  if test $HAVE_FFS = 0; then
+    AC_LIBOBJ([ffs])
+  fi
+  gl_STRINGS_MODULE_INDICATOR([ffs])
   gl_FILE_NAME_CONCAT_LGPL
   AC_C_FLEXIBLE_ARRAY_MEMBER
   gl_FLOAT_H
@@ -392,12 +402,24 @@ AC_DEFUN([gl_INIT],
     AC_LIBOBJ([getcwd-lgpl])
   fi
   gl_UNISTD_MODULE_INDICATOR([getcwd])
+  gl_FUNC_GETDELIM
+  if test $HAVE_GETDELIM = 0 || test $REPLACE_GETDELIM = 1; then
+    AC_LIBOBJ([getdelim])
+    gl_PREREQ_GETDELIM
+  fi
+  gl_STDIO_MODULE_INDICATOR([getdelim])
   gl_FUNC_GETDTABLESIZE
   if test $HAVE_GETDTABLESIZE = 0 || test $REPLACE_GETDTABLESIZE = 1; then
     AC_LIBOBJ([getdtablesize])
     gl_PREREQ_GETDTABLESIZE
   fi
   gl_UNISTD_MODULE_INDICATOR([getdtablesize])
+  gl_FUNC_GETLINE
+  if test $REPLACE_GETLINE = 1; then
+    AC_LIBOBJ([getline])
+    gl_PREREQ_GETLINE
+  fi
+  gl_STDIO_MODULE_INDICATOR([getline])
   gl_FUNC_GETLOGIN_R
   if test $HAVE_GETLOGIN_R = 0 || test $REPLACE_GETLOGIN_R = 1; then
     AC_LIBOBJ([getlogin_r])
@@ -697,6 +719,7 @@ AC_DEFUN([gl_INIT],
   dnl For the modules argp, error.
   gl_MODULE_INDICATOR([strerror_r-posix])
   gl_HEADER_STRING_H
+  gl_HEADER_STRINGS_H
   gl_FUNC_STRNLEN
   if test $HAVE_DECL_STRNLEN = 0 || test $REPLACE_STRNLEN = 1; then
     AC_LIBOBJ([strnlen])
@@ -924,8 +947,11 @@ AC_DEFUN([gltests_LIBSOURCES], [
 # This macro records the list of files which have been installed by
 # gnulib-tool and may be removed by future gnulib-tool invocations.
 AC_DEFUN([gl_FILE_LIST], [
+  build-aux/gendocs.sh
   build-aux/gitlog-to-changelog
   build-aux/update-copyright
+  doc/gendocs_template
+  doc/gendocs_template_min
   lib/_Noreturn.h
   lib/alloca.c
   lib/alloca.in.h
@@ -972,6 +998,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/fd-safer-flag.c
   lib/fd-safer.c
   lib/fdopendir.c
+  lib/ffs.c
   lib/filename.h
   lib/filenamecat-lgpl.c
   lib/filenamecat.h
@@ -990,7 +1017,9 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/fstatat.c
   lib/getcwd-lgpl.c
   lib/getcwd.c
+  lib/getdelim.c
   lib/getdtablesize.c
+  lib/getline.c
   lib/getlogin_r.c
   lib/getprogname.c
   lib/getprogname.h
@@ -1110,6 +1139,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/strerror.c
   lib/strerror_r.c
   lib/string.in.h
+  lib/strings.in.h
   lib/stripslash.c
   lib/strnlen.c
   lib/strnlen1.c
@@ -1184,6 +1214,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/fcntl.m4
   m4/fcntl_h.m4
   m4/fdopendir.m4
+  m4/ffs.m4
   m4/filenamecat.m4
   m4/flexmember.m4
   m4/float_h.m4
@@ -1198,7 +1229,9 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/getcwd-abort-bug.m4
   m4/getcwd-path-max.m4
   m4/getcwd.m4
+  m4/getdelim.m4
   m4/getdtablesize.m4
+  m4/getline.m4
   m4/getlogin.m4
   m4/getlogin_r.m4
   m4/getpagesize.m4
@@ -1284,6 +1317,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/strerror.m4
   m4/strerror_r.m4
   m4/string_h.m4
+  m4/strings_h.m4
   m4/strnlen.m4
   m4/strstr.m4
   m4/strtok_r.m4

@@ -17,7 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "bfd.h"
 #include "sim-main.h"
 #include "dis-asm.h"
@@ -28,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #define SEMOPS_DEFINE_INLINE
 #include "cgen-ops.h"
 
-const char * const mode_names[] = {
+const char * const cgen_mode_names[] = {
   "VOID",
   "BI",
   "QI",
@@ -56,22 +58,22 @@ const char * const mode_names[] = {
 static const CGEN_IBASE virtual_insn_entries[] =
 {
   {
-    VIRTUAL_INSN_X_INVALID, "--invalid--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_INVALID, "--invalid--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_BEFORE, "--before--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_BEFORE, "--before--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_AFTER, "--after--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_AFTER, "--after--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_BEGIN, "--begin--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_BEGIN, "--begin--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_CHAIN, "--chain--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_CHAIN, "--chain--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_CTI_CHAIN, "--cti-chain--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_CTI_CHAIN, "--cti-chain--", NULL, 0, { V, {} }
   }
 };
 
@@ -416,7 +418,7 @@ cgen_rtx_error (SIM_CPU *cpu, const char * msg)
 {
   SIM_DESC sd = CPU_STATE (cpu);
 
-  sim_io_printf (sd, msg);
+  sim_io_printf (sd, "%s", msg);
   sim_io_printf (sd, "\n");
 
   sim_engine_halt (sd, cpu, NULL, CPU_PC_GET (cpu), sim_stopped, SIM_SIGTRAP);

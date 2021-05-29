@@ -508,7 +508,7 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
 	opts.format = 0;
 	if (type->is_unsigned ())
 	  type = builtin_type (gdbarch)->builtin_true_unsigned_char;
- 	else
+	else
 	  type = builtin_type (gdbarch)->builtin_true_char;
 
 	value_print (value_from_longest (type, *val_long), stream, &opts);
@@ -3186,7 +3186,8 @@ _initialize_printcmd ()
 
   current_display_number = -1;
 
-  gdb::observers::free_objfile.attach (clear_dangling_display_expressions);
+  gdb::observers::free_objfile.attach (clear_dangling_display_expressions,
+				       "printcmd");
 
   add_info ("address", info_address_command,
 	    _("Describe where symbol SYM is stored.\n\
@@ -3280,7 +3281,7 @@ Use \"set variable\" for variables with names identical to set subcommands.\n\
 \n\
 With a subcommand, this command modifies parts of the gdb environment.\n\
 You can see these environment settings with the \"show\" command."),
-		  &setlist, "set ", 1, &cmdlist);
+		  &setlist, 1, &cmdlist);
   if (dbx_commands)
     add_com ("assign", class_vars, set_command, _("\
 Evaluate expression EXP and assign result to variable VAR.\n\
@@ -3303,7 +3304,8 @@ current working language.  The result is printed and saved in the value\n\
 history, if it is not void."));
   set_cmd_completer_handle_brkchars (c, print_command_completer);
 
-  add_cmd ("variable", class_vars, set_command, _("\
+  cmd_list_element *set_variable_cmd
+    = add_cmd ("variable", class_vars, set_command, _("\
 Evaluate expression EXP and assign result to variable VAR.\n\
 Usage: set variable VAR = EXP\n\
 This uses assignment syntax appropriate for the current language\n\
@@ -3312,8 +3314,8 @@ VAR may be a debugger \"convenience\" variable (names starting\n\
 with $), a register (a few standard names starting with $), or an actual\n\
 variable in the program being debugged.  EXP is any valid expression.\n\
 This may usually be abbreviated to simply \"set\"."),
-	   &setlist);
-  add_alias_cmd ("var", "variable", class_vars, 0, &setlist);
+	       &setlist);
+  add_alias_cmd ("var", set_variable_cmd, class_vars, 0, &setlist);
 
   const auto print_opts = make_value_print_options_def_group (nullptr);
 
@@ -3350,10 +3352,11 @@ EXP may be preceded with /FMT, where FMT is a format letter\n\
 but no count or size letter (see \"x\" command)."),
 					      print_opts);
 
-  c = add_com ("print", class_vars, print_command, print_help.c_str ());
-  set_cmd_completer_handle_brkchars (c, print_command_completer);
-  add_com_alias ("p", "print", class_vars, 1);
-  add_com_alias ("inspect", "print", class_vars, 1);
+  cmd_list_element *print_cmd
+    = add_com ("print", class_vars, print_command, print_help.c_str ());
+  set_cmd_completer_handle_brkchars (print_cmd, print_command_completer);
+  add_com_alias ("p", print_cmd, class_vars, 1);
+  add_com_alias ("inspect", print_cmd, class_vars, 1);
 
   add_setshow_uinteger_cmd ("max-symbolic-offset", no_class,
 			    &max_symbolic_offset, _("\
@@ -3384,7 +3387,7 @@ treat this string as a command line, and evaluate it."));
   /* Memory tagging commands.  */
   add_prefix_cmd ("memory-tag", class_vars, memory_tag_command, _("\
 Generic command for printing and manipulating memory tag properties."),
-		  &memory_tag_list, "memory-tag ", 0, &cmdlist);
+		  &memory_tag_list, 0, &cmdlist);
   add_cmd ("print-logical-tag", class_vars,
 	   memory_tag_print_logical_tag_command,
 	   ("Print the logical tag from POINTER.\n\

@@ -1184,8 +1184,7 @@ print_thread_info_1 (struct ui_out *uiout, const char *requested_threads,
 	    }
 	  else
 	    {
-	      uiout->field_string ("target-id",
-				   thread_target_id_str (tp).c_str ());
+	      uiout->field_string ("target-id", thread_target_id_str (tp));
 	    }
 
 	  if (tp->state == THREAD_RUNNING)
@@ -1977,7 +1976,7 @@ print_selected_thread_frame (struct ui_out *uiout,
 	  uiout->text ("[Switching to thread ");
 	  uiout->field_string ("new-thread-id", print_thread_id (tp));
 	  uiout->text (" (");
-	  uiout->text (target_pid_to_str (inferior_ptid).c_str ());
+	  uiout->text (target_pid_to_str (inferior_ptid));
 	  uiout->text (")]");
 	}
     }
@@ -2134,10 +2133,13 @@ Options:\n\
   c = add_info ("threads", info_threads_command, info_threads_help.c_str ());
   set_cmd_completer_handle_brkchars (c, info_threads_command_completer);
 
-  add_prefix_cmd ("thread", class_run, thread_command, _("\
+  cmd_list_element *thread_cmd
+    = add_prefix_cmd ("thread", class_run, thread_command, _("\
 Use this command to switch between threads.\n\
 The new thread ID must be currently known."),
-		  &thread_cmd_list, "thread ", 1, &cmdlist);
+		      &thread_cmd_list, 1, &cmdlist);
+
+  add_com_alias ("t", thread_cmd, class_run, 1);
 
 #define THREAD_APPLY_OPTION_HELP "\
 Prints per-inferior thread number and target system's thread id\n\
@@ -2160,7 +2162,7 @@ THREAD_APPLY_OPTION_HELP),
 
   c = add_prefix_cmd ("apply", class_run, thread_apply_command,
 		      thread_apply_help.c_str (),
-		      &thread_apply_list, "thread apply ", 1,
+		      &thread_apply_list, 1,
 		      &thread_cmd_list);
   set_cmd_completer_handle_brkchars (c, thread_apply_command_completer);
 
@@ -2203,8 +2205,6 @@ Find threads that match a regular expression.\n\
 Usage: thread find REGEXP\n\
 Will display thread ids whose name, target ID, or extra info matches REGEXP."),
 	   &thread_cmd_list);
-
-  add_com_alias ("t", "thread", class_run, 1);
 
   add_setshow_boolean_cmd ("thread-events", no_class,
 			   &print_thread_events, _("\

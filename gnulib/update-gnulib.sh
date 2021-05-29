@@ -36,9 +36,12 @@ IMPORTED_GNULIB_MODULES="\
     dirent \
     dirfd \
     errno \
+    ffs \
     fnmatch-gnu \
     frexpl \
+    gendocs \
     getcwd \
+    getline \
     gettimeofday \
     gitlog-to-changelog \
     glob \

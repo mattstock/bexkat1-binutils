@@ -31,6 +31,21 @@
     equivalent of the CLI's "break -qualified" and "dprintf
     -qualified".
 
+ ** '-break-insert --force-condition' and '-dprintf-insert --force-condition'
+
+    The MI -break-insert and -dprintf-insert commands now support a
+    '--force-condition' flag to forcibly define a condition even when
+    the condition is invalid at all locations of the breakpoint.  This
+    is equivalent to the '-force-condition' flag of the CLI's "break"
+    command.
+
+ ** '-break-condition --force'
+
+    The MI -break-condition command now supports a '--force' flag to
+    forcibly define a condition even when the condition is invalid at
+    all locations of the selected breakpoint.  This is equivalent to
+    the '-force' flag of the CLI's "cond" command.
+
 * GDB now supports core file debugging for x86_64 Cygwin programs.
 
 * GDB will now look for the .gdbinit file in a config directory before
@@ -101,6 +116,27 @@ show startup-quietly
   initialization file (e.g. ~/.config/gdb/gdbearlyinit) in order to
   affect GDB.
 
+set print type hex on|off
+show print type hex
+  When 'on', the 'ptype' command uses hexadecimal notation to print sizes
+  and offsets of struct members.  When 'off', decimal notation is used.
+
+set python ignore-environment on|off
+show python ignore-environment
+  When 'on', this causes GDB's builtin Python to ignore any
+  environment variables that would otherwise affect how Python
+  behaves.  This command needs to be added to an early initialization
+  file (e.g. ~/.config/gdb/gdbearlyinit) in order to affect GDB.
+
+set python dont-write-bytecode auto|on|off
+show python dont-write-bytecode
+  When 'on', this causes GDB's builtin Python to not write any
+  byte-code (.pyc files) to disk.  This command needs to be added to
+  an early initialization file (e.g. ~/.config/gdb/gdbearlyinit) in
+  order to affect GDB.  When 'off' byte-code will always be written.
+  When set to 'auto' (the default) Python will check the
+  PYTHONDONTWRITEBYTECODE environment variable.
+
 * Changed commands
 
 break [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]
@@ -145,6 +181,13 @@ maintenance info sections
   line flag.  It is now possible to filter which sections are printed
   even when -all-objects is passed.
 
+ptype[/FLAGS] TYPE | EXPRESSION
+  The 'ptype' command has two new flags.  When '/x' is set, hexadecimal
+  notation is used when printing sizes and offsets of struct members.
+  When '/d' is set, decimal notation is used when printing sizes and
+  offsets of struct members.  Default behavior is given by 'show print
+  type hex'.
+
 * Removed targets and native configurations
 
 ARM Symbian			arm*-*-symbianelf*
@@ -156,6 +199,23 @@ qMemTags
 QMemTags
   Request the remote to store the specified allocation tags to the requested
   memory range.
+
+* Guile API
+
+  ** Improved support for rvalue reference values:
+     TYPE_CODE_RVALUE_REF is now exported as part of the API and the
+     value-referenced-value procedure now handles rvalue reference
+     values.
+
+  ** New procedures for obtaining value variants:
+     value-reference-value, value-rvalue-reference-value and
+     value-const-value.
+
+* Python API
+
+  ** Inferior objects now contain a read-only 'connection_num' attribute that
+     gives the connection number as seen in 'info connections' and
+     'info inferiors'.
 
 *** Changes in GDB 10
 

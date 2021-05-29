@@ -683,7 +683,7 @@ public:
   const struct btrace_config *btrace_conf (const struct btrace_target_info *) override;
   bool augmented_libraries_svr4_read () override;
   void follow_fork (bool, bool) override;
-  void follow_exec (struct inferior *, const char *) override;
+  void follow_exec (inferior *, ptid_t, const char *) override;
   int insert_fork_catchpoint (int) override;
   int remove_fork_catchpoint (int) override;
   int insert_vfork_catchpoint (int) override;
@@ -764,7 +764,7 @@ public: /* Remote specific methods.  */
   ptid_t select_thread_for_ambiguous_stop_reply
     (const struct target_waitstatus *status);
 
-  void remote_notice_new_inferior (ptid_t currthread, int executing);
+  void remote_notice_new_inferior (ptid_t currthread, bool executing);
 
   void process_initial_stop_replies (int from_tty);
 
@@ -780,7 +780,7 @@ public: /* Remote specific methods.  */
   int stop_reply_queue_length ();
 
   void check_pending_events_prevent_wildcard_vcont
-    (int *may_global_wildcard_vcont);
+    (bool *may_global_wildcard_vcont);
 
   void discard_pending_stop_replies_in_queue ();
   struct stop_reply *remote_notif_remove_queued_reply (ptid_t ptid);
@@ -1928,24 +1928,27 @@ add_packet_config_cmd (struct packet_config *config, const char *name,
 			 name, title);
   /* set/show TITLE-packet {auto,on,off} */
   cmd_name = xstrprintf ("%s-packet", title);
-  add_setshow_auto_boolean_cmd (cmd_name, class_obscure,
-				&config->detect, set_doc,
-				show_doc, NULL, /* help_doc */
-				NULL,
-				show_remote_protocol_packet_cmd,
-				&remote_set_cmdlist, &remote_show_cmdlist);
+  set_show_commands cmds
+    = add_setshow_auto_boolean_cmd (cmd_name, class_obscure,
+				    &config->detect, set_doc,
+				    show_doc, NULL, /* help_doc */
+				    NULL,
+				    show_remote_protocol_packet_cmd,
+				    &remote_set_cmdlist, &remote_show_cmdlist);
+
   /* The command code copies the documentation strings.  */
   xfree (set_doc);
   xfree (show_doc);
+
   /* set/show remote NAME-packet {auto,on,off} -- legacy.  */
   if (legacy)
     {
       char *legacy_name;
 
       legacy_name = xstrprintf ("%s-packet", name);
-      add_alias_cmd (legacy_name, cmd_name, class_obscure, 0,
+      add_alias_cmd (legacy_name, cmds.set, class_obscure, 0,
 		     &remote_set_cmdlist);
-      add_alias_cmd (legacy_name, cmd_name, class_obscure, 0,
+      add_alias_cmd (legacy_name, cmds.show, class_obscure, 0,
 		     &remote_show_cmdlist);
     }
 }
@@ -2556,12 +2559,12 @@ remote_target::remote_add_thread (ptid_t ptid, bool running, bool executing)
    thread is (internally) executing or stopped.  */
 
 void
-remote_target::remote_notice_new_inferior (ptid_t currthread, int executing)
+remote_target::remote_notice_new_inferior (ptid_t currthread, bool executing)
 {
   /* In non-stop mode, we assume new found threads are (externally)
      running until proven otherwise with a stop reply.  In all-stop,
      we can only get here if all threads are stopped.  */
-  int running = target_is_non_stop_p () ? 1 : 0;
+  bool running = target_is_non_stop_p ();
 
   /* If this is a new thread, add it to GDB's thread list.
      If we leave it up to WFI to do this, bad things will happen.  */
@@ -3955,7 +3958,7 @@ remote_target::update_thread_list ()
 		 executing until proven otherwise with a stop reply.
 		 In all-stop, we can only get here if all threads are
 		 stopped.  */
-	      int executing = target_is_non_stop_p () ? 1 : 0;
+	      bool executing = target_is_non_stop_p ();
 
 	      remote_notice_new_inferior (item.ptid, executing);
 
@@ -5925,20 +5928,20 @@ remote_target::follow_fork (bool follow_child, bool detach_fork)
 }
 
 /* Target follow-exec function for remote targets.  Save EXECD_PATHNAME
-   in the program space of the new inferior.  On entry and at return the
-   current inferior is the exec'ing inferior.  INF is the new exec'd
-   inferior, which may be the same as the exec'ing inferior unless
-   follow-exec-mode is "new".  */
+   in the program space of the new inferior.  */
 
 void
-remote_target::follow_exec (struct inferior *inf, const char *execd_pathname)
+remote_target::follow_exec (inferior *follow_inf, ptid_t ptid,
+			    const char *execd_pathname)
 {
+  process_stratum_target::follow_exec (follow_inf, ptid, execd_pathname);
+
   /* We know that this is a target file name, so if it has the "target:"
      prefix we strip it off before saving it in the program space.  */
   if (is_target_filename (execd_pathname))
     execd_pathname += strlen (TARGET_SYSROOT_PREFIX);
 
-  set_pspace_remote_exec_file (inf->pspace, execd_pathname);
+  set_pspace_remote_exec_file (follow_inf->pspace, execd_pathname);
 }
 
 /* Same as remote_detach, but don't send the "D" packet; just disconnect.  */
@@ -6634,9 +6637,6 @@ vcont_builder::push_action (ptid_t ptid, bool step, gdb_signal siggnal)
 void
 remote_target::commit_resumed ()
 {
-  int any_process_wildcard;
-  int may_global_wildcard_vcont;
-
   /* If connected in all-stop mode, we'd send the remote resume
      request directly from remote_resume.  Likewise if
      reverse-debugging, as there are no defined vCont actions for
@@ -6693,7 +6693,7 @@ remote_target::commit_resumed ()
      (vCont;c).  We can still send process-wide wildcards though.  */
 
   /* Start by assuming a global wildcard (vCont;c) is possible.  */
-  may_global_wildcard_vcont = 1;
+  bool may_global_wildcard_vcont = true;
 
   /* And assume every process is individually wildcard-able too.  */
   for (inferior *inf : all_non_exited_inferiors (this))
@@ -6721,7 +6721,7 @@ remote_target::commit_resumed ()
 
 	  /* And if we can't wildcard a process, we can't wildcard
 	     everything either.  */
-	  may_global_wildcard_vcont = 0;
+	  may_global_wildcard_vcont = false;
 	  continue;
 	}
 
@@ -6732,7 +6732,7 @@ remote_target::commit_resumed ()
 	 can't do a global wildcard, as that would resume the fork
 	 child.  */
       if (is_pending_fork_parent_thread (tp))
-	may_global_wildcard_vcont = 0;
+	may_global_wildcard_vcont = false;
     }
 
   /* We didn't have any resumed thread pending a vCont resume, so nothing to
@@ -6782,13 +6782,13 @@ remote_target::commit_resumed ()
   /* Now check whether we can send any process-wide wildcard.  This is
      to avoid sending a global wildcard in the case nothing is
      supposed to be resumed.  */
-  any_process_wildcard = 0;
+  bool any_process_wildcard = false;
 
   for (inferior *inf : all_non_exited_inferiors (this))
     {
       if (get_remote_inferior (inf)->may_wildcard_vcont)
 	{
-	  any_process_wildcard = 1;
+	  any_process_wildcard = true;
 	  break;
 	}
     }
@@ -7271,15 +7271,15 @@ remote_target::remove_new_fork_children (threads_listing_context *context)
       context->remove_thread (event->ws.value.related_pid);
 }
 
-/* Check whether any event pending in the vStopped queue would prevent
-   a global or process wildcard vCont action.  Clear
-   *may_global_wildcard if we can't do a global wildcard (vCont;c),
-   and clear the event inferior's may_wildcard_vcont flag if we can't
-   do a process-wide wildcard resume (vCont;c:pPID.-1).  */
+/* Check whether any event pending in the vStopped queue would prevent a
+   global or process wildcard vCont action.  Set *may_global_wildcard to
+   false if we can't do a global wildcard (vCont;c), and clear the event
+   inferior's may_wildcard_vcont flag if we can't do a process-wide
+   wildcard resume (vCont;c:pPID.-1).  */
 
 void
 remote_target::check_pending_events_prevent_wildcard_vcont
-  (int *may_global_wildcard)
+  (bool *may_global_wildcard)
 {
   struct notif_client *notif = &notif_client_stop;
 
@@ -7292,12 +7292,12 @@ remote_target::check_pending_events_prevent_wildcard_vcont
 
       if (event->ws.kind == TARGET_WAITKIND_FORKED
 	  || event->ws.kind == TARGET_WAITKIND_VFORKED)
-	*may_global_wildcard = 0;
+	*may_global_wildcard = false;
 
       /* This may be the first time we heard about this process.
 	 Regardless, we must not do a global wildcard resume, otherwise
 	 we'd resume this process too.  */
-      *may_global_wildcard = 0;
+      *may_global_wildcard = false;
       if (event->ptid != null_ptid)
 	{
 	  inferior *inf = find_inferior_ptid (this, event->ptid);
@@ -8036,7 +8036,7 @@ remote_target::process_stop_reply (struct stop_reply *stop_reply,
 	  stop_reply->regcache.clear ();
 	}
 
-      remote_notice_new_inferior (ptid, 0);
+      remote_notice_new_inferior (ptid, false);
       remote_thread_info *remote_thr = get_remote_thread_info (this, ptid);
       remote_thr->core = stop_reply->core;
       remote_thr->stop_reason = stop_reply->stop_reason;
@@ -9790,7 +9790,7 @@ remote_target::read_frame (gdb::char_vector *buf_p)
 	  {
 	    int repeat;
 
- 	    csum += c;
+	    csum += c;
 	    c = readchar (remote_timeout);
 	    csum += c;
 	    repeat = c - ' ' + 3;	/* Compute repeat count.  */
@@ -13521,7 +13521,6 @@ remote_target::get_tracepoint_status (struct breakpoint *bp,
 {
   struct remote_state *rs = get_remote_state ();
   char *reply;
-  struct bp_location *loc;
   struct tracepoint *tp = (struct tracepoint *) bp;
   size_t size = get_remote_packet_size ();
 
@@ -13529,7 +13528,7 @@ remote_target::get_tracepoint_status (struct breakpoint *bp,
     {
       tp->hit_count = 0;
       tp->traceframe_usage = 0;
-      for (loc = tp->loc; loc; loc = loc->next)
+      for (bp_location *loc : tp->locations ())
 	{
 	  /* If the tracepoint was never downloaded, don't go asking for
 	     any status.  */
@@ -14730,6 +14729,17 @@ remote_target::store_memtags (CORE_ADDR address, size_t len,
   return packet_check_result (rs->buf.data ()) == PACKET_OK;
 }
 
+/* Return true if remote target T is non-stop.  */
+
+bool
+remote_target_is_non_stop_p (remote_target *t)
+{
+  scoped_restore_current_thread restore_thread;
+  switch_to_target_no_thread (t);
+
+  return target_is_non_stop_p ();
+}
+
 #if GDB_SELF_TEST
 
 namespace selftests {
@@ -14820,9 +14830,6 @@ void _initialize_remote ();
 void
 _initialize_remote ()
 {
-  struct cmd_list_element *cmd;
-  const char *cmd_name;
-
   /* architecture specific data */
   remote_g_packet_data_handle =
     gdbarch_data_register_pre_init (remote_g_packet_data_init);
@@ -14831,7 +14838,7 @@ _initialize_remote ()
   add_target (extended_remote_target_info, extended_remote_target::open);
 
   /* Hook into new objfile notification.  */
-  gdb::observers::new_objfile.attach (remote_new_objfile);
+  gdb::observers::new_objfile.attach (remote_new_objfile, "remote");
 
 #if 0
   init_remote_threadtests ();
@@ -14843,13 +14850,13 @@ _initialize_remote ()
 Remote protocol specific variables.\n\
 Configure various remote-protocol specific variables such as\n\
 the packets being used."),
-			&remote_set_cmdlist, "set remote ",
+			&remote_set_cmdlist,
 			0 /* allow-unknown */, &setlist);
   add_prefix_cmd ("remote", class_maintenance, show_remote_cmd, _("\
 Remote protocol specific variables.\n\
 Configure various remote-protocol specific variables such as\n\
 the packets being used."),
-		  &remote_show_cmdlist, "show remote ",
+		  &remote_show_cmdlist,
 		  0 /* allow-unknown */, &showlist);
 
   add_cmd ("compare-sections", class_obscure, compare_sections_command, _("\
@@ -14867,18 +14874,15 @@ response packet.  GDB supplies the initial `$' character, and the\n\
 terminating `#' character and checksum."),
 	   &maintenancelist);
 
-  add_setshow_boolean_cmd ("remotebreak", no_class, &remote_break, _("\
+  set_show_commands remotebreak_cmds
+    = add_setshow_boolean_cmd ("remotebreak", no_class, &remote_break, _("\
 Set whether to send break if interrupted."), _("\
 Show whether to send break if interrupted."), _("\
 If set, a break, instead of a cntrl-c, is sent to the remote target."),
-			   set_remotebreak, show_remotebreak,
-			   &setlist, &showlist);
-  cmd_name = "remotebreak";
-  cmd = lookup_cmd (&cmd_name, setlist, "", NULL, -1, 1);
-  deprecate_cmd (cmd, "set remote interrupt-sequence");
-  cmd_name = "remotebreak"; /* needed because lookup_cmd updates the pointer */
-  cmd = lookup_cmd (&cmd_name, showlist, "", NULL, -1, 1);
-  deprecate_cmd (cmd, "show remote interrupt-sequence");
+			       set_remotebreak, show_remotebreak,
+			       &setlist, &showlist);
+  deprecate_cmd (remotebreak_cmds.set, "set remote interrupt-sequence");
+  deprecate_cmd (remotebreak_cmds.show, "show remote interrupt-sequence");
 
   add_setshow_enum_cmd ("interrupt-sequence", class_support,
 			interrupt_sequence_modes, &interrupt_sequence_mode,
@@ -15271,7 +15275,7 @@ packets."),
   add_basic_prefix_cmd ("remote", class_files, _("\
 Manipulate files on the remote system.\n\
 Transfer files to and from the remote target system."),
-			&remote_cmdlist, "remote ",
+			&remote_cmdlist,
 			0 /* allow-unknown */, &cmdlist);
 
   add_cmd ("put", class_files, remote_put_command,

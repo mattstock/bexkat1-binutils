@@ -592,6 +592,7 @@ struct bfd_link_hash_table *
 _bfd_xcoff_bfd_link_hash_table_create (bfd *abfd)
 {
   struct xcoff_link_hash_table *ret;
+  bool isxcoff64 = false;
   size_t amt = sizeof (* ret);
 
   ret = bfd_zmalloc (amt);
@@ -604,7 +605,9 @@ _bfd_xcoff_bfd_link_hash_table_create (bfd *abfd)
       return NULL;
     }
 
-  ret->debug_strtab = _bfd_xcoff_stringtab_init ();
+  isxcoff64 = bfd_coff_debug_string_prefix_length (abfd) == 4;
+
+  ret->debug_strtab = _bfd_xcoff_stringtab_init (isxcoff64);
   ret->archive_info = htab_create (37, xcoff_archive_info_hash,
 				   xcoff_archive_info_eq, NULL);
   if (!ret->debug_strtab || !ret->archive_info)
@@ -2653,7 +2656,7 @@ xcoff_auto_export_p (struct bfd_link_info *info,
 
 static bool
 xcoff_need_ldrel_p (struct bfd_link_info *info, struct internal_reloc *rel,
-		    struct xcoff_link_hash_entry *h)
+		    struct xcoff_link_hash_entry *h, asection *ssec)
 {
   if (!xcoff_hash_table (info)->loader_section)
     return false;
@@ -2701,6 +2704,14 @@ xcoff_need_ldrel_p (struct bfd_link_info *info, struct internal_reloc *rel,
 		  && bfd_is_abs_section (sec->output_section)))
 	    return false;
 	}
+
+      /* Absolute relocations from read-only sections are forbidden
+	 by AIX loader. However, they can appear in their section's
+         relocations.  */
+      if (ssec != NULL
+	  && (ssec->output_section->flags & SEC_READONLY) != 0)
+	return false;
+
       return true;
 
     case R_TLS:
@@ -2989,7 +3000,7 @@ xcoff_mark (struct bfd_link_info *info, asection *sec)
 
 	      /* See if this reloc needs to be copied into the .loader
 		 section.  */
-	      if (xcoff_need_ldrel_p (info, rel, h))
+	      if (xcoff_need_ldrel_p (info, rel, h, sec))
 		{
 		  ++xcoff_hash_table (info)->ldrel_count;
 		  if (h != NULL)
@@ -4982,7 +4993,7 @@ xcoff_link_input_bfd (struct xcoff_final_link_info *flinfo,
 		}
 
 	      if ((o->flags & SEC_DEBUGGING) == 0
-		  && xcoff_need_ldrel_p (flinfo->info, irel, h))
+		  && xcoff_need_ldrel_p (flinfo->info, irel, h, o))
 		{
 		  asection *sec;
 

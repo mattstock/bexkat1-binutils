@@ -783,7 +783,7 @@ jit_breakpoint_deleted (struct breakpoint *b)
   if (b->type != bp_jit_event)
     return;
 
-  for (bp_location *iter = b->loc; iter != nullptr; iter = iter->next)
+  for (bp_location *iter : b->locations ())
     {
       for (objfile *objf : iter->pspace->objfiles ())
 	{
@@ -807,6 +807,10 @@ jit_breakpoint_re_set_internal (struct gdbarch *gdbarch, program_space *pspace)
 {
   for (objfile *the_objfile : pspace->objfiles ())
     {
+      /* Skip separate debug objects.  */
+      if (the_objfile->separate_debug_objfile_backlink != nullptr)
+	continue;
+
       if (the_objfile->skip_jit_symbol_lookup)
 	continue;
 
@@ -833,7 +837,7 @@ jit_breakpoint_re_set_internal (struct gdbarch *gdbarch, program_space *pspace)
 	}
 
       jiter_objfile_data *objf_data
-	= get_jiter_objfile_data (reg_symbol.objfile);
+	= get_jiter_objfile_data (the_objfile);
       objf_data->register_code = reg_symbol.minsym;
       objf_data->descriptor = desc_symbol.minsym;
 
@@ -1243,10 +1247,10 @@ _initialize_jit ()
 			   show_jit_debug,
 			   &setdebuglist, &showdebuglist);
 
-  gdb::observers::inferior_created.attach (jit_inferior_created_hook);
-  gdb::observers::inferior_execd.attach (jit_inferior_created_hook);
-  gdb::observers::inferior_exit.attach (jit_inferior_exit_hook);
-  gdb::observers::breakpoint_deleted.attach (jit_breakpoint_deleted);
+  gdb::observers::inferior_created.attach (jit_inferior_created_hook, "jit");
+  gdb::observers::inferior_execd.attach (jit_inferior_created_hook, "jit");
+  gdb::observers::inferior_exit.attach (jit_inferior_exit_hook, "jit");
+  gdb::observers::breakpoint_deleted.attach (jit_breakpoint_deleted, "jit");
 
   jit_gdbarch_data = gdbarch_data_register_pre_init (jit_gdbarch_data_init);
   if (is_dl_available ())

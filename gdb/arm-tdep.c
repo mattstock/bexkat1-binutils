@@ -4614,15 +4614,15 @@ displaced_write_reg (regcache *regs, arm_displaced_step_copy_insn_closure *dsc,
 
 	case BX_WRITE_PC:
 	  bx_write_pc (regs, val);
-  	  break;
+	  break;
 
 	case LOAD_WRITE_PC:
 	  load_write_pc (regs, dsc, val);
-  	  break;
+	  break;
 
 	case ALU_WRITE_PC:
 	  alu_write_pc (regs, dsc, val);
-  	  break;
+	  break;
 
 	case CANNOT_WRITE_PC:
 	  warning (_("Instruction wrote to PC in an unexpected way when "
@@ -9553,7 +9553,7 @@ _initialize_arm_tdep ()
   gdbarch_register (bfd_arch_arm, arm_gdbarch_init, arm_dump_tdep);
 
   /* Add ourselves to objfile event chain.  */
-  gdb::observers::new_objfile.attach (arm_exidx_new_objfile);
+  gdb::observers::new_objfile.attach (arm_exidx_new_objfile, "arm-tdep");
 
   /* Register an ELF OS ABI sniffer for ARM binaries.  */
   gdbarch_register_osabi_sniffer (bfd_arch_arm,
@@ -9563,11 +9563,11 @@ _initialize_arm_tdep ()
   /* Add root prefix command for all "set arm"/"show arm" commands.  */
   add_basic_prefix_cmd ("arm", no_class,
 			_("Various ARM-specific commands."),
-			&setarmcmdlist, "set arm ", 0, &setlist);
+			&setarmcmdlist, 0, &setlist);
 
   add_show_prefix_cmd ("arm", no_class,
 		       _("Various ARM-specific commands."),
-		       &showarmcmdlist, "show arm ", 0, &showlist);
+		       &showarmcmdlist, 0, &showlist);
 
 
   arm_disassembler_options = xstrdup ("reg-names-std");
@@ -9697,11 +9697,11 @@ vfp - VFP co-processor."),
 	  { \
 	    unsigned int mem_len = LENGTH; \
 	    if (mem_len) \
-	    { \
-	      MEMS =  XNEWVEC (struct arm_mem_r, mem_len);  \
-	      memcpy(&MEMS->len, &RECORD_BUF[0], \
-		     sizeof(struct arm_mem_r) * LENGTH); \
-	    } \
+	      { \
+		MEMS =  XNEWVEC (struct arm_mem_r, mem_len);  \
+		memcpy(&MEMS->len, &RECORD_BUF[0], \
+		       sizeof(struct arm_mem_r) * LENGTH); \
+	      } \
 	  } \
 	  while (0)
 
@@ -9997,19 +9997,19 @@ arm_record_extension_space (insn_decode_record *arm_insn_r)
     {
       /* Handle MLA(S) and MUL(S).  */
       if (in_inclusive_range (insn_op1, 0U, 3U))
-      {
-	record_buf[0] = bits (arm_insn_r->arm_insn, 12, 15);
-	record_buf[1] = ARM_PS_REGNUM;
-	arm_insn_r->reg_rec_count = 2;
-      }
+	{
+	  record_buf[0] = bits (arm_insn_r->arm_insn, 12, 15);
+	  record_buf[1] = ARM_PS_REGNUM;
+	  arm_insn_r->reg_rec_count = 2;
+	}
       else if (in_inclusive_range (insn_op1, 4U, 15U))
-      {
-	/* Handle SMLAL(S), SMULL(S), UMLAL(S), UMULL(S).  */
-	record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
-	record_buf[1] = bits (arm_insn_r->arm_insn, 12, 15);
-	record_buf[2] = ARM_PS_REGNUM;
-	arm_insn_r->reg_rec_count = 3;
-      }
+	{
+	  /* Handle SMLAL(S), SMULL(S), UMLAL(S), UMULL(S).  */
+	  record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
+	  record_buf[1] = bits (arm_insn_r->arm_insn, 12, 15);
+	  record_buf[2] = ARM_PS_REGNUM;
+	  arm_insn_r->reg_rec_count = 3;
+	}
     }
 
   opcode1 = bits (arm_insn_r->arm_insn, 26, 27);
@@ -10302,20 +10302,20 @@ arm_record_data_proc_misc_ld_str (insn_decode_record *arm_insn_r)
       /* Handle multiply instructions.  */
       /* MLA, MUL, SMLAL, SMULL, UMLAL, UMULL.  */
       if (0 == arm_insn_r->opcode || 1 == arm_insn_r->opcode)
-	  {
-	    /* Handle MLA and MUL.  */
-	    record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
-	    record_buf[1] = ARM_PS_REGNUM;
-	    arm_insn_r->reg_rec_count = 2;
-	  }
-	else if (4 <= arm_insn_r->opcode && 7 >= arm_insn_r->opcode)
-	  {
-	    /* Handle SMLAL, SMULL, UMLAL, UMULL.  */
-	    record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
-	    record_buf[1] = bits (arm_insn_r->arm_insn, 12, 15);
-	    record_buf[2] = ARM_PS_REGNUM;
-	    arm_insn_r->reg_rec_count = 3;
-	  }
+	{
+	  /* Handle MLA and MUL.  */
+	  record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
+	  record_buf[1] = ARM_PS_REGNUM;
+	  arm_insn_r->reg_rec_count = 2;
+	}
+      else if (4 <= arm_insn_r->opcode && 7 >= arm_insn_r->opcode)
+	{
+	  /* Handle SMLAL, SMULL, UMLAL, UMULL.  */
+	  record_buf[0] = bits (arm_insn_r->arm_insn, 16, 19);
+	  record_buf[1] = bits (arm_insn_r->arm_insn, 12, 15);
+	  record_buf[2] = ARM_PS_REGNUM;
+	  arm_insn_r->reg_rec_count = 3;
+	}
     }
   else if (9 == arm_insn_r->decode  && opcode1 > 0x10)
     {
@@ -11100,10 +11100,10 @@ arm_record_b_bl (insn_decode_record *arm_insn_r)
   /* Note: BLX(1) doesnt fall here but instead it falls into
      extension space.  */
   if (bit (arm_insn_r->arm_insn, 24))
-  {
-    record_buf[0] = ARM_LR_REGNUM;
-    arm_insn_r->reg_rec_count = 1;
-  }
+    {
+      record_buf[0] = ARM_LR_REGNUM;
+      arm_insn_r->reg_rec_count = 1;
+    }
 
   REG_ALLOC (arm_insn_r->arm_regs, arm_insn_r->reg_rec_count, record_buf);
 

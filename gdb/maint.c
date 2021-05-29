@@ -1133,20 +1133,23 @@ _initialize_maint_cmds ()
 {
   struct cmd_list_element *cmd;
 
-  add_basic_prefix_cmd ("maintenance", class_maintenance, _("\
+  cmd_list_element *maintenance_cmd
+    = add_basic_prefix_cmd ("maintenance", class_maintenance, _("\
 Commands for use by GDB maintainers.\n\
 Includes commands to dump specific internal GDB structures in\n\
 a human readable form, to cause GDB to deliberately dump core, etc."),
-			&maintenancelist, "maintenance ", 0,
-			&cmdlist);
+			    &maintenancelist, 0,
+			    &cmdlist);
 
-  add_com_alias ("mt", "maintenance", class_maintenance, 1);
+  add_com_alias ("mt", maintenance_cmd, class_maintenance, 1);
 
-  add_basic_prefix_cmd ("info", class_maintenance, _("\
+  cmd_list_element *maintenance_info_cmd
+    = add_basic_prefix_cmd ("info", class_maintenance, _("\
 Commands for showing internal info about the program being debugged."),
-			&maintenanceinfolist, "maintenance info ", 0,
-			&maintenancelist);
-  add_alias_cmd ("i", "info", class_maintenance, 1, &maintenancelist);
+			    &maintenanceinfolist, 0,
+			    &maintenancelist);
+  add_alias_cmd ("i", maintenance_info_cmd, class_maintenance, 1,
+		 &maintenancelist);
 
   const auto opts = make_maint_info_sections_options_def_group (nullptr);
   static std::string maint_info_sections_command_help
@@ -1183,25 +1186,25 @@ sectoins."),
 
   add_basic_prefix_cmd ("print", class_maintenance,
 			_("Maintenance command for printing GDB internal state."),
-			&maintenanceprintlist, "maintenance print ", 0,
+			&maintenanceprintlist, 0,
 			&maintenancelist);
 
   add_basic_prefix_cmd ("flush", class_maintenance,
 			_("Maintenance command for flushing GDB internal caches."),
-			&maintenanceflushlist, "maintenance flush ", 0,
+			&maintenanceflushlist, 0,
 			&maintenancelist);
 
   add_basic_prefix_cmd ("set", class_maintenance, _("\
 Set GDB internal variables used by the GDB maintainer.\n\
 Configure variables internal to GDB that aid in GDB's maintenance"),
-			&maintenance_set_cmdlist, "maintenance set ",
+			&maintenance_set_cmdlist,
 			0/*allow-unknown*/,
 			&maintenancelist);
 
   add_show_prefix_cmd ("show", class_maintenance, _("\
 Show GDB internal variables used by the GDB maintainer.\n\
 Configure variables internal to GDB that aid in GDB's maintenance"),
-		       &maintenance_show_cmdlist, "maintenance show ",
+		       &maintenance_show_cmdlist,
 		       0/*allow-unknown*/,
 		       &maintenancelist);
 
@@ -1247,12 +1250,12 @@ This command has been moved to \"demangle\"."),
 
   add_prefix_cmd ("per-command", class_maintenance, set_per_command_cmd, _("\
 Per-command statistics settings."),
-		    &per_command_setlist, "maintenance set per-command ",
+		    &per_command_setlist,
 		    1/*allow-unknown*/, &maintenance_set_cmdlist);
 
   add_show_prefix_cmd ("per-command", class_maintenance, _("\
 Show per-command statistics settings."),
-		       &per_command_showlist, "maintenance show per-command ",
+		       &per_command_showlist,
 		       0/*allow-unknown*/, &maintenance_show_cmdlist);
 
   add_setshow_boolean_cmd ("time", class_maintenance,
@@ -1320,7 +1323,7 @@ Takes an optional file parameter."),
 
   add_basic_prefix_cmd ("check", class_maintenance, _("\
 Commands for checking internal gdb state."),
-			&maintenancechecklist, "maintenance check ", 0,
+			&maintenancechecklist, 0,
 			&maintenancelist);
 
   add_cmd ("translate-address", class_maintenance,

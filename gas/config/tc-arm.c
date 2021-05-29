@@ -20013,8 +20013,8 @@ do_mve_mov (int toQ)
   constraint (inst.operands[Q0].reg != inst.operands[Q1].reg + 2,
 	      _("Index one must be [2,3] and index two must be two less than"
 		" index one."));
-  constraint (inst.operands[Rt].reg == inst.operands[Rt2].reg,
-	      _("General purpose registers may not be the same"));
+  constraint (!toQ && inst.operands[Rt].reg == inst.operands[Rt2].reg,
+	      _("Destination registers may not be the same"));
   constraint (inst.operands[Rt].reg == REG_SP
 	      || inst.operands[Rt2].reg == REG_SP,
 	      BAD_SP);
@@ -26827,6 +26827,14 @@ md_convert_frag (bfd *abfd, segT asec ATTRIBUTE_UNUSED, fragS *fragp)
       pc_rel = (opcode == T_MNEM_ldr_pc2);
       break;
     case T_MNEM_adr:
+      /* Thumb bits should be set in the frag handling so we process them
+	 after all symbols have been seen.  PR gas/25235.  */
+      if (exp.X_op == O_symbol
+	  && exp.X_add_symbol != NULL
+	  && S_IS_DEFINED (exp.X_add_symbol)
+	  && THUMB_IS_FUNC (exp.X_add_symbol))
+	exp.X_add_number |= 1;
+
       if (fragp->fr_var == 4)
 	{
 	  insn = THUMB_OP32 (opcode);
@@ -27024,7 +27032,8 @@ relax_adr (fragS *fragp, asection *sec, long stretch)
   if (fragp->fr_symbol == NULL
       || !S_IS_DEFINED (fragp->fr_symbol)
       || sec != S_GET_SEGMENT (fragp->fr_symbol)
-      || S_IS_WEAK (fragp->fr_symbol))
+      || S_IS_WEAK (fragp->fr_symbol)
+      || THUMB_IS_FUNC (fragp->fr_symbol))
     return 4;
 
   val = relaxed_symbol_addr (fragp, stretch);

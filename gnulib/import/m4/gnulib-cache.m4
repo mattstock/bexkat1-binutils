@@ -44,9 +44,12 @@
 #  dirent \
 #  dirfd \
 #  errno \
+#  ffs \
 #  fnmatch-gnu \
 #  frexpl \
+#  gendocs \
 #  getcwd \
+#  getline \
 #  gettimeofday \
 #  gitlog-to-changelog \
 #  glob \
@@ -86,9 +89,12 @@ gl_MODULES([
   dirent
   dirfd
   errno
+  ffs
   fnmatch-gnu
   frexpl
+  gendocs
   getcwd
+  getline
   gettimeofday
   gitlog-to-changelog
   glob

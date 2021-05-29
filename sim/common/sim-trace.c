@@ -17,6 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "sim-main.h"
 #include "sim-io.h"
 #include "sim-options.h"
@@ -889,7 +892,7 @@ dis_read (bfd_vma memaddr, bfd_byte *myaddr, unsigned int length,
   return 0;
 }
 
-static int
+static int ATTRIBUTE_PRINTF (2, 3)
 dis_printf (SIM_CPU *cpu, const char *fmt, ...)
 {
   SIM_DESC sd = CPU_STATE (cpu);

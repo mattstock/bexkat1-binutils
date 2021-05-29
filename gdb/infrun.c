@@ -1064,7 +1064,6 @@ show_follow_exec_mode_string (struct ui_file *file, int from_tty,
 static void
 follow_exec (ptid_t ptid, const char *exec_file_target)
 {
-  struct inferior *inf = current_inferior ();
   int pid = ptid.pid ();
   ptid_t process_ptid;
 
@@ -1167,6 +1166,8 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
      previous incarnation of this process.  */
   no_shared_libraries (NULL, 0);
 
+  struct inferior *inf = current_inferior ();
+
   if (follow_exec_mode_string == follow_exec_mode_new)
     {
       /* The user wants to keep the old inferior and program spaces
@@ -1176,18 +1177,16 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
 	 inferior's pid.  Having two inferiors with the same pid would confuse
 	 find_inferior_p(t)id.  Transfer the terminal state and info from the
 	  old to the new inferior.  */
-      inf = add_inferior_with_spaces ();
-      swap_terminal_info (inf, current_inferior ());
-      exit_inferior_silent (current_inferior ());
+      inferior *new_inferior = add_inferior_with_spaces ();
 
-      inf->pid = pid;
-      target_follow_exec (inf, exec_file_target);
+      swap_terminal_info (new_inferior, inf);
+      exit_inferior_silent (inf);
 
-      inferior *org_inferior = current_inferior ();
-      switch_to_inferior_no_thread (inf);
-      inf->push_target (org_inferior->process_target ());
-      thread_info *thr = add_thread (inf->process_target (), ptid);
-      switch_to_thread (thr);
+      new_inferior->pid = pid;
+      target_follow_exec (new_inferior, ptid, exec_file_target);
+
+      /* We continue with the new inferior.  */
+      inf = new_inferior;
     }
   else
     {
@@ -1198,8 +1197,10 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
 	 around (its description is later cleared/refetched on
 	 restart).  */
       target_clear_description ();
+      target_follow_exec (inf, ptid, exec_file_target);
     }
 
+  gdb_assert (current_inferior () == inf);
   gdb_assert (current_program_space == inf->pspace);
 
   /* Attempt to open the exec file.  SYMFILE_DEFER_BP_RESET is used
@@ -4703,12 +4704,11 @@ save_waitstatus (struct thread_info *tp, const target_waitstatus *ws)
   tp->suspend.waitstatus = *ws;
   tp->suspend.waitstatus_pending_p = 1;
 
-  struct regcache *regcache = get_thread_regcache (tp);
-  const address_space *aspace = regcache->aspace ();
-
   if (ws->kind == TARGET_WAITKIND_STOPPED
       && ws->value.sig == GDB_SIGNAL_TRAP)
     {
+      struct regcache *regcache = get_thread_regcache (tp);
+      const address_space *aspace = regcache->aspace ();
       CORE_ADDR pc = regcache_read_pc (regcache);
 
       adjust_pc_after_break (tp, &tp->suspend.waitstatus);
@@ -7248,7 +7248,7 @@ process_event_stop_test (struct execution_control_state *ecs)
   bool refresh_step_info = true;
   if ((ecs->event_thread->suspend.stop_pc == stop_pc_sal.pc)
       && (ecs->event_thread->current_line != stop_pc_sal.line
- 	  || ecs->event_thread->current_symtab != stop_pc_sal.symtab))
+	  || ecs->event_thread->current_symtab != stop_pc_sal.symtab))
     {
       /* We are at a different line.  */
 
@@ -9501,10 +9501,11 @@ _initialize_infrun ()
     = create_async_event_handler (infrun_async_inferior_event_handler, NULL,
 				  "infrun");
 
-  add_info ("signals", info_signals_command, _("\
+  cmd_list_element *info_signals_cmd
+    = add_info ("signals", info_signals_command, _("\
 What debugger does when program gets various signals.\n\
 Specify a signal as argument to print info on that signal only."));
-  add_info_alias ("handle", "signals", 0);
+  add_info_alias ("handle", info_signals_cmd, 0);
 
   c = add_com ("handle", class_run, handle_command, _("\
 Specify how to handle signals.\n\
@@ -9759,11 +9760,13 @@ enabled by default on some platforms."),
   inferior_ptid = null_ptid;
   target_last_wait_ptid = minus_one_ptid;
 
-  gdb::observers::thread_ptid_changed.attach (infrun_thread_ptid_changed);
-  gdb::observers::thread_stop_requested.attach (infrun_thread_stop_requested);
-  gdb::observers::thread_exit.attach (infrun_thread_thread_exit);
-  gdb::observers::inferior_exit.attach (infrun_inferior_exit);
-  gdb::observers::inferior_execd.attach (infrun_inferior_execd);
+  gdb::observers::thread_ptid_changed.attach (infrun_thread_ptid_changed,
+					      "infrun");
+  gdb::observers::thread_stop_requested.attach (infrun_thread_stop_requested,
+						"infrun");
+  gdb::observers::thread_exit.attach (infrun_thread_thread_exit, "infrun");
+  gdb::observers::inferior_exit.attach (infrun_inferior_exit, "infrun");
+  gdb::observers::inferior_execd.attach (infrun_inferior_execd, "infrun");
 
   /* Explicitly create without lookup, since that tries to create a
      value with a void typed value, and when we get here, gdbarch

@@ -1,3 +1,108 @@
+2021-05-27  Hannes Domani  <ssbssa@yahoo.de>
+
+	* python.texi (TUI Windows In Python): Document "full_window"
+	argument.
+
+2021-05-27  Hannes Domani  <ssbssa@yahoo.de>
+
+	* python.texi (Symbols In Python): Document gdb.SYMBOL_LOC_LABEL.
+
+2021-05-25  Hannes Domani  <ssbssa@yahoo.de>
+
+	* python.texi (Symbols In Python): Fix gdb.SYMBOL_LOC_COMMON_BLOCK.
+
+2021-05-24  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texi (Initialization Files): Add '@:' after 'e.g.'.
+	(Source Path): Likewise.
+	(GDB/MI Development and Front Ends): Likewise.
+	(ARM Features): Likewise.
+	(gdb man): Likewise.
+
+2021-05-14  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* python.texi (Inferiors In Python): Mention the 'connection_num'
+	attribute.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* guile.texi (Values From Inferior In Guile): Add documentation
+	for value-const-value.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* guile.texi (Values From Inferior In Guile): Add documentation
+	for value-reference-value.  Add documentation for
+	value-rvalue-reference-value.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* guile.texi (Types In Guile): Add documentation for
+	TYPE_CODE_RVALUE_REF.
+
+2021-05-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* guile.texinfo (Breakpoints In Guile): Reword sentence.
+	* python.texinfo (Breakpoints In Python): Reword sentence.
+
+2021-05-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python.texinfo (Python Commands): Document 'set debug
+	py-unwind' and 'show debug py-unwind'.
+
+2021-05-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python.texinfo (Python Commands): Document 'set debug
+	py-breakpoint' and 'show debug py-breakpoint'.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.texinfo (GDB/MI Breakpoint Commands): Mention the
+	'--force' flag of the '-break-condition' command.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.texinfo (GDB/MI Breakpoint Commands): Mention the
+	'--force-condition' flag of the '-break-insert' and
+	'-dprintf-insert' commands.
+
+2021-05-04  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* python.texi (Types In Python): Re-organize Type.fields doc.
+	Mention handling of array types.  Correct doc for when calling
+	the method on another type.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Initialization Files): Use @env when referencing
+	environment variables.
+	(Shell Commands): Likewise.
+	(Starting): Likewise.
+	(Arguments): Likewise.
+	(Environment): Likewise.
+	(Edit): Likewise.
+	(Compiling and Injecting Code): Likewise.
+	(Files): Likewise.
+	(Command History): Likewise.
+	(Screen Size): Likewise.
+	(Emacs): Likewise.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python.texinfo (Python Commands): Mention new commands.
+
+2021-04-25  Lancelot Six  <lsix@lancelotsix.com>
+
+	PR gdb/22640
+	* gdb.texinfo (Symbols): Describe the 'x' and 'd' flags of the
+	ptype command, describe 'set print type hex' and 'show print
+	type hex' commands.  Update 'ptype/o' examples.
+
+2021-04-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.texinfo (GDB/MI Breakpoint Information): Update the
+	description for the 'enabled' field of breakpoint locations.
+
 2021-04-15  Tom Tromey  <tom@tromey.com>
 	    Andrew Burgess  <andrew.burgess@embecosm.com>
 

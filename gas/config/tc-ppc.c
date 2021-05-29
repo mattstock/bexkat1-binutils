@@ -5144,7 +5144,9 @@ ppc_function (int ignore ATTRIBUTE_UNUSED)
 	  expression (& exp);
 	  if (*input_line_pointer == ',')
 	    {
-	      /* The fifth argument is the function size.  */
+	      /* The fifth argument is the function size.
+	         If it's omitted, the size will be the containing csect.
+	         This will be donce during ppc_frob_symtab.  */
 	      ++input_line_pointer;
 	      symbol_get_tc (ext_sym)->u.size
 		= symbol_new ("L0\001", absolute_section,
@@ -5864,6 +5866,7 @@ ppc_frob_symbol (symbolS *sym)
   /* Discard symbols that should not be included in the output symbol
      table.  */
   if (! symbol_used_in_reloc_p (sym)
+      && S_GET_STORAGE_CLASS (sym) != C_DWARF
       && ((symbol_get_bfdsym (sym)->flags & BSF_SECTION_SYM) != 0
 	  || (! (S_IS_EXTERNAL (sym) || S_IS_WEAK (sym))
 	      && ! symbol_get_tc (sym)->output
@@ -5903,14 +5906,25 @@ ppc_frob_symbol (symbolS *sym)
 
   if (SF_GET_FUNCTION (sym))
     {
-      if (ppc_last_function != (symbolS *) NULL)
-	as_bad (_("two .function pseudo-ops with no intervening .ef"));
+      /* Make sure coff_last_function is reset. Otherwise, we won't create
+         the auxent for the next function.  */
+      coff_last_function = 0;
       ppc_last_function = sym;
       if (symbol_get_tc (sym)->u.size != (symbolS *) NULL)
 	{
 	  resolve_symbol_value (symbol_get_tc (sym)->u.size);
 	  SA_SET_SYM_FSIZE (sym,
 			    (long) S_GET_VALUE (symbol_get_tc (sym)->u.size));
+	}
+      else
+	{
+	  /* Size of containing csect.  */
+	  symbolS* within = symbol_get_tc (sym)->within;
+	  union internal_auxent *csectaux;
+	  csectaux = &coffsymbol (symbol_get_bfdsym (within))
+	    ->native[S_GET_NUMBER_AUXILIARY(within)].u.auxent;
+
+	  SA_SET_SYM_FSIZE (sym, csectaux->x_csect.x_scnlen.l);
 	}
     }
   else if (S_GET_STORAGE_CLASS (sym) == C_FCN
@@ -6126,13 +6140,43 @@ ppc_frob_symbol (symbolS *sym)
   return 0;
 }
 
-/* Adjust the symbol table.  This creates csect symbols for all
-   absolute symbols.  */
+/* Adjust the symbol table.  */
 
 void
 ppc_adjust_symtab (void)
 {
   symbolS *sym;
+  symbolS *anchorSym;
+
+  /* Make sure C_DWARF symbols come right after C_FILE.
+     As the C_FILE might not be defined yet and as C_DWARF
+     might already be ordered, we insert them before the
+     first symbol which isn't a C_FILE or a C_DWARF.  */
+  for (anchorSym = symbol_rootP; anchorSym != NULL;
+       anchorSym = symbol_next (anchorSym))
+    {
+      if (S_GET_STORAGE_CLASS (anchorSym) != C_FILE
+	  && S_GET_STORAGE_CLASS (anchorSym) != C_DWARF)
+	break;
+    }
+
+  sym = anchorSym;
+  while (sym != NULL)
+    {
+      if (S_GET_STORAGE_CLASS (sym) != C_DWARF)
+	{
+	  sym = symbol_next (sym);
+	  continue;
+	}
+
+      symbolS* tsym = sym;
+      sym = symbol_next (sym);
+
+      symbol_remove (tsym, &symbol_rootP, &symbol_lastP);
+      symbol_insert (tsym, anchorSym, &symbol_rootP, &symbol_lastP);
+    }
+
+  /* Create csect symbols for all absolute symbols.  */
 
   if (! ppc_saw_abs)
     return;
@@ -6264,6 +6308,45 @@ md_pcrel_from_section (fixS *fixp, segT sec ATTRIBUTE_UNUSED)
 
 #ifdef OBJ_XCOFF
 
+/* Return the surrending csect for sym when possible.  */
+
+static symbolS*
+ppc_get_csect_to_adjust (symbolS *sym)
+{
+  if (sym == NULL)
+    return NULL;
+
+  valueT val = resolve_symbol_value (sym);
+  TC_SYMFIELD_TYPE *tc = symbol_get_tc (sym);
+  segT symseg = S_GET_SEGMENT (sym);
+
+  if (tc->subseg == 0
+      && tc->symbol_class != XMC_TC0
+      && tc->symbol_class != XMC_TC
+      && tc->symbol_class != XMC_TE
+      && symseg != bss_section
+      && symseg != ppc_xcoff_tbss_section.segment
+      /* Don't adjust if this is a reloc in the toc section.  */
+      && (symseg != data_section
+	  || ppc_toc_csect == NULL
+	  || val < ppc_toc_frag->fr_address
+	  || (ppc_after_toc_frag != NULL
+	      && val >= ppc_after_toc_frag->fr_address)))
+    {
+      symbolS* csect = tc->within;
+
+      /* If the symbol was not declared by a label (eg: a section symbol),
+         use the section instead of the csect.  This doesn't happen in
+         normal AIX assembly code.  */
+      if (csect == NULL)
+        csect = seg_info (symseg)->sym;
+
+      return csect;
+    }
+
+  return NULL;
+}
+
 /* This is called to see whether a fixup should be adjusted to use a
    section symbol.  We take the opportunity to change a fixup against
    a symbol in the TOC subsegment into a reloc against the
@@ -6274,7 +6357,7 @@ ppc_fix_adjustable (fixS *fix)
 {
   valueT val = resolve_symbol_value (fix->fx_addsy);
   segT symseg = S_GET_SEGMENT (fix->fx_addsy);
-  TC_SYMFIELD_TYPE *tc;
+  symbolS* csect;
 
   if (symseg == absolute_section)
     return 0;
@@ -6316,32 +6399,17 @@ ppc_fix_adjustable (fixS *fix)
     }
 
   /* Possibly adjust the reloc to be against the csect.  */
-  tc = symbol_get_tc (fix->fx_addsy);
-  if (tc->subseg == 0
-      && tc->symbol_class != XMC_TC0
-      && tc->symbol_class != XMC_TC
-      && tc->symbol_class != XMC_TE
-      && symseg != bss_section
-      && symseg != ppc_xcoff_tbss_section.segment
-      /* Don't adjust if this is a reloc in the toc section.  */
-      && (symseg != data_section
-	  || ppc_toc_csect == NULL
-	  || val < ppc_toc_frag->fr_address
-	  || (ppc_after_toc_frag != NULL
-	      && val >= ppc_after_toc_frag->fr_address)))
+  if ((csect = ppc_get_csect_to_adjust (fix->fx_addsy)) != NULL)
     {
-      symbolS *csect = tc->within;
-
-      /* If the symbol was not declared by a label (eg: a section symbol),
-         use the section instead of the csect.  This doesn't happen in
-         normal AIX assembly code.  */
-      if (csect == NULL)
-        csect = seg_info (symseg)->sym;
-
       fix->fx_offset += val - symbol_get_frag (csect)->fr_address;
       fix->fx_addsy = csect;
+    }
 
-      return 0;
+  if ((csect = ppc_get_csect_to_adjust (fix->fx_subsy)) != NULL)
+    {
+      fix->fx_offset -= resolve_symbol_value (fix->fx_subsy)
+	- symbol_get_frag (csect)->fr_address;
+      fix->fx_subsy = csect;
     }
 
   /* Adjust a reloc against a .lcomm symbol to be against the base
@@ -7367,12 +7435,14 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
 
 /* Generate a reloc for a fixup.  */
 
-arelent *
+arelent **
 tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
 {
+  static arelent *relocs[3];
   arelent *reloc;
 
-  reloc = XNEW (arelent);
+  relocs[0] = reloc = XNEW (arelent);
+  relocs[1] = NULL;
 
   reloc->sym_ptr_ptr = XNEW (asymbol *);
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
@@ -7386,11 +7456,33 @@ tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
       as_bad_where (fixp->fx_file, fixp->fx_line,
 		    _("reloc %d not supported by object file format"),
 		    (int) fixp->fx_r_type);
-      return NULL;
+      relocs[0] = NULL;
     }
   reloc->addend = fixp->fx_addnumber;
 
-  return reloc;
+  if (fixp->fx_subsy && fixp->fx_addsy)
+    {
+      relocs[1] = reloc = XNEW (arelent);
+      relocs[2] = NULL;
+
+      reloc->sym_ptr_ptr = XNEW (asymbol *);
+      *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_subsy);
+      reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
+
+      reloc->howto = bfd_reloc_type_lookup (stdoutput, BFD_RELOC_PPC_NEG);
+      reloc->addend = fixp->fx_addnumber;
+
+      if (reloc->howto == (reloc_howto_type *) NULL)
+        {
+          as_bad_where (fixp->fx_file, fixp->fx_line,
+            _("reloc %d not supported by object file format"),
+            BFD_RELOC_PPC_NEG);
+	  relocs[0] = NULL;
+        }
+    }
+
+
+  return relocs;
 }
 
 void

@@ -1,3 +1,374 @@
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.base/reverse-init-functions.exp: New.
+
+2021-05-27  Tom de Vries  <tdevries@suse.de>
+
+	PR symtab/27919
+	PR testsuite/27920
+	* gdb.dwarf2/dw2-dummy-cu.exp: Use maint expand-symtabs instead of
+	-readnow.
+
+2021-05-27  Tom de Vries  <tdevries@suse.de>
+
+	PR testsuite/27921
+	* gdb.dwarf2/gdb-index.exp (add_gdb_index): Rename to ...
+	(local_add_gdb_index): ... this.
+
+2021-05-21  Tom de Vries  <tdevries@suse.de>
+
+	PR testsuite/25047
+	* boards/cc-with-gnu-debuglink.exp: New file.
+
+2021-05-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.dwarf2/dw2-inline-with-lexical-scope.c (func): Replace
+	a dead code with an assignment to a global var.  Fix a
+	whitespacing problem around an assignment operator.
+
+2021-05-19  Will Schmidt  <will_schmidt@vnet.ibm.com>
+
+	* gdb.arch/powerpc64-prologue.c: New test to exercise prologues
+	for the powerpc64 LE target.
+	* gdb.arch/powerpc-prologue.exp: Test Harness.
+
+2021-05-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-pretty-print.exp: Add test names to resolve
+	duplicate test names.
+
+2021-05-19  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.base/info-types.exp.tcl: Scan info types output line-by-line.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.python/py-framefilter-gdb.py.in: Rename to:
+	* gdb.python/py-framefilter-gdb.py: ... this.
+	* gdb.python/py-framefilter-invalidarg-gdb.py.in: Rename to:
+	* gdb.python/py-framefilter-invalidarg-gdb.py: ... this.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.python/py-framefilter-gdb.py.in: Re-format.
+	* gdb.python/py-framefilter-invalidarg-gdb.py.in: Re-format.
+
+2021-05-17  Bhuvanendra Kumar N  <Bhuvanendra.KumarN@amd.com>
+
+	* gdb.base/class-allocatable-array.exp: Modified test for clang.
+
+2021-05-16  Weimin Pan  <weimin.pan@oracle.com>
+
+	* gdb.ctf/funcreturn.exp: New file.
+	* gdb.ctf/whatis.c: Copy from gdb.base.
+
+2021-05-14  Tom Tromey  <tom@tromey.com>
+
+	* gdb.rust/pp.exp: New file.
+	* gdb.rust/pp.py: New file.
+	* gdb.rust/pp.rs: New file.
+
+2021-05-14  Bernd Edlinger  <bernd.edlinger@hotmail.de>
+
+	* gdb.base/index-cache.exp: Cleanup $cache_dir/*.gdb-index and
+	remove the directory.
+	* gdb.dwarf2/per-bfd-sharing.exp: Likewise.
+
+2021-05-14  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.python/py-inferior.exp: Add test cases for 'connection_num'.
+
+2021-05-14  Kent Cheung  <kent.cheung@arm.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-format-string.c: Added a variable to test.
+	* gdb.python/py-format-string.exp: Check string representation is
+	printed at appropriate max_depth settings.
+	* gdb.python/py-nested-maps.exp: Likewise.
+	* gdb.guile/scm-pretty-print.exp: Add additional tests.
+
+2021-05-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-pretty-print.exp (run_lang_tests): Give some tests
+	unique names, also wrap proc body in with_test_prefix.
+
+2021-05-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-frame-args.exp: Add with_test_prefix to resolve
+	duplicate test names.
+	* gdb.guile/scm-parameter.exp: Provide test names to avoid
+	duplicate names based on the command being run.
+	* gdb.guile/scm-symbol.exp: Extend test name to make it unique.
+	* gdb.guile/scm-type.exp (restart_gdb): Don't print PASS line when
+	loading a support module.
+	(test_equality): Update test name to match the actual test, making
+	the name unique in the process.
+	* gdb.guile/scm-value.exp (test_value_in_inferior): Add test names
+	to resolve duplicate tests.
+	(test_inferior_function_call): Likewise.
+	(test_subscript_regression): Likewise.
+
+2021-05-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* lib/guile.exp (gdb_scm_load_file): Use empty test name to
+	silence PASS lines.
+	(gdb_install_guile_module): Likewise.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* gdb.guile/scm-value.exp (test_value_in_inferior): Add test for
+	value-const-value.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* gdb.guile/scm-value.exp (test_value_in_inferior): Add test for
+	value-reference-value.  Add test for value-rvalue-reference-value.
+
+2021-05-11  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.base/watch_thread_num.exp: Fix "set debug infrun 1" FAILs.
+	Add "set debug infrun 1" commented out.
+
+2021-05-11  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.base/gdb-sigterm.exp: Fix exp_continue regexp.
+
+2021-05-11  Bhuvanendra Kumar  <Bhuvanendra.KumarN@amd.com>
+
+	* gdb.fortran/array-element.exp: Breakpoint location is modified.
+
+2021-05-10  Lancelot Six  <lsix@lancelotsix.com>
+
+	PR gdb/27614
+	* gdb.dwarf2/gdb-add-index-symlink.exp: New test.
+
+2021-05-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/guile.exp: Don't use the source directory as a
+	temporary HOME directory.
+
+2021-05-10  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.arch/amd64-osabi.exp (test_osabi_none): Use the
+	parameters.
+
+2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/guile.exp: Add an extra test.
+
+2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/ptype-offsets.exp: Replace use of send_gdb with
+	gdb_test_no_output.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Re-format all Python files using black.
+	* gdb.python/py-prettyprint.exp (run_lang_tests): Adjust.
+
+2021-05-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-breakpoint.exp (test_watchpoints): Print the
+	watchpoint object before and after registering it with GDB.
+
+2021-05-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-breakpoint.exp (test_bkpt_basic): Convert to
+	'proc_with_prefix', remove use of 'with_test_prefix', and
+	reindent.
+	(test_bkpt_deletion): Likewise.
+	(test_bkpt_cond_and_cmds): Likewise.
+	(test_bkpt_invisible): Likewise.
+	(test_watchpoints): Likewise.
+	(test_bkpt_internal): Likewise.
+	(test_bkpt_eval_funcs): Likewise.
+	(test_bkpt_registration): Likewise.
+	(test_bkpt_address): Convert to 'proc_with_prefix'.
+	(test_bkpt_probe): Likewise.
+
+2021-05-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-breakpoint.exp (test_bkpt_basic): Extend test
+	names to avoid duplicates.
+	(test_bkpt_cond_and_cmds): Likewise.
+	(test_bkpt_eval_funcs): Likewise.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.mi/mi-break.exp (test_forced_conditions): Add a test
+	for the -break-condition command's "--force" flag.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.mi/mi-break.exp (test_forced_conditions): New proc that
+	is called by the test.
+
+2021-05-05  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.threads/detach-step-over.exp: Do exp_continue when encountering
+	"Reading symbols" or "Expanding full symbols" lines.  Using timeout
+	factor of 2 for attach.
+
+2021-05-05  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.threads/fork-plus-threads.exp: Handle "New LWP <n>" and
+	"LWP <n> exited" messages.
+
+2021-05-04  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.python/py-type.exp (test_fields): Test calling fields on
+	an int type.
+
+2021-05-04  Simon Marchi  <simon.marchi@efficios.com>
+
+	* gdb.python/flexible-array-member.exp: Adjust expected range
+	value for member declared with 0 size.  Test accessing range
+	tuple through range type.
+
+2021-05-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR testsuite/27788
+	* gdb.python/py-startup-opt.exp (test_python_settings): Change the
+	expected results when environment variable PYTHONDONTWRITEBYTECODE
+	is set.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* gdb.ada/enum_idx_packed/pck.ads (My_Enum, My_Array_Type)
+	(Confused_Array): New types.
+	* gdb.ada/enum_idx_packed/foo.adb (Confused_Array): New variable.
+	* gdb.ada/enum_idx_packed.exp: Add new tests.
+
+2021-04-30  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.mi/mi-sym-info.exp: Add with_timeout_factor, and increase
+	existing timeout factors.
+
+2021-04-30  Tom de Vries  <tdevries@suse.de>
+
+	* gdb.mi/mi-sym-info.exp: Remove duplicate test.
+
+2021-04-29  Tom de Vries  <tdevries@suse.de>
+
+	PR testsuite/27786
+	* lib/valgrind.exp (vgdb_start): Use set_remotetimeout.  Increase
+	remotetimeout to 4.
+
+2021-04-28  Tom Tromey  <tromey@adacore.com>
+
+	* gdb.ada/null_overload.exp: New file.
+	* gdb.ada/null_overload/foo.adb: New file.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-startup-opt.exp: New file.
+
+2021-04-27  Luis Machado  <luis.machado@linaro.org>
+
+	* gdb.base/maint.exp: Drop a pattern that is not needed.
+	* lib/gdb.exp (readnow): Match line-by-line.
+
+2021-04-27  Luis Machado  <luis.machado@linaro.org>
+
+	* gdb.xml/tdesc-reload.exp: Pass -lbl.
+
+2021-04-27  Michael Weghorn  <m.weghorn@posteo.de>
+	    Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.python/libpy-autoloaded-pretty-printers-in-newobjfile-event.so-gdb.py: New test.
+	* gdb.python/py-autoloaded-pretty-printers-in-newobjfile-event-lib.cc: New test.
+	* gdb.python/py-autoloaded-pretty-printers-in-newobjfile-event-lib.h: New test.
+	* gdb.python/py-autoloaded-pretty-printers-in-newobjfile-event-main.cc: New test.
+	* gdb.python/py-autoloaded-pretty-printers-in-newobjfile-event.exp: New test.
+	* gdb.python/py-autoloaded-pretty-printers-in-newobjfile-event.py: New test.
+
+2021-04-26  Tom Tromey  <tromey@adacore.com>
+
+	PR gdb/27743:
+	* gdb.dwarf2/imported-unit-bp.exp: New file.
+	* gdb.dwarf2/imported-unit-bp-main.c: New file.
+	* gdb.dwarf2/imported-unit-bp-alt.c: New file.
+
+2021-04-26  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	PR gdb/27773
+	* gdb.base/dump.exp: Test dump to non-existent dir.
+
+2021-04-26  Luis Machado  <luis.machado@linaro.org>
+
+	* gdb.arch/aarch64-dbreg-contents.c (set_watchpoint): Fix arch level
+	comparison.
+
+2021-04-25  Lancelot Six  <lsix@lancelotsix.com>
+
+	PR gdb/22640
+	* gdb.base/ptype-offsets.exp: Add tests to verify the behavior
+	of 'ptype/ox' and 'ptype/od'. Check that 'set print type hex'
+	changes the default behavior of 'ptype/o'.  Update to take into
+	account new horizontal layout.
+	* gdb.rust/simple.exp: Update ptype test to check new horizontal
+	layout.
+	* gdb.rust/union.exp: Same.
+
+2021-04-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/info_sources.exp: Add new tests.
+
+2021-04-22  Tom Tromey  <tom@tromey.com>
+
+	* gdb.base/ptype-offsets.cc (struct empty_member): New.
+	(main): Use empty_member.
+	* gdb.base/ptype-offsets.exp: Add new test.
+
+2021-04-22  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb.python/flexible-array-member.exp: Add check for Python
+	support.
+
+2021-04-22  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	PR gdb/27757
+	* gdb.python/flexible-array-member.c: New test.
+	* gdb.python/flexible-array-member.exp: New test.
+	* gdb.guile/scm-type.exp (test_range): Add test for flexible
+	array member.
+	* gdb.guile/scm-type.c (struct flex_member): New.
+	(main): Use it.
+
+2021-04-22  Tom Tromey  <tom@tromey.com>
+
+	* gdb.rust/modules.exp: Add checks for syntax errors.
+	* gdb.rust/expr.exp: Add checks for syntax errors.
+	* gdb.rust/simple.exp: Add checks for syntax errors.
+
+2021-04-21  Carl Love  <cel@us.ibm.com>
+
+	* gdb.base/valgrind-bt.exp: Add gdb_test "break main".
+	Update expected string for gdb_test "bt".
+
+	* lib/valgrind.exp: Add set remotetimeout 3.
+	Increase vgdb wait from 1 to 2.
+	Add max-invoke-ms option to vgdb command line.
+
+2021-04-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.mi/mi-break.exp: Extend with checks for invalid breakpoint
+	conditions.
+
+2021-04-21  Simon Marchi  <simon.marchi@polymtl.ca>
+	    Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* gdb.mi/mi-break.exp: Fix the duplicate test names.
+
+2021-04-20  Felix Willgerodt  <felix.willgerodt@intel.com>
+
+	* gdb.base/address_space_qualifier.exp: New file.
+
+2021-04-19  Tom Tromey  <tromey@adacore.com>
+
+	PR gdb/27742:
+	* gdb.opt/inline-locals.exp: Update kfail patterns.
+
 2021-04-17  Tom Tromey  <tom@tromey.com>
 
 	* gdb.dwarf2/gdb-index-nodebug.exp: New file.

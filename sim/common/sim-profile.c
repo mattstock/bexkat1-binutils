@@ -17,6 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "sim-main.h"
 #include "sim-io.h"
 #include "sim-options.h"
@@ -454,7 +457,7 @@ profile_option_handler (SIM_DESC sd,
 
 /* Profiling output hooks.  */
 
-static void
+static void ATTRIBUTE_PRINTF (3, 0)
 profile_vprintf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, va_list ap)
 {
   FILE *fp = PROFILE_FILE (CPU_PROFILE_DATA (cpu));
@@ -466,7 +469,7 @@ profile_vprintf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, va_list ap)
     sim_io_evprintf (sd, fmt, ap);
 }
 
-__attribute__ ((format (printf, 3, 4)))
+ATTRIBUTE_PRINTF (3, 4)
 static void
 profile_printf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, ...)
 {

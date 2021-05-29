@@ -23,8 +23,12 @@ AC_CONFIG_MACRO_DIRS([../m4 ../.. ../../config])
 
 SIM_AC_COMMON
 
-SIM_AC_OPTION_WARNINGS(no)
-
-AC_CHECK_HEADERS(sys/select.h termios.h sys/socket.h netinet/in.h netinet/tcp.h)
+AC_CHECK_HEADERS_ONCE(m4_flatten([
+  termios.h
+  netinet/in.h
+  netinet/tcp.h
+  sys/select.h
+  sys/socket.h
+]))
 
 SIM_AC_OUTPUT

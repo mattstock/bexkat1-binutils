@@ -20,15 +20,17 @@
    run.c and gdb (when the simulator is linked with gdb).
    All simulator interaction should go through this file.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <bfd.h>
 #include <signal.h>
-#include "gdb/callback.h"
-#include "gdb/remote-sim.h"
+#include "sim/callback.h"
+#include "sim/sim.h"
 #include "sim-main.h"
 #include "sim-options.h"
 #include "armemu.h"
@@ -62,8 +64,8 @@ int trace_funcs = 0;
 static struct disassemble_info  info;
 static char opbuf[1000];
 
-static int
-op_printf (char *buf, char *fmt, ...)
+static int ATTRIBUTE_PRINTF (2, 3)
+op_printf (char *buf, const char *fmt, ...)
 {
   int ret;
   va_list ap;

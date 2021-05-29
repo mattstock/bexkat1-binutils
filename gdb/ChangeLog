@@ -1,3 +1,1293 @@
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Fix tab after space indentation issues throughout.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Fix some indentation mistakes throughout.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.h (iterate_over_bp_locations): Remove.  Update
+	users to use all_bp_locations.
+	(all_bp_locations): New.
+	* breakpoint.c (all_bp_locations): Make non-static.
+	(iterate_over_bp_locations): Remove.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.h (iterate_over_breakpoints): Remove.  Update
+	callers to use all_breakpoints or all_breakpoints_safe.
+	(breakpoint_range, all_breakpoints, breakpoint_safe_range,
+	all_breakpoints_safe): Move here.
+	* breakpoint.c (all_breakpoints, all_breakpoints_safe): Make
+	non-static.
+	(iterate_over_breakpoints): Remove.
+	* python/py-finishbreakpoint.c (bpfinishpy_detect_out_scope_cb):
+	Return void.
+	* python/py-breakpoint.c (build_bp_list): Add comment, reverse
+	return value logic.
+	* guile/scm-breakpoint.c (bpscm_build_bp_list): Return void.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (get_first_locp_gte_addr): Remove.
+	(ALL_BP_LOCATIONS_AT_ADDR): Remove.  Replace all uses with
+	all_bp_locations_at_addr.
+	(struct bp_locations_at_addr_range): New.
+	(all_bp_locations_at_addr): New.
+	(bp_locations_compare_addrs): New.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (ALL_BP_LOCATIONS): Remove, update users to use
+	all_bp_locations.
+	(all_bp_locations): New.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (bp_locations): Change to std::vector, update all
+	users.
+	(bp_locations_count): Remove.
+	(update_global_location_list): Change to work with indices
+	rather than bp_location**.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.h (bp_locations_range): New.
+	(struct breakpoint) <locations>: New.  Use where possible.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.h (all_tracepoints): Remove.
+	(breakpoint_iterator): Move here.
+	(struct tracepoint_filter): New.
+	(tracepoint_iterator): New.
+	(tracepoint_range): New.
+	(all_tracepoints): New.
+	* breakpoint.c (ALL_TRACEPOINTS): Remove, replace all users with
+	all_tracepoints.
+	(breakpoint_iterator): Move to header.
+	(all_tracepoints): New.
+	* tracepoint.c (start_tracing): Adjust.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (breakpoint_safe_range): New.
+	(all_breakpoints_safe): New.  Use instead of
+	ALL_BREAKPOINTS_SAFE where possible.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (ALL_BREAKPOINTS): Remove, replace all uses with
+	all_breakpoints.
+	(breakpoint_iterator): New.
+	(breakpoint_range): New.
+	(all_breakpoints): New.
+
+2021-05-27  Hannes Domani  <ssbssa@yahoo.de>
+
+	* python/py-tui.c (tui_py_window::output): Add full_window
+	argument.
+	(gdbpy_tui_write): Parse "full_window" argument.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* make-init-c: Add option to reverse function calls.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Makefile.in (INIT_FILES_FILTER_OUT): New.
+	(INIT_FILES): Use INIT_FILES_FILTER_OUT.
+	(stamp-init): Use make-init-c.
+	* bpf-tdep.c (_initialize_bpf_tdep): Remove "void".
+	* silent-rules.mk (ECHO_INIT_C): Change.
+	* make-init-c: New file.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* command.h (add_alias_cmd): Accept target as
+	cmd_list_element.  Update callers.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* command.h (add_info_alias): Accept target as
+	cmd_list_element.  Update callers.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* command.h (add_com_alias): Accept target as
+	cmd_list_element.  Update callers.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* python/py-param.c (add_setshow_generic): Use return values of
+	add_setshow functions.
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* mi/mi-main.c (_initialize_mi_main):
+	* python/py-auto-load.c (gdbpy_initialize_auto_load):
+	* remote.c (_initialize_remote):
+
+2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* command.h (set_show_commands): New.
+	(add_setshow_enum_cmd, add_setshow_auto_boolean_cmd,
+	add_setshow_boolean_cmd, add_setshow_filename_cmd,
+	add_setshow_string_cmd, add_setshow_string_noescape_cmd,
+	add_setshow_optional_filename_cmd, add_setshow_integer_cmd,
+	add_setshow_uinteger_cmd, add_setshow_zinteger_cmd,
+	add_setshow_zuinteger_cmd, add_setshow_zuinteger_unlimited_cmd):
+	Return set_show_commands.  Adjust callers.
+	* cli/cli-decode.c (add_setshow_cmd_full): Return
+	set_show_commands, remove result parameters, adjust callers.
+
+2021-05-27  Tom de Vries  <tdevries@suse.de>
+
+	PR symtab/27919
+	* dwarf2/read.c (process_psymtab_comp_unit):
+
+2021-05-27  Tom de Vries  <tdevries@suse.de>
+
+	* dwarf2/read.c (find_partial_die): Fix "Cannot not" typo in dwarf
+	error.
+
+2021-05-27  Tom de Vries  <tdevries@suse.de>
+
+	PR symtab/27898
+	* dwarf2/cu.c (dwarf2_cu::dwarf2_cu): Add load_all_dies init.
+	* dwarf2/cu.h (dwarf2_cu): Add load_all_dies field.
+	* dwarf2/read.c (load_partial_dies, find_partial_die): Update.
+	* dwarf2/read.h (dwarf2_per_cu_data::dwarf2_per_cu_data): Remove
+	load_all_dies init.
+	(dwarf2_per_cu_data): Remove load_all_dies field.
+
+2021-05-26  Simon Marchi  <simon.marchi@efficios.com>
+
+	* regcache.c (reg_buffer::reg_buffer): Default-initialize
+	m_registers array.
+
+2021-05-26  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.c (allocate_type_unit_groups_table)
+	(handle_DW_AT_stmt_list, allocate_dwo_file_hash_table): Use
+	htab_delete_entry.
+	(free_line_header_voidp): Remove.
+	* completer.c
+	(completion_tracker::completion_hash_entry::deleter): Remove.
+	(completion_tracker::discard_completions): Use htab_delete_entry.
+	* utils.h (htab_delete_entry): New template function.
+
+2021-05-24  Hannes Domani  <ssbssa@yahoo.de>
+
+	* python/py-tui.c (tui_py_window::refresh_window):
+	Avoid flickering.
+
+2021-05-23  Tom de Vries  <tdevries@suse.de>
+
+	PR tdep/27822
+	* target.h (struct target_ops): Mention target_thread_architecture in
+	read_description comment.
+	* x86-linux-nat.c (x86_linux_nat_target::read_description): Use
+	pid to determine if process is 64-bit or 32-bit.
+	* aarch64-linux-nat.c (aarch64_linux_nat_target::read_description):
+	Same.
+	* ppc-linux-nat.c (ppc_linux_nat_target::read_description): Same.
+        * riscv-linux-nat.c (riscv_linux_nat_target::read_description): Same.
+	* s390-linux-nat.c (s390_linux_nat_target::read_description): Same.
+	* arm-linux-nat.c (arm_linux_nat_target::read_description): Same.
+	Likewise, use pid to determine if kernel supports reading VFP
+	registers.
+
+2021-05-22  Philippe Waroquiers  <philippe.waroquiers@skynet.be>
+
+	* main.c (enum cmdarg_kind): Fix option type comments for
+	CMDARG_EARLYINIT_FILE and CMDARG_EARLYINIT_COMMAND.
+
+2021-05-21  Tom de Vries  <tdevries@suse.de>
+
+	PR testsuite/25047
+	* contrib/cc-with-tweaks.sh: Handle -l.
+
+2021-05-21  Tom de Vries  <tdevries@suse.de>
+
+	PR breakpoint/27889
+	* jit.c (jit_breakpoint_re_set_internal): Skip separate debug
+	objects.  Call get_jiter_objfile_data with the_objfile.
+
+2021-05-20  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* linespec.c (linespec_p): Remove.  Replace all uses with
+	"linespec *".
+
+2021-05-20  Alexandra Hájková  <ahajkova@redhat.com>
+	    Pedro Alves  <pedro@palves.net>
+
+	* cli/cli-script.h (command_line_up): New unique_ptr typedef.
+	* cli/cli-script.c (multi_line_command_p): Use unique_ptr
+	command_line_up instead of struct command_line.
+	(build_command_line): Likewise.
+	(get_command_line): Update the cmd function call parameter.
+	(process_next_line):  Use unique_ptr command_line_up instead
+	of struct command_line.
+	(recurse_read_control_structure): Change the the type of
+	next to command_line_up.
+	(read_command_lines_1): Change type of `next' to be
+	command_line_up and update all references of `next'
+	accordingly.
+
+2021-05-20  Alexandra Hájková  <ahajkova@redhat.com>
+
+	* MAINTAINERS (Write After Approval): Add myself.
+
+2021-05-19  John Baldwin  <jhb@FreeBSD.org>
+
+	* dwarf2/read.c (tu_abbrev_offset::operator<): Mark const.
+
+2021-05-18  Alexandra Hájková  <ahajkova@redhat.com>
+
+	* inflow.c (new_tty): Do not leak tty.
+
+2021-05-17  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.h: Update include.
+	* dwarf2/read.c: Update include.
+	* dwarf2/line-header.c: Update include.
+	* dwarf2/cu.h: Update include.
+	* dwarf2/comp-unit-head.h: Rename from comp-unit.h.
+	* dwarf2/comp-unit-head.c: Rename from comp-unit.c.
+	* Makefile.in (COMMON_SFILES): Update.
+
+2021-05-17  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.c (maybe_queue_comp_unit)
+	(dwarf2_per_objfile::age_comp_units): Update.
+	(dwarf2_add_dependence, dwarf2_mark_helper, dwarf2_mark): Move to
+	dwarf2_cu methods.
+	* dwarf2/cu.h (struct dwarf2_cu) <mark, clear_mark, is_marked,
+	add_dependence>: New methods.
+	<m_dependencies>: Add "m_" prefix.  Now private.
+	<m_mark>: Add "m_" prefix.
+	* dwarf2/cu.c (dwarf2_cu::dwarf2_cu): Update.
+	(dwarf2_mark_helper): New function.
+	(dwarf2_cu::mark, dwarf2_cu::add_dependence): New methods.
+
+2021-05-17  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.c (dwarf2_cu::addr_sized_int_type)
+	(dwarf2_cu::start_symtab, dwarf2_cu::addr_type)
+	(dwarf2_cu::dwarf2_cu): Move to cu.c.
+	* dwarf2/cu.c: New file.
+	* Makefile.in (COMMON_SFILES): Add dwarf2/cu.c.
+
+2021-05-17  Tom Tromey  <tom@tromey.com>
+
+	* Makefile.in (HFILES_NO_SRCDIR): Add dwarf2/cu.h.
+	* dwarf2/read.c (struct delayed_method_info, struct dwarf2_cu):
+	Move to cu.h.
+	* dwarf2/cu.h: New file.
+
+2021-05-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* .dir-locals.el: Set sentence-end-double-space for all modes, and
+	set brace-list-open to 0 for C and C++ modes.
+
+2021-05-17  Tom Tromey  <tromey@adacore.com>
+
+	* dwarf2/loc.c (dwarf2_evaluate_loc_desc::get_frame_base): Throw
+	if frame is null.
+
+2021-05-17  Tom Tromey  <tromey@adacore.com>
+
+	* nat/linux-osdata.c (user_from_uid, time_from_time_t)
+	(group_from_gid): Subtract one from strncpy length.
+
+2021-05-17  Tom Tromey  <tromey@adacore.com>
+
+	* source.c (add_path): Check 'p' before using 'p[-1]'.
+
+2021-05-17  Tom Tromey  <tromey@adacore.com>
+
+	* dwarf2/read.h (struct dwarf2_per_cu_data_deleter: New.
+	(dwarf2_per_cu_data_up): New typedef.
+	(struct dwarf2_per_bfd) <allocate_per_cu>: Change return type.
+	<all_comp_units>: Use dwarf2_per_cu_data_up.
+	* dwarf2/read.c (dwarf2_per_cu_data::operator()): New function.
+	(dwarf2_per_bfd::allocate_per_cu): Return dwarf2_per_cu_data_up.
+	(create_cu_from_index_list): Likewise.
+	(create_signatured_type_table_from_index)
+	(create_cus_from_debug_names_list, add_type_unit)
+	(read_comp_units_from_section): Update.
+	(dwarf2_find_containing_comp_unit): Change type of all_comp_units.
+	(run_test): Update.
+
+2021-05-17  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.c (tu_abbrev_offset::operator<): New method.
+	(sort_tu_by_abbrev_offset): Remove.
+	(build_type_psymtabs): Update.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* py-project.toml: New.
+	* gdb-gdb.py.in: Re-format.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (cmd_list_element) <is_command_class_help>:
+	New, use it.
+	* command.h (cmd_func_p): Remove.
+	* cli/cli-decode.c (cmd_func_p): Remove.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (cmd_list_element) <is_alias>: New, use it.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (cmd_list_element) <cmd_pointer>: Rename
+	to...
+	<alias_target>: ... this.
+	(add_alias_cmd): Rename old to target.
+	(add_info_alias): Rename old_name to target_name.
+	(add_com_alias): Likewise.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Rename "prefixlist" parameters to "subcommands" throughout.
+	* cli/cli-decode.h (cmd_list_element) <prefixlist>: Rename to...
+	<subcommands>: ... this.
+	* cli/cli-decode.c (lookup_cmd_for_prefixlist): Rename to...
+	(lookup_cmd_with_subcommands): ... this.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.c (add_alias_cmd): Don't handle old == 0.
+
+2021-05-17  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (prefixname): Make const, move implementation
+	to cli/cli-decode.c.
+	* cli/cli-decode.c (cmd_list_element::prefixname): New.
+
+2021-05-16  Weimin Pan  <weimin.pan@oracle.com>
+
+	* ctfread.c (new_symbol): Set function address.
+	(read_func_kind_type): Remove incorrect type name setting.
+	Don't copy name returned from ctf_type_ame_raw throughout file.
+
+2021-05-14  Tom Tromey  <tom@tromey.com>
+
+	* rust-lang.c (rust_language::val_print_struct)
+	(rust_language::print_enum): Use common_val_print, not
+	value_print_inner.
+
+2021-05-14  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* python/py-inferior.c (infpy_get_connection_num): New function.
+	(inferior_object_getset): Add a new element for 'connection_num'.
+	* NEWS: Mention the 'connection_num' attribute of Inferior objects.
+
+2021-05-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* remote.c (check_pending_events_prevent_wildcard_vcont): Change
+	argument type, update and re-wrap, header comment.
+	(remote_target::commit_resumed): Convert any_process_wildcard and
+	may_global_wildcard_vcont from int to bool.
+
+2021-05-14  Kent Cheung  <kent.cheung@arm.com>
+
+	* cp-valprint.c (cp_print_value): Replaced duplicate code.
+	* guile/scm-pretty-print.c (ppscm_print_children): Check max_depth
+	just before printing child values.
+	(gdbscm_apply_val_pretty_printer): Don't check max_depth before
+	printing string representation.
+	* python/py-prettyprint.c (print_children): Check max_depth just
+	before printing child values.
+	(gdbpy_apply_val_pretty_printer): Don't check max_depth before
+	printing string representation.
+
+2021-05-14  Mike Frysinger  <vapier@gentoo.org>
+
+	* remote-sim.c: Change gdb/callback.h & gdb/remote-sim.h includes to
+	sim/callback.h & sim/sim.h.
+
+2021-05-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* lm32-tdep.c: Delete gdb/callback.h, gdb/remote-sim.h, and
+	sim-regno.h include.
+
+2021-05-13  Simon Marchi  <simon.marchi@efficios.com>
+
+	* inf-child.h (inf_child_target) <follow_exec>: New.
+	* inf-child.c (inf_child_target::follow_exec): New.
+
+2021-05-13  Simon Marchi  <simon.marchi@efficios.com>
+
+	* target.h (struct target_ops) <follow_exec>: Add ptid_t
+	parameter.
+	(target_follow_exec): Likewise.
+	* target.c (target_follow_exec): Add ptid_t parameter.
+	* infrun.c (follow_exec): Adjust call to target_follow_exec,
+	don't push target nor create thread.
+	* linux-thread-db.c (class thread_db_target) <follow_exec>: New.
+	(thread_db_target::wait): Just return on TARGET_WAITKIND_EXECD.
+	(thread_db_target::follow_exec): New.
+	* remote.c (class remote_target) <follow_exec>: Add ptid_t parameter.
+	(remote_target::follow_exec): Call
+	process_stratum_target::follow_exec.
+	* target-delegates.c: Re-generate.
+
+2021-05-13  Simon Marchi  <simon.marchi@efficios.com>
+
+	* infrun.c (follow_exec): Call target_follow_fork when
+	follow-exec-mode is same.
+	* target.h (target_follow_fork): Improve doc.
+
+2021-05-13  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (struct cmd_list_element) <pre_show_hook>:
+	Remove.
+	* cli/cli-setshow.c (do_show_command): Adjust.
+
+2021-05-13  Luis Machado  <luis.machado@linaro.org>
+
+	* arch/aarch64-mte-linux.c (aarch64_mte_get_tag_granules): Don't
+	include the last address in the range.
+
+2021-05-12  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* python/python-internal.h (gdbpy_parse_command_name): Return
+	gdb::unique_xmalloc_ptr.
+	* python/py-cmd.c (gdbpy_parse_command_name): Likewise.
+	(cmdpy_init): Adjust.
+	* python/py-param.c (parmpy_init): Adjust.
+	(add_setshow_generic): Take gdb::unique_xmalloc_ptr, release it
+	when done.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* NEWS (Guile API): Note the addition of the new procedure.
+	* guile/scm-value.c (gdbscm_value_const_value): Add
+	implementation of value-const-value procedure.
+	(value_functions): Add value-const-value procedure.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* NEWS (Guile API): Note the addition of new procedures.
+	* guile/scm-value.c (gdbscm_reference_value): Add helper function
+	for reference value creation.
+	(gdbscm_value_reference_value): Add implementation of
+	value-reference-value procedure.
+	(gdbscm_value_rvalue_reference_value): Add implementation of
+	value-rvalue-reference-value procedure.
+	(value_functions): Add value-reference-value procedure.  Add
+	value-rvalue-reference-value procedure.
+
+2021-05-12  George Barrett  <bob@bob131.so>
+
+	* guile/scm-type.c (type_integer_constants): Add binding for
+	TYPE_CODE_RVALUE_REF.
+	* guile/scm-value.c (gdbscm_value_referenced_value): Handle
+	dereferencing of rvalue references.
+	* NEWS (Guile API): Note improvements in rvalue reference support.
+
+2021-05-12  Markus Metzger  <markus.t.metzger@intel.com>
+
+	* btrace.c (handle_pt_insn_events): Ignore status update enable
+	events.
+
+2021-05-11  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* arm-tdep.c (arm_record_data_proc_misc_ld_str): Fix
+	indentation.
+
+2021-05-11  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* cli/cli-decode.h (struct cmd_list_element): Fix indentation.
+
+2021-05-10  Lancelot Six  <lsix@lancelotsix.com>
+
+	PR gdb/27614
+	* contrib/gdb-add-index.sh: Fix when called with a symlink as an
+	argument.
+
+2021-05-10  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* nat/linux-waitpid.c (status_to_str): Show signal name.
+
+2021-05-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python/py-breakpoint.c (pybp_debug): New static global.
+	(show_pybp_debug): New function.
+	(pybp_debug_printf): Define.
+	(PYBP_SCOPED_DEBUG_ENTER_EXIT): Define.
+	(gdbpy_breakpoint_created): Add some debugging.
+	(gdbpy_breakpoint_deleted): Likewise.
+	(gdbpy_breakpoint_modified): Likewise.
+	(_initialize_py_breakpoint): New function.
+
+2021-05-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python/py-unwind.c (pyuw_debug): Convert to bool.
+	(show_pyuw_debug): New function.
+	(pyuw_debug_printf): Define.
+	(PYUW_SCOPED_DEBUG_ENTER_EXIT): Define.
+	(pyuw_this_id): Convert to new debug print macros.
+	(pyuw_prev_register): Likewise.
+	(pyuw_sniffer): Likewise.
+	(pyuw_dealloc_cache): Likewise.
+	(_initialize_py_unwind): Update now pyuw_debug is a bool, and add
+	show function when registering.
+
+2021-05-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dummy-frame.c (fprint_dummy_frames): Convert use of
+	fprint_frame_id to use frame_id::to_string.
+	* frame.c (fprint_field): Delete.
+	(fprint_frame_id): Moved to...
+	(frame_id::to_string): ...this, rewritten to return a string.
+	(fprint_frame): Convert use of fprint_frame_id to use
+	frame_id::to_string.
+	(compute_frame_id): Likewise.
+	(frame_id_p): Likewise.
+	(frame_id_eq): Likewise.
+	(frame_id_inner): Likewise.
+	* frame.h (struct frame_id) <to_string>: New member function.
+	(fprint_frame_id): Delete declaration.
+	* guile/scm-frame.c (frscm_print_frame_smob): Convert use of
+	fprint_frame_id to use frame_id::to_string.
+	* python/py-frame.c (frame_object_to_frame_info): Likewise.
+	* python/py-unwind.c (unwind_infopy_str): Likewise.
+	(pyuw_this_id): Likewise.
+
+2021-05-08  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* nat/linux-waitpid.c (status_to_str): Return std::string.
+	* nat/linux-waitpid.h (status_to_str): Likewise.
+	* linux-nat.c (linux_nat_post_attach_wait): Adjust.
+	(linux_nat_target::attach): Adjust.
+	(linux_handle_extended_wait): Adjust.
+	(wait_lwp): Adjust.
+	(stop_wait_callback): Adjust.
+	(linux_nat_filter_event): Adjust.
+	(linux_nat_wait_1): Adjust.
+	* nat/linux-waitpid.c (status_to_str): Adjust.
+	* nat/linux-waitpid.h (status_to_str): Adjust.
+
+2021-05-08  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* infrun.h (infrun_debug_printf): Add missing space.
+
+2021-05-08  Pedro Alves  <pedro@palves.net>
+
+	* linux-nat.c (linux_nat_target::supports_disable_randomization):
+	Remove references to HAVE_PERSONALITY.
+	* nat/linux-personality.c: Remove references to HAVE_PERSONALITY.
+	(maybe_disable_address_space_randomization)
+	(~maybe_disable_address_space_randomizatio): Remove references to
+	HAVE_PERSONALITY.
+	* config.in, configure: Regenerate.
+
+2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-cmds.c: Add 'gdbsupport/gdb_tilde_expand.h'
+	include.
+	(source_script_with_search): Perform tilde expansion.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* target-descriptions.c (struct target_desc_info) <filename>:
+	Make std::string.
+	(copy_inferior_target_desc_info): Adjust.
+	(target_desc_info_free): Adjust.
+	(target_find_description): Adjust.
+	(set_tdesc_filename_cmd): Adjust.
+	(show_tdesc_filename_cmd): Adjust.
+	(unset_tdesc_filename_cmd): Adjust.
+	(maint_print_c_tdesc_cmd): Adjust.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* target-descriptions.c (struct target_desc_info): Initialize
+	fields.
+	(get_tdesc_info): Use new.
+	(target_desc_info_free): Use delete.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* target-descriptions.c (struct target_desc_info) <fetched>:
+	bool.
+	(target_find_description): Adjust.
+	(target_clear_description): Adjust.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* target-descriptions.c (struct target_desc_info) <tdesc>:
+	Adjust doc.
+	(target_desc_fetched): Remove.
+	(current_target_desc): Remove.
+	(target_description_filename): Remove.
+	(target_find_description): Adjust.
+	(target_clear_description): Adjust.
+	(target_current_description): Adjust.
+	(set_tdesc_filename_cmd): Adjust.
+	(show_tdesc_filename_cmd): Adjust.
+	(unset_tdesc_filename_cmd): Adjust.
+	(maint_print_c_tdesc_cmd): Adjust.
+	(maint_print_xml_tdesc_cmd): Adjust.
+
+2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* infcmd.c (notice_new_inferior): Change parameter type.
+	* inferior.h (notice_new_inferior): Change parameter type.
+	* remote.c (remote_notice_new_inferior): Change parameter type to
+	bool.  Also update type of local variable to bool.
+	(remote_target::update_thread_list): Change type of local variable
+	to bool.
+	(remote_target::process_stop_reply): Pass bool instead of int to
+	remote_notice_new_inferior.
+
+2021-05-07  Simon Marchi  <simon.marchi@efficios.com>
+
+	* target.c (target_stack::unpush): Call target_ops::find_beneath
+	to get the target beneath `t`.
+
+2021-05-07  Simon Marchi  <simon.marchi@efficios.com>
+
+	* target.c (target_close): Check in all inferiors that the
+	target is not pushed.
+
+2021-05-07  Aaron Merey  <amerey@redhat.com>
+
+	* debuginfod-support.c (debuginfod_init): Remove.
+	(get_debuginfod_client): New function.
+
+2021-05-07  Tom Tromey  <tom@tromey.com>
+
+	* breakpoint.c (ambiguous_names_p): Use htab_eq_string.
+	* utils.c (streq_hash): Remove.
+	* utils.h (streq_hash): Don't declare.
+	* completer.c (completion_tracker::discard_completions): Update
+	comment.
+	* ada-lang.c (_initialize_ada_language): Use htab_eq_string.
+
+2021-05-07  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* Re-format all Python files using black.
+
+2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* guile/guile-internal.h (gdbscm_safe_source_script): Change
+	function return type.
+	* guile/guile.c (gdbscm_source_script): Update to handle change in
+	gdbscm_safe_source_script.
+	* guile/scm-objfile.c (gdbscm_source_objfile_script): Likewise.
+	* guile/scm-safe-call.c (gdbscm_safe_source_script): Change return
+	type.
+
+2021-05-06  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* inferior.h (class inferior) <args>: Change type to
+	unique_xmalloc_ptr.
+	* inferior.c (inferior::~inferior): Don't free args.
+	* infcmd.c (get_inferior_args): Adjust.
+	(set_inferior_args): Adjust.
+
+2021-05-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* guile/scm-breakpoint.c (bpscm_print_breakpoint_smob): Only print
+	breakpoint locations when the breakpoint actually has a location.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* mi/mi-cmd-break.c (mi_cmd_break_condition): New function.
+	* mi/mi-cmds.c: Change the binding of "-break-condition" to
+	mi_cmd_break_condition.
+	* mi/mi-cmds.h (mi_cmd_break_condition): Declare.
+	* breakpoint.h (set_breakpoint_condition): Declare a new
+	overload.
+	* breakpoint.c (set_breakpoint_condition): New overloaded function
+	extracted out from ...
+	(condition_command): ... this.
+	* NEWS: Mention the change.
+
+2021-05-06  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* mi/mi-cmd-break.c (mi_cmd_break_insert_1): Recognize the
+	'--force-condition' flag to force the condition in the
+	'-break-insert' and '-dprintf-insert' commands.
+	* NEWS: Mention the change.
+
+2021-05-04  Tom de Vries  <tdevries@suse.de>
+
+	PR guile/27806
+	* guile/guile.c	(gdbscm_initialize): Don't let guile change libgmp
+	memory functions.
+
+2021-04-30  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.c (dwarf2_initialize_objfile): Update.
+	(add_signatured_type_cu_to_table): Remove.
+	(create_debug_type_hash_table): Assume dwo_file is non-null.
+	(create_debug_types_hash_table): Update comment.
+	(create_all_type_units): Remove.
+	(sort_tu_by_abbrev_offset): Update comment.
+	(build_type_psymtabs): Rename from build_type_psymtabs_1.
+	(build_type_psymtabs): Remove.
+	(process_skeletonless_type_unit, dwarf2_build_psymtabs_hard):
+	Update.
+	(read_comp_units_from_section): Add types_htab, section_kind
+	parameters.
+	(create_all_comp_units): Read type units.
+
+2021-04-30  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.h (struct tu_stats) <nr_tus>: New member.
+	(struct dwarf2_per_bfd) <get_cutu, get_tu>: Remove
+	<get_cu>: Now inline.
+	<all_type_units>: Remove.
+	* dwarf2/read.c (dwarf2_per_bfd::~dwarf2_per_bfd): Update.
+	(dwarf2_per_bfd::get_cutu, dwarf2_per_bfd::get_cu)
+	(dwarf2_per_bfd::get_tu): Remove.
+	(dwarf2_per_bfd::allocate_signatured_type): Update nr_tus.
+	(create_signatured_type_table_from_index)
+	(create_signatured_type_table_from_debug_names)
+	(dw2_symtab_iter_next, dwarf2_base_index_functions::print_stats)
+	(dwarf2_base_index_functions::expand_all_symtabs)
+	(dw2_expand_marked_cus, dw_expand_symtabs_matching_file_matcher)
+	(dwarf2_base_index_functions::map_symbol_filenames)
+	(dw2_debug_names_iterator::next, dwarf2_initialize_objfile)
+	(add_signatured_type_cu_to_table, create_all_type_units)
+	(add_type_unit, build_type_psymtabs_1, print_tu_stats)
+	(create_all_comp_units): Update.
+	* dwarf2/index-write.c (check_dwarf64_offsets, write_gdbindex)
+	(write_debug_names): Update.
+
+2021-04-30  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.h (struct dwarf2_per_bfd) <allocate_per_cu,
+	allocate_signatured_type>: Change return type.
+	<all_comp_units, all_type_units>: Hold unique pointers.
+	(struct dwarf2_per_cu_data): Add constructor and initializers.
+	(struct signatured_type): Derive from dwarf2_per_cu_data.
+	* dwarf2/read.c (type_unit_group): Derive from
+	dwarf2_per_cu_data.
+	(dwarf2_per_bfd::get_cutu, dwarf2_per_bfd::get_cu)
+	(dwarf2_per_bfd::get_tu)
+	(dwarf2_per_bfd::allocate_signatured_type)
+	(dwarf2_per_bfd::allocate_signatured_type)
+	(create_cu_from_index_list, create_cus_from_index_list)
+	(create_signatured_type_table_from_index)
+	(create_signatured_type_table_from_debug_names)
+	(create_addrmap_from_aranges)
+	(dwarf2_base_index_functions::find_last_source_symtab)
+	(dw_expand_symtabs_matching_file_matcher)
+	(dwarf2_gdb_index::expand_symtabs_matching)
+	(dwarf2_base_index_functions::map_symbol_filenames)
+	(create_cus_from_debug_names_list)
+	(dw2_debug_names_iterator::next)
+	(dwarf2_debug_names_index::expand_symtabs_matching)
+	(create_debug_type_hash_table, add_type_unit)
+	(fill_in_sig_entry_from_dwo_entry, lookup_dwo_signatured_type):
+	Update.
+	(allocate_type_unit_groups_table): Use delete.
+	(create_type_unit_group): Change return type.  Use new.
+	(get_type_unit_group, build_type_psymtabs_1)
+	(build_type_psymtab_dependencies)
+	(process_skeletonless_type_unit, set_partial_user)
+	(dwarf2_build_psymtabs_hard, read_comp_units_from_section)
+	(create_cus_hash_table, queue_and_load_dwo_tu, follow_die_sig_1)
+	(read_signatured_type): Update.
+	(dwarf2_find_containing_comp_unit): Change type of
+	'all_comp_units'.
+	(run_test): Update.
+	(dwarf2_per_bfd::allocate_per_cu)
+	(dwarf2_per_bfd::allocate_signatured_type): Change return type.
+	Use new.
+	(add_signatured_type_cu_to_table): Update.
+	* dwarf2/index-write.c (write_one_signatured_type)
+	(check_dwarf64_offsets, psyms_seen_size, write_gdbindex)
+	(write_debug_names): Update.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* nat/windows-nat.h (get_image_name): Don't declare.
+	* nat/windows-nat.c (get_image_name): Now static.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* windows-nat.c (windows_nat::handle_load_dll): Update.
+	(windows_nat_target::get_windows_debug_event): Call
+	dll_loaded_event.
+	(windows_add_all_dlls, windows_add_dll): Move to
+	nat/windows-nat.c.
+	* nat/windows-nat.h (handle_load_dll): Change parameters.
+	(dll_loaded_event, windows_add_all_dlls): Declare.
+	* nat/windows-nat.c (windows_add_dll, windows_add_all_dlls): Move
+	from windows-nat.c.
+	(dll_loaded_event): New function.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* nat/windows-nat.h (GenerateConsoleCtrlEvent): New define.
+	(GenerateConsoleCtrlEvent_ftype, GenerateConsoleCtrlEvent):
+	Declare.
+	* nat/windows-nat.c (GenerateConsoleCtrlEvent): Define.
+	(initialize_loadable): Initialize GenerateConsoleCtrlEvent.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* windows-nat.c: Move code to nat/windows-nat.[ch].
+	(_initialize_windows_nat): Call initialize_loadable.
+	* nat/windows-nat.h (AdjustTokenPrivileges)
+	(DebugActiveProcessStop, DebugBreakProcess)
+	(DebugSetProcessKillOnExit, EnumProcessModules)
+	(EnumProcessModulesEx, GetModuleInformation)
+	(GetModuleFileNameExA, GetModuleFileNameExW)
+	(LookupPrivilegeValueA, OpenProcessToken, GetConsoleFontSize)
+	(GetCurrentConsoleFont, Wow64SuspendThread)
+	(Wow64GetThreadContext, Wow64SetThreadContext)
+	(Wow64GetThreadSelectorEntry): Move from windows-nat.c.
+	(AdjustTokenPrivileges_ftype)
+	(DebugActiveProcessStop_ftype, DebugBreakProcess_ftype)
+	(DebugSetProcessKillOnExit_ftype, EnumProcessModules_ftype)
+	(EnumProcessModulesEx_ftype, GetModuleInformation_ftype)
+	(GetModuleFileNameExA_ftype, GetModuleFileNameExW_ftype)
+	(LookupPrivilegeValueA_ftype, OpenProcessToken_ftype)
+	(GetConsoleFontSize_ftype)
+	(GetCurrentConsoleFont_ftype, Wow64SuspendThread_ftype)
+	(Wow64GetThreadContext_ftype, Wow64SetThreadContext_ftype)
+	(Wow64GetThreadSelectorEntry_ftype): Likewise.
+	(initialize_loadable): Declare.
+	* nat/windows-nat.c (AdjustTokenPrivileges)
+	(DebugActiveProcessStop, DebugBreakProcess)
+	(DebugSetProcessKillOnExit, EnumProcessModules)
+	(EnumProcessModulesEx, GetModuleInformation, GetModuleFileNameExA)
+	(GetModuleFileNameExW, LookupPrivilegeValueA, OpenProcessToken)
+	(GetCurrentConsoleFont, GetConsoleFontSize, Wow64SuspendThread)
+	(Wow64GetThreadContext, Wow64SetThreadContext)
+	(Wow64GetThreadSelectorEntry): Define.
+	(bad, bad_GetCurrentConsoleFont, bad_GetConsoleFontSize): Move
+	from windows-nat.c.
+	(initialize_loadable): Likewise, and rename.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* windows-nat.c (bad_GetModuleFileNameEx): Remove define.
+	(bad_DebugActiveProcessStop, bad_DebugBreakProcess)
+	(bad_DebugSetProcessKillOnExit, bad_EnumProcessModules)
+	(bad_GetModuleFileNameExW, bad_GetModuleFileNameExA)
+	(bad_GetModuleInformation, bad_OpenProcessToken): Remove.
+	(bad): New template functions.
+	(_initialize_loadable): Update.
+
+2021-04-30  Tom Tromey  <tromey@adacore.com>
+
+	* ada-lang.c (ada_index_type): Use ada_check_typedef.
+
+2021-04-29  Simon Marchi  <simon.marchi@efficios.com>
+
+	* auto-load.h: Split namespace declaration.
+
+2021-04-29  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* infrun.c (save_waitstatus): Move variables to inner scope.
+
+2021-04-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* NEWS: Fix typo and stray full stop.
+
+2021-04-28  Tom Tromey  <tromey@adacore.com>
+
+	* ada-exp.y (primary): Use new type for null pointer.
+	* ada-lang.c (ada_type_match): Remove "may_deref"
+	parameter.  Handle null pointer.
+	(ada_args_match): Update.
+	* ada-valprint.c (ada_value_print_ptr, ada_value_print):
+	Handle null pointer.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* NEWS: Mention new commands.
+	* python/python.c (python_ignore_environment): New static global.
+	(show_python_ignore_environment): New function.
+	(set_python_ignore_environment): New function.
+	(python_dont_write_bytecode): New static global.
+	(show_python_dont_write_bytecode): New function.
+	(set_python_dont_write_bytecode): New function.
+	(_initialize_python): Register new commands.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* extension-priv.h (struct extension_language_ops): Rename
+	'finish_initialization' to 'initialize'.
+	* extension.c (finish_ext_lang_initialization): Renamed to...
+	(ext_lang_initialization): ...this, update comment, and updated
+	the calls to reflect the change in struct extension_language_ops.
+	* extension.h (finish_ext_lang_initialization): Renamed to...
+	(ext_lang_initialization): ...this.
+	* guile/guile.c (gdbscm_finish_initialization): Renamed to...
+	(gdbscm_initialize): ...this, update comment at definition.
+	(guile_extension_ops): Update.
+	* main.c (captured_main_1): Update call to
+	finish_ext_lang_initialization.
+	* python/python.c (gdbpy_finish_initialization): Rename to...
+	(gdbpy_initialize): ...this, update comment at definition, and
+	update call to do_finish_initialization.
+	(python_extension_ops): Update.
+	(do_finish_initialization): Rename to...
+	(do_initialize): ...this, and update comment.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* main.c (captured_main_1): Add a call to
+	finish_ext_lang_initialization.
+	* top.c (gdb_init): Remove call to finish_ext_lang_initialization.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* guile/guile.c (gdbscm_set_backtrace): Add declaration.
+	(gdbscm_finish_initialization): Add code moved from
+	_initialize_guile.
+	(_initialize_guile): Move code to gdbscm_finish_initialization.
+	* guile/scm-arch.c (gdbscm_initialize_arches): Move some code into
+	_initialize_scm_arch.
+	(_initialize_scm_arch): New function.
+	* guile/scm-block.c (gdbscm_initialize_blocks): Move some code
+	into _initialize_scm_block.
+	(_initialize_scm_block): New function.
+	* guile/scm-frame.c (gdbscm_initialize_frames): Move some code
+	into _initialize_scm_frame.
+	(_initialize_scm_frame): New function.
+	* guile/scm-objfile.c (gdbscm_initialize_objfiles): Move some code
+	into _initialize_scm_objfile.
+	(_initialize_scm_objfile): New function.
+	* guile/scm-progspace.c (gdbscm_initialize_pspaces): Move some
+	code into _initialize_scm_progspace.
+	(_initialize_scm_progspace): New function.
+	* guile/scm-symbol.c (gdbscm_initialize_symbols): Move some code
+	into _initialize_scm_symbol.
+	(_initialize_scm_symbol): New function.
+	* guile/scm-symtab.c (gdbscm_initialize_symtabs): Move some code
+	into _initialize_scm_symtab.
+	(_initialize_scm_symtab): New function.
+	* guile/scm-type.c (gdbscm_initialize_types): Move some code into
+	_initialize_scm_type.
+	(_initialize_scm_type): New function.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python/py-arch.c (_initialize_py_arch): New function.
+	(gdbpy_initialize_arch): Move code to _initialize_py_arch.
+	* python/py-block.c (_initialize_py_block): New function.
+	(gdbpy_initialize_blocks): Move code to _initialize_py_block.
+	* python/py-inferior.c (_initialize_py_inferior): New function.
+	(gdbpy_initialize_inferior): Move code to _initialize_py_inferior.
+	* python/py-objfile.c (_initialize_py_objfile): New function.
+	(gdbpy_initialize_objfile): Move code to _initialize_py_objfile.
+	* python/py-progspace.c (_initialize_py_progspace): New function.
+	(gdbpy_initialize_pspace): Move code to _initialize_py_progspace.
+	* python/py-registers.c (_initialize_py_registers): New function.
+	(gdbpy_initialize_registers): Move code to
+	_initialize_py_registers.
+	* python/py-symbol.c (_initialize_py_symbol): New function.
+	(gdbpy_initialize_symbols): Move code to _initialize_py_symbol.
+	* python/py-symtab.c (_initialize_py_symtab): New function.
+	(gdbpy_initialize_symtabs): Move code to _initialize_py_symtab.
+	* python/py-type.c (_initialize_py_type): New function.
+	(gdbpy_initialize_types): Move code to _initialize_py_type.
+	* python/py-unwind.c (_initialize_py_unwind): New function.
+	(gdbpy_initialize_unwind): Move code to _initialize_py_unwind.
+	* python/python.c (_initialize_python): Move call to
+	do_start_initialization to gdbpy_finish_initialization.
+	(gdbpy_finish_initialization): Add call to
+	do_start_initialization.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* extension.c (struct scoped_default_signal): New struct.
+	(scoped_default_sigint): New typedef.
+	(finish_ext_lang_initialization): Make use of
+	scoped_default_sigint.
+
+2021-04-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* main.c (captured_main_1): Don't pass argument to gdb_init.
+	* top.c (gdb_init): Remove unused argument, and add header
+	comment.
+	* top.h (gdb_init): Remove argument.
+
+2021-04-27  Luis Machado  <luis.machado@linaro.org>
+
+	* psymtab.c (psymbol_functions::dump): Output newline.
+	Remove wrap.
+	* symmisc.c (dump_objfile): Likewise.
+
+2021-04-27  Michael Weghorn  <m.weghorn@posteo.de>
+	    Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* gdb/auto-load.c (_initialize_auto_load): 'Specify token
+	when attaching the 'auto_load_new_objfile' observer, so
+	other observers can specify it as a dependency.
+	* gdb/auto-load.h (struct token): Declare
+	'auto_load_new_objfile_observer_token' as token to be used
+	for the 'auto_load_new_objfile' observer.
+	* gdb/python/py-inferior.c (gdbpy_initialize_inferior): Make
+	'python_new_objfile' observer depend on 'auto_load_new_objfile'
+	observer, so it gets notified after the latter.
+
+2021-04-27  Michael Weghorn  <m.weghorn@posteo.de>
+	    Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* unittests/observable-selftests.c (dependency_test_counters):
+	New.
+	(observer_token0, observer_token1, observer_token2,
+	observer_token3, observer_token4, observer_token5): New.
+	(struct dependency_observer_data): New struct.
+	(observer_dependency_test_callback): New function.
+	(test_observers): New.
+	(run_dependency_test): New function.
+	(test_dependency): New.
+	(_initialize_observer_selftest): Register dependency test.
+
+2021-04-26  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	PR gdb/27773
+	* cli/cli-dump.c (dump_binary_file): Check result of
+	gdb_fopen_cloexec.
+
+2021-04-25  Sergei Trofimovich  <siarheit@google.com>
+
+	* sparc-linux-nat.c (sparc_linux_nat_target): fix sparc build
+	by passing `process_stratum_target*` parameter.
+
+2021-04-25  Lancelot Six  <lsix@lancelotsix.com>
+
+	PR gdb/22640
+	* typeprint.h (struct type_print_options): Add print_in_hex
+	flag.
+	(struct print_offset_data): Add print_in_hex flag, add a
+	constructor accepting a type_print_options* argument.
+	* typeprint.c (type_print_raw_options, default_ptype_flags): Set
+	default value for print_in_hex.
+	(print_offset_data::indentation): Allow more horizontal space.
+	(print_offset_data::print_offset_data): Add ctor.
+	(print_offset_data::maybe_print_hole, print_offset_data::update):
+	Handle the print_in_hex flag.
+	(whatis_exp): Handle 'x' and 'd' flags.
+	(print_offsets_and_sizes_in_hex): Declare.
+	(set_print_offsets_and_sizes_in_hex): Create.
+	(show_print_offsets_and_sizes_in_hex): Create.
+	(_initialize_typeprint): Update help message for the ptype
+	command, register the 'set print type hex' and 'show print type
+	hex' commands.
+	* c-typeprint.c (c_print_type, c_type_print_base_struct_union)
+	(c_type_print_base): Construct the print_offset_data
+	object using the type_print_optons parameter.
+	* rust-lang.c (rust_language::print_type): Construct the
+	print_offset_data object using the type_print_optons parameter.
+	* NEWS: Mention the new flags of the ptype command.
+
+2021-04-25  Lancelot Six  <lsix@lancelotsix.com>
+
+	* typeprint.h (struct type_print_options): Move before
+	print_offset_data.
+
+2021-04-25  Joel Brobecker  <brobecker@adacore.com>
+
+	GDB 10.2 released.
+
+2021-04-23  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* observable.c (observer_debug): Change to bool.
+
+2021-04-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf2/read.c: Add 'unordered_set' include.
+	(dwarf2_base_index_functions::map_symbol_filenames): Replace
+	'visited' hash table with 'qfn_cache' unordered_set.  Remove use
+	of per_Bfd->filenames_cache cache, and use function local
+	filenames_cache instead.  Reindent.
+	* dwarf2/read.h (struct dwarf2_per_bfd) <filenames_cache>: Delete.
+
+2021-04-22  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* breakpoint.c (iterate_over_bp_locations): Change callback to
+	function view, remove data parameter.
+	* breakpoint.h (iterate_over_bp_locations): Likewise.
+	* record-full.c (record_full_sync_record_breakpoints): Remove
+	data parameter.
+
+2021-04-22  Tom Tromey  <tom@tromey.com>
+
+	* c-typeprint.c (c_type_print_base_struct_union): Use
+	print_spaces_filtered_with_print_options.
+
+2021-04-22  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	PR gdb/27757
+	* python/py-type.c (typy_range): Check that bounds are constant
+	before accessing them as such.
+	* guile/scm-type.c (gdbscm_type_range): Likewise.
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* Makefile.in (COMMON_SFILES): Remove continuations.c.
+	* inferior.c (inferior::add_continuation): New method, adapted
+	from 'add_inferior_continuation'.
+	(inferior::do_all_continuations): New method, adapted from
+	'do_all_inferior_continuations'.
+	(inferior::~inferior): Clear the list of continuations directly.
+	* inferior.h (class inferior) <continuations>: Rename into...
+	<m_continuations>: ...this and make private.
+	* continuations.c: Remove.
+	* continuations.h: Remove.
+	* event-top.c: Don't include "continuations.h".
+
+	Update the users below.
+	* inf-loop.c (inferior_event_handler)
+	* infcmd.c (attach_command)
+	(notice_new_inferior): Update.
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* inferior.h (class inferior) <continuations>: Change the type
+	to be an std::list of std::function's.
+	Update the references and uses below.
+	* continuations.c (struct continuation): Delete.
+	(make_continuation): Delete.
+	(do_my_continuations_1): Delete.
+	(do_my_continuations): Delete.
+	(discard_my_continuations_1): Delete.
+	(discard_my_continuations): Delete.
+	(add_inferior_continuation): Update.
+	(do_all_inferior_continuations): Update.
+	(discard_all_inferior_continuations): Update.
+	* continuations.h (add_inferior_continuation): Update to take
+	an std::function as the parameter.
+	* infcmd.c (struct attach_command_continuation_args): Delete.
+	(attach_command_continuation): Delete.
+	(attach_command_continuation_free_args): Delete.
+	(attach_command): Update.
+	(notice_new_inferior): Update.
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* continuations.h: Update the general comment.
+	* inferior.h (class inferior) <continuations>: Update the comment.
+	* interps.c: Do not include "continuations.h".
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* continuations.h (do_all_inferior_continuations): Remove the 'err'
+	parameter.  Update the references below.
+	* continuations.c (do_my_continuations_1)
+	(do_my_continuations)
+	(do_all_inferior_continuations): Update.
+	* inf-loop.c (inferior_event_handler): Update.
+	* infcmd.c (attach_command_continuation): Update.
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* infcmd.c (attach_post_wait): Update the function comment.
+
+2021-04-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* infcmd.c (attach_post_wait): Remove the unused parameter 'args'.
+	Update the references below.
+	(struct attach_command_continuation_args)
+	(attach_command_continuation)
+	(attach_command_continuation_free_args)
+	(attach_command)
+	(notice_new_inferior): Update to remove the reference to 'args'.
+
+2021-04-22  Simon Marchi  <simon.marchi@polymtl.ca>
+	    Tom de Vries  <tdevries@suse.de>
+
+	PR remote/27710
+	* remote.c (remote_target_is_non_stop_p): New function.
+	* remote.h (remote_target_is_non_stop_p): Declare.
+	* remote-notif.c (remote_async_get_pending_events_handler): Fix assert
+	to check non-stopness using notif_state->remote rather current target.
+
+2021-04-22  Tom Tromey  <tom@tromey.com>
+
+	* rust-parse.c (rust_parser::parse_sizeof): Remove KW_MUT code.
+	(struct typed_val_int) <val>: Now ULONGEST.
+	(rust_parser::parse_array_type): Remove negative check.
+	(rust_lex_int_test): Change 'value' to ULONGEST.
+
+2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* arch-utils.c (default_addressable_memory_unit_size): Return a
+	value based on bfd's bits per byte.
+
+2021-04-21  Tom Tromey  <tom@tromey.com>
+
+	* dwarf2/read.h (struct dwarf2_per_cu_data) <dwarf_version>: Now
+	unsigned char.
+	(struct dwarf2_per_cu_data): Rearrange.
+	* dwarf2/comp-unit.h (struct comp_unit_head) <version>: Now
+	unsigned char.
+	(struct comp_unit_head): Rearrange.
+	* dwarf2/comp-unit.c (read_comp_unit_head): Update.
+
+2021-04-21  Tom de Vries  <tdevries@suse.de>
+
+	PR build/27681
+	* configure.ac: Remove --without-included-regex/--with-included-regex.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* gdb_regex.h: Assume USE_INCLUDED_REGEX is defined.
+
+2021-04-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* breakpoint.h (create_breakpoint): Add a new parameter,
+	'force_condition'.
+	* breakpoint.c (create_breakpoint): Use the 'force_condition'
+	argument when 'parse_extra' is false to check if the condition
+	is invalid at all of the breakpoint locations.
+	Update the users below.
+	(break_command_1)
+	(dprintf_command)
+	(trace_command)
+	(ftrace_command)
+	(strace_command)
+	(create_tracepoint_from_upload): Update.
+	* guile/scm-breakpoint.c (gdbscm_register_breakpoint_x): Update.
+	* mi/mi-cmd-break.c (mi_cmd_break_insert_1): Update.
+	* python/py-breakpoint.c (bppy_init): Update.
+	* python/py-finishbreakpoint.c (bpfinishpy_init): Update.
+
+2021-04-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* breakpoint.c (print_one_breakpoint_location): Display "N" for
+	disabled-by-condition locations on MI-like output.
+	(breakpoint_1): Do not display the disabled-by-condition footnote
+	if the output is MI-like.
+
+2021-04-21  Frederic Cambus  <fred@statdns.com>
+
+	* syscalls/update-netbsd.sh: Fix script name display in usage, and
+	update year range in generated copyright notices.
+
+2021-04-20  Felix Willgerodt  <felix.willgerodt@intel.com>
+
+	* c-exp.y (qualifier_seq_noopt): Replace qualifier_seq with
+	qualifier_seq_noopt.
+
+2021-04-20  Felix Willgerodt  <felix.willgerodt@intel.com>
+
+	* c-exp.y (single_qualifier): Handle UNKNOWN_CPP_NAME.
+
+2021-04-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* producer.c: Replace 'regex' include with 'gdb_regex.h'.
+	(producer_is_icc): Replace use of std::regex with gdb's
+	compiled_regex.
+
 2021-04-17  Tom Tromey  <tom@tromey.com>
 
 	PR gdb/23743:

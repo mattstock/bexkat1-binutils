@@ -126,7 +126,8 @@ extern const char *i386_comment_chars;
 #define GLOBAL_OFFSET_TABLE_NAME "_GLOBAL_OFFSET_TABLE_"
 #endif
 
-#if (defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)) && !defined (LEX_AT)
+#if ((defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)) \
+     && !defined (LEX_AT)) || defined (TE_PE)
 #define TC_PARSE_CONS_EXPRESSION(EXP, NBYTES) x86_cons (EXP, NBYTES)
 #endif
 extern bfd_reloc_code_real_type x86_cons (expressionS *, int);
@@ -143,8 +144,10 @@ extern int x86_address_bytes (void);
 
 #define NO_RELOC BFD_RELOC_NONE
 
-void i386_validate_fix (struct fix *);
-#define TC_VALIDATE_FIX(FIX,SEGTYPE,SKIP) i386_validate_fix(FIX)
+int i386_validate_fix (struct fix *);
+#define TC_VALIDATE_FIX(FIX,SEGTYPE,SKIP) do { \
+    if (!i386_validate_fix(FIX)) goto SKIP;      \
+  } while (0)
 
 #define tc_fix_adjustable(X)  tc_i386_fix_adjustable(X)
 extern int tc_i386_fix_adjustable (struct fix *);

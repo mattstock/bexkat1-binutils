@@ -47,7 +47,6 @@
 #include "inline-frame.h"
 #include "tracepoint.h"
 #include "inf-loop.h"
-#include "continuations.h"
 #include "linespec.h"
 #include "thread-fsm.h"
 #include "top.h"
@@ -137,9 +136,9 @@ get_inferior_args (void)
     }
 
   if (current_inferior ()->args == NULL)
-    current_inferior ()->args = xstrdup ("");
+    current_inferior ()->args = make_unique_xstrdup ("");
 
-  return current_inferior ()->args;
+  return current_inferior ()->args.get ();
 }
 
 /* Set the arguments for the current inferior.  Ownership of
@@ -148,8 +147,11 @@ get_inferior_args (void)
 void
 set_inferior_args (const char *newargs)
 {
-  xfree (current_inferior ()->args);
-  current_inferior ()->args = newargs ? xstrdup (newargs) : NULL;
+  if (newargs != nullptr)
+    current_inferior ()->args = make_unique_xstrdup (newargs);
+  else
+    current_inferior ()->args.reset ();
+
   current_inferior ()->argc = 0;
   current_inferior ()->argv = 0;
 }
@@ -1470,7 +1472,7 @@ get_return_value (struct value *function, struct type *value_type)
      calls are made async, this will likely be made the norm.  */
 
   switch (gdbarch_return_value (gdbarch, function, value_type,
-  				NULL, NULL, NULL))
+				NULL, NULL, NULL))
     {
     case RETURN_VALUE_REGISTER_CONVENTION:
     case RETURN_VALUE_ABI_RETURNS_ADDRESS:
@@ -1537,7 +1539,7 @@ print_return_value_1 (struct ui_out *uiout, struct return_value_info *rv)
     {
       std::string type_name = type_to_string (rv->type);
       uiout->text ("Value returned has type: ");
-      uiout->field_string ("return-type", type_name.c_str ());
+      uiout->field_string ("return-type", type_name);
       uiout->text (".");
       uiout->text (" Cannot determine contents\n");
     }
@@ -2467,11 +2469,11 @@ enum attach_post_wait_mode
 };
 
 /* Called after we've attached to a process and we've seen it stop for
-   the first time.  If ASYNC_EXEC is true, re-resume threads that
-   should be running.  Else if ATTACH, */
+   the first time.  Resume, stop, or don't touch the threads according
+   to MODE.  */
 
 static void
-attach_post_wait (const char *args, int from_tty, enum attach_post_wait_mode mode)
+attach_post_wait (int from_tty, enum attach_post_wait_mode mode)
 {
   struct inferior *inferior;
 
@@ -2486,7 +2488,7 @@ attach_post_wait (const char *args, int from_tty, enum attach_post_wait_mode mod
       /* The user requested an `attach&', so be sure to leave threads
 	 that didn't get a signal running.  */
 
-      /* Immediatelly resume all suspended threads of this inferior,
+      /* Immediately resume all suspended threads of this inferior,
 	 and this inferior only.  This should have no effect on
 	 already running threads.  If a thread has been stopped with a
 	 signal, leave it be.  */
@@ -2538,35 +2540,6 @@ attach_post_wait (const char *args, int from_tty, enum attach_post_wait_mode mod
       if (deprecated_attach_hook)
 	deprecated_attach_hook ();
     }
-}
-
-struct attach_command_continuation_args
-{
-  char *args;
-  int from_tty;
-  enum attach_post_wait_mode mode;
-};
-
-static void
-attach_command_continuation (void *args, int err)
-{
-  struct attach_command_continuation_args *a
-    = (struct attach_command_continuation_args *) args;
-
-  if (err)
-    return;
-
-  attach_post_wait (a->args, a->from_tty, a->mode);
-}
-
-static void
-attach_command_continuation_free_args (void *args)
-{
-  struct attach_command_continuation_args *a
-    = (struct attach_command_continuation_args *) args;
-
-  xfree (a->args);
-  xfree (a);
 }
 
 /* "attach" command entry point.  Takes a program started up outside
@@ -2666,8 +2639,6 @@ attach_command (const char *args, int from_tty)
      E.g. Mach 3 or GNU hurd.  */
   if (!target_attach_no_wait ())
     {
-      struct attach_command_continuation_args *a;
-
       /* Careful here.  See comments in inferior.h.  Basically some
 	 OSes don't ignore SIGSTOPs on continue requests anymore.  We
 	 need a way for handle_inferior_event to reset the stop_signal
@@ -2676,12 +2647,10 @@ attach_command (const char *args, int from_tty)
       inferior->control.stop_soon = STOP_QUIETLY_NO_SIGSTOP;
 
       /* Wait for stop.  */
-      a = XNEW (struct attach_command_continuation_args);
-      a->args = xstrdup (args);
-      a->from_tty = from_tty;
-      a->mode = mode;
-      add_inferior_continuation (attach_command_continuation, a,
-				 attach_command_continuation_free_args);
+      inferior->add_continuation ([=] ()
+	{
+	  attach_post_wait (from_tty, mode);
+	});
 
       /* Let infrun consider waiting for events out of this
 	 target.  */
@@ -2692,7 +2661,7 @@ attach_command (const char *args, int from_tty)
       return;
     }
   else
-    attach_post_wait (args, from_tty, mode);
+    attach_post_wait (from_tty, mode);
 
   disable_commit_resumed.reset_and_commit ();
 }
@@ -2706,7 +2675,7 @@ attach_command (const char *args, int from_tty)
    as stopped.  */
 
 void
-notice_new_inferior (thread_info *thr, int leave_running, int from_tty)
+notice_new_inferior (thread_info *thr, bool leave_running, int from_tty)
 {
   enum attach_post_wait_mode mode
     = leave_running ? ATTACH_POST_WAIT_RESUME : ATTACH_POST_WAIT_NOTHING;
@@ -2725,7 +2694,6 @@ notice_new_inferior (thread_info *thr, int leave_running, int from_tty)
 
   if (thr->executing)
     {
-      struct attach_command_continuation_args *a;
       struct inferior *inferior = current_inferior ();
 
       /* We're going to install breakpoints, and poke at memory,
@@ -2736,17 +2704,15 @@ notice_new_inferior (thread_info *thr, int leave_running, int from_tty)
       inferior->control.stop_soon = STOP_QUIETLY_REMOTE;
 
       /* Wait for stop before proceeding.  */
-      a = XNEW (struct attach_command_continuation_args);
-      a->args = xstrdup ("");
-      a->from_tty = from_tty;
-      a->mode = mode;
-      add_inferior_continuation (attach_command_continuation, a,
-				 attach_command_continuation_free_args);
+      inferior->add_continuation ([=] ()
+	{
+	  attach_post_wait (from_tty, mode);
+	});
 
       return;
     }
 
-  attach_post_wait ("" /* args */, from_tty, mode);
+  attach_post_wait (from_tty, mode);
 }
 
 /*
@@ -3118,7 +3084,7 @@ environment to be given to the program."), &showlist);
 
   add_basic_prefix_cmd ("unset", no_class,
 			_("Complement to certain \"set\" commands."),
-			&unsetlist, "unset ", 0, &cmdlist);
+			&unsetlist, 0, &cmdlist);
 
   c = add_cmd ("environment", class_run, unset_environment_command, _("\
 Cancel environment variable VAR for the program.\n\
@@ -3155,7 +3121,7 @@ needed."),
 
   add_prefix_cmd ("kill", class_run, kill_command,
 		  _("Kill execution of program being debugged."),
-		  &killlist, "kill ", 0, &cmdlist);
+		  &killlist, 0, &cmdlist);
 
   add_com ("attach", class_run, attach_command, _("\
 Attach to a process or file outside of GDB.\n\
@@ -3174,7 +3140,7 @@ to specify the program, and to load its symbol table."));
 Detach a process or file previously attached.\n\
 If a process, it is no longer traced, and it continues its execution.  If\n\
 you were debugging a file, the file is closed and gdb no longer accesses it."),
-		  &detachlist, "detach ", 0, &cmdlist);
+		  &detachlist, 0, &cmdlist);
 
   add_com ("disconnect", class_run, disconnect_command, _("\
 Disconnect from a target.\n\
@@ -3208,48 +3174,54 @@ In a multi-threaded program the signal is queued with, or discarded from,\n\
 the current thread only."));
   set_cmd_completer (c, signal_completer);
 
-  add_com ("stepi", class_run, stepi_command, _("\
+  cmd_list_element *stepi_cmd
+    = add_com ("stepi", class_run, stepi_command, _("\
 Step one instruction exactly.\n\
 Usage: stepi [N]\n\
 Argument N means step N times (or till program stops for another \
 reason)."));
-  add_com_alias ("si", "stepi", class_run, 0);
+  add_com_alias ("si", stepi_cmd, class_run, 0);
 
-  add_com ("nexti", class_run, nexti_command, _("\
+  cmd_list_element *nexti_cmd
+   = add_com ("nexti", class_run, nexti_command, _("\
 Step one instruction, but proceed through subroutine calls.\n\
 Usage: nexti [N]\n\
 Argument N means step N times (or till program stops for another \
 reason)."));
-  add_com_alias ("ni", "nexti", class_run, 0);
+  add_com_alias ("ni", nexti_cmd, class_run, 0);
 
-  add_com ("finish", class_run, finish_command, _("\
+  cmd_list_element *finish_cmd
+    = add_com ("finish", class_run, finish_command, _("\
 Execute until selected stack frame returns.\n\
 Usage: finish\n\
 Upon return, the value returned is printed and put in the value history."));
-  add_com_alias ("fin", "finish", class_run, 1);
+  add_com_alias ("fin", finish_cmd, class_run, 1);
 
-  add_com ("next", class_run, next_command, _("\
+  cmd_list_element *next_cmd
+    = add_com ("next", class_run, next_command, _("\
 Step program, proceeding through subroutine calls.\n\
 Usage: next [N]\n\
 Unlike \"step\", if the current source line calls a subroutine,\n\
 this command does not enter the subroutine, but instead steps over\n\
 the call, in effect treating it as a single source line."));
-  add_com_alias ("n", "next", class_run, 1);
+  add_com_alias ("n", next_cmd, class_run, 1);
 
-  add_com ("step", class_run, step_command, _("\
+  cmd_list_element *step_cmd
+    = add_com ("step", class_run, step_command, _("\
 Step program until it reaches a different source line.\n\
 Usage: step [N]\n\
 Argument N means step N times (or till program stops for another \
 reason)."));
-  add_com_alias ("s", "step", class_run, 1);
+  add_com_alias ("s", step_cmd, class_run, 1);
 
-  c = add_com ("until", class_run, until_command, _("\
+  cmd_list_element *until_cmd
+    = add_com ("until", class_run, until_command, _("\
 Execute until past the current line or past a LOCATION.\n\
 Execute until the program reaches a source line greater than the current\n\
 or a specified location (same args as break command) within the current \
 frame."));
-  set_cmd_completer (c, location_completer);
-  add_com_alias ("u", "until", class_run, 1);
+  set_cmd_completer (until_cmd, location_completer);
+  add_com_alias ("u", until_cmd, class_run, 1);
 
   c = add_com ("advance", class_run, advance_command, _("\
 Continue the program up to the given location (same form as args for break \
@@ -3257,15 +3229,17 @@ command).\n\
 Execution will also stop upon exit from the current stack frame."));
   set_cmd_completer (c, location_completer);
 
-  c = add_com ("jump", class_run, jump_command, _("\
+  cmd_list_element *jump_cmd
+    = add_com ("jump", class_run, jump_command, _("\
 Continue program being debugged at specified line or address.\n\
 Usage: jump LOCATION\n\
 Give as argument either LINENUM or *ADDR, where ADDR is an expression\n\
 for an address to start at."));
-  set_cmd_completer (c, location_completer);
-  add_com_alias ("j", "jump", class_run, 1);
+  set_cmd_completer (jump_cmd, location_completer);
+  add_com_alias ("j", jump_cmd, class_run, 1);
 
-  add_com ("continue", class_run, continue_command, _("\
+  cmd_list_element *continue_cmd
+    = add_com ("continue", class_run, continue_command, _("\
 Continue program being debugged, after signal or breakpoint.\n\
 Usage: continue [N]\n\
 If proceeding from breakpoint, a number N may be used as an argument,\n\
@@ -3276,14 +3250,15 @@ If non-stop mode is enabled, continue only the current thread,\n\
 otherwise all the threads in the program are continued.  To \n\
 continue all stopped threads in non-stop mode, use the -a option.\n\
 Specifying -a and an ignore count simultaneously is an error."));
-  add_com_alias ("c", "cont", class_run, 1);
-  add_com_alias ("fg", "cont", class_run, 1);
+  add_com_alias ("c", continue_cmd, class_run, 1);
+  add_com_alias ("fg", continue_cmd, class_run, 1);
 
-  c = add_com ("run", class_run, run_command, _("\
+  cmd_list_element *run_cmd
+    = add_com ("run", class_run, run_command, _("\
 Start debugged program.\n"
 RUN_ARGS_HELP));
-  set_cmd_completer (c, filename_completer);
-  add_com_alias ("r", "run", class_run, 1);
+  set_cmd_completer (run_cmd, filename_completer);
+  add_com_alias ("r", run_cmd, class_run, 1);
 
   c = add_com ("start", class_run, start_command, _("\
 Start the debugged program stopping at the beginning of the main procedure.\n"
@@ -3301,13 +3276,14 @@ If non-stop mode is enabled, interrupt only the current thread,\n\
 otherwise all the threads in the program are stopped.  To \n\
 interrupt all running threads in non-stop mode, use the -a option."));
 
-  c = add_info ("registers", info_registers_command, _("\
+  cmd_list_element *info_registers_cmd
+    = add_info ("registers", info_registers_command, _("\
 List of integer registers and their contents, for selected stack frame.\n\
 One or more register names as argument means describe the given registers.\n\
 One or more register group names as argument means describe the registers\n\
 in the named register groups."));
-  add_info_alias ("r", "registers", 1);
-  set_cmd_completer (c, reg_or_group_completer);
+  add_info_alias ("r", info_registers_cmd, 1);
+  set_cmd_completer (info_registers_cmd, reg_or_group_completer);
 
   c = add_info ("all-registers", info_all_registers_command, _("\
 List of all registers and their contents, for selected stack frame.\n\
@@ -3329,7 +3305,7 @@ in the named register groups."));
 		  _("\
 Show additional information about a process.\n\
 Specify any process id, or use the program being debugged by default."),
-		  &info_proc_cmdlist, "info proc ",
+		  &info_proc_cmdlist,
 		  1/*allow-unknown*/, &infolist);
 
   add_cmd ("mappings", class_info, info_proc_cmd_mappings, _("\

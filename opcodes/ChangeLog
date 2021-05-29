@@ -1,3 +1,87 @@
+2021-05-27  Peter Bergner  <bergner@linux.ibm.com>
+
+	* ppc-opc.c (powerpc_opcodes) <xxmr, xxlnot>: New extended mnemonics.
+
+2021-05-25  Alan Modra  <amodra@gmail.com>
+
+	* cris-desc.c: Regenerate.
+	* cris-desc.h: Regenerate.
+	* cris-opc.h: Regenerate.
+	* po/POTFILES.in: Regenerate.
+
+2021-05-24  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.am (HFILES): Add cris-desc.h & cris-opc.h.
+	(TARGET_LIBOPCODES_CFILES): Add cris-desc.c.
+	(CGEN_CPUS): Add cris.
+	(CRIS_DEPS): Define.
+	(stamp-cris): New rule.
+	* cgen.sh: Handle desc action.
+	* configure.ac (bfd_cris_arch): Add cris-desc.lo.
+	* Makefile.in, configure: Regenerate.
+
+2021-05-18  Job Noorman  <mtvec@pm.me>
+
+	PR 27814
+	* riscv-dis.c (riscv_get_disassembler): Get elf attributes only for
+	the elf objects.
+
+2021-05-17  Alex Coplan  <alex.coplan@arm.com>
+
+	* arm-dis.c (mve_opcodes): Fix disassembly of
+	MVE_VMOV2_GP_TO_VEC_LANE when idx == 1.
+	(is_mve_encoding_conflict): MVE vector loads should not match
+	when P = W = 0.
+	(is_mve_unpredictable): It's not unpredictable to use the same
+	source register twice (for MVE_VMOV2_GP_TO_VEC_LANE).
+
+2021-05-11  Nick Clifton  <nickc@redhat.com>
+
+	PR 27840
+	* tic30-dis.c (print_insn_tic30): Prevent attempts to read beyond
+	the end of the code buffer.
+
+2021-05-06  Stafford Horne  <shorne@gmail.com>
+
+	PR 21464
+	* or1k-asm.c: Regenerate.
+
+2021-05-01  Max Filippov  <jcmvbkbc@gmail.com>
+
+	* xtensa-dis.c (print_insn_xtensa): Fill in info->insn_type and
+	info->insn_info_valid.
+
+2021-04-26  Jan Beulich  <jbeulich@suse.com>
+
+	* i386-opc.tbl (lea): Add Optimize.
+	* opcodes/i386-tbl.h: Re-generate.
+
+2020-04-23  Max Filippov  <jcmvbkbc@gmail.com>
+
+	* xtensa-dis.c (print_xtensa_operand): For PC-relative operand
+	of l32r fetch and display referenced literal value.
+
+2021-04-23  Max Filippov  <jcmvbkbc@gmail.com>
+
+	* xtensa-dis.c (print_insn_xtensa): Set info->bytes_per_chunk
+	to 4 for literal disassembly.
+
+2021-04-19  Przemyslaw Wirkus  <przemyslaw.wirkus@arm.com>
+
+	* aarch64-opc.c: Add new registers (RPAOS, RPALOS, PAALLOS, PAALL) support
+	for TLBI instruction.
+
+2021-04-19  Przemyslaw Wirkus  <przemyslaw.wirkus@arm.com>
+
+	* aarch64-opc.c: Add new register (CIPAPA, CIGDPAPA) support for
+	DC instruction.
+
+2021-04-19  Jan Beulich  <jbeulich@suse.com>
+
+	* aarch64-asm.c (encode_asimd_fcvt): Add initializer for
+	"qualifier".
+	(convert_mov_to_movewide): Add initializer for "value".
+
 2021-04-16  Przemyslaw Wirkus  <przemyslaw.wirkus@arm.com>
 
 	* aarch64-opc.c: Add RME system registers.

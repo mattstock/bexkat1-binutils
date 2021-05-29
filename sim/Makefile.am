@@ -35,6 +35,8 @@ CLEANFILES =
 DISTCLEANFILES =
 MOSTLYCLEANFILES = core
 
+AM_CPPFLAGS = -I$(srcroot)/include
+
 COMPILE_FOR_BUILD = $(CC_FOR_BUILD) $(AM_CPPFLAGS) $(CFLAGS_FOR_BUILD)
 LINK_FOR_BUILD = $(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@
 
@@ -48,6 +50,10 @@ LINK_FOR_BUILD = $(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@
 nltvals:
 	$(abs_srcdir)/common/gennltvals.py --cpp "$(CPP)" --output nltvals.def --srcroot $(srcroot)
 	$(SHELL) $(srcroot)/move-if-change nltvals.def $(abs_srcdir)/common/nltvals.def
+
+pkginclude_HEADERS = \
+	$(srcroot)/include/sim/callback.h \
+	$(srcroot)/include/sim/sim.h
 
 if SIM_ENABLE_IGEN
 include igen/local.mk

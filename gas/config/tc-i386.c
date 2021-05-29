@@ -2556,8 +2556,8 @@ offset_in_range (offsetT val, int size)
     {
       char buf1[40], buf2[40];
 
-      sprint_value (buf1, val);
-      sprint_value (buf2, val & mask);
+      bfd_sprintf_vma (stdoutput, buf1, val);
+      bfd_sprintf_vma (stdoutput, buf2, val & mask);
       as_warn (_("%s shortened to %s"), buf1, buf2);
     }
   return val & mask;
@@ -3297,8 +3297,8 @@ static void
 pe (expressionS *e)
 {
   fprintf (stdout, "    operation     %d\n", e->X_op);
-  fprintf (stdout, "    add_number    %ld (%lx)\n",
-	   (long) e->X_add_number, (long) e->X_add_number);
+  fprintf (stdout, "    add_number    %" BFD_VMA_FMT "d (%" BFD_VMA_FMT "x)\n",
+	   e->X_add_number, e->X_add_number);
   if (e->X_add_symbol)
     {
       fprintf (stdout, "    add_symbol    ");
@@ -3553,6 +3553,17 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
     return 0;
 #endif
   return 1;
+}
+
+static INLINE bool
+want_disp32 (const insn_template *t)
+{
+  return flag_code != CODE_64BIT
+	 || i.prefix[ADDR_PREFIX]
+	 || (t->base_opcode == 0x8d
+	     && t->opcode_modifier.opcodespace == SPACE_BASE
+	     && (!i.types[1].bitfield.qword
+		|| t->opcode_modifier.size == SIZE32));
 }
 
 static int
@@ -4058,6 +4069,147 @@ static void
 optimize_encoding (void)
 {
   unsigned int j;
+
+  if (i.tm.opcode_modifier.opcodespace == SPACE_BASE
+      && i.tm.base_opcode == 0x8d)
+    {
+      /* Optimize: -O:
+	   lea symbol, %rN    -> mov $symbol, %rN
+	   lea (%rM), %rN     -> mov %rM, %rN
+	   lea (,%rM,1), %rN  -> mov %rM, %rN
+
+	   and in 32-bit mode for 16-bit addressing
+
+	   lea (%rM), %rN     -> movzx %rM, %rN
+
+	   and in 64-bit mode zap 32-bit addressing in favor of using a
+	   32-bit (or less) destination.
+       */
+      if (flag_code == CODE_64BIT && i.prefix[ADDR_PREFIX])
+	{
+	  if (!i.op[1].regs->reg_type.bitfield.word)
+	    i.tm.opcode_modifier.size = SIZE32;
+	  i.prefix[ADDR_PREFIX] = 0;
+	}
+
+      if (!i.index_reg && !i.base_reg)
+	{
+	  /* Handle:
+	       lea symbol, %rN    -> mov $symbol, %rN
+	   */
+	  if (flag_code == CODE_64BIT)
+	    {
+	      /* Don't transform a relocation to a 16-bit one.  */
+	      if (i.op[0].disps
+		  && i.op[0].disps->X_op != O_constant
+		  && i.op[1].regs->reg_type.bitfield.word)
+		return;
+
+	      if (!i.op[1].regs->reg_type.bitfield.qword
+		  || i.tm.opcode_modifier.size == SIZE32)
+		{
+		  i.tm.base_opcode = 0xb8;
+		  i.tm.opcode_modifier.modrm = 0;
+		  if (!i.op[1].regs->reg_type.bitfield.word)
+		    i.types[0].bitfield.imm32 = 1;
+		  else
+		    {
+		      i.tm.opcode_modifier.size = SIZE16;
+		      i.types[0].bitfield.imm16 = 1;
+		    }
+		}
+	      else
+		{
+		  /* Subject to further optimization below.  */
+		  i.tm.base_opcode = 0xc7;
+		  i.tm.extension_opcode = 0;
+		  i.types[0].bitfield.imm32s = 1;
+		  i.types[0].bitfield.baseindex = 0;
+		}
+	    }
+	  /* Outside of 64-bit mode address and operand sizes have to match if
+	     a relocation is involved, as otherwise we wouldn't (currently) or
+	     even couldn't express the relocation correctly.  */
+	  else if (i.op[0].disps
+		   && i.op[0].disps->X_op != O_constant
+		   && ((!i.prefix[ADDR_PREFIX])
+		       != (flag_code == CODE_32BIT
+			   ? i.op[1].regs->reg_type.bitfield.dword
+			   : i.op[1].regs->reg_type.bitfield.word)))
+	    return;
+	  else
+	    {
+	      i.tm.base_opcode = 0xb8;
+	      i.tm.opcode_modifier.modrm = 0;
+	      if (i.op[1].regs->reg_type.bitfield.dword)
+		i.types[0].bitfield.imm32 = 1;
+	      else
+		i.types[0].bitfield.imm16 = 1;
+
+	      if (i.op[0].disps
+		  && i.op[0].disps->X_op == O_constant
+		  && i.op[1].regs->reg_type.bitfield.dword
+		  /* NB: Add () to !i.prefix[ADDR_PREFIX] to silence
+		     GCC 5. */
+		  && (!i.prefix[ADDR_PREFIX]) != (flag_code == CODE_32BIT))
+		i.op[0].disps->X_add_number &= 0xffff;
+	    }
+
+	  i.tm.operand_types[0] = i.types[0];
+	  i.imm_operands = 1;
+	  if (!i.op[0].imms)
+	    {
+	      i.op[0].imms = &im_expressions[0];
+	      i.op[0].imms->X_op = O_absent;
+	    }
+	}
+      else if (i.op[0].disps
+		  && (i.op[0].disps->X_op != O_constant
+		      || i.op[0].disps->X_add_number))
+	return;
+      else
+	{
+	  /* Handle:
+	       lea (%rM), %rN     -> mov %rM, %rN
+	       lea (,%rM,1), %rN  -> mov %rM, %rN
+	       lea (%rM), %rN     -> movzx %rM, %rN
+	   */
+	  const reg_entry *addr_reg;
+
+	  if (!i.index_reg && i.base_reg->reg_num != RegIP)
+	    addr_reg = i.base_reg;
+	  else if (!i.base_reg
+		   && i.index_reg->reg_num != RegIZ
+		   && !i.log2_scale_factor)
+	    addr_reg = i.index_reg;
+	  else
+	    return;
+
+	  if (addr_reg->reg_type.bitfield.word
+	      && i.op[1].regs->reg_type.bitfield.dword)
+	    {
+	      if (flag_code != CODE_32BIT)
+		return;
+	      i.tm.opcode_modifier.opcodespace = SPACE_0F;
+	      i.tm.base_opcode = 0xb7;
+	    }
+	  else
+	    i.tm.base_opcode = 0x8b;
+
+	  if (addr_reg->reg_type.bitfield.dword
+	      && i.op[1].regs->reg_type.bitfield.qword)
+	    i.tm.opcode_modifier.size = SIZE32;
+
+	  i.op[0].regs = addr_reg;
+	  i.reg_operands = 2;
+	}
+
+      i.mem_operands = 0;
+      i.disp_operands = 0;
+      i.prefix[ADDR_PREFIX] = 0;
+      i.prefix[SEG_PREFIX] = 0;
+      i.seg[0] = NULL;
+    }
 
   if (optimize_for_space
       && i.tm.opcode_modifier.opcodespace == SPACE_BASE
@@ -4739,6 +4891,34 @@ md_assemble (char *line)
 
   if (i.imm_operands)
     optimize_imm ();
+
+  if (i.disp_operands && !want_disp32 (current_templates->start))
+    {
+      for (j = 0; j < i.operands; ++j)
+	{
+	  const expressionS *exp = i.op[j].disps;
+
+	  if (!operand_type_check (i.types[j], disp))
+	    continue;
+
+	  if (exp->X_op != O_constant)
+	    continue;
+
+	  /* Since displacement is signed extended to 64bit, don't allow
+	     disp32 and turn off disp32s if they are out of range.  */
+	  i.types[j].bitfield.disp32 = 0;
+	  if (fits_in_signed_long (exp->X_add_number))
+	    continue;
+
+	  i.types[j].bitfield.disp32s = 0;
+	  if (i.types[j].bitfield.baseindex)
+	    {
+	      as_bad (_("0x%" BFD_VMA_FMT "x out of range of signed 32bit displacement"),
+		      exp->X_add_number);
+	      return;
+	    }
+	}
+    }
 
   /* Don't optimize displacement for movabs since it only takes 64bit
      displacement.  */
@@ -5611,8 +5791,8 @@ optimize_imm (void)
 	    if ((i.types[op].bitfield.imm16)
 		&& (i.op[op].imms->X_add_number & ~(offsetT) 0xffff) == 0)
 	      {
-		i.op[op].imms->X_add_number =
-		  (((i.op[op].imms->X_add_number & 0xffff) ^ 0x8000) - 0x8000);
+		i.op[op].imms->X_add_number = ((i.op[op].imms->X_add_number
+						^ 0x8000) - 0x8000);
 	      }
 #ifdef BFD64
 	    /* Store 32-bit immediate in 64-bit for 64-bit BFD.  */
@@ -5646,17 +5826,15 @@ optimize_imm (void)
 	       than those matching the insn suffix.  */
 	    {
 	      i386_operand_type mask, allowed;
-	      const insn_template *t;
+	      const insn_template *t = current_templates->start;
 
 	      operand_type_set (&mask, 0);
-	      operand_type_set (&allowed, 0);
+	      allowed = t->operand_types[op];
 
-	      for (t = current_templates->start;
-		   t < current_templates->end;
-		   ++t)
+	      while (++t < current_templates->end)
 		{
-		  allowed = operand_type_or (allowed, t->operand_types[op]);
 		  allowed = operand_type_and (allowed, anyimm);
+		  allowed = operand_type_or (allowed, t->operand_types[op]);
 		}
 	      switch (guess_suffix)
 		{
@@ -5707,19 +5885,6 @@ optimize_disp (void)
 		op_disp = (((op_disp & 0xffff) ^ 0x8000) - 0x8000);
 		i.types[op].bitfield.disp64 = 0;
 	      }
-#ifdef BFD64
-	    /* Optimize 64-bit displacement to 32-bit for 64-bit BFD.  */
-	    if (i.types[op].bitfield.disp32
-		&& (op_disp & ~(((offsetT) 2 << 31) - 1)) == 0)
-	      {
-		/* If this operand is at most 32 bits, convert
-		   to a signed 32 bit number and don't use 64bit
-		   displacement.  */
-		op_disp &= (((offsetT) 2 << 31) - 1);
-		op_disp = (op_disp ^ ((offsetT) 1 << 31)) - ((addressT) 1 << 31);
-		i.types[op].bitfield.disp64 = 0;
-	      }
-#endif
 	    if (!op_disp && i.types[op].bitfield.baseindex)
 	      {
 		i.types[op].bitfield.disp8 = 0;
@@ -5730,17 +5895,32 @@ optimize_disp (void)
 		i.op[op].disps = 0;
 		i.disp_operands--;
 	      }
+#ifdef BFD64
 	    else if (flag_code == CODE_64BIT)
 	      {
+		if (want_disp32 (current_templates->start)
+		    && fits_in_unsigned_long (op_disp))
+		  i.types[op].bitfield.disp32 = 1;
+
+		/* Optimize 64-bit displacement to 32-bit for 64-bit BFD.  */
+		if (i.types[op].bitfield.disp32
+		    && (op_disp & ~(((offsetT) 2 << 31) - 1)) == 0)
+		  {
+		    /* If this operand is at most 32 bits, convert
+		       to a signed 32 bit number and don't use 64bit
+		       displacement.  */
+		    op_disp &= (((offsetT) 2 << 31) - 1);
+		    op_disp = (op_disp ^ ((offsetT) 1 << 31)) - ((addressT) 1 << 31);
+		    i.types[op].bitfield.disp64 = 0;
+		  }
+
 		if (fits_in_signed_long (op_disp))
 		  {
 		    i.types[op].bitfield.disp64 = 0;
 		    i.types[op].bitfield.disp32s = 1;
 		  }
-		if (i.prefix[ADDR_PREFIX]
-		    && fits_in_unsigned_long (op_disp))
-		  i.types[op].bitfield.disp32 = 1;
 	      }
+#endif
 	    if ((i.types[op].bitfield.disp32
 		 || i.types[op].bitfield.disp32s
 		 || i.types[op].bitfield.disp16)
@@ -8078,7 +8258,7 @@ build_modrm_byte (void)
 		  i.types[op].bitfield.disp8 = 0;
 		  i.types[op].bitfield.disp16 = 0;
 		  i.types[op].bitfield.disp64 = 0;
-		  if (flag_code != CODE_64BIT || i.prefix[ADDR_PREFIX])
+		  if (want_disp32 (&i.tm))
 		    {
 		      /* Must be 32 bit */
 		      i.types[op].bitfield.disp32 = 1;
@@ -8129,7 +8309,7 @@ build_modrm_byte (void)
 		      i.rm.regmem = ESCAPE_TO_TWO_BYTE_ADDRESSING;
 		      i.sib.base = NO_BASE_REGISTER;
 		      i.sib.index = NO_INDEX_REGISTER;
-		      newdisp = (!i.prefix[ADDR_PREFIX] ? disp32s : disp32);
+		      newdisp = (want_disp32(&i.tm) ? disp32 : disp32s);
 		    }
 		  else if ((flag_code == CODE_16BIT)
 			   ^ (i.prefix[ADDR_PREFIX] != 0))
@@ -8158,7 +8338,7 @@ build_modrm_byte (void)
 		  i.types[op].bitfield.disp8 = 0;
 		  i.types[op].bitfield.disp16 = 0;
 		  i.types[op].bitfield.disp64 = 0;
-		  if (flag_code != CODE_64BIT || i.prefix[ADDR_PREFIX])
+		  if (want_disp32 (&i.tm))
 		    {
 		      /* Must be 32 bit */
 		      i.types[op].bitfield.disp32 = 1;
@@ -8233,12 +8413,11 @@ build_modrm_byte (void)
 	    }
 	  else /* i.base_reg and 32/64 bit mode  */
 	    {
-	      if (flag_code == CODE_64BIT
-		  && operand_type_check (i.types[op], disp))
+	      if (operand_type_check (i.types[op], disp))
 		{
 		  i.types[op].bitfield.disp16 = 0;
 		  i.types[op].bitfield.disp64 = 0;
-		  if (i.prefix[ADDR_PREFIX] == 0)
+		  if (!want_disp32 (&i.tm))
 		    {
 		      i.types[op].bitfield.disp32 = 0;
 		      i.types[op].bitfield.disp32s = 1;
@@ -8748,11 +8927,26 @@ output_jump (void)
   fixP = fix_new_exp (frag_now, p - frag_now->fr_literal, size,
 		      i.op[0].disps, 1, jump_reloc);
 
-  /* All jumps handled here are signed, but don't use a signed limit
-     check for 32 and 16 bit jumps as we want to allow wrap around at
-     4G and 64k respectively.  */
-  if (size == 1)
-    fixP->fx_signed = 1;
+  /* All jumps handled here are signed, but don't unconditionally use a
+     signed limit check for 32 and 16 bit jumps as we want to allow wrap
+     around at 4G (outside of 64-bit mode) and 64k (except for XBEGIN)
+     respectively.  */
+  switch (size)
+    {
+    case 1:
+      fixP->fx_signed = 1;
+      break;
+
+    case 2:
+      if (i.tm.base_opcode == 0xc7f8)
+	fixP->fx_signed = 1;
+      break;
+
+    case 4:
+      if (flag_code == CODE_64BIT)
+	fixP->fx_signed = 1;
+      break;
+    }
 }
 
 static void
@@ -9806,7 +10000,7 @@ output_disp (fragS *insn_start_frag, offsetT insn_start_off)
 		    {
 		      reloc_type = BFD_RELOC_386_GOTPC;
 		      i.has_gotpc_tls_reloc = true;
-		      i.op[n].imms->X_add_number +=
+		      i.op[n].disps->X_add_number +=
 			encoding_length (insn_start_frag, insn_start_off, p);
 		    }
 		  else if (reloc_type == BFD_RELOC_64)
@@ -9841,6 +10035,11 @@ output_disp (fragS *insn_start_frag, offsetT insn_start_off)
 	      fixP = fix_new_exp (frag_now, p - frag_now->fr_literal,
 				  size, i.op[n].disps, pcrel,
 				  reloc_type);
+
+	      if (flag_code == CODE_64BIT && size == 4 && pcrel
+		  && !i.prefix[ADDR_PREFIX])
+		fixP->fx_signed = 1;
+
 	      /* Check for "call/jmp *mem", "mov mem, %reg",
 		 "test %reg, mem" and "binop mem, %reg" where binop
 		 is one of adc, add, and, cmp, or, sbb, sub, xor
@@ -10025,8 +10224,8 @@ x86_address_bytes (void)
   return stdoutput->arch_info->bits_per_address / 8;
 }
 
-#if !(defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF) || defined (OBJ_MACH_O)) \
-    || defined (LEX_AT)
+#if (!(defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF) || defined (OBJ_MACH_O)) \
+     || defined (LEX_AT)) && !defined (TE_PE)
 # define lex_got(reloc, adjust, types) NULL
 #else
 /* Parse operands of the form
@@ -10055,6 +10254,7 @@ lex_got (enum bfd_reloc_code_real *rel,
     const i386_operand_type types64;
     bool need_GOT_symbol;
   } gotrel[] = {
+#ifndef TE_PE
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
     { STRING_COMMA_LEN ("SIZE"),      { BFD_RELOC_SIZE32,
 					BFD_RELOC_SIZE32 },
@@ -10111,11 +10311,16 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("TLSCALL"),  { BFD_RELOC_386_TLS_DESC_CALL,
 				       BFD_RELOC_X86_64_TLSDESC_CALL },
       OPERAND_TYPE_IMM32_32S_DISP32, true },
+#else /* TE_PE */
+    { STRING_COMMA_LEN ("SECREL32"), { BFD_RELOC_32_SECREL,
+				       BFD_RELOC_32_SECREL },
+      OPERAND_TYPE_IMM32_32S_64_DISP32_64, false },
+#endif
   };
   char *cp;
   unsigned int j;
 
-#if defined (OBJ_MAYBE_ELF)
+#if defined (OBJ_MAYBE_ELF) && !defined (TE_PE)
   if (!IS_ELF)
     return NULL;
 #endif
@@ -10190,109 +10395,6 @@ lex_got (enum bfd_reloc_code_real *rel,
   return NULL;
 }
 #endif
-
-#ifdef TE_PE
-#ifdef lex_got
-#undef lex_got
-#endif
-/* Parse operands of the form
-   <symbol>@SECREL32+<nnn>
-
-   If we find one, set up the correct relocation in RELOC and copy the
-   input string, minus the `@SECREL32' into a malloc'd buffer for
-   parsing by the calling routine.  Return this buffer, and if ADJUST
-   is non-null set it to the length of the string we removed from the
-   input line.  Otherwise return NULL.
-
-   This function is copied from the ELF version above adjusted for PE targets.  */
-
-static char *
-lex_got (enum bfd_reloc_code_real *rel ATTRIBUTE_UNUSED,
-	 int *adjust ATTRIBUTE_UNUSED,
-	 i386_operand_type *types)
-{
-  static const struct
-  {
-    const char *str;
-    int len;
-    const enum bfd_reloc_code_real rel[2];
-    const i386_operand_type types64;
-  }
-  gotrel[] =
-  {
-    { STRING_COMMA_LEN ("SECREL32"),    { BFD_RELOC_32_SECREL,
-					  BFD_RELOC_32_SECREL },
-      OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
-  };
-
-  char *cp;
-  unsigned j;
-
-  for (cp = input_line_pointer; *cp != '@'; cp++)
-    if (is_end_of_line[(unsigned char) *cp] || *cp == ',')
-      return NULL;
-
-  for (j = 0; j < ARRAY_SIZE (gotrel); j++)
-    {
-      int len = gotrel[j].len;
-
-      if (strncasecmp (cp + 1, gotrel[j].str, len) == 0)
-	{
-	  if (gotrel[j].rel[object_64bit] != 0)
-	    {
-	      int first, second;
-	      char *tmpbuf, *past_reloc;
-
-	      *rel = gotrel[j].rel[object_64bit];
-	      if (adjust)
-		*adjust = len;
-
-	      if (types)
-		{
-		  if (flag_code != CODE_64BIT)
-		    {
-		      types->bitfield.imm32 = 1;
-		      types->bitfield.disp32 = 1;
-		    }
-		  else
-		    *types = gotrel[j].types64;
-		}
-
-	      /* The length of the first part of our input line.  */
-	      first = cp - input_line_pointer;
-
-	      /* The second part goes from after the reloc token until
-		 (and including) an end_of_line char or comma.  */
-	      past_reloc = cp + 1 + len;
-	      cp = past_reloc;
-	      while (!is_end_of_line[(unsigned char) *cp] && *cp != ',')
-		++cp;
-	      second = cp + 1 - past_reloc;
-
-	      /* Allocate and copy string.  The trailing NUL shouldn't
-		 be necessary, but be safe.  */
-	      tmpbuf = XNEWVEC (char, first + second + 2);
-	      memcpy (tmpbuf, input_line_pointer, first);
-	      if (second != 0 && *past_reloc != ' ')
-		/* Replace the relocation token with ' ', so that
-		   errors like foo@SECLREL321 will be detected.  */
-		tmpbuf[first++] = ' ';
-	      memcpy (tmpbuf + first, past_reloc, second);
-	      tmpbuf[first + second] = '\0';
-	      return tmpbuf;
-	    }
-
-	  as_bad (_("@%s reloc is not supported with %d-bit output format"),
-		  gotrel[j].str, 1 << (5 + object_64bit));
-	  return NULL;
-	}
-    }
-
-  /* Might be a symbol version string.  Don't as_bad here.  */
-  return NULL;
-}
-
-#endif /* TE_PE */
 
 bfd_reloc_code_real_type
 x86_cons (expressionS *exp, int size)
@@ -10588,8 +10690,14 @@ i386_immediate (char *imm_start)
     {
       free (gotfree_input_line);
 
-      if (exp->X_op == O_constant || exp->X_op == O_register)
+      if (exp->X_op == O_constant)
 	exp->X_op = O_illegal;
+    }
+
+  if (exp_seg == reg_section)
+    {
+      as_bad (_("illegal immediate register operand %s"), imm_start);
+      return 0;
     }
 
   return i386_finalize_immediate (exp_seg, exp, types, imm_start);
@@ -10629,12 +10737,6 @@ i386_finalize_immediate (segT exp_seg ATTRIBUTE_UNUSED, expressionS *exp,
       return 0;
     }
 #endif
-  else if (!intel_syntax && exp_seg == reg_section)
-    {
-      if (imm_start)
-	as_bad (_("illegal immediate register operand %s"), imm_start);
-      return 0;
-    }
   else
     {
       /* This is an address.  The size of the address will be
@@ -10908,25 +11010,6 @@ i386_finalize_displacement (segT exp_seg ATTRIBUTE_UNUSED, expressionS *exp,
       as_bad (_("missing or invalid displacement expression `%s'"),
 	      disp_start);
       ret = 0;
-    }
-
-  else if (flag_code == CODE_64BIT
-	   && !i.prefix[ADDR_PREFIX]
-	   && exp->X_op == O_constant)
-    {
-      /* Since displacement is signed extended to 64bit, don't allow
-	 disp32 and turn off disp32s if they are out of range.  */
-      i.types[this_operand].bitfield.disp32 = 0;
-      if (!fits_in_signed_long (exp->X_add_number))
-	{
-	  i.types[this_operand].bitfield.disp32s = 0;
-	  if (i.types[this_operand].bitfield.baseindex)
-	    {
-	      as_bad (_("0x%lx out range of signed 32bit displacement"),
-		      (long) exp->X_add_number);
-	      ret = 0;
-	    }
-	}
     }
 
 #if (defined (OBJ_AOUT) || defined (OBJ_MAYBE_AOUT))
@@ -12095,6 +12178,7 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
       enum bfd_reloc_code_real reloc_type;
       unsigned char *opcode;
       int old_fr_fix;
+      fixS *fixP = NULL;
 
       if (fragP->fr_var != NO_RELOC)
 	reloc_type = (enum bfd_reloc_code_real) fragP->fr_var;
@@ -12116,10 +12200,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	  /* Make jmp (0xeb) a (d)word displacement jump.  */
 	  opcode[0] = 0xe9;
 	  fragP->fr_fix += size;
-	  fix_new (fragP, old_fr_fix, size,
-		   fragP->fr_symbol,
-		   fragP->fr_offset, 1,
-		   reloc_type);
+	  fixP = fix_new (fragP, old_fr_fix, size,
+			  fragP->fr_symbol,
+			  fragP->fr_offset, 1,
+			  reloc_type);
 	  break;
 
 	case COND_JUMP86:
@@ -12146,8 +12230,6 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	case COND_JUMP:
 	  if (no_cond_jump_promotion && fragP->fr_var == NO_RELOC)
 	    {
-	      fixS *fixP;
-
 	      fragP->fr_fix += 1;
 	      fixP = fix_new (fragP, old_fr_fix, 1,
 			      fragP->fr_symbol,
@@ -12163,16 +12245,23 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	  opcode[0] = TWO_BYTE_OPCODE_ESCAPE;
 	  /* We've added an opcode byte.  */
 	  fragP->fr_fix += 1 + size;
-	  fix_new (fragP, old_fr_fix + 1, size,
-		   fragP->fr_symbol,
-		   fragP->fr_offset, 1,
-		   reloc_type);
+	  fixP = fix_new (fragP, old_fr_fix + 1, size,
+			  fragP->fr_symbol,
+			  fragP->fr_offset, 1,
+			  reloc_type);
 	  break;
 
 	default:
 	  BAD_CASE (fragP->fr_subtype);
 	  break;
 	}
+
+      /* All jumps handled here are signed, but don't unconditionally use a
+	 signed limit check for 32 and 16 bit jumps as we want to allow wrap
+	 around at 4G (outside of 64-bit mode) and 64k.  */
+      if (size == 4 && flag_code == CODE_64BIT)
+	fixP->fx_signed = 1;
+
       frag_wane (fragP);
       return fragP->fr_fix - old_fr_fix;
     }
@@ -12556,7 +12645,18 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 
   /* Are we finished with this relocation now?  */
   if (fixP->fx_addsy == NULL)
-    fixP->fx_done = 1;
+    {
+      fixP->fx_done = 1;
+      switch (fixP->fx_r_type)
+	{
+	case BFD_RELOC_X86_64_32S:
+	  fixP->fx_signed = 1;
+	  break;
+
+	default:
+	  break;
+	}
+    }
 #if defined (OBJ_COFF) && defined (TE_PE)
   else if (fixP->fx_addsy != NULL && S_IS_WEAK (fixP->fx_addsy))
     {
@@ -13793,9 +13893,11 @@ i386_target_format (void)
 # if defined (TE_PE) || defined (TE_PEP)
     case bfd_target_coff_flavour:
       if (flag_code == CODE_64BIT)
-	return use_big_obj ? "pe-bigobj-x86-64" : "pe-x86-64";
-      else
-	return use_big_obj ? "pe-bigobj-i386" : "pe-i386";
+	{
+	  object_64bit = 1;
+	  return use_big_obj ? "pe-bigobj-x86-64" : "pe-x86-64";
+	}
+      return use_big_obj ? "pe-bigobj-i386" : "pe-i386";
 # elif defined (TE_GO32)
     case bfd_target_coff_flavour:
       return "coff-go32";
@@ -13972,9 +14074,17 @@ i386_cons_align (int ignore ATTRIBUTE_UNUSED)
     }
 }
 
-void
+int
 i386_validate_fix (fixS *fixp)
 {
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+  if (fixp->fx_r_type == BFD_RELOC_SIZE32
+      || fixp->fx_r_type == BFD_RELOC_SIZE64)
+    return IS_ELF && fixp->fx_addsy
+	   && (!S_IS_DEFINED (fixp->fx_addsy)
+	       || S_IS_EXTERNAL (fixp->fx_addsy));
+#endif
+
   if (fixp->fx_subsy)
     {
       if (fixp->fx_subsy == GOT_symbol)
@@ -14021,6 +14131,8 @@ i386_validate_fix (fixS *fixp)
 	}
     }
 #endif
+
+  return 1;
 }
 
 arelent *
@@ -14032,21 +14144,53 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
   switch (fixp->fx_r_type)
     {
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+      symbolS *sym;
+
     case BFD_RELOC_SIZE32:
     case BFD_RELOC_SIZE64:
-      if (S_IS_DEFINED (fixp->fx_addsy)
-	  && !S_IS_EXTERNAL (fixp->fx_addsy))
+      if (fixp->fx_addsy
+	  && !bfd_is_abs_section (S_GET_SEGMENT (fixp->fx_addsy))
+	  && (!fixp->fx_subsy
+	      || bfd_is_abs_section (S_GET_SEGMENT (fixp->fx_subsy))))
+	sym = fixp->fx_addsy;
+      else if (fixp->fx_subsy
+	       && !bfd_is_abs_section (S_GET_SEGMENT (fixp->fx_subsy))
+	       && (!fixp->fx_addsy
+		   || bfd_is_abs_section (S_GET_SEGMENT (fixp->fx_addsy))))
+	sym = fixp->fx_subsy;
+      else
+	sym = NULL;
+      if (IS_ELF && sym && S_IS_DEFINED (sym) && !S_IS_EXTERNAL (sym))
 	{
 	  /* Resolve size relocation against local symbol to size of
 	     the symbol plus addend.  */
-	  valueT value = S_GET_SIZE (fixp->fx_addsy) + fixp->fx_offset;
+	  valueT value = S_GET_SIZE (sym);
+
+	  if (symbol_get_bfdsym (sym)->flags & BSF_SECTION_SYM)
+	    value = bfd_section_size (S_GET_SEGMENT (sym));
+	  if (sym == fixp->fx_subsy)
+	    {
+	      value = -value;
+	      if (fixp->fx_addsy)
+	        value += S_GET_VALUE (fixp->fx_addsy);
+	    }
+	  else if (fixp->fx_subsy)
+	    value -= S_GET_VALUE (fixp->fx_subsy);
+	  value += fixp->fx_offset;
 	  if (fixp->fx_r_type == BFD_RELOC_SIZE32
+	      && object_64bit
 	      && !fits_in_unsigned_long (value))
 	    as_bad_where (fixp->fx_file, fixp->fx_line,
 			  _("symbol size computation overflow"));
 	  fixp->fx_addsy = NULL;
 	  fixp->fx_subsy = NULL;
 	  md_apply_fix (fixp, (valueT *) &value, NULL);
+	  return NULL;
+	}
+      if (!fixp->fx_addsy || fixp->fx_subsy)
+	{
+	  as_bad_where (fixp->fx_file, fixp->fx_line,
+			"unsupported expression involving @size");
 	  return NULL;
 	}
 #endif
