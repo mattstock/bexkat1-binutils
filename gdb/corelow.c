@@ -154,7 +154,21 @@ private: /* per-core data */
 
 core_target::core_target ()
 {
+  /* Find a first arch based on the BFD.  We need the initial gdbarch so
+     we can setup the hooks to find a target description.  */
   m_core_gdbarch = gdbarch_from_bfd (core_bfd);
+
+  /* If the arch is able to read a target description from the core, it
+     could yield a more specific gdbarch.  */
+  const struct target_desc *tdesc = read_description ();
+
+  if (tdesc != nullptr)
+    {
+      struct gdbarch_info info;
+      info.abfd = core_bfd;
+      info.target_desc = tdesc;
+      m_core_gdbarch = gdbarch_find_by_info (info);
+    }
 
   if (!m_core_gdbarch
       || !gdbarch_iterate_over_regset_sections_p (m_core_gdbarch))
@@ -414,7 +428,8 @@ core_target_open (const char *arg, int from_tty)
     }
 
   gdb::unique_xmalloc_ptr<char> filename (tilde_expand (arg));
-  if (!IS_ABSOLUTE_PATH (filename.get ()))
+  if (strlen (filename.get ()) != 0
+      && !IS_ABSOLUTE_PATH (filename.get ()))
     filename = gdb_abspath (filename.get ());
 
   flags = O_BINARY | O_LARGEFILE;

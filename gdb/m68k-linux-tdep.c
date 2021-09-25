@@ -316,6 +316,7 @@ m68k_linux_sigtramp_frame_sniffer (const struct frame_unwind *self,
 
 static const struct frame_unwind m68k_linux_sigtramp_frame_unwind =
 {
+  "m68k linux sigtramp",
   SIGTRAMP_FRAME,
   default_frame_unwind_stop_reason,
   m68k_linux_sigtramp_frame_this_id,
@@ -407,7 +408,7 @@ m68k_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   /* GNU/Linux uses SVR4-style shared libraries.  */
   set_solib_svr4_fetch_link_map_offsets (gdbarch,
-					 svr4_ilp32_fetch_link_map_offsets);
+					 linux_ilp32_fetch_link_map_offsets);
 
   /* GNU/Linux uses the dynamic linker included in the GNU C Library.  */
   set_gdbarch_skip_solib_resolver (gdbarch, glibc_skip_solib_resolver);

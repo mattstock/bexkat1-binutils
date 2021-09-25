@@ -29,6 +29,9 @@
 #include "gdbsupport/gdb_wait.h"
 #include "inf-ptrace.h"
 #include <sys/types.h>
+#ifdef HAVE_SYS_PROCCTL_H
+#include <sys/procctl.h>
+#endif
 #include <sys/procfs.h>
 #include <sys/ptrace.h>
 #include <sys/signal.h>
@@ -362,7 +365,7 @@ fbsd_nat_target::info_proc (const char *args, enum info_proc_what what)
 	  printf_filtered ("Parent process: %d\n", kp.ki_ppid);
 	  printf_filtered ("Process group: %d\n", kp.ki_pgid);
 	  printf_filtered ("Session id: %d\n", kp.ki_sid);
-	  printf_filtered ("TTY: %ju\n", (uintmax_t) kp.ki_tdev);
+	  printf_filtered ("TTY: %s\n", pulongest (kp.ki_tdev));
 	  printf_filtered ("TTY owner process group: %d\n", kp.ki_tpgid);
 	  printf_filtered ("User IDs (real, effective, saved): %d %d %d\n",
 			   kp.ki_ruid, kp.ki_uid, kp.ki_svuid);
@@ -380,34 +383,35 @@ fbsd_nat_target::info_proc (const char *args, enum info_proc_what what)
 			   kp.ki_rusage.ru_majflt);
 	  printf_filtered ("Major faults, children: %ld\n",
 			   kp.ki_rusage_ch.ru_majflt);
-	  printf_filtered ("utime: %jd.%06ld\n",
-			   (intmax_t) kp.ki_rusage.ru_utime.tv_sec,
+	  printf_filtered ("utime: %s.%06ld\n",
+			   plongest (kp.ki_rusage.ru_utime.tv_sec),
 			   kp.ki_rusage.ru_utime.tv_usec);
-	  printf_filtered ("stime: %jd.%06ld\n",
-			   (intmax_t) kp.ki_rusage.ru_stime.tv_sec,
+	  printf_filtered ("stime: %s.%06ld\n",
+			   plongest (kp.ki_rusage.ru_stime.tv_sec),
 			   kp.ki_rusage.ru_stime.tv_usec);
-	  printf_filtered ("utime, children: %jd.%06ld\n",
-			   (intmax_t) kp.ki_rusage_ch.ru_utime.tv_sec,
+	  printf_filtered ("utime, children: %s.%06ld\n",
+			   plongest (kp.ki_rusage_ch.ru_utime.tv_sec),
 			   kp.ki_rusage_ch.ru_utime.tv_usec);
-	  printf_filtered ("stime, children: %jd.%06ld\n",
-			   (intmax_t) kp.ki_rusage_ch.ru_stime.tv_sec,
+	  printf_filtered ("stime, children: %s.%06ld\n",
+			   plongest (kp.ki_rusage_ch.ru_stime.tv_sec),
 			   kp.ki_rusage_ch.ru_stime.tv_usec);
 	  printf_filtered ("'nice' value: %d\n", kp.ki_nice);
-	  printf_filtered ("Start time: %jd.%06ld\n", kp.ki_start.tv_sec,
+	  printf_filtered ("Start time: %s.%06ld\n",
+			   plongest (kp.ki_start.tv_sec),
 			   kp.ki_start.tv_usec);
 	  pgtok = getpagesize () / 1024;
-	  printf_filtered ("Virtual memory size: %ju kB\n",
-			   (uintmax_t) kp.ki_size / 1024);
-	  printf_filtered ("Data size: %ju kB\n",
-			   (uintmax_t) kp.ki_dsize * pgtok);
-	  printf_filtered ("Stack size: %ju kB\n",
-			   (uintmax_t) kp.ki_ssize * pgtok);
-	  printf_filtered ("Text size: %ju kB\n",
-			   (uintmax_t) kp.ki_tsize * pgtok);
-	  printf_filtered ("Resident set size: %ju kB\n",
-			   (uintmax_t) kp.ki_rssize * pgtok);
-	  printf_filtered ("Maximum RSS: %ju kB\n",
-			   (uintmax_t) kp.ki_rusage.ru_maxrss);
+	  printf_filtered ("Virtual memory size: %s kB\n",
+			   pulongest (kp.ki_size / 1024));
+	  printf_filtered ("Data size: %s kB\n",
+			   pulongest (kp.ki_dsize * pgtok));
+	  printf_filtered ("Stack size: %s kB\n",
+			   pulongest (kp.ki_ssize * pgtok));
+	  printf_filtered ("Text size: %s kB\n",
+			   pulongest (kp.ki_tsize * pgtok));
+	  printf_filtered ("Resident set size: %s kB\n",
+			   pulongest (kp.ki_rssize * pgtok));
+	  printf_filtered ("Maximum RSS: %s kB\n",
+			   pulongest (kp.ki_rusage.ru_maxrss));
 	  printf_filtered ("Pending Signals: ");
 	  for (int i = 0; i < _SIG_WORDS; i++)
 	    printf_filtered ("%08x ", kp.ki_siglist.__bits[i]);
@@ -886,7 +890,7 @@ fbsd_add_threads (fbsd_nat_target *target, pid_t pid)
 
   for (i = 0; i < nlwps; i++)
     {
-      ptid_t ptid = ptid_t (pid, lwps[i], 0);
+      ptid_t ptid = ptid_t (pid, lwps[i]);
 
       if (!in_thread_list (target, ptid))
 	{
@@ -1041,8 +1045,8 @@ fbsd_nat_target::resume (ptid_t ptid, int step, enum gdb_signal signo)
     return;
 #endif
 
-  fbsd_lwp_debug_printf ("ptid (%d, %ld, %ld)", ptid.pid (), ptid.lwp (),
-			 ptid.tid ());
+  fbsd_lwp_debug_printf ("ptid (%d, %ld, %s)", ptid.pid (), ptid.lwp (),
+			 pulongest (ptid.tid ()));
   if (ptid.lwp_p ())
     {
       /* If ptid is a specific LWP, suspend all other LWPs in the process.  */
@@ -1187,7 +1191,7 @@ fbsd_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	  if (ptrace (PT_LWPINFO, pid, (caddr_t) &pl, sizeof pl) == -1)
 	    perror_with_name (("ptrace"));
 
-	  wptid = ptid_t (pid, pl.pl_lwpid, 0);
+	  wptid = ptid_t (pid, pl.pl_lwpid);
 
 	  if (debug_fbsd_nat)
 	    {
@@ -1283,7 +1287,7 @@ fbsd_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 		    perror_with_name (("ptrace"));
 
 		  gdb_assert (pl.pl_flags & PL_FLAG_CHILD);
-		  child_ptid = ptid_t (child, pl.pl_lwpid, 0);
+		  child_ptid = ptid_t (child, pl.pl_lwpid);
 		}
 
 	      /* Enable additional events on the child process.  */
@@ -1401,17 +1405,83 @@ fbsd_nat_target::supports_stopped_by_sw_breakpoint ()
 }
 #endif
 
+#ifdef PROC_ASLR_CTL
+class maybe_disable_address_space_randomization
+{
+public:
+  explicit maybe_disable_address_space_randomization (bool disable_randomization)
+  {
+    if (disable_randomization)
+      {
+	if (procctl (P_PID, getpid (), PROC_ASLR_STATUS, &m_aslr_ctl) == -1)
+	  {
+	    warning (_("Failed to fetch current address space randomization "
+		       "status: %s"), safe_strerror (errno));
+	    return;
+	  }
+
+	m_aslr_ctl &= ~PROC_ASLR_ACTIVE;
+	if (m_aslr_ctl == PROC_ASLR_FORCE_DISABLE)
+	  return;
+
+	int ctl = PROC_ASLR_FORCE_DISABLE;
+	if (procctl (P_PID, getpid (), PROC_ASLR_CTL, &ctl) == -1)
+	  {
+	    warning (_("Error disabling address space randomization: %s"),
+		     safe_strerror (errno));
+	    return;
+	  }
+
+	m_aslr_ctl_set = true;
+      }
+  }
+
+  ~maybe_disable_address_space_randomization ()
+  {
+    if (m_aslr_ctl_set)
+      {
+	if (procctl (P_PID, getpid (), PROC_ASLR_CTL, &m_aslr_ctl) == -1)
+	  warning (_("Error restoring address space randomization: %s"),
+		   safe_strerror (errno));
+      }
+  }
+
+  DISABLE_COPY_AND_ASSIGN (maybe_disable_address_space_randomization);
+
+private:
+  bool m_aslr_ctl_set = false;
+  int m_aslr_ctl = 0;
+};
+#endif
+
+void
+fbsd_nat_target::create_inferior (const char *exec_file,
+				  const std::string &allargs,
+				  char **env, int from_tty)
+{
+#ifdef PROC_ASLR_CTL
+  maybe_disable_address_space_randomization restore_aslr_ctl
+    (disable_randomization);
+#endif
+
+  inf_ptrace_target::create_inferior (exec_file, allargs, env, from_tty);
+}
+
 #ifdef TDP_RFPPWAIT
 /* Target hook for follow_fork.  On entry and at return inferior_ptid is
    the ptid of the followed inferior.  */
 
 void
-fbsd_nat_target::follow_fork (bool follow_child, bool detach_fork)
+fbsd_nat_target::follow_fork (inferior *child_inf, ptid_t child_ptid,
+			      target_waitkind fork_kind, bool follow_child,
+			      bool detach_fork)
 {
+  inf_ptrace_target::follow_fork (child_inf, child_ptid, fork_kind,
+				  follow_child, detach_fork);
+
   if (!follow_child && detach_fork)
     {
-      struct thread_info *tp = inferior_thread ();
-      pid_t child_pid = tp->pending_follow.value.related_pid.pid ();
+      pid_t child_pid = child_ptid.pid ();
 
       /* Breakpoints have already been detached from the child by
 	 infrun.c.  */
@@ -1420,7 +1490,7 @@ fbsd_nat_target::follow_fork (bool follow_child, bool detach_fork)
 	perror_with_name (("ptrace"));
 
 #ifndef PTRACE_VFORK
-      if (tp->pending_follow.kind == TARGET_WAITKIND_VFORKED)
+      if (fork_kind == TARGET_WAITKIND_VFORKED)
 	{
 	  /* We can't insert breakpoints until the child process has
 	     finished with the shared memory region.  The parent
@@ -1524,6 +1594,62 @@ bool
 fbsd_nat_target::supports_multi_process ()
 {
   return true;
+}
+
+bool
+fbsd_nat_target::supports_disable_randomization ()
+{
+#ifdef PROC_ASLR_CTL
+  return true;
+#else
+  return false;
+#endif
+}
+
+/* See fbsd-nat.h.  */
+
+void
+fbsd_nat_target::fetch_register_set (struct regcache *regcache, int regnum,
+				     int fetch_op, const struct regset *regset,
+				     void *regs, size_t size)
+{
+  const struct regcache_map_entry *map
+    = (const struct regcache_map_entry *) regset->regmap;
+  pid_t pid = get_ptrace_pid (regcache->ptid ());
+
+  if (regnum == -1 || regcache_map_supplies (map, regnum, regcache->arch(),
+					     size))
+    {
+      if (ptrace (fetch_op, pid, (PTRACE_TYPE_ARG3) regs, 0) == -1)
+	perror_with_name (_("Couldn't get registers"));
+
+      regcache->supply_regset (regset, regnum, regs, size);
+    }
+}
+
+/* See fbsd-nat.h.  */
+
+void
+fbsd_nat_target::store_register_set (struct regcache *regcache, int regnum,
+				     int fetch_op, int store_op,
+				     const struct regset *regset, void *regs,
+				     size_t size)
+{
+  const struct regcache_map_entry *map
+    = (const struct regcache_map_entry *) regset->regmap;
+  pid_t pid = get_ptrace_pid (regcache->ptid ());
+
+  if (regnum == -1 || regcache_map_supplies (map, regnum, regcache->arch(),
+					     size))
+    {
+      if (ptrace (fetch_op, pid, (PTRACE_TYPE_ARG3) regs, 0) == -1)
+	perror_with_name (_("Couldn't get registers"));
+
+      regcache->collect_regset (regset, regnum, regs, size);
+
+      if (ptrace (store_op, pid, (PTRACE_TYPE_ARG3) regs, 0) == -1)
+	perror_with_name (_("Couldn't write registers"));
+    }
 }
 
 void _initialize_fbsd_nat ();

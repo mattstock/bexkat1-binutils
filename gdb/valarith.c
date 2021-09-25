@@ -344,7 +344,7 @@ value_user_defined_op (struct value **argp, gdb::array_view<value *> args,
 					  noside);
     }
   else
-    result = value_struct_elt (argp, args.data (), name, static_memfuncp,
+    result = value_struct_elt (argp, args, name, static_memfuncp,
 			       "structure");
 
   return result;
@@ -1653,9 +1653,9 @@ value_binop (struct value *arg1, struct value *arg2, enum exp_opcode op)
   return val;
 }
 
-/* Simulate the C operator ! -- return 1 if ARG1 contains zero.  */
+/* See value.h.  */
 
-int
+bool
 value_logical_not (struct value *arg1)
 {
   int len;

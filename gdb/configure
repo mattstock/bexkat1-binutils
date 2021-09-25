@@ -633,7 +633,6 @@ LIBXXHASH
 HAVE_LIBXXHASH
 CTF_DEPS
 LIBCTF
-ENABLE_LIBCTF
 LTLIBBABELTRACE
 LIBBABELTRACE
 HAVE_LIBBABELTRACE
@@ -795,6 +794,7 @@ DEPDIR
 am__leading_dot
 CXX_DIALECT
 HAVE_CXX11
+target_noncanonical
 INSTALL_STRIP_PROGRAM
 STRIP
 install_sh
@@ -2990,6 +2990,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
+
 ac_config_headers="$ac_config_headers config.h:config.in"
 
 
@@ -5178,6 +5179,24 @@ ac_configure="$SHELL $ac_aux_dir/configure"  # Please don't use this var.
 
 
 # Set target, target_cpu, target_vendor, and target_os.
+
+
+ case ${build_alias} in
+  "") build_noncanonical=${build} ;;
+  *) build_noncanonical=${build_alias} ;;
+esac
+
+ case ${host_alias} in
+  "") host_noncanonical=${build_noncanonical} ;;
+  *) host_noncanonical=${host_alias} ;;
+esac
+
+ case ${target_alias} in
+  "") target_noncanonical=${host_noncanonical} ;;
+  *) target_noncanonical=${target_alias} ;;
+esac
+
+
 
 
 test "$program_prefix" != NONE &&
@@ -12210,7 +12229,7 @@ fi
 for ac_header in nlist.h machine/reg.h \
                   thread_db.h \
 		  sys/file.h sys/filio.h sys/ioctl.h sys/param.h \
-		  sys/resource.h sys/ptrace.h ptrace.h \
+		  sys/procctl.h sys/resource.h sys/ptrace.h ptrace.h \
 		  sys/reg.h sys/debugreg.h \
 		  termios.h elf_hp.h
 do :
@@ -12290,6 +12309,18 @@ do :
 if test "x$ac_cv_header_ws2tcpip_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
 #define HAVE_WS2TCPIP_H 1
+_ACEOF
+
+fi
+
+done
+
+for ac_header in execinfo.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "execinfo.h" "ac_cv_header_execinfo_h" "$ac_includes_default"
+if test "x$ac_cv_header_execinfo_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_EXECINFO_H 1
 _ACEOF
 
 fi
@@ -13806,7 +13837,7 @@ fi
 
   for ac_func in fdwalk getrlimit pipe pipe2 poll socketpair sigaction \
 		  ptrace64 sbrk setns sigaltstack sigprocmask \
-		  setpgid setpgrp getrusage getauxval
+		  setpgid setpgrp getrusage getauxval sigtimedwait
 do :
   as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
 ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
@@ -16464,6 +16495,45 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $found" >&5
 $as_echo "$found" >&6; }
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether execinfo.h backtrace is available" >&5
+$as_echo_n "checking whether execinfo.h backtrace is available... " >&6; }
+if ${gdb_cv_execinfo_backtrace+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+         #include <execinfo.h>
+
+int
+main ()
+{
+
+         int f;
+         void *b[2];
+         f = backtrace (b, 2);
+         backtrace_symbols_fd (b, f, 2);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  gdb_cv_execinfo_backtrace=yes
+else
+  gdb_cv_execinfo_backtrace=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gdb_cv_execinfo_backtrace" >&5
+$as_echo "$gdb_cv_execinfo_backtrace" >&6; }
+if test "$gdb_cv_execinfo_backtrace" = yes; then
+
+$as_echo "#define HAVE_EXECINFO_BACKTRACE 1" >>confdefs.h
+
+fi
 
 
 if test "${build}" = "${host}" -a "${host}" = "${target}" ; then
@@ -19153,7 +19223,6 @@ else
   LIBCTF=
   CTF_DEPS=
 fi
-
 
 
 

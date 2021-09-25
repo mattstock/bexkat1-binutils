@@ -943,11 +943,7 @@ hppa64_convert_code_addr_to_fptr (struct gdbarch *gdbarch, CORE_ADDR code)
 
   if (opd < sec->objfile->sections_end)
     {
-      CORE_ADDR addr;
-
-      for (addr = obj_section_addr (opd);
-	   addr < obj_section_endaddr (opd);
-	   addr += 2 * 8)
+      for (CORE_ADDR addr = opd->addr (); addr < opd->endaddr (); addr += 2 * 8)
 	{
 	  ULONGEST opdaddr;
 	  gdb_byte tmp[8];
@@ -2306,6 +2302,7 @@ hppa_frame_unwind_sniffer (const struct frame_unwind *self,
 
 static const struct frame_unwind hppa_frame_unwind =
 {
+  "hppa unwind table",
   NORMAL_FRAME,
   default_frame_unwind_stop_reason,
   hppa_frame_this_id,
@@ -2418,6 +2415,7 @@ hppa_fallback_frame_prev_register (struct frame_info *this_frame,
 
 static const struct frame_unwind hppa_fallback_frame_unwind =
 {
+  "hppa prologue",
   NORMAL_FRAME,
   default_frame_unwind_stop_reason,
   hppa_fallback_frame_this_id,
@@ -2498,6 +2496,7 @@ hppa_stub_unwind_sniffer (const struct frame_unwind *self,
 }
 
 static const struct frame_unwind hppa_stub_frame_unwind = {
+  "hppa stub",
   NORMAL_FRAME,
   default_frame_unwind_stop_reason,
   hppa_stub_frame_this_id,

@@ -60,7 +60,7 @@ dwarf2_cu::start_symtab (const char *name, const char *comp_dir,
 
   m_builder.reset (new struct buildsym_compunit
 		   (this->per_objfile->objfile,
-		    name, comp_dir, language, low_pc));
+		    name, comp_dir, per_cu->lang, low_pc));
 
   list_in_scope = get_builder ()->get_file_symbols ();
 
@@ -137,4 +137,19 @@ dwarf2_cu::add_dependence (struct dwarf2_per_cu_data *ref_per_cu)
   slot = htab_find_slot (m_dependencies, ref_per_cu, INSERT);
   if (*slot == nullptr)
     *slot = ref_per_cu;
+}
+
+/* See dwarf2/cu.h.  */
+
+buildsym_compunit *
+dwarf2_cu::get_builder ()
+{
+  /* If this CU has a builder associated with it, use that.  */
+  if (m_builder != nullptr)
+    return m_builder.get ();
+
+  if (per_objfile->sym_cu != nullptr)
+    return per_objfile->sym_cu->m_builder.get ();
+
+  gdb_assert_not_reached ("");
 }

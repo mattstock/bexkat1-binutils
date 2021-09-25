@@ -523,7 +523,7 @@ const char EXP_CHARS[] = "eE";
 /* As in 0f12.456  */
 /* or	 0d1.2345e12  */
 
-const char FLT_CHARS[] = "rRsSfFdDxXeEpPhH";
+const char FLT_CHARS[] = "rRsSfFdDxXeEpPhHb";
 
 /* Prefix character that indicates the start of an immediate value.  */
 #define is_immediate_prefix(C) ((C) == '#')
@@ -643,54 +643,6 @@ aarch64_get_expression (expressionS *  ep,
 const char *
 md_atof (int type, char *litP, int *sizeP)
 {
-  /* If this is a bfloat16 type, then parse it slightly differently -
-     as it does not follow the IEEE standard exactly.  */
-  if (type == 'b')
-    {
-      char * t;
-      LITTLENUM_TYPE words[MAX_LITTLENUMS];
-      FLONUM_TYPE generic_float;
-
-      t = atof_ieee_detail (input_line_pointer, 1, 8, words, &generic_float);
-
-      if (t)
-	input_line_pointer = t;
-      else
-	return _("invalid floating point number");
-
-      switch (generic_float.sign)
-	{
-	/* Is +Inf.  */
-	case 'P':
-	  words[0] = 0x7f80;
-	  break;
-
-	/* Is -Inf.  */
-	case 'N':
-	  words[0] = 0xff80;
-	  break;
-
-	/* Is NaN.  */
-	/* bfloat16 has two types of NaN - quiet and signalling.
-	   Quiet NaN has bit[6] == 1 && faction != 0, whereas
-	   signalling Nan's have bit[0] == 0 && fraction != 0.
-	   Chose this specific encoding as it is the same form
-	   as used by other IEEE 754 encodings in GAS.  */
-	case 0:
-	  words[0] = 0x7fff;
-	  break;
-
-	default:
-	  break;
-	}
-
-      *sizeP = 2;
-
-      md_number_to_chars (litP, (valueT) words[0], sizeof (LITTLENUM_TYPE));
-
-      return NULL;
-    }
-
   return ieee_md_atof (type, litP, sizeP, target_big_endian);
 }
 
@@ -5214,7 +5166,7 @@ output_inst (struct aarch64_inst *new_inst)
 
 struct templates
 {
-  aarch64_opcode *opcode;
+  const aarch64_opcode *opcode;
   struct templates *next;
 };
 
@@ -5591,7 +5543,7 @@ get_logsz (unsigned int size)
 static inline bfd_reloc_code_real_type
 ldst_lo12_determine_real_reloc_type (void)
 {
-  unsigned logsz;
+  unsigned logsz, max_logsz;
   enum aarch64_opnd_qualifier opd0_qlf = inst.base.operands[0].qualifier;
   enum aarch64_opnd_qualifier opd1_qlf = inst.base.operands[1].qualifier;
 
@@ -5650,13 +5602,22 @@ ldst_lo12_determine_real_reloc_type (void)
   gas_assert (opd1_qlf != AARCH64_OPND_QLF_NIL);
 
   logsz = get_logsz (aarch64_get_qualifier_esize (opd1_qlf));
+
   if (inst.reloc.type == BFD_RELOC_AARCH64_TLSLD_LDST_DTPREL_LO12
       || inst.reloc.type == BFD_RELOC_AARCH64_TLSLD_LDST_DTPREL_LO12_NC
       || inst.reloc.type == BFD_RELOC_AARCH64_TLSLE_LDST_TPREL_LO12
       || inst.reloc.type == BFD_RELOC_AARCH64_TLSLE_LDST_TPREL_LO12_NC)
-    gas_assert (logsz <= 3);
+    max_logsz = 3;
   else
-    gas_assert (logsz <= 4);
+    max_logsz = 4;
+
+  if (logsz > max_logsz)
+    {
+      /* SEE PR 27904 for an example of this.  */
+      set_fatal_syntax_error
+	(_("relocation qualifier does not match instruction size"));
+      return BFD_RELOC_AARCH64_NONE;
+    }
 
   /* In reloc.c, these pseudo relocation types should be defined in similar
      order as above reloc_ldst_lo12 array. Because the array index calculation
@@ -7263,7 +7224,7 @@ md_assemble (char *str)
 {
   char *p = str;
   templates *template;
-  aarch64_opcode *opcode;
+  const aarch64_opcode *opcode;
   aarch64_inst *inst_base;
   unsigned saved_cond;
 
@@ -8759,7 +8720,7 @@ sysreg_hash_insert (htab_t table, const char *key, void *value)
 static void
 fill_instruction_hash_table (void)
 {
-  aarch64_opcode *opcode = aarch64_opcode_table;
+  const aarch64_opcode *opcode = aarch64_opcode_table;
 
   while (opcode->name != NULL)
     {

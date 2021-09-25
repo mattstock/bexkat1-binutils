@@ -96,7 +96,7 @@ python_on_normal_stop (struct bpstats *bs, int print_frame)
   if (inferior_ptid == null_ptid)
     return;
 
-  stop_signal = inferior_thread ()->suspend.stop_signal;
+  stop_signal = inferior_thread ()->stop_signal ();
 
   gdbpy_enter enter_py (get_current_arch (), current_language);
 
@@ -441,7 +441,7 @@ infpy_get_connection_num (PyObject *self, void *closure)
   if (target == nullptr)
     Py_RETURN_NONE;
 
-  return PyLong_FromLong (target->connection_number);
+  return gdb_py_object_from_longest (target->connection_number).release ();
 }
 
 static PyObject *
@@ -1026,7 +1026,7 @@ PyTypeObject inferior_object_type =
   0,				  /* tp_getattro */
   0,				  /* tp_setattro */
   0,				  /* tp_as_buffer */
-  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_ITER,  /* tp_flags */
+  Py_TPFLAGS_DEFAULT,		  /* tp_flags */
   "GDB inferior object",	  /* tp_doc */
   0,				  /* tp_traverse */
   0,				  /* tp_clear */

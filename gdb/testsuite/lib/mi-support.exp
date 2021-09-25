@@ -663,16 +663,46 @@ proc mi_gdb_load { arg } {
     return 0
 }
 
-# mi_gdb_test COMMAND PATTERN MESSAGE [IPATTERN] -- send a command to gdb; 
+# Return 1 if symbols were read in using -readnow.  Otherwise, return 0.
+# Based on readnow from lib/gdb.exp.
+
+proc mi_readnow { args } {
+    global mi_gdb_prompt
+
+    if { [llength $args] == 1 } {
+	set re [lindex $args 0]
+    } else {
+	set re ""
+    }
+
+    set readnow_p 0
+    set cmd "maint print objfiles $re"
+    send_gdb "$cmd\n"
+    gdb_expect {
+	-re ".gdb_index: faked for ..readnow.." {
+	    # Record that we've seen the above pattern.
+	    set readnow_p 1
+	    exp_continue
+	}
+	-re "\\^done\r\n$mi_gdb_prompt$" {
+	}
+    }
+
+    return $readnow_p
+}
+
+# mi_gdb_test COMMAND [PATTERN [MESSAGE [IPATTERN]]] -- send a command to gdb;
 #   test the result.
 #
 # COMMAND is the command to execute, send to GDB with send_gdb.  If
 #   this is the null string no command is sent.
 # PATTERN is the pattern to match for a PASS, and must NOT include
 #   the \r\n sequence immediately before the gdb prompt.
+#   If not specified, .* is used.
 # MESSAGE is the message to be printed.  (If this is the empty string,
 #   then sometimes we don't call pass or fail at all; I don't
 #   understand this at all.)
+#   If not specified, COMMAND is used.
 # IPATTERN is the pattern to match for the inferior's output.  This parameter
 #   is optional.  If present, it will produce a PASS if the match is
 #   successful, and a FAIL if unsuccessful.
@@ -689,9 +719,23 @@ proc mi_gdb_test { args } {
     global inferior_exited_re async
     upvar timeout timeout
 
-    set command [lindex $args 0]
-    set pattern [lindex $args 1]
-    set message [lindex $args 2]
+    if { [llength $args] >= 1 } then {
+	set command [lindex $args 0]
+    } else {
+	error "Not enough arguments in mi_gdb_test"
+    }
+
+    if { [llength $args] >= 2 } then {
+	set pattern [lindex $args 1]
+    } else {
+	set pattern ".*"
+    }
+
+    if { [llength $args] >= 3 } then {
+	set message [lindex $args 2]
+    } else {
+	set message $command
+    }
 
     if [llength $args]==4 {
 	set ipattern [lindex $args 3]
@@ -702,6 +746,10 @@ proc mi_gdb_test { args } {
 	set response_string [lindex $args 4]
     } else {
 	set question_string "^FOOBAR$"
+    }
+
+    if { [llength $args] >= 6 } {
+	error "Too many arguments in mi_gdb_test"
     }
 
     if $verbose>2 then {

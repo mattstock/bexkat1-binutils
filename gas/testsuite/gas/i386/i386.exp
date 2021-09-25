@@ -41,7 +41,7 @@ proc gas_bfd64_check { } {
     global AS
 
     set status [gas_host_run "$AS --help" ""]
-    return [regexp "32bit/64bit/x32" [lindex $status 1]];
+    return [regexp "32bit/64bit" [lindex $status 1]];
 }
 
 if [gas_32_check] then {
@@ -69,6 +69,7 @@ if [gas_32_check] then {
     run_dump_test "prefix"
     run_list_test "prefix32" "-al"
     run_dump_test "lea"
+    run_dump_test "lea16"
     run_dump_test "amd"
     run_dump_test "katmai"
     run_dump_test "jump"
@@ -86,6 +87,10 @@ if [gas_32_check] then {
     run_dump_test "disp"
     run_dump_test "disp-intel"
     run_dump_test "disp32"
+    run_list_test "disp-imm-16"
+    if { [gas_bfd64_check] } {
+	run_dump_test "disp-imm-32"
+    }
     run_dump_test "vmx"
     run_dump_test "vmfunc"
     run_dump_test "smx"
@@ -96,6 +101,8 @@ if [gas_32_check] then {
     run_dump_test "equ"
     run_list_test "equ-bad"
     run_dump_test "divide"
+    run_dump_test "quoted"
+    run_dump_test "unary"
     run_dump_test "padlock"
     run_dump_test "crx"
     run_list_test "cr-err" ""
@@ -111,7 +118,6 @@ if [gas_32_check] then {
     run_list_test "lockbad-1" "-al"
     run_dump_test "long-1"
     run_dump_test "long-1-intel"
-    run_dump_test "fp"
     run_dump_test "nops"
     run_dump_test "nops16-1"
     run_dump_test "nops-1"
@@ -148,6 +154,8 @@ if [gas_32_check] then {
     run_dump_test "addr32"
     run_dump_test "code16"
     run_list_test "oversized16" "-al"
+    run_dump_test "wrap32-text"
+    run_dump_test "wrap32-data"
     run_dump_test "sse4_1"
     run_dump_test "sse4_1-intel"
     run_dump_test "sse4_2"
@@ -507,6 +515,12 @@ if [gas_32_check] then {
     run_list_test "vp2intersect-inval-bcast"
     run_dump_test "keylocker"
     run_dump_test "keylocker-intel"
+    run_dump_test "avx512_fp16"
+    run_dump_test "avx512_fp16-intel"
+    run_dump_test "avx512_fp16_vl"
+    run_dump_test "avx512_fp16_vl-intel"
+    run_dump_test "avx512_fp16_pseudo_ops"
+    run_list_test "avx512_fp16-inval-bcast"
     run_list_test "avx512vl-1" "-al"
     run_list_test "avx512vl-2" "-al"
     run_list_test "avx512vl-ambig"
@@ -539,6 +553,7 @@ if [gas_32_check] then {
     run_list_test "optimize-7" "-I${srcdir}/$subdir -march=+noavx2 -al"
     run_dump_test "lea-optimize"
     run_dump_test "lea16-optimize"
+    run_dump_test "lea16-optimize2"
     run_dump_test "align-branch-1a"
     run_dump_test "align-branch-1b"
     run_dump_test "align-branch-1c"
@@ -631,6 +646,7 @@ if [gas_32_check] then {
 	run_dump_test "dw2-compress-2"
 	run_dump_test "dw2-compressed-2"
 
+	run_dump_test "bad-bcast"
 	run_dump_test "bad-size"
 
 	run_dump_test "size-1"
@@ -709,6 +725,7 @@ run_dump_test rept
 run_dump_test pr19498
 run_list_test "nop-bad-1" ""
 run_list_test "unspec" ""
+run_dump_test "fp"
 if {[is_elf_format] || [istarget "*-*-vxworks*"]} then {
     run_list_test_stdin "list-1" "-al"
     run_list_test_stdin "list-2" "-al"
@@ -855,6 +872,7 @@ if [gas_64_check] then {
     run_dump_test "x86-64-sib-intel"
     run_dump_test "x86-64-disp"
     run_dump_test "x86-64-disp-intel"
+    run_list_test "disp-imm-64"
     run_dump_test "intel-movs64"
     run_dump_test "intel-cmps64"
     run_dump_test "x86-64-disp32"
@@ -918,6 +936,7 @@ if [gas_64_check] then {
     run_dump_test "x86-64-avx512er-intel"
     run_dump_test "x86-64-avx512pf"
     run_dump_test "x86-64-avx512pf-intel"
+    run_dump_test "x86-64-evex"
     run_dump_test "x86-64-evex-lig256"
     run_dump_test "x86-64-evex-lig512"
     run_dump_test "x86-64-evex-lig256-intel"
@@ -1150,6 +1169,14 @@ if [gas_64_check] then {
     run_list_test "x86-64-vp2intersect-inval-bcast"
     run_dump_test "x86-64-keylocker"
     run_dump_test "x86-64-keylocker-intel"
+    run_dump_test "x86-64-avx512_fp16"
+    run_dump_test "x86-64-avx512_fp16-intel"
+    run_dump_test "x86-64-avx512_fp16_vl"
+    run_dump_test "x86-64-avx512_fp16_vl-intel"
+    run_dump_test "x86-64-avx512_fp16_pseudo_ops"
+    run_list_test "x86-64-avx512_fp16-inval-bcast"
+    run_list_test "x86-64-avx512_fp16-inval-register"
+    run_dump_test "x86-64-avx512_fp16-bad"
     run_dump_test "x86-64-fence-as-lock-add-yes"
     run_dump_test "x86-64-fence-as-lock-add-no"
     run_dump_test "x86-64-pr20141"

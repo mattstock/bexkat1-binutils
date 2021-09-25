@@ -554,7 +554,6 @@ amd64_has_unaligned_fields (struct type *type)
 	{
 	  struct type *subtype = check_typedef (type->field (i).type ());
 	  int bitpos = TYPE_FIELD_BITPOS (type, i);
-	  int align = type_align(subtype);
 
 	  /* Ignore static fields, empty fields (for example nested
 	     empty structures), and bitfields (these are handled by
@@ -567,6 +566,10 @@ amd64_has_unaligned_fields (struct type *type)
 
 	  if (bitpos % 8 != 0)
 	    return true;
+
+	  int align = type_align (subtype);
+	  if (align == 0)
+	    error (_("could not determine alignment of type"));
 
 	  int bytepos = bitpos / 8;
 	  if (bytepos % align != 0)
@@ -725,10 +728,10 @@ amd64_classify (struct type *type, enum amd64_reg_class theclass[2])
       && (len == 1 || len == 2 || len == 4 || len == 8))
     theclass[0] = AMD64_INTEGER;
 
-  /* Arguments of types float, double, _Decimal32, _Decimal64 and __m64
-     are in class SSE.  */
+  /* Arguments of types _Float16, float, double, _Decimal32, _Decimal64 and
+     __m64 are in class SSE.  */
   else if ((code == TYPE_CODE_FLT || code == TYPE_CODE_DECFLOAT)
-	   && (len == 4 || len == 8))
+	   && (len == 2 || len == 4 || len == 8))
     /* FIXME: __m64 .  */
     theclass[0] = AMD64_SSE;
 
@@ -746,8 +749,8 @@ amd64_classify (struct type *type, enum amd64_reg_class theclass[2])
     /* Class X87 and X87UP.  */
     theclass[0] = AMD64_X87, theclass[1] = AMD64_X87UP;
 
-  /* Arguments of complex T where T is one of the types float or
-     double get treated as if they are implemented as:
+  /* Arguments of complex T - where T is one of the types _Float16, float or
+     double - get treated as if they are implemented as:
 
      struct complexT {
        T real;
@@ -755,7 +758,7 @@ amd64_classify (struct type *type, enum amd64_reg_class theclass[2])
      };
 
   */
-  else if (code == TYPE_CODE_COMPLEX && len == 8)
+  else if (code == TYPE_CODE_COMPLEX && (len == 8 || len == 4))
     theclass[0] = AMD64_SSE;
   else if (code == TYPE_CODE_COMPLEX && len == 16)
     theclass[0] = theclass[1] = AMD64_SSE;
@@ -2699,6 +2702,7 @@ amd64_frame_prev_register (struct frame_info *this_frame, void **this_cache,
 
 static const struct frame_unwind amd64_frame_unwind =
 {
+  "amd64 prologue",
   NORMAL_FRAME,
   amd64_frame_unwind_stop_reason,
   amd64_frame_this_id,
@@ -2843,6 +2847,7 @@ amd64_sigtramp_frame_sniffer (const struct frame_unwind *self,
 
 static const struct frame_unwind amd64_sigtramp_frame_unwind =
 {
+  "amd64 sigtramp",
   SIGTRAMP_FRAME,
   amd64_sigtramp_frame_unwind_stop_reason,
   amd64_sigtramp_frame_this_id,
@@ -2978,6 +2983,7 @@ amd64_epilogue_frame_this_id (struct frame_info *this_frame,
 
 static const struct frame_unwind amd64_epilogue_frame_unwind =
 {
+  "amd64 epilogue",
   NORMAL_FRAME,
   amd64_epilogue_frame_unwind_stop_reason,
   amd64_epilogue_frame_this_id,

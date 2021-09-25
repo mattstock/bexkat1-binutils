@@ -346,6 +346,20 @@ If no exception is raised, the return value is always an instance of
 @code{gdb.Value} (@pxref{Values From Inferior}).
 @end defun
 
+@defun gdb.add_history (value)
+Takes @var{value}, an instance of @code{gdb.Value} (@pxref{Values From
+Inferior}), and appends the value this object represents to
+@value{GDBN}'s value history (@pxref{Value History}), and return an
+integer, its history number.  If @var{value} is not a
+@code{gdb.Value}, it is is converted using the @code{gdb.Value}
+constructor.  If @var{value} can't be converted to a @code{gdb.Value}
+then a @code{TypeError} is raised.
+
+When a command implemented in Python prints a single @code{gdb.Value}
+as its result, then placing the value into the history will allow the
+user convenient access to those values via CLI history facilities.
+@end defun
+
 @findex gdb.convenience_variable
 @defun gdb.convenience_variable (name)
 Return the value of the convenience variable (@pxref{Convenience
@@ -1661,7 +1675,7 @@ example above might be written.
 @smallexample
 def str_lookup_function(val):
     lookup_tag = val.type.tag
-    if lookup_tag == None:
+    if lookup_tag is None:
         return None
     regex = re.compile("^std::basic_string<char,.*>$")
     if regex.match(lookup_tag):
@@ -2367,7 +2381,7 @@ class InlinedFrameDecorator(FrameDecorator):
         super(InlinedFrameDecorator, self).__init__(fobj)
 
     def function(self):
-        frame = fobj.inferior_frame()
+        frame = self.inferior_frame()
         name = str(frame.name())
 
         if frame.type() == gdb.INLINE_FRAME:
@@ -2603,6 +2617,11 @@ Each attribute value should be an instance of @code{gdb.Value}.
 Return the @code{gdb.Architecture} (@pxref{Architectures In Python})
 for this @code{gdb.PendingFrame}.  This represents the architecture of
 the particular frame being unwound.
+@end defun
+
+@defun PendingFrame.level ()
+Return an integer, the stack frame level for this frame.
+@xref{Frames, ,Stack Frames}.
 @end defun
 
 @subheading Unwinder Output: UnwindInfo
@@ -4813,6 +4832,10 @@ Set this frame to be the selected frame.  @xref{Stack, ,Examining the
 Stack}.
 @end defun
 
+@defun Frame.level ()
+Return an integer, the stack frame level for this frame.  @xref{Frames, ,Stack Frames}.
+@end defun
+
 @node Blocks In Python
 @subsubsection Accessing blocks from Python
 
@@ -5508,6 +5531,13 @@ Hardware assisted read watchpoint.
 @vindex BP_ACCESS_WATCHPOINT
 @item gdb.BP_ACCESS_WATCHPOINT
 Hardware assisted access watchpoint.
+
+@vindex BP_CATCHPOINT
+@item gdb.BP_CATCHPOINT
+Catchpoint.  Currently, this type can't be used when creating
+@code{gdb.Breakpoint} objects, but will be present in
+@code{gdb.Breakpoint} objects reported from
+@code{gdb.BreakpointEvent}s (@pxref{Events In Python}).
 @end vtable
 
 The available watchpoint types are represented by constants defined in the
@@ -6014,6 +6044,13 @@ amount by which to scroll, with negative numbers meaning to scroll
 backward.  In the TUI model, it is the viewport that moves, not the
 contents.  A positive argument should cause the viewport to move down,
 and so the content should appear to move up.
+@end defun
+
+@defun Window.click (@var{x}, @var{y}, @var{button})
+This is called on a mouse click in this window.  @var{x} and @var{y} are
+the mouse coordinates inside the window (0-based), and @var{button}
+specifies which mouse button was used, whose values can be 1 (left),
+2 (middle), or 3 (right).
 @end defun
 
 @node Python Auto-loading

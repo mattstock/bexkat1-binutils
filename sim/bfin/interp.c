@@ -30,13 +30,12 @@
 #include <unistd.h>
 #include <sys/time.h>
 
+#include "portability.h"
 #include "sim/callback.h"
 #include "gdb/signals.h"
 #include "sim-main.h"
 #include "sim-syscall.h"
 #include "sim-hw.h"
-
-#include "targ-vals.h"
 
 /* The numbers here do not matter.  They just need to be unique.  They also
    need not be static across releases -- they're used internally only.  The
@@ -73,25 +72,6 @@
 
 #include "dv-bfin_cec.h"
 #include "dv-bfin_mmu.h"
-
-#ifndef HAVE_GETUID
-# define getuid() 0
-#endif
-#ifndef HAVE_GETGID
-# define getgid() 0
-#endif
-#ifndef HAVE_GETEUID
-# define geteuid() 0
-#endif
-#ifndef HAVE_GETEGID
-# define getegid() 0
-#endif
-#ifndef HAVE_SETUID
-# define setuid(uid) -1
-#endif
-#ifndef HAVE_SETGID
-# define setgid(gid) -1
-#endif
 
 static const char cb_linux_stat_map_32[] =
 /* Linux kernel 32bit layout:  */
@@ -138,8 +118,8 @@ bfin_syscall (SIM_CPU *cpu)
       sc.arg2 = args[1] = DREG (1);
       sc.arg3 = args[2] = DREG (2);
       sc.arg4 = args[3] = DREG (3);
-      /*sc.arg5 =*/ args[4] = DREG (4);
-      /*sc.arg6 =*/ args[5] = DREG (5);
+      sc.arg5 = args[4] = DREG (4);
+      sc.arg6 = args[5] = DREG (5);
     }
   else
     {
@@ -149,8 +129,8 @@ bfin_syscall (SIM_CPU *cpu)
       sc.arg2 = args[1] = GET_LONG (DREG (0) + 4);
       sc.arg3 = args[2] = GET_LONG (DREG (0) + 8);
       sc.arg4 = args[3] = GET_LONG (DREG (0) + 12);
-      /*sc.arg5 =*/ args[4] = GET_LONG (DREG (0) + 16);
-      /*sc.arg6 =*/ args[5] = GET_LONG (DREG (0) + 20);
+      sc.arg5 = args[4] = GET_LONG (DREG (0) + 16);
+      sc.arg6 = args[5] = GET_LONG (DREG (0) + 20);
     }
   sc.p1 = (PTR) sd;
   sc.p2 = (PTR) cpu;
@@ -246,7 +226,7 @@ bfin_syscall (SIM_CPU *cpu)
       else
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EINVAL;
+	  sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 	}
       break;
 
@@ -263,7 +243,7 @@ bfin_syscall (SIM_CPU *cpu)
 	if (sc.arg4 & 0x20 /*MAP_ANONYMOUS*/)
 	  /* XXX: We don't handle zeroing, but default is all zeros.  */;
 	else if (args[4] >= MAX_CALLBACK_FDS)
-	  sc.errcode = TARGET_ENOSYS;
+	  sc.errcode = cb_host_to_target_errno (cb, ENOSYS);
 	else
 	  {
 #ifdef HAVE_PREAD
@@ -273,11 +253,11 @@ bfin_syscall (SIM_CPU *cpu)
 	    if (pread (cb->fdmap[args[4]], data, sc.arg2, args[5] << 12) == sc.arg2)
 	      sc.write_mem (cb, &sc, heap, data, sc.arg2);
 	    else
-	      sc.errcode = TARGET_EINVAL;
+	      sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 
 	    free (data);
 #else
-	    sc.errcode = TARGET_ENOSYS;
+	    sc.errcode = cb_host_to_target_errno (cb, ENOSYS);
 #endif
 	  }
 
@@ -306,7 +286,7 @@ bfin_syscall (SIM_CPU *cpu)
       if (sc.arg1 >= MAX_CALLBACK_FDS || sc.arg2 >= MAX_CALLBACK_FDS)
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EINVAL;
+	  sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 	}
       else
 	{
@@ -322,7 +302,7 @@ bfin_syscall (SIM_CPU *cpu)
       if (sc.arg2)
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EINVAL;
+	  sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 	}
       else
 	{
@@ -345,7 +325,7 @@ bfin_syscall (SIM_CPU *cpu)
       if (sc.arg1 >= MAX_CALLBACK_FDS)
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EINVAL;
+	  sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 	}
       else
 	{
@@ -394,7 +374,7 @@ bfin_syscall (SIM_CPU *cpu)
       if (getcwd (p, sc.arg2) == NULL)
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EINVAL;
+	  sc.errcode = cb_host_to_target_errno (cb, EINVAL);
 	}
       else
 	{
@@ -464,7 +444,7 @@ bfin_syscall (SIM_CPU *cpu)
       if (sc.arg1 != getpid ())
 	{
 	  sc.result = -1;
-	  sc.errcode = TARGET_EPERM;
+	  sc.errcode = cb_host_to_target_errno (cb, EPERM);
 	}
       else
 	{
@@ -473,7 +453,7 @@ bfin_syscall (SIM_CPU *cpu)
 	  goto sys_finish;
 #else
 	  sc.result = -1;
-	  sc.errcode = TARGET_ENOSYS;
+	  sc.errcode = cb_host_to_target_errno (cb, ENOSYS);
 #endif
 	}
       break;
@@ -719,6 +699,12 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   int i;
   SIM_DESC sd = sim_state_alloc_extra (kind, callback,
 				       sizeof (struct bfin_board_data));
+
+  /* Set default options before parsing user options.  */
+  STATE_MACHS (sd) = bfin_sim_machs;
+  STATE_MODEL_NAME (sd) = "bf537";
+  current_alignment = STRICT_ALIGNMENT;
+  current_target_byte_order = BFD_ENDIAN_LITTLE;
 
   /* The cpu data is kept in a separately allocated chunk of memory.  */
   if (sim_cpu_alloc_all (sd, 1) != SIM_RC_OK)

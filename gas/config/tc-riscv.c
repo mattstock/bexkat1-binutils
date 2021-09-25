@@ -29,7 +29,6 @@
 #include "dwarf2dbg.h"
 #include "dw2gencfi.h"
 
-#include "bfd/cpu-riscv.h"
 #include "bfd/elfxx-riscv.h"
 #include "elf/riscv.h"
 #include "opcode/riscv.h"
@@ -86,65 +85,6 @@ struct riscv_csr_extra
 
   /* The CSR may have more than one setting.  */
   struct riscv_csr_extra *next;
-};
-
-/* All standard/Z* extensions defined in all supported ISA spec.  */
-struct riscv_ext_version
-{
-  const char *name;
-  enum riscv_spec_class isa_spec_class;
-  int major_version;
-  int minor_version;
-};
-
-static const struct riscv_ext_version ext_version_table[] =
-{
-  {"e", ISA_SPEC_CLASS_20191213, 1, 9},
-  {"e", ISA_SPEC_CLASS_20190608, 1, 9},
-  {"e", ISA_SPEC_CLASS_2P2,      1, 9},
-
-  {"i", ISA_SPEC_CLASS_20191213, 2, 1},
-  {"i", ISA_SPEC_CLASS_20190608, 2, 1},
-  {"i", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"m", ISA_SPEC_CLASS_20191213, 2, 0},
-  {"m", ISA_SPEC_CLASS_20190608, 2, 0},
-  {"m", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"a", ISA_SPEC_CLASS_20191213, 2, 1},
-  {"a", ISA_SPEC_CLASS_20190608, 2, 0},
-  {"a", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"f", ISA_SPEC_CLASS_20191213, 2, 2},
-  {"f", ISA_SPEC_CLASS_20190608, 2, 2},
-  {"f", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"d", ISA_SPEC_CLASS_20191213, 2, 2},
-  {"d", ISA_SPEC_CLASS_20190608, 2, 2},
-  {"d", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"q", ISA_SPEC_CLASS_20191213, 2, 2},
-  {"q", ISA_SPEC_CLASS_20190608, 2, 2},
-  {"q", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"c", ISA_SPEC_CLASS_20191213, 2, 0},
-  {"c", ISA_SPEC_CLASS_20190608, 2, 0},
-  {"c", ISA_SPEC_CLASS_2P2,      2, 0},
-
-  {"zicsr", ISA_SPEC_CLASS_20191213, 2, 0},
-  {"zicsr", ISA_SPEC_CLASS_20190608, 2, 0},
-
-  {"zifencei", ISA_SPEC_CLASS_20191213, 2, 0},
-  {"zifencei", ISA_SPEC_CLASS_20190608, 2, 0},
-
-  {"zihintpause", ISA_SPEC_CLASS_DRAFT, 1, 0},
-
-  {"zbb",   ISA_SPEC_CLASS_DRAFT, 0, 93},
-  {"zba",   ISA_SPEC_CLASS_DRAFT, 0, 93},
-  {"zbc",   ISA_SPEC_CLASS_DRAFT, 0, 93},
-
-  /* Terminate the list.  */
-  {NULL, 0, 0, 0}
 };
 
 #ifndef DEFAULT_ARCH
@@ -349,57 +289,6 @@ riscv_multi_subset_supports (enum riscv_insn_class insn_class)
     }
 }
 
-/* Handle of the extension with version hash table.  */
-static htab_t ext_version_hash = NULL;
-
-static htab_t
-init_ext_version_hash (void)
-{
-  const struct riscv_ext_version *table = ext_version_table;
-  htab_t hash = str_htab_create ();
-  int i = 0;
-
-  while (table[i].name)
-    {
-      const char *name = table[i].name;
-      if (str_hash_insert (hash, name, &table[i], 0) != NULL)
-	as_fatal (_("internal: duplicate %s"), name);
-
-      i++;
-      while (table[i].name
-	     && strcmp (table[i].name, name) == 0)
-       i++;
-    }
-
-  return hash;
-}
-
-static void
-riscv_get_default_ext_version (const char *name,
-			       int *major_version,
-			       int *minor_version)
-{
-  struct riscv_ext_version *ext;
-
-  if (name == NULL || default_isa_spec == ISA_SPEC_CLASS_NONE)
-    return;
-
-  ext = (struct riscv_ext_version *) str_hash_find (ext_version_hash, name);
-  while (ext
-	 && ext->name
-	 && strcmp (ext->name, name) == 0)
-    {
-      if (ext->isa_spec_class == ISA_SPEC_CLASS_DRAFT
-	  || ext->isa_spec_class == default_isa_spec)
-	{
-	  *major_version = ext->major_version;
-	  *minor_version = ext->minor_version;
-	  return;
-	}
-      ext++;
-    }
-}
-
 /* Set which ISA and extensions are available.  */
 
 static void
@@ -409,14 +298,26 @@ riscv_set_arch (const char *s)
   rps.subset_list = &riscv_subsets;
   rps.error_handler = as_bad;
   rps.xlen = &xlen;
-  rps.get_default_version = riscv_get_default_ext_version;
+  rps.isa_spec = default_isa_spec;
   rps.check_unknown_prefixed_ext = true;
 
-  if (s == NULL)
-    return;
+  if (s != NULL && strcmp (s, "") == 0)
+    {
+      as_bad (_("the architecture string of -march and elf architecture "
+		"attributes cannot be empty"));
+      return;
+    }
 
   riscv_release_subset_list (&riscv_subsets);
   riscv_parse_subset (&rps, s);
+
+  /* To support .option rvc and rve.  */
+  riscv_set_rvc (false);
+  if (riscv_subset_supports ("c"))
+    riscv_set_rvc (true);
+  riscv_set_rve (false);
+  if (riscv_subset_supports ("e"))
+    riscv_set_rve (true);
 }
 
 /* Indicate -mabi option is explictly set.  */
@@ -552,6 +453,157 @@ static bool explicit_priv_attr = false;
   (((OPCODE) & MASK_##OP) == MATCH_##OP)
 
 static char *expr_end;
+
+/* Create a new mapping symbol for the transition to STATE.  */
+
+static void
+make_mapping_symbol (enum riscv_seg_mstate state,
+		     valueT value,
+		     fragS *frag)
+{
+  const char *name;
+  switch (state)
+    {
+    case MAP_DATA:
+      name = "$d";
+      break;
+    case MAP_INSN:
+      name = "$x";
+      break;
+    default:
+      abort ();
+    }
+
+  symbolS *symbol = symbol_new (name, now_seg, frag, value);
+  symbol_get_bfdsym (symbol)->flags |= (BSF_NO_FLAGS | BSF_LOCAL);
+
+  /* If .fill or other data filling directive generates zero sized data,
+     or we are adding odd alignemnts, then the mapping symbol for the
+     following code will have the same value.  */
+  if (value == 0)
+    {
+       if (frag->tc_frag_data.first_map_symbol != NULL)
+	{
+	  know (S_GET_VALUE (frag->tc_frag_data.first_map_symbol)
+		== S_GET_VALUE (symbol));
+	  /* Remove the old one.  */
+	  symbol_remove (frag->tc_frag_data.first_map_symbol,
+			 &symbol_rootP, &symbol_lastP);
+	}
+      frag->tc_frag_data.first_map_symbol = symbol;
+    }
+  if (frag->tc_frag_data.last_map_symbol != NULL)
+    {
+      /* The mapping symbols should be added in offset order.  */
+      know (S_GET_VALUE (frag->tc_frag_data.last_map_symbol)
+			 <= S_GET_VALUE (symbol));
+      /* Remove the old one.  */
+      if (S_GET_VALUE (frag->tc_frag_data.last_map_symbol)
+	  == S_GET_VALUE (symbol))
+	symbol_remove (frag->tc_frag_data.last_map_symbol,
+		       &symbol_rootP, &symbol_lastP);
+    }
+  frag->tc_frag_data.last_map_symbol = symbol;
+}
+
+/* Set the mapping state for frag_now.  */
+
+void
+riscv_mapping_state (enum riscv_seg_mstate to_state,
+		     int max_chars)
+{
+  enum riscv_seg_mstate from_state =
+	seg_info (now_seg)->tc_segment_info_data.map_state;
+
+  if (!SEG_NORMAL (now_seg)
+      /* For now I only add the mapping symbols to text sections.
+	 Therefore, the dis-assembler only show the actual contents
+	 distribution for text.  Other sections will be shown as
+	 data without the details.  */
+      || !subseg_text_p (now_seg))
+    return;
+
+  /* The mapping symbol should be emitted if not in the right
+     mapping state  */
+  if (from_state == to_state)
+    return;
+
+  valueT value = (valueT) (frag_now_fix () - max_chars);
+  seg_info (now_seg)->tc_segment_info_data.map_state = to_state;
+  make_mapping_symbol (to_state, value, frag_now);
+}
+
+/* Add the odd bytes of paddings for riscv_handle_align.  */
+
+static void
+riscv_add_odd_padding_symbol (fragS *frag)
+{
+  /* If there was already a mapping symbol, it should be
+     removed in the make_mapping_symbol.  */
+  make_mapping_symbol (MAP_DATA, frag->fr_fix, frag);
+  make_mapping_symbol (MAP_INSN, frag->fr_fix + 1, frag);
+}
+
+/* Remove any excess mapping symbols generated for alignment frags in
+   SEC.  We may have created a mapping symbol before a zero byte
+   alignment; remove it if there's a mapping symbol after the
+   alignment.  */
+
+static void
+riscv_check_mapping_symbols (bfd *abfd ATTRIBUTE_UNUSED,
+			     asection *sec,
+			     void *dummy ATTRIBUTE_UNUSED)
+{
+  segment_info_type *seginfo = seg_info (sec);
+  fragS *fragp;
+
+  if (seginfo == NULL || seginfo->frchainP == NULL)
+    return;
+
+  for (fragp = seginfo->frchainP->frch_root;
+       fragp != NULL;
+       fragp = fragp->fr_next)
+    {
+      symbolS *last = fragp->tc_frag_data.last_map_symbol;
+      fragS *next = fragp->fr_next;
+
+      if (last == NULL || next == NULL)
+	continue;
+
+      /* Check the last mapping symbol if it is at the boundary of
+	 fragment.  */
+      if (S_GET_VALUE (last) < next->fr_address)
+	continue;
+      know (S_GET_VALUE (last) == next->fr_address);
+
+      do
+	{
+	  if (next->tc_frag_data.first_map_symbol != NULL)
+	    {
+	      /* The last mapping symbol overlaps with another one
+		 which at the start of the next frag.  */
+	      symbol_remove (last, &symbol_rootP, &symbol_lastP);
+	      break;
+	    }
+
+	  if (next->fr_next == NULL)
+	    {
+	      /* The last mapping symbol is at the end of the section.  */
+	      know (next->fr_fix == 0 && next->fr_var == 0);
+	      symbol_remove (last, &symbol_rootP, &symbol_lastP);
+	      break;
+	    }
+
+	  /* Since we may have empty frags without any mapping symbols,
+	     keep looking until the non-empty frag.  */
+	  if (next->fr_address != next->fr_next->fr_address)
+	    break;
+
+	  next = next->fr_next;
+	}
+      while (next != NULL);
+    }
+}
 
 /* The default target format to use.  */
 
@@ -1299,7 +1351,7 @@ append_insn (struct riscv_cl_insn *ip, expressionS *address_expr,
 	{
 	  howto = bfd_reloc_type_lookup (stdoutput, reloc_type);
 	  if (howto == NULL)
-	    as_bad (_("internal: usupported RISC-V relocation number %d"),
+	    as_bad (_("internal: unsupported RISC-V relocation number %d"),
 		    reloc_type);
 
 	  ip->fixp = fix_new_exp (ip->frag, ip->where,
@@ -2741,6 +2793,51 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
   return error;
 }
 
+/* Similar to riscv_ip, but assembles an instruction according to the
+   hardcode values of .insn directive.  */
+
+static const char *
+riscv_ip_hardcode (char *str,
+		   struct riscv_cl_insn *ip,
+		   expressionS *imm_expr,
+		   const char *error)
+{
+  struct riscv_opcode *insn;
+  insn_t values[2] = {0, 0};
+  unsigned int num = 0;
+
+  input_line_pointer = str;
+  do
+    {
+      expression (imm_expr);
+      if (imm_expr->X_op != O_constant)
+	{
+	  /* The first value isn't constant, so it should be
+	     .insn <type> <operands>.  We have been parsed it
+	     in the riscv_ip.  */
+	  if (num == 0)
+	    return error;
+	  return _("values must be constant");
+	}
+      values[num++] = (insn_t) imm_expr->X_add_number;
+    }
+  while (*input_line_pointer++ == ',' && num < 2);
+
+  input_line_pointer--;
+  if (*input_line_pointer != '\0')
+    return _("unrecognized values");
+
+  insn = XNEW (struct riscv_opcode);
+  insn->match = values[num - 1];
+  create_insn (ip, insn);
+  unsigned int bytes = riscv_insn_length (insn->match);
+  if (values[num - 1] >> (8 * bytes) != 0
+      || (num == 2 && values[0] != bytes))
+    return _("value conflicts with instruction length");
+
+  return NULL;
+}
+
 void
 md_assemble (char *str)
 {
@@ -2758,6 +2855,8 @@ md_assemble (char *str)
       if (!riscv_set_default_priv_spec (NULL))
        return;
     }
+
+  riscv_mapping_state (MAP_INSN, 0);
 
   const char *error = riscv_ip (str, &insn, &imm_expr, &imm_reloc, op_hash);
 
@@ -2931,11 +3030,6 @@ riscv_after_parse_args (void)
       else
 	as_bad ("unknown default architecture `%s'", default_arch);
     }
-  if (default_arch_with_ext == NULL)
-    default_arch_with_ext = xlen == 64 ? "rv64g" : "rv32g";
-
-  /* Initialize the hash table for extensions with default version.  */
-  ext_version_hash = init_ext_version_hash ();
 
   /* Set default specs.  */
   if (default_isa_spec == ISA_SPEC_CLASS_NONE)
@@ -2944,16 +3038,6 @@ riscv_after_parse_args (void)
     riscv_set_default_priv_spec (DEFAULT_RISCV_PRIV_SPEC);
 
   riscv_set_arch (default_arch_with_ext);
-
-  /* Add the RVC extension, regardless of -march, to support .option rvc.  */
-  riscv_set_rvc (false);
-  if (riscv_subset_supports ("c"))
-    riscv_set_rvc (true);
-
-  /* Enable RVE if specified by the -march option.  */
-  riscv_set_rve (false);
-  if (riscv_subset_supports ("e"))
-    riscv_set_rve (true);
 
   /* If the CIE to be produced has not been overridden on the command line,
      then produce version 3 by default.  This allows us to use the full
@@ -3203,8 +3287,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     }
 
   if (fixP->fx_subsy != NULL)
-    as_bad_where (fixP->fx_file, fixP->fx_line,
-		  _("unsupported symbol subtraction"));
+    as_bad_subtract (fixP);
 
   /* Add an R_RISCV_RELAX reloc if the reloc is relaxable.  */
   if (relaxable && fixP->fx_tcbit && fixP->fx_addsy != NULL)
@@ -3424,6 +3507,8 @@ riscv_frag_align_code (int n)
   fix_new_exp (frag_now, nops - frag_now->fr_literal, 0,
 	       &ex, false, BFD_RELOC_RISCV_ALIGN);
 
+  riscv_mapping_state (MAP_INSN, worst_case_bytes);
+
   return true;
 }
 
@@ -3443,6 +3528,7 @@ riscv_handle_align (fragS *fragP)
 	  /* We have 4 byte uncompressed nops.  */
 	  bfd_signed_vma size = 4;
 	  bfd_signed_vma excess = bytes % size;
+	  bfd_boolean odd_padding = (excess % 2 == 1);
 	  char *p = fragP->fr_literal + fragP->fr_fix;
 
 	  if (bytes <= 0)
@@ -3451,17 +3537,49 @@ riscv_handle_align (fragS *fragP)
 	  /* Insert zeros or compressed nops to get 4 byte alignment.  */
 	  if (excess)
 	    {
+	      if (odd_padding)
+		riscv_add_odd_padding_symbol (fragP);
 	      riscv_make_nops (p, excess);
 	      fragP->fr_fix += excess;
 	      p += excess;
 	    }
 
-	  /* Insert variable number of 4 byte uncompressed nops.  */
+	  /* The frag will be changed to `rs_fill` later.  The function
+	     `write_contents` will try to fill the remaining spaces
+	     according to the patterns we give.  In this case, we give
+	     a 4 byte uncompressed nop as the pattern, and set the size
+	     of the pattern into `fr_var`.  The nop will be output to the
+	     file `fr_offset` times.  However, `fr_offset` could be zero
+	     if we don't need to pad the boundary finally.  */
 	  riscv_make_nops (p, size);
 	  fragP->fr_var = size;
 	}
       break;
 
+    default:
+      break;
+    }
+}
+
+/* This usually called from frag_var.  */
+
+void
+riscv_init_frag (fragS * fragP, int max_chars)
+{
+  /* Do not add mapping symbol to debug sections.  */
+  if (bfd_section_flags (now_seg) & SEC_DEBUGGING)
+    return;
+
+  switch (fragP->fr_type)
+    {
+    case rs_fill:
+    case rs_align:
+    case rs_align_test:
+      riscv_mapping_state (MAP_DATA, max_chars);
+      break;
+    case rs_align_code:
+      riscv_mapping_state (MAP_INSN, max_chars);
+      break;
     default:
       break;
     }
@@ -3706,7 +3824,10 @@ s_riscv_leb128 (int sign)
   return s_leb128 (sign);
 }
 
-/* Parse the .insn directive.  */
+/* Parse the .insn directive.  There are three formats,
+   Format 1: .insn <type> <operand1>, <operand2>, ...
+   Format 2: .insn <length>, <value>
+   Format 3: .insn <value>.  */
 
 static void
 s_riscv_insn (int x ATTRIBUTE_UNUSED)
@@ -3723,13 +3844,19 @@ s_riscv_insn (int x ATTRIBUTE_UNUSED)
   save_c = *input_line_pointer;
   *input_line_pointer = '\0';
 
+  riscv_mapping_state (MAP_INSN, 0);
+
   const char *error = riscv_ip (str, &insn, &imm_expr,
 				&imm_reloc, insn_type_hash);
-
   if (error)
     {
-      as_bad ("%s `%s'", error, str);
+      char *save_in = input_line_pointer;
+      error = riscv_ip_hardcode (str, &insn, &imm_expr, error);
+      input_line_pointer = save_in;
     }
+
+  if (error)
+    as_bad ("%s `%s'", error, str);
   else
     {
       gas_assert (insn.insn_mo->pinfo != INSN_MACRO);
@@ -3811,6 +3938,15 @@ void
 riscv_md_end (void)
 {
   riscv_set_public_attributes ();
+}
+
+/* Adjust the symbol table.  */
+
+void
+riscv_adjust_symtab (void)
+{
+  bfd_map_over_sections (stdoutput, riscv_check_mapping_symbols, (char *) 0);
+  elf_adjust_symtab ();
 }
 
 /* Given a symbolic attribute NAME, return the proper integer value.

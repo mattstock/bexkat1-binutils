@@ -319,8 +319,7 @@ print_objfile_section_info (bfd *abfd, struct obj_section *asect,
 
       print_section_index (abfd, asect->the_bfd_section, index_digits);
       maint_print_section_info (name, flags,
-				obj_section_addr (asect),
-				obj_section_endaddr (asect),
+				asect->addr (), asect->endaddr (),
 				asect->the_bfd_section->filepos,
 				addr_size);
     }
@@ -867,6 +866,30 @@ maintenance_set_worker_threads (const char *args, int from_tty,
   update_thread_pool_size ();
 }
 
+static void
+maintenance_show_worker_threads (struct ui_file *file, int from_tty,
+				 struct cmd_list_element *c,
+				 const char *value)
+{
+#if CXX_STD_THREAD
+  if (n_worker_threads == -1)
+    {
+      fprintf_filtered (file, _("The number of worker threads GDB "
+				"can use is unlimited (currently %zu).\n"),
+			gdb::thread_pool::g_thread_pool->thread_count ());
+      return;
+    }
+#endif
+
+  int report_threads = 0;
+#if CXX_STD_THREAD
+  report_threads = n_worker_threads;
+#endif
+  fprintf_filtered (file, _("The number of worker threads GDB "
+			    "can use is %d.\n"),
+		    report_threads);
+}
+
 
 /* If true, display time usage both at startup and for each command.  */
 
@@ -1104,8 +1127,9 @@ static void
 maintenance_selftest (const char *args, int from_tty)
 {
 #if GDB_SELF_TEST
+  bool verbose = args != nullptr && check_for_argument (&args, "-verbose");
   gdb_argv argv (args);
-  selftests::run_tests (argv.as_array_view ());
+  selftests::run_tests (argv.as_array_view (), verbose);
 #else
   printf_filtered (_("\
 Selftests have been disabled for this build.\n"));
@@ -1372,7 +1396,8 @@ Set the number of worker threads GDB can use."), _("\
 Show the number of worker threads GDB can use."), _("\
 GDB may use multiple threads to speed up certain CPU-intensive operations,\n\
 such as demangling symbol names."),
-				       maintenance_set_worker_threads, NULL,
+				       maintenance_set_worker_threads,
+				       maintenance_show_worker_threads,
 				       &maintenance_set_cmdlist,
 				       &maintenance_show_cmdlist);
 

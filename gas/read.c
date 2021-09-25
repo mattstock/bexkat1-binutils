@@ -364,9 +364,7 @@ static const pseudo_typeS potable[] = {
   {"common.s", s_mri_common, 1},
   {"data", s_data, 0},
   {"dc", cons, 2},
-#ifdef TC_ADDRESS_BYTES
   {"dc.a", cons, 0},
-#endif
   {"dc.b", cons, 1},
   {"dc.d", float_cons, 'd'},
   {"dc.l", cons, 4},
@@ -384,10 +382,10 @@ static const pseudo_typeS potable[] = {
   {"ds.b", s_space, 1},
   {"ds.d", s_space, 8},
   {"ds.l", s_space, 4},
-  {"ds.p", s_space, 12},
+  {"ds.p", s_space, 'p'},
   {"ds.s", s_space, 4},
   {"ds.w", s_space, 2},
-  {"ds.x", s_space, 12},
+  {"ds.x", s_space, 'x'},
   {"debug", s_ignore, 0},
 #ifdef S_SET_DESC
   {"desc", s_desc, 0},
@@ -3329,6 +3327,29 @@ s_space (int mult)
   md_flush_pending_output ();
 #endif
 
+  switch (mult)
+    {
+    case 'x':
+#ifdef X_PRECISION
+# ifndef P_PRECISION
+#  define P_PRECISION     X_PRECISION
+#  define P_PRECISION_PAD X_PRECISION_PAD
+# endif
+      mult = (X_PRECISION + X_PRECISION_PAD) * sizeof (LITTLENUM_TYPE);
+      if (!mult)
+#endif
+	mult = 12;
+      break;
+
+    case 'p':
+#ifdef P_PRECISION
+      mult = (P_PRECISION + P_PRECISION_PAD) * sizeof (LITTLENUM_TYPE);
+      if (!mult)
+#endif
+	mult = 12;
+      break;
+    }
+
 #ifdef md_cons_align
   md_cons_align (1);
 #endif
@@ -3618,6 +3639,113 @@ s_nops (int ignore ATTRIBUTE_UNUSED)
   *p = val.X_add_number;
 }
 
+/* Obtain the size of a floating point number, given a type.  */
+
+static int
+float_length (int float_type, int *pad_p)
+{
+  int length, pad = 0;
+
+  switch (float_type)
+    {
+    case 'b':
+    case 'B':
+    case 'h':
+    case 'H':
+      length = 2;
+      break;
+
+    case 'f':
+    case 'F':
+    case 's':
+    case 'S':
+      length = 4;
+      break;
+
+    case 'd':
+    case 'D':
+    case 'r':
+    case 'R':
+      length = 8;
+      break;
+
+    case 'x':
+    case 'X':
+#ifdef X_PRECISION
+      length = X_PRECISION * sizeof (LITTLENUM_TYPE);
+      pad = X_PRECISION_PAD * sizeof (LITTLENUM_TYPE);
+      if (!length)
+#endif
+	length = 12;
+      break;
+
+    case 'p':
+    case 'P':
+#ifdef P_PRECISION
+      length = P_PRECISION * sizeof (LITTLENUM_TYPE);
+      pad = P_PRECISION_PAD * sizeof (LITTLENUM_TYPE);
+      if (!length)
+#endif
+	length = 12;
+      break;
+
+    default:
+      as_bad (_("unknown floating type '%c'"), float_type);
+      length = -1;
+      break;
+    }
+
+  if (pad_p)
+    *pad_p = pad;
+
+  return length;
+}
+
+static int
+parse_one_float (int float_type, char temp[MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT])
+{
+  int length;
+
+  SKIP_WHITESPACE ();
+
+  /* Skip any 0{letter} that may be present.  Don't even check if the
+     letter is legal.  Someone may invent a "z" format and this routine
+     has no use for such information. Lusers beware: you get
+     diagnostics if your input is ill-conditioned.  */
+  if (input_line_pointer[0] == '0'
+      && ISALPHA (input_line_pointer[1]))
+    input_line_pointer += 2;
+
+  /* Accept :xxxx, where the x's are hex digits, for a floating point
+     with the exact digits specified.  */
+  if (input_line_pointer[0] == ':')
+    {
+      ++input_line_pointer;
+      length = hex_float (float_type, temp);
+      if (length < 0)
+	{
+	  ignore_rest_of_line ();
+	  return length;
+	}
+    }
+  else
+    {
+      const char *err;
+
+      err = md_atof (float_type, temp, &length);
+      know (length <= MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT);
+      know (err != NULL || length > 0);
+      if (err)
+	{
+	  as_bad (_("bad floating literal: %s"), err);
+	  ignore_rest_of_line ();
+	  return -1;
+	}
+    }
+
+  return length;
+}
+
 /* This is like s_space, but the value is a floating point number with
    the given precision.  This is for the MRI dcb.s pseudo-op and
    friends.  */
@@ -3643,51 +3771,24 @@ s_float_space (int float_type)
   SKIP_WHITESPACE ();
   if (*input_line_pointer != ',')
     {
-      as_bad (_("missing value"));
-      ignore_rest_of_line ();
-      if (flag_mri)
-	mri_comment_end (stop, stopc);
-      return;
-    }
+      int pad;
 
-  ++input_line_pointer;
-
-  SKIP_WHITESPACE ();
-
-  /* Skip any 0{letter} that may be present.  Don't even check if the
-   * letter is legal.  */
-  if (input_line_pointer[0] == '0'
-      && ISALPHA (input_line_pointer[1]))
-    input_line_pointer += 2;
-
-  /* Accept :xxxx, where the x's are hex digits, for a floating point
-     with the exact digits specified.  */
-  if (input_line_pointer[0] == ':')
-    {
-      flen = hex_float (float_type, temp);
-      if (flen < 0)
-	{
-	  ignore_rest_of_line ();
-	  if (flag_mri)
-	    mri_comment_end (stop, stopc);
-	  return;
-	}
+      flen = float_length (float_type, &pad);
+      if (flen >= 0)
+	memset (temp, 0, flen += pad);
     }
   else
     {
-      const char *err;
+      ++input_line_pointer;
 
-      err = md_atof (float_type, temp, &flen);
-      know (flen <= MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT);
-      know (err != NULL || flen > 0);
-      if (err)
-	{
-	  as_bad (_("bad floating literal: %s"), err);
-	  ignore_rest_of_line ();
-	  if (flag_mri)
-	    mri_comment_end (stop, stopc);
-	  return;
-	}
+      flen = parse_one_float (float_type, temp);
+    }
+
+  if (flen < 0)
+    {
+      if (flag_mri)
+	mri_comment_end (stop, stopc);
+      return;
     }
 
   while (--count >= 0)
@@ -4095,10 +4196,8 @@ cons_worker (int nbytes,	/* 1=.byte, 2=.word, 4=.long.  */
       return;
     }
 
-#ifdef TC_ADDRESS_BYTES
   if (nbytes == 0)
     nbytes = TC_ADDRESS_BYTES ();
-#endif
 
 #ifdef md_cons_align
   md_cons_align (nbytes);
@@ -4509,24 +4608,19 @@ emit_expr_with_reloc (expressionS *exp,
       valueT get;
       valueT use;
       valueT mask;
-      valueT hibit;
       valueT unmask;
 
       /* JF << of >= number of bits in the object is undefined.  In
 	 particular SPARC (Sun 4) has problems.  */
       if (nbytes >= sizeof (valueT))
 	{
+	  know (nbytes == sizeof (valueT));
 	  mask = 0;
-	  if (nbytes > sizeof (valueT))
-	    hibit = 0;
-	  else
-	    hibit = (valueT) 1 << (nbytes * BITS_PER_CHAR - 1);
 	}
       else
 	{
 	  /* Don't store these bits.  */
 	  mask = ~(valueT) 0 << (BITS_PER_CHAR * nbytes);
-	  hibit = (valueT) 1 << (nbytes * BITS_PER_CHAR - 1);
 	}
 
       unmask = ~mask;		/* Do store these bits.  */
@@ -4538,23 +4632,16 @@ emit_expr_with_reloc (expressionS *exp,
 
       get = exp->X_add_number;
       use = get & unmask;
-      if ((get & mask) != 0
-	  && ((get & mask) != mask
-	      || (get & hibit) == 0))
+      if ((get & mask) != 0 && (-get & mask) != 0)
 	{
+	  char get_buf[128];
+	  char use_buf[128];
+
+	  /* These buffers help to ease the translation of the warning message.  */
+	  sprintf_vma (get_buf, get);
+	  sprintf_vma (use_buf, use);
 	  /* Leading bits contain both 0s & 1s.  */
-#if defined (BFD64) && BFD_HOST_64BIT_LONG_LONG
-#ifndef __MSVCRT__
-	  as_warn (_("value 0x%llx truncated to 0x%llx"),
-		   (unsigned long long) get, (unsigned long long) use);
-#else
-	  as_warn (_("value 0x%I64x truncated to 0x%I64x"),
-		   (unsigned long long) get, (unsigned long long) use);
-#endif
-#else
-	  as_warn (_("value 0x%lx truncated to 0x%lx"),
-		   (unsigned long) get, (unsigned long) use);
-#endif
+	  as_warn (_("value 0x%s truncated to 0x%s"), get_buf, use_buf);
 	}
       /* Put bytes in right order.  */
       md_number_to_chars (p, use, (int) nbytes);
@@ -4825,39 +4912,11 @@ parse_repeat_cons (expressionS *exp, unsigned int nbytes)
 static int
 hex_float (int float_type, char *bytes)
 {
-  int length;
+  int pad, length = float_length (float_type, &pad);
   int i;
 
-  switch (float_type)
-    {
-    case 'f':
-    case 'F':
-    case 's':
-    case 'S':
-      length = 4;
-      break;
-
-    case 'd':
-    case 'D':
-    case 'r':
-    case 'R':
-      length = 8;
-      break;
-
-    case 'x':
-    case 'X':
-      length = 12;
-      break;
-
-    case 'p':
-    case 'P':
-      length = 12;
-      break;
-
-    default:
-      as_bad (_("unknown floating type type '%c'"), float_type);
-      return -1;
-    }
+  if (length < 0)
+    return length;
 
   /* It would be nice if we could go through expression to parse the
      hex constant, but if we get a bignum it's a pain to sort it into
@@ -4904,7 +4963,9 @@ hex_float (int float_type, char *bytes)
 	memset (bytes, 0, length - i);
     }
 
-  return length;
+  memset (bytes + length, 0, pad);
+
+  return length + pad;
 }
 
 /*			float_cons()
@@ -4930,7 +4991,6 @@ float_cons (/* Clobbers input_line-pointer, checks end-of-line.  */
 {
   char *p;
   int length;			/* Number of chars in an object.  */
-  const char *err;		/* Error from scanning floating literal.  */
   char temp[MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT];
 
   if (is_it_end_of_statement ())
@@ -4964,41 +5024,9 @@ float_cons (/* Clobbers input_line-pointer, checks end-of-line.  */
 
   do
     {
-      /* input_line_pointer->1st char of a flonum (we hope!).  */
-      SKIP_WHITESPACE ();
-
-      /* Skip any 0{letter} that may be present. Don't even check if the
-	 letter is legal. Someone may invent a "z" format and this routine
-	 has no use for such information. Lusers beware: you get
-	 diagnostics if your input is ill-conditioned.  */
-      if (input_line_pointer[0] == '0'
-	  && ISALPHA (input_line_pointer[1]))
-	input_line_pointer += 2;
-
-      /* Accept :xxxx, where the x's are hex digits, for a floating
-	 point with the exact digits specified.  */
-      if (input_line_pointer[0] == ':')
-	{
-	  ++input_line_pointer;
-	  length = hex_float (float_type, temp);
-	  if (length < 0)
-	    {
-	      ignore_rest_of_line ();
-	      return;
-	    }
-	}
-      else
-	{
-	  err = md_atof (float_type, temp, &length);
-	  know (length <= MAXIMUM_NUMBER_OF_CHARS_FOR_FLOAT);
-	  know (err != NULL || length > 0);
-	  if (err)
-	    {
-	      as_bad (_("bad floating literal: %s"), err);
-	      ignore_rest_of_line ();
-	      return;
-	    }
-	}
+      length = parse_one_float (float_type, temp);
+      if (length < 0)
+	return;
 
       if (!need_pass_2)
 	{

@@ -542,6 +542,7 @@ s390_sigtramp_frame_sniffer (const struct frame_unwind *self,
 /* S390 sigtramp frame unwinder.  */
 
 static const struct frame_unwind s390_sigtramp_frame_unwind = {
+  "s390 linux sigtramp",
   SIGTRAMP_FRAME,
   default_frame_unwind_stop_reason,
   s390_sigtramp_frame_this_id,
@@ -1119,7 +1120,7 @@ s390_linux_init_abi_any (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   tdep->s390_syscall_record = s390_linux_syscall_record;
 
-  linux_init_abi (info, gdbarch, 0);
+  linux_init_abi (info, gdbarch, 1);
 
   /* Register handling.  */
   set_gdbarch_core_read_description (gdbarch, s390_core_read_description);
@@ -1157,7 +1158,7 @@ s390_linux_init_abi_31 (struct gdbarch_info info, struct gdbarch *gdbarch)
   s390_linux_init_abi_any (info, gdbarch);
 
   set_solib_svr4_fetch_link_map_offsets (gdbarch,
-					 svr4_ilp32_fetch_link_map_offsets);
+					 linux_ilp32_fetch_link_map_offsets);
   set_xml_syscall_file_name (gdbarch, XML_SYSCALL_FILENAME_S390);
 }
 
@@ -1173,7 +1174,7 @@ s390_linux_init_abi_64 (struct gdbarch_info info, struct gdbarch *gdbarch)
   s390_linux_init_abi_any (info, gdbarch);
 
   set_solib_svr4_fetch_link_map_offsets (gdbarch,
-					 svr4_lp64_fetch_link_map_offsets);
+					 linux_lp64_fetch_link_map_offsets);
   set_xml_syscall_file_name (gdbarch, XML_SYSCALL_FILENAME_S390X);
 }
 

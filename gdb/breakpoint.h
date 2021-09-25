@@ -30,6 +30,8 @@
 #include "gdbsupport/array-view.h"
 #include "gdbsupport/filtered-iterator.h"
 #include "gdbsupport/function-view.h"
+#include "gdbsupport/next-iterator.h"
+#include "gdbsupport/iterator-range.h"
 #include "gdbsupport/refcounted-object.h"
 #include "gdbsupport/safe-iterator.h"
 #include "cli/cli-script.h"
@@ -706,7 +708,7 @@ extern bool target_exact_watchpoints;
 
 /* bp_location linked list range.  */
 
-using bp_locations_range = next_adapter<bp_location>;
+using bp_location_range = next_range<bp_location>;
 
 /* Note that the ->silent field is not currently used by any commands
    (though the code is in there if it was to be, and set_raw_breakpoint
@@ -721,7 +723,7 @@ struct breakpoint
   virtual ~breakpoint ();
 
   /* Return a range of this breakpoint's locations.  */
-  bp_locations_range locations ();
+  bp_location_range locations ();
 
   /* Methods associated with this breakpoint.  */
   const breakpoint_ops *ops = NULL;
@@ -882,20 +884,6 @@ struct watchpoint : public breakpoint
   /* The mask address for a masked hardware watchpoint.  */
   CORE_ADDR hw_wp_mask;
 };
-
-/* Given a function FUNC (struct breakpoint *B, void *DATA) and
-   USER_DATA, call FUNC for every known breakpoint passing USER_DATA
-   as argument.
-
-   If FUNC returns 1, the loop stops and the current
-   'struct breakpoint' being processed is returned.  If FUNC returns
-   zero, the loop continues.
-
-   This function returns either a 'struct breakpoint' pointer or NULL.
-   It was based on BFD's bfd_sections_find_if function.  */
-
-extern struct breakpoint *breakpoint_find_if
-  (int (*func) (struct breakpoint *b, void *d), void *user_data);
 
 /* Return true if BPT is either a software breakpoint or a hardware
    breakpoint.  */
@@ -1345,7 +1333,7 @@ extern void initialize_breakpoint_ops (void);
 
 extern void
   add_catch_command (const char *name, const char *docstring,
-		     cmd_const_sfunc_ftype *sfunc,
+		     cmd_func_ftype *func,
 		     completer_ftype *completer,
 		     void *user_data_catch,
 		     void *user_data_tcatch);
@@ -1676,8 +1664,8 @@ extern int catch_syscall_enabled (void);
 
 /* Checks if we are catching syscalls with the specific
    syscall_number.  Used for "filtering" the catchpoints.
-   Returns 0 if not, greater than 0 if we are.  */
-extern int catching_syscall_number (int syscall_number);
+   Returns false if not, true if we are.  */
+extern bool catching_syscall_number (int syscall_number);
 
 /* Return a tracepoint with the given number if found.  */
 extern struct tracepoint *get_tracepoint (int num);
@@ -1715,7 +1703,7 @@ using breakpoint_iterator = next_iterator<breakpoint>;
 
 /* Breakpoint linked list range.  */
 
-using breakpoint_range = next_adapter<breakpoint, breakpoint_iterator>;
+using breakpoint_range = iterator_range<breakpoint_iterator>;
 
 /* Return a range to iterate over all breakpoints.  */
 
@@ -1746,7 +1734,7 @@ using tracepoint_iterator
 
 /* Breakpoint linked list range, filtering to only keep tracepoints.  */
 
-using tracepoint_range = next_adapter<breakpoint, tracepoint_iterator>;
+using tracepoint_range = iterator_range<tracepoint_iterator>;
 
 /* Return a range to iterate over all tracepoints.  */
 

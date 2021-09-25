@@ -41,7 +41,7 @@
 struct fork_info
 {
   explicit fork_info (pid_t pid)
-    : ptid (pid, pid, 0)
+    : ptid (pid, pid)
   {
   }
 
@@ -224,8 +224,7 @@ fork_load_infrun_state (struct fork_info *fp)
   registers_changed ();
   reinit_frame_cache ();
 
-  inferior_thread ()->suspend.stop_pc
-    = regcache_read_pc (get_current_regcache ());
+  inferior_thread ()->set_stop_pc (regcache_read_pc (get_current_regcache ()));
   nullify_last_target_wait_ptid ();
 
   /* Now restore the file positions of open file descriptors.  */

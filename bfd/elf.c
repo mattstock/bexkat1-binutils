@@ -1944,6 +1944,7 @@ _bfd_elf_get_symbol_version_string (bfd *abfd, asymbol *symbol,
 		{
 		  if (a->vna_other == vernum)
 		    {
+		      *hidden = true;
 		      version_string = a->vna_nodename;
 		      break;
 		    }
@@ -2467,6 +2468,8 @@ bfd_section_from_shdr (bfd *abfd, unsigned int shindex)
 		     "for section %pA found - ignoring"),
 		   abfd, name, target_sect);
 	      }
+	    else
+	      esdt->has_secondary_relocs = true;
 	    goto success;
 	  }
 
@@ -7982,7 +7985,7 @@ _bfd_elf_fixup_group_sections (bfd *ibfd, asection *discarded)
 		    isec->flags |= SEC_EXCLUDE;
 		  }
 	      }
-	    else
+	    else if (isec->output_section != NULL)
 	      {
 		/* Adjust the output section size when called from
 		   objcopy. */
@@ -8092,7 +8095,6 @@ swap_out_syms (bfd *abfd,
   bfd_byte *outbound_syms;
   bfd_byte *outbound_shndx;
   unsigned long outbound_syms_index;
-  unsigned long outbound_shndx_index;
   unsigned int idx;
   unsigned int num_locals;
   size_t amt;
@@ -8141,7 +8143,6 @@ swap_out_syms (bfd *abfd,
   outbound_syms_index = 0;
 
   outbound_shndx = NULL;
-  outbound_shndx_index = 0;
 
   if (elf_symtab_shndx_list (abfd))
     {
@@ -8177,10 +8178,7 @@ swap_out_syms (bfd *abfd,
     sym.st_target_internal = 0;
     symstrtab[0].sym = sym;
     symstrtab[0].dest_index = outbound_syms_index;
-    symstrtab[0].destshndx_index = outbound_shndx_index;
     outbound_syms_index++;
-    if (outbound_shndx != NULL)
-      outbound_shndx_index++;
   }
 
   name_local_sections
@@ -8412,11 +8410,8 @@ Unable to handle section index %x in ELF symbol.  Using ABS instead."),
       idx++;
       symstrtab[idx].sym = sym;
       symstrtab[idx].dest_index = outbound_syms_index;
-      symstrtab[idx].destshndx_index = outbound_shndx_index;
 
       outbound_syms_index++;
-      if (outbound_shndx != NULL)
-	outbound_shndx_index++;
     }
 
   /* Finalize the .strtab section.  */
@@ -8441,9 +8436,9 @@ Unable to handle section index %x in ELF symbol.  Using ABS instead."),
 			       (outbound_syms
 				+ (elfsym->dest_index
 				   * bed->s->sizeof_sym)),
-			       (outbound_shndx
-				+ (elfsym->destshndx_index
-				   * sizeof (Elf_External_Sym_Shndx))));
+			       NPTR_ADD (outbound_shndx,
+					 (elfsym->dest_index
+					  * sizeof (Elf_External_Sym_Shndx))));
     }
   free (symstrtab);
 
@@ -8557,7 +8552,7 @@ _bfd_elf_get_reloc_upper_bound (bfd *abfd, sec_ptr asect)
       return -1;
     }
 #endif
-  return (asect->reloc_count + 1) * sizeof (arelent *);
+  return (asect->reloc_count + 1L) * sizeof (arelent *);
 }
 
 /* Canonicalize the relocs.  */
@@ -9585,23 +9580,6 @@ elfcore_make_auxv_note_section (bfd *abfd, Elf_Internal_Note *note,
 				size_t offs)
 {
   asection *sect = bfd_make_section_anyway_with_flags (abfd, ".auxv",
-						       SEC_HAS_CONTENTS);
-
-  if (sect == NULL)
-    return false;
-
-  sect->size = note->descsz - offs;
-  sect->filepos = note->descpos + offs;
-  sect->alignment_power = 1 + bfd_get_arch_size (abfd) / 32;
-
-  return true;
-}
-
-static bool
-elfcore_make_memtag_note_section (bfd *abfd, Elf_Internal_Note *note,
-				  size_t offs)
-{
-  asection *sect = bfd_make_section_anyway_with_flags (abfd, ".memtag",
 						       SEC_HAS_CONTENTS);
 
   if (sect == NULL)
@@ -10674,8 +10652,6 @@ elfcore_grok_note (bfd *abfd, Elf_Internal_Note *note)
       return elfcore_make_note_pseudosection (abfd, ".note.linuxcore.siginfo",
 					      note);
 
-    case NT_MEMTAG:
-      return elfcore_make_memtag_note_section (abfd, note, 0);
     }
 }
 
@@ -12739,6 +12715,9 @@ _bfd_elf_slurp_secondary_reloc_section (bfd *       abfd,
 #endif
     r_sym = elf32_r_sym;
   
+  if (!elf_section_data (sec)->has_secondary_relocs)
+    return true;
+
   /* Discover if there are any secondary reloc sections
      associated with SEC.  */
   for (relsec = abfd->sections; relsec != NULL; relsec = relsec->next)

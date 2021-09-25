@@ -31,17 +31,17 @@
 
 /* Return true if the change of command parameter should be notified.  */
 
-static int
-notify_command_param_changed_p (int param_changed, struct cmd_list_element *c)
+static bool
+notify_command_param_changed_p (bool param_changed, struct cmd_list_element *c)
 {
-  if (param_changed == 0)
-    return 0;
+  if (!param_changed)
+    return false;
 
   if (c->theclass == class_maintenance || c->theclass == class_deprecated
       || c->theclass == class_obscure)
-    return 0;
+    return false;
 
-  return 1;
+  return true;
 }
 
 
@@ -305,7 +305,7 @@ void
 do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 {
   /* A flag to indicate the option is changed or not.  */
-  int option_changed = 0;
+  bool option_changed = false;
 
   gdb_assert (c->type == set_cmd);
 
@@ -359,7 +359,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	    xfree (*(char **) c->var);
 	    *(char **) c->var = newobj;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
 	else
 	  xfree (newobj);
@@ -371,7 +371,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  xfree (*(char **) c->var);
 	  *(char **) c->var = xstrdup (arg);
 
-	  option_changed = 1;
+	  option_changed = true;
 	}
       break;
     case var_filename:
@@ -404,7 +404,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	    xfree (*(char **) c->var);
 	    *(char **) c->var = val;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
 	else
 	  xfree (val);
@@ -420,7 +420,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    *(bool *) c->var = val;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
       }
       break;
@@ -432,7 +432,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    *(enum auto_boolean *) c->var = val;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
       }
       break;
@@ -445,7 +445,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    *(unsigned int *) c->var = val;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
       }
       break;
@@ -481,7 +481,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    *(int *) c->var = val;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
 	break;
       }
@@ -499,7 +499,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    *(const char **) c->var = match;
 
-	    option_changed = 1;
+	    option_changed = true;
 	  }
       }
       break;
@@ -510,14 +510,15 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	if (*(int *) c->var != val)
 	  {
 	    *(int *) c->var = val;
-	    option_changed = 1;
+	    option_changed = true;
 	  }
       }
       break;
     default:
       error (_("gdb internal error: bad var_type in do_setshow_command"));
     }
-  c->func (c, NULL, from_tty);
+
+  c->func (NULL, from_tty, c);
 
   if (notify_command_param_changed_p (option_changed, c))
     {
@@ -723,7 +724,7 @@ do_show_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	deprecated_show_value_hack (gdb_stdout, from_tty, c, val.c_str ());
     }
 
-  c->func (c, NULL, from_tty);
+  c->func (NULL, from_tty, c);
 }
 
 /* Show all the settings in a list of show commands.  */

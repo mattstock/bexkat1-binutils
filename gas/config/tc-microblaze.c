@@ -411,12 +411,12 @@ const pseudo_typeS md_pseudo_table[] =
 void
 md_begin (void)
 {
-  struct op_code_struct * opcode;
+  const struct op_code_struct * opcode;
 
   opcode_hash_control = str_htab_create ();
 
   /* Insert unique names into hash table.  */
-  for (opcode = opcodes; opcode->name; opcode ++)
+  for (opcode = microblaze_opcodes; opcode->name; opcode ++)
     str_hash_insert (opcode_hash_control, opcode->name, opcode, 0);
 }
 
@@ -915,7 +915,7 @@ md_assemble (char * str)
   unsigned reg2;
   unsigned reg3;
   unsigned isize;
-  unsigned int immed, temp;
+  unsigned int immed = 0, temp;
   expressionS exp;
   char name[20];
 

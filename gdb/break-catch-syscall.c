@@ -30,6 +30,7 @@
 #include "observable.h"
 #include "xml-syscall.h"
 #include "cli/cli-style.h"
+#include "cli/cli-decode.h"
 
 /* An instance of this type is used to represent a syscall catchpoint.
    A breakpoint is really of this type iff its ops pointer points to
@@ -439,7 +440,7 @@ catch_syscall_command_1 (const char *arg, int from_tty,
     error (_("The feature 'catch syscall' is not supported on \
 this architecture yet."));
 
-  tempflag = get_cmd_context (command) == CATCH_TEMPORARY;
+  tempflag = command->context () == CATCH_TEMPORARY;
 
   arg = skip_spaces (arg);
 
@@ -485,15 +486,12 @@ catch_syscall_enabled (void)
   return inf_data->total_syscalls_count != 0;
 }
 
-/* Helper function for catching_syscall_number.  If B is a syscall
-   catchpoint for SYSCALL_NUMBER, return 1 (which will make
-   'breakpoint_find_if' return).  Otherwise, return 0.  */
+/* Helper function for catching_syscall_number.  return true if B is a syscall
+   catchpoint for SYSCALL_NUMBER, else false.  */
 
-static int
-catching_syscall_number_1 (struct breakpoint *b,
-			   void *data)
+static bool
+catching_syscall_number_1 (struct breakpoint *b, int syscall_number)
 {
-  int syscall_number = (int) (uintptr_t) data;
 
   if (is_syscall_catchpoint_enabled (b))
     {
@@ -503,22 +501,23 @@ catching_syscall_number_1 (struct breakpoint *b,
 	{
 	  for (int iter : c->syscalls_to_be_caught)
 	    if (syscall_number == iter)
-	      return 1;
+	      return true;
 	}
       else
-	return 1;
+	return true;
     }
 
-  return 0;
+  return false;
 }
 
-int
+bool
 catching_syscall_number (int syscall_number)
 {
-  struct breakpoint *b = breakpoint_find_if (catching_syscall_number_1,
-					 (void *) (uintptr_t) syscall_number);
+  for (breakpoint *b : all_breakpoints ())
+    if (catching_syscall_number_1 (b, syscall_number))
+      return true;
 
-  return b != NULL;
+  return false;
 }
 
 /* Complete syscall names.  Used by "catch syscall".  */

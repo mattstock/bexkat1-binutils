@@ -102,7 +102,7 @@ public:
 				      CORE_ADDR load_module_addr,
 				      CORE_ADDR offset) override;
   const char *extra_thread_info (struct thread_info *) override;
-  ptid_t get_ada_task_ptid (long lwp, long thread) override;
+  ptid_t get_ada_task_ptid (long lwp, ULONGEST thread) override;
 
   thread_info *thread_handle_to_thread_info (const gdb_byte *thread_handle,
 					     int handle_len,
@@ -687,7 +687,7 @@ check_thread_db_callback (const td_thrhandle_t *th, void *arg)
      calls are made, we just assume they were; future changes
      to how GDB accesses TLS could result in this passing
      without exercising the calls it's supposed to.  */
-  ptid_t ptid = ptid_t (tdb_testinfo->info->pid, ti.ti_lid, 0);
+  ptid_t ptid = ptid_t (tdb_testinfo->info->pid, ti.ti_lid);
   thread_info *thread_info = find_thread_ptid (linux_target, ptid);
   if (thread_info != NULL && thread_info->priv != NULL)
     {
@@ -797,6 +797,24 @@ check_thread_db (struct thread_db_info *info, bool log_progress)
   linux_unstop_all_lwps ();
 
   return test_passed;
+}
+
+/* Predicate which tests whether objfile OBJ refers to the library
+   containing pthread related symbols.  Historically, this library has
+   been named in such a way that looking for "libpthread" in the name
+   was sufficient to identify it.  As of glibc-2.34, the C library
+   (libc) contains the thread library symbols.  Therefore we check
+   that the name matches a possible thread library, but we also check
+   that it contains at least one of the symbols (pthread_create) that
+   we'd expect to find in the thread library.  */
+
+static bool
+libpthread_objfile_p (objfile *obj)
+{
+  return (libpthread_name_p (objfile_name (obj))
+          && lookup_minimal_symbol ("pthread_create",
+	                            NULL,
+				    obj).minsym != NULL);
 }
 
 /* Attempt to initialize dlopen()ed libthread_db, described by INFO.
@@ -1012,8 +1030,17 @@ try_thread_db_load (const char *library, bool check_auto_load_safe)
   if (strchr (library, '/') != NULL)
     info->filename = gdb_realpath (library).release ();
 
-  if (try_thread_db_load_1 (info))
-    return true;
+  try
+    {
+      if (try_thread_db_load_1 (info))
+	return true;
+    }
+  catch (const gdb_exception_error &except)
+    {
+      if (libthread_db_debug)
+	exception_fprintf (gdb_stdlog, except,
+			   "Warning: While trying to load libthread_db: ");
+    }
 
   /* This library "refused" to work on current inferior.  */
   delete_thread_db_info (current_inferior ()->process_target (),
@@ -1063,7 +1090,7 @@ try_thread_db_load_from_pdir (const char *subdir)
     return false;
 
   for (objfile *obj : current_program_space->objfiles ())
-    if (libpthread_name_p (objfile_name (obj)))
+    if (libpthread_objfile_p (obj))
       {
 	if (try_thread_db_load_from_pdir_1 (obj, subdir))
 	  return true;
@@ -1172,7 +1199,7 @@ static bool
 has_libpthread (void)
 {
   for (objfile *obj : current_program_space->objfiles ())
-    if (libpthread_name_p (objfile_name (obj)))
+    if (libpthread_objfile_p (obj))
       return true;
 
   return false;
@@ -1184,10 +1211,15 @@ has_libpthread (void)
 static bool
 thread_db_load (void)
 {
-  struct thread_db_info *info;
+  inferior *inf = current_inferior ();
 
-  info = get_thread_db_info (current_inferior ()->process_target (),
-			     inferior_ptid.pid ());
+  /* When attaching / handling fork child, don't try loading libthread_db
+     until we know about all shared libraries.  */
+  if (inf->in_initial_library_scan)
+    return false;
+
+  thread_db_info *info = get_thread_db_info (inf->process_target (),
+					     inferior_ptid.pid ());
 
   if (info != NULL)
     return true;
@@ -1240,7 +1272,7 @@ check_thread_signals (void)
    an inferior is created (or otherwise acquired, e.g. attached to)
    and when new shared libraries are loaded into a running process.  */
 
-void
+static void
 check_for_thread_db (void)
 {
   /* Do nothing if we couldn't load libthread_db.so.1.  */
@@ -1272,7 +1304,7 @@ thread_db_new_objfile (struct objfile *objfile)
 	 of the list of shared libraries to load, and in an app of several
 	 thousand shared libraries, this can otherwise be painful.  */
       && ((objfile->flags & OBJF_MAINLINE) != 0
-	  || libpthread_name_p (objfile_name (objfile))))
+	  || libpthread_objfile_p (objfile)))
     check_for_thread_db ();
 }
 
@@ -1609,7 +1641,7 @@ thread_db_target::update_thread_list ()
 	continue;
 
       thread_info *thread = any_live_thread_of_inferior (inf);
-      if (thread == NULL || thread->executing)
+      if (thread == NULL || thread->executing ())
 	continue;
 
       /* It's best to avoid td_ta_thr_iter if possible.  That walks
@@ -1807,10 +1839,10 @@ thread_db_target::get_thread_local_address (ptid_t ptid,
 /* Implement the to_get_ada_task_ptid target method for this target.  */
 
 ptid_t
-thread_db_target::get_ada_task_ptid (long lwp, long thread)
+thread_db_target::get_ada_task_ptid (long lwp, ULONGEST thread)
 {
   /* NPTL uses a 1:1 model, so the LWP id suffices.  */
-  return ptid_t (inferior_ptid.pid (), lwp, 0);
+  return ptid_t (inferior_ptid.pid (), lwp);
 }
 
 void

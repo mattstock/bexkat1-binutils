@@ -245,8 +245,8 @@ CODESIGN_CERT = @CODESIGN_CERT@
 GDBFLAGS =
 
 # Helper code from gnulib.
-GNULIB_BUILDDIR = ../gnulib
-include $(GNULIB_BUILDDIR)/Makefile.gnulib.inc
+GNULIB_PARENT_DIR = ..
+include $(GNULIB_PARENT_DIR)/gnulib/Makefile.gnulib.inc
 
 SUPPORT = ../gdbsupport
 LIBSUPPORT = $(SUPPORT)/libgdbsupport.a
@@ -449,18 +449,21 @@ SELFTESTS_SRCS = \
 	unittests/function-view-selftests.c \
 	unittests/gdb_tilde_expand-selftests.c \
 	unittests/gmp-utils-selftests.c \
+	unittests/intrusive_list-selftests.c \
 	unittests/lookup_name_info-selftests.c \
 	unittests/memory-map-selftests.c \
 	unittests/memrange-selftests.c \
 	unittests/offset-type-selftests.c \
 	unittests/observable-selftests.c \
 	unittests/optional-selftests.c \
+	unittests/parallel-for-selftests.c \
 	unittests/parse-connection-spec-selftests.c \
 	unittests/ptid-selftests.c \
 	unittests/main-thread-selftests.c \
 	unittests/mkdir-recursive-selftests.c \
 	unittests/rsp-low-selftests.c \
 	unittests/scoped_fd-selftests.c \
+	unittests/scoped_ignore_signal-selftests.c \
 	unittests/scoped_mmap-selftests.c \
 	unittests/scoped_restore-selftests.c \
 	unittests/search-memory-selftests.c \
@@ -729,6 +732,7 @@ ALL_TARGET_OBS = \
 	arm-fbsd-tdep.o \
 	arm-linux-tdep.o \
 	arm-netbsd-tdep.o \
+	arm-none-tdep.o \
 	arm-obsd-tdep.o \
 	arm-pikeos-tdep.o \
 	arm-tdep.o \
@@ -850,7 +854,8 @@ ALL_TARGET_OBS = \
 	xstormy16-tdep.o \
 	xtensa-config.o \
 	xtensa-linux-tdep.o \
-	xtensa-tdep.o
+	xtensa-tdep.o \
+	z80-tdep.o
 
 # The following native-target dependent variables are defined on
 # configure.nat.
@@ -1335,7 +1340,6 @@ HFILES_NO_SRCDIR = \
 	inf-ptrace.h \
 	infcall.h \
 	inferior.h \
-	inflow.h \
 	inline-frame.h \
 	interps.h \
 	jit.h \
@@ -1632,7 +1636,7 @@ generated_files = \
 PYTHON_CFLAGS = @PYTHON_CFLAGS@
 
 all: gdb$(EXEEXT) $(CONFIG_ALL) gdb-gdb.py gdb-gdb.gdb
-	@$(MAKE) $(FLAGS_TO_PASS) DO=all "DODIRS=`echo $(SUBDIRS) | sed 's/testsuite//'`" subdir_do
+	@$(MAKE) $(FLAGS_TO_PASS) DO=all "DODIRS=$(SUBDIRS)" subdir_do
 
 # Rule for compiling .c files in the top-level gdb directory.
 # The order-only dependencies ensure that we create the build subdirectories.
@@ -1885,11 +1889,6 @@ ifneq ($(CODESIGN_CERT),)
 	$(ECHO_SIGN) $(CODESIGN) -s $(CODESIGN_CERT) gdb$(EXEEXT)
 endif
 
-# Convenience rule to handle recursion.
-.PHONY: all-data-directory
-all-data-directory: data-directory/Makefile
-	@$(MAKE) $(FLAGS_TO_PASS) DO=all DODIRS=data-directory subdir_do
-
 # This is useful when debugging GDB, because some Unix's don't let you run GDB
 # on itself without copying the executable.  So "make gdb1" will make
 # gdb and put a copy in gdb1, and you can run it with "gdb gdb1".
@@ -1987,9 +1986,6 @@ subdir_do: force
 	done
 
 Makefile: Makefile.in config.status
-	$(SHELL) config.status $@
-
-data-directory/Makefile: data-directory/Makefile.in config.status
 	$(SHELL) config.status $@
 
 .PHONY: run
@@ -2163,6 +2159,7 @@ ALLDEPFILES = \
 	arm-linux-tdep.c \
 	arm-netbsd-nat.c \
 	arm-netbsd-tdep.c \
+	arm-none-tdep.c \
 	arm-obsd-tdep.c \
 	arm-tdep.c \
 	avr-tdep.c \

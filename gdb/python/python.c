@@ -35,6 +35,7 @@
 #include <ctype.h>
 #include "location.h"
 #include "run-on-main-thread.h"
+#include "gdbsupport/selftest.h"
 
 /* Declared constants and enum for python stack printing.  */
 static const char python_excp_none[] = "none";
@@ -1877,6 +1878,47 @@ do_start_initialization ()
   return true;
 }
 
+#if GDB_SELF_TEST
+namespace selftests {
+
+/* Entry point for python unit tests.  */
+
+static void
+test_python ()
+{
+#define CMD execute_command_to_string ("python print(5)", 0, true);
+
+  std::string output;
+
+  output = CMD;
+  SELF_CHECK (output == "5\n");
+  output.clear ();
+
+  bool saw_exception = false;
+  scoped_restore reset_gdb_python_initialized
+    = make_scoped_restore (&gdb_python_initialized, 0);
+  try
+    {
+      output = CMD;
+    }
+  catch (const gdb_exception &e)
+    {
+      saw_exception = true;
+      SELF_CHECK (e.reason == RETURN_ERROR);
+      SELF_CHECK (e.error == GENERIC_ERROR);
+      SELF_CHECK (*e.message == "Python not initialized");
+    }
+  SELF_CHECK (saw_exception);
+  SELF_CHECK (output.empty ());
+
+#undef CMD
+}
+
+#undef CHECK_OUTPUT
+
+} // namespace selftests
+#endif /* GDB_SELF_TEST */
+
 #endif /* HAVE_PYTHON */
 
 /* See python.h.  */
@@ -1977,6 +2019,12 @@ python executable."),
 				show_python_dont_write_bytecode,
 				&user_set_python_list,
 				&user_show_python_list);
+
+#ifdef HAVE_PYTHON
+#if GDB_SELF_TEST
+  selftests::register_test ("python", selftests::test_python);
+#endif /* GDB_SELF_TEST */
+#endif /* HAVE_PYTHON */
 }
 
 #ifdef HAVE_PYTHON
@@ -2076,6 +2124,8 @@ PyMethodDef python_GdbMethods[] =
 {
   { "history", gdbpy_history, METH_VARARGS,
     "Get a value from history" },
+  { "add_history", gdbpy_add_history, METH_VARARGS,
+    "Add a value to the value history list" },
   { "execute", (PyCFunction) execute_gdb_command, METH_VARARGS | METH_KEYWORDS,
     "execute (command [, from_tty] [, to_string]) -> [String]\n\
 Evaluate command, a string, as a gdb CLI command.  Optionally returns\n\

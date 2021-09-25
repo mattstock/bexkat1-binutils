@@ -24,6 +24,7 @@
 
 #include "sim-main.h"
 #include "sim-io.h"
+#include "sim/callback.h"
 #include "targ-vals.h"
 
 #include <errno.h>
@@ -308,7 +309,9 @@ sim_io_error (SIM_DESC sd,
     va_start (ap, fmt);
     STATE_CALLBACK (sd)->evprintf_filtered (STATE_CALLBACK (sd), fmt, ap);
     va_end (ap);
-    STATE_CALLBACK (sd)->error (STATE_CALLBACK (sd), "");
+    /* Printing a space here avoids empty printf compiler warnings.  Not ideal,
+       but we want error's side-effect where it halts processing.  */
+    STATE_CALLBACK (sd)->error (STATE_CALLBACK (sd), " ");
   }
 }
 
@@ -347,7 +350,7 @@ sim_io_poll_read (SIM_DESC sd,
 		  char *buf,
 		  int sizeof_buf)
 {
-#if defined(O_NDELAY) && defined(F_GETFL) && defined(F_SETFL)
+#if defined(O_NONBLOCK) && defined(F_GETFL) && defined(F_SETFL)
   int fd = STATE_CALLBACK (sd)->fdmap[sim_io_fd];
   int flags;
   int status;
@@ -362,7 +365,7 @@ sim_io_poll_read (SIM_DESC sd,
       return 0;
     }
   /* temp, disable blocking IO */
-  status = fcntl (fd, F_SETFL, flags | O_NDELAY);
+  status = fcntl (fd, F_SETFL, flags | O_NONBLOCK);
   if (status == -1)
     {
       perror ("sim_io_read_stdin");

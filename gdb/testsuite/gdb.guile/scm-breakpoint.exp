@@ -258,6 +258,13 @@ proc_with_prefix test_watchpoints { } {
     gdb_test "continue" \
 	".*\[Ww\]atchpoint.*result.*Old value = 0.*New value = 25.*main.*" \
 	"test watchpoint write"
+
+    gdb_test "guile (define wp2 (make-breakpoint \"result\" #:wp-class WP_WRITE #:type 999))" \
+	"(ERROR: )?In procedure gdbscm_make_breakpoint: Out of range: invalid breakpoint type in position 5: 999\r\n.*" \
+	"create a breakpoint with an invalid type number"
+    gdb_test "guile (define wp2 (make-breakpoint \"result\" #:wp-class WP_WRITE #:type BP_NONE))" \
+	"(ERROR: )?In procedure gdbscm_make_breakpoint: unsupported breakpoint type in position 5: \"BP_NONE\"\r\n.*" \
+	"create a breakpoint with an unsupported type"
 }
 
 proc_with_prefix test_bkpt_internal { } {
@@ -478,6 +485,38 @@ proc_with_prefix test_bkpt_registration {} {
 	"= #t" "breakpoint valid after re-registration"
 }
 
+proc_with_prefix test_bkpt_temporary { } {
+    global srcfile testfile hex decimal
+
+    # Start with a fresh gdb.
+    clean_restart ${testfile}
+
+    if ![gdb_guile_runto_main] {
+	fail "cannot run to main."
+	return 0
+    }
+    delete_breakpoints
+
+    set ibp_location [gdb_get_line_number "Break at multiply."]
+    gdb_scm_test_silent_cmd "guile (define ibp (make-breakpoint \"$ibp_location\" #:temporary #t))" \
+	"create temporary breakpoint"
+    gdb_scm_test_silent_cmd "guile (register-breakpoint! ibp)" \
+	"register ibp"
+    gdb_test "info breakpoints" \
+	"2.*breakpoint.*del.*scm-breakpoint\.c:$ibp_location.*" \
+	"check info breakpoints shows breakpoint with temporary status"
+    gdb_test "guile (print (breakpoint-location ibp))" "scm-breakpoint\.c:$ibp_location*" \
+	"check temporary breakpoint location"
+    gdb_test "guile (print (breakpoint-temporary? ibp))" "#t" \
+	"check breakpoint temporary status"
+    gdb_continue_to_breakpoint "Break at multiply." \
+	".*$srcfile:$ibp_location.*"
+    gdb_test "guile (print (breakpoint-temporary? ibp))" "Invalid object: <gdb:breakpoint>.*" \
+	"check temporary breakpoint is deleted after being hit"
+    gdb_test "info breakpoints" "No breakpoints or watchpoints.*" \
+	"check info breakpoints shows temporary breakpoint is deleted"
+}
+
 proc_with_prefix test_bkpt_address {} {
     global decimal srcfile
 
@@ -512,13 +551,51 @@ proc_with_prefix test_bkpt_probe {} {
 	"register probe breakpoint"
 }
 
+proc_with_prefix test_catchpoints {} {
+    global srcfile testfile
+    global gdb_prompt decimal
+
+    # Start with a fresh gdb.
+    clean_restart ${testfile}
+
+    if ![gdb_guile_runto_main] {
+	return
+    }
+
+    # Try to create a catchpoint, currently this isn't supported via
+    # the guile api.
+    gdb_test "guile (define cp (make-breakpoint \"syscall\" #:type BP_CATCHPOINT))" \
+	"(ERROR: )?In procedure gdbscm_make_breakpoint: unsupported breakpoint type in position 3: \"BP_CATCHPOINT\"\r\n.*" \
+	"create a catchpoint via the api"
+
+    # Setup a catchpoint.
+    set num "XXX"
+    gdb_test_multiple "catch syscall" "" {
+	-re "The feature \'catch syscall\' is not supported.*\r\n$gdb_prompt $" {
+	    unsupported "catch syscall isn't supported"
+	    return -1
+	}
+	-re "Catchpoint ($decimal) \\(any syscall\\)\r\n$gdb_prompt $" {
+	    set num $expect_out(1,string)
+	    pass $gdb_test_name
+	}
+    }
+
+    # Look for the catchpoint in the breakpoint list.
+    gdb_test "guile (for-each (lambda (b) (if (= (breakpoint-type b) BP_CATCHPOINT) (begin (display b) (newline)))) (breakpoints))" \
+	"#<gdb:breakpoint #${num} BP_CATCHPOINT enabled noisy hit:0 ignore:0>" \
+	"look for BP_CATCHPOINT in breakpoint list"
+}
+
 test_bkpt_basic
 test_bkpt_deletion
 test_bkpt_cond_and_cmds
 test_bkpt_invisible
+test_catchpoints
 test_watchpoints
 test_bkpt_internal
 test_bkpt_eval_funcs
 test_bkpt_registration
+test_bkpt_temporary
 test_bkpt_address
 test_bkpt_probe

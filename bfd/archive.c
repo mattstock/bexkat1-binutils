@@ -713,8 +713,9 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos)
 
       /* It's not an element of a nested archive;
 	 open the external file as a bfd.  */
+      bfd_set_error (bfd_error_no_error);
       n_bfd = open_nested_file (filename, archive);
-      if (n_bfd == NULL)
+      if (n_bfd == NULL && bfd_get_error () == bfd_error_no_error)
 	bfd_set_error (bfd_error_malformed_archive);
     }
   else
@@ -1867,7 +1868,7 @@ bfd_ar_hdr_from_filesystem (bfd *abfd, const char *filename, bfd *member)
     }
   else if (stat (filename, &status) != 0)
     {
-      bfd_set_input_error (member, bfd_error_system_call);
+      bfd_set_error (bfd_error_system_call);
       return NULL;
     }
 
@@ -2845,6 +2846,10 @@ _bfd_archive_close_and_cleanup (bfd *abfd)
 	  htab_delete (htab);
 	  bfd_ardata (abfd)->cache = NULL;
 	}
+
+      /* Close the archive plugin file descriptor if needed.  */
+      if (abfd->archive_plugin_fd > 0)
+	close (abfd->archive_plugin_fd);
     }
 
   _bfd_unlink_from_archive_parent (abfd);

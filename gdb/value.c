@@ -1182,7 +1182,7 @@ value_actual_type (struct value *value, int resolve_simple_types,
     {
       /* If result's target type is TYPE_CODE_STRUCT, proceed to
 	 fetch its rtti type.  */
-      if ((result->code () == TYPE_CODE_PTR || TYPE_IS_REFERENCE (result))
+      if (result->is_pointer_or_reference ()
 	  && (check_typedef (TYPE_TARGET_TYPE (result))->code ()
 	      == TYPE_CODE_STRUCT)
 	  && !value_optimized_out (value))
@@ -1692,6 +1692,8 @@ value_copy (struct value *arg)
   val->embedded_offset = value_embedded_offset (arg);
   val->pointed_to_offset = arg->pointed_to_offset;
   val->modifiable = arg->modifiable;
+  val->stack = arg->stack;
+  val->initialized = arg->initialized;
   if (!value_lazy (val))
     {
       memcpy (value_contents_all_raw (val), value_contents_all_raw (arg),
@@ -2776,8 +2778,7 @@ value_as_address (struct value *val)
      converted to pointers; usually, the ABI doesn't either, but
      ABI-specific code is a more reasonable place to handle it.  */
 
-  if (value_type (val)->code () != TYPE_CODE_PTR
-      && !TYPE_IS_REFERENCE (value_type (val))
+  if (!value_type (val)->is_pointer_or_reference ()
       && gdbarch_integer_to_address_p (gdbarch))
     return gdbarch_integer_to_address (gdbarch, value_type (val),
 				       value_contents (val));
@@ -3724,8 +3725,7 @@ readjust_indirect_value_type (struct value *value, struct type *enc_type,
 			      struct value *original_value,
 			      CORE_ADDR original_value_address)
 {
-  gdb_assert (original_type->code () == TYPE_CODE_PTR
-	      || TYPE_IS_REFERENCE (original_type));
+  gdb_assert (original_type->is_pointer_or_reference ());
 
   struct type *original_target_type = TYPE_TARGET_TYPE (original_type);
   gdb::array_view<const gdb_byte> view;
@@ -3950,23 +3950,22 @@ value_fetch_lazy_register (struct value *val)
     {
       struct gdbarch *gdbarch;
       struct frame_info *frame;
-      /* VALUE_FRAME_ID is used here, instead of VALUE_NEXT_FRAME_ID,
-	 so that the frame level will be shown correctly.  */
-      frame = frame_find_by_id (VALUE_FRAME_ID (val));
+      frame = frame_find_by_id (VALUE_NEXT_FRAME_ID (val));
+      frame = get_prev_frame_always (frame);
       regnum = VALUE_REGNUM (val);
       gdbarch = get_frame_arch (frame);
 
-      fprintf_unfiltered (gdb_stdlog,
-			  "{ value_fetch_lazy "
-			  "(frame=%d,regnum=%d(%s),...) ",
+      string_file debug_file;
+      fprintf_unfiltered (&debug_file,
+			  "(frame=%d, regnum=%d(%s), ...) ",
 			  frame_relative_level (frame), regnum,
 			  user_reg_map_regnum_to_name (gdbarch, regnum));
 
-      fprintf_unfiltered (gdb_stdlog, "->");
+      fprintf_unfiltered (&debug_file, "->");
       if (value_optimized_out (new_val))
 	{
-	  fprintf_unfiltered (gdb_stdlog, " ");
-	  val_print_optimized_out (new_val, gdb_stdlog);
+	  fprintf_unfiltered (&debug_file, " ");
+	  val_print_optimized_out (new_val, &debug_file);
 	}
       else
 	{
@@ -3974,23 +3973,23 @@ value_fetch_lazy_register (struct value *val)
 	  const gdb_byte *buf = value_contents (new_val);
 
 	  if (VALUE_LVAL (new_val) == lval_register)
-	    fprintf_unfiltered (gdb_stdlog, " register=%d",
+	    fprintf_unfiltered (&debug_file, " register=%d",
 				VALUE_REGNUM (new_val));
 	  else if (VALUE_LVAL (new_val) == lval_memory)
-	    fprintf_unfiltered (gdb_stdlog, " address=%s",
+	    fprintf_unfiltered (&debug_file, " address=%s",
 				paddress (gdbarch,
 					  value_address (new_val)));
 	  else
-	    fprintf_unfiltered (gdb_stdlog, " computed");
+	    fprintf_unfiltered (&debug_file, " computed");
 
-	  fprintf_unfiltered (gdb_stdlog, " bytes=");
-	  fprintf_unfiltered (gdb_stdlog, "[");
+	  fprintf_unfiltered (&debug_file, " bytes=");
+	  fprintf_unfiltered (&debug_file, "[");
 	  for (i = 0; i < register_size (gdbarch, regnum); i++)
-	    fprintf_unfiltered (gdb_stdlog, "%02x", buf[i]);
-	  fprintf_unfiltered (gdb_stdlog, "]");
+	    fprintf_unfiltered (&debug_file, "%02x", buf[i]);
+	  fprintf_unfiltered (&debug_file, "]");
 	}
 
-      fprintf_unfiltered (gdb_stdlog, " }\n");
+      frame_debug_printf ("%s", debug_file.c_str ());
     }
 
   /* Dispose of the intermediate values.  This prevents

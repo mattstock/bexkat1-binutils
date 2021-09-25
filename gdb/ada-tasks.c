@@ -600,7 +600,7 @@ ada_get_tcb_types_info (void)
 static ptid_t
 ptid_from_atcb_common (struct value *common_value)
 {
-  long thread = 0;
+  ULONGEST thread;
   CORE_ADDR lwp = 0;
   struct value *ll_value;
   ptid_t ptid;
@@ -1233,7 +1233,8 @@ info_task (struct ui_out *uiout, const char *taskno_str, struct inferior *inf)
     fprintf_styled (gdb_stdout, metadata_style.style (), _("<no name>\n"));
 
   /* Print the TID and LWP.  */
-  printf_filtered (_("Thread: %#lx\n"), task_info->ptid.tid ());
+  printf_filtered (_("Thread: 0x%s\n"), phex_nz (task_info->ptid.tid (),
+						 sizeof (ULONGEST)));
   printf_filtered (_("LWP: %#lx\n"), task_info->ptid.lwp ());
 
   /* If set, print the base CPU.  */
@@ -1444,8 +1445,6 @@ ada_tasks_normal_stop_observer (struct bpstats *unused_args, int unused_args2)
 static void
 ada_tasks_new_objfile_observer (struct objfile *objfile)
 {
-  struct inferior *inf;
-
   /* Invalidate the relevant data in our program-space data.  */
 
   if (objfile == NULL)
@@ -1468,7 +1467,7 @@ ada_tasks_new_objfile_observer (struct objfile *objfile)
      If all objfiles are being cleared (OBJFILE is NULL), then
      clear the caches for all inferiors.  */
 
-  for (inf = inferior_list; inf != NULL; inf = inf->next)
+  for (inferior *inf : all_inferiors ())
     if (objfile == NULL || inf->pspace == objfile->pspace)
       ada_tasks_invalidate_inferior_data (inf);
 }

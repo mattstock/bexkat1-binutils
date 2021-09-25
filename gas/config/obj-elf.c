@@ -743,6 +743,22 @@ obj_elf_change_section (const char *name,
   if (linkonce)
     flags |= SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD;
 
+  /* PR 28054: Set the SEC_ELF_OCTETS flag for debugging sections.
+     Based on the code in bfd/elf.c:_bfd_elf_make_section_from_shdr().
+
+     FIXME: We do not set the SEC_DEBUGGING flag because that causes
+     problems for the FT32 and MSP430 targets.  Investigate and fix.  */
+  if ((flags & SEC_ALLOC) == 0 && name [0] == '.')
+    {
+      if (   startswith (name, ".debug")
+	  || startswith (name, ".zdebug")
+	  || startswith (name, ".gnu.debuglto_.debug_")
+	  || startswith (name, ".gnu.linkonce.wi.")
+	  || startswith (name, GNU_BUILD_ATTRS_SECTION_NAME)
+	  || startswith (name, ".note.gnu"))
+	flags |= SEC_ELF_OCTETS;
+    }
+  
   if (old_sec == NULL)
     {
       symbolS *secsym;
@@ -2689,7 +2705,7 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 		S_SET_EXTERNAL (symp2);
 	    }
 
-	  switch (symbol_get_obj (symp)->visibility)
+	  switch (sy_obj->visibility)
 	    {
 	    case visibility_unchanged:
 	      break;
@@ -2700,7 +2716,18 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 	      elfsym->internal_elf_sym.st_other |= STV_HIDDEN;
 	      break;
 	    case visibility_remove:
-	      symbol_remove (symp, &symbol_rootP, &symbol_lastP);
+	      /* Don't remove the symbol if it is used in relocation.
+		 Instead, mark it as to be removed and issue an error
+		 if the symbol has more than one versioned name.  */
+	      if (symbol_used_in_reloc_p (symp))
+		{
+		  if (sy_obj->versioned_name->next != NULL)
+		    as_bad (_("symbol '%s' with multiple versions cannot be used in relocation"),
+			    S_GET_NAME (symp));
+		  symbol_mark_removed (symp);
+		}
+	      else
+		symbol_remove (symp, &symbol_rootP, &symbol_lastP);
 	      break;
 	    case visibility_local:
 	      S_CLEAR_EXTERNAL (symp);
@@ -2716,6 +2743,19 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 	as_bad (_("symbol `%s' can not be both weak and common"),
 		S_GET_NAME (symp));
     }
+}
+
+/* Fix up SYMPP which has been marked to be removed by .symver.  */
+
+void
+elf_fixup_removed_symbol (symbolS **sympp)
+{
+  symbolS *symp = *sympp;
+  struct elf_obj_sy *sy_obj = symbol_get_obj (symp);
+
+  /* Replace the removed symbol with the versioned symbol.  */
+  symp = symbol_find (sy_obj->versioned_name->name);
+  *sympp = symp;
 }
 
 struct group_list

@@ -67,6 +67,7 @@
 #include "thread-fsm.h"
 #include "tid-parse.h"
 #include "cli/cli-style.h"
+#include "cli/cli-decode.h"
 
 /* readline include files */
 #include "readline/tilde.h"
@@ -406,8 +407,7 @@ breakpoints_should_be_inserted_now (void)
       /* Don't remove breakpoints yet if, even though all threads are
 	 stopped, we still have events to process.  */
       for (thread_info *tp : all_non_exited_threads ())
-	if (tp->resumed
-	    && tp->suspend.waitstatus_pending_p)
+	if (tp->resumed () && tp->has_pending_waitstatus ())
 	  return 1;
     }
   return 0;
@@ -626,19 +626,6 @@ static int tracepoint_count;
 static struct cmd_list_element *breakpoint_set_cmdlist;
 static struct cmd_list_element *breakpoint_show_cmdlist;
 struct cmd_list_element *save_cmdlist;
-
-/* See declaration at breakpoint.h.  */
-
-struct breakpoint *
-breakpoint_find_if (int (*func) (struct breakpoint *b, void *d),
-		    void *user_data)
-{
-  for (breakpoint *b : all_breakpoints ())
-    if (func (b, user_data) != 0)
-      return b;
-
-  return nullptr;
-}
 
 /* Return whether a breakpoint is an active enabled breakpoint.  */
 static int
@@ -1674,7 +1661,7 @@ watchpoint_in_thread_scope (struct watchpoint *b)
   return (b->pspace == current_program_space
 	  && (b->watchpoint_thread == null_ptid
 	      || (inferior_ptid == b->watchpoint_thread
-		  && !inferior_thread ()->executing)));
+		  && !inferior_thread ()->executing ())));
 }
 
 /* Set watchpoint B to disp_del_at_next_stop, even including its possible
@@ -2697,6 +2684,14 @@ insert_bp_location (struct bp_location *bl,
       if (bp_excpt.reason != 0)
 	{
 	  /* Can't set the breakpoint.  */
+
+	  /* If the target has closed then it will have deleted any
+	     breakpoints inserted within the target inferior, as a result
+	     any further attempts to interact with the breakpoint objects
+	     is not possible.  Just rethrow the error.  */
+	  if (bp_excpt.error == TARGET_CLOSE_ERROR)
+	    throw bp_excpt;
+	  gdb_assert (bl->owner != nullptr);
 
 	  /* In some cases, we might not be able to insert a
 	     breakpoint in a shared library that has already been
@@ -4517,7 +4512,7 @@ get_bpstat_thread ()
     return NULL;
 
   thread_info *tp = inferior_thread ();
-  if (tp->state == THREAD_EXITED || tp->executing)
+  if (tp->state == THREAD_EXITED || tp->executing ())
     return NULL;
   return tp;
 }
@@ -4570,13 +4565,12 @@ maybe_print_thread_hit_breakpoint (struct ui_out *uiout)
 
   if (show_thread_that_caused_stop ())
     {
-      const char *name;
       struct thread_info *thr = inferior_thread ();
 
       uiout->text ("Thread ");
       uiout->field_string ("thread-id", print_thread_id (thr));
 
-      name = thr->name != NULL ? thr->name : target_thread_name (thr);
+      const char *name = thread_name (thr);
       if (name != NULL)
 	{
 	  uiout->text (" \"");
@@ -5483,7 +5477,6 @@ bpstat_stop_status (const address_space *aspace,
 	  if (bs->stop)
 	    {
 	      ++(b->hit_count);
-	      gdb::observers::breakpoint_modified.notify (b);
 
 	      /* We will stop here.  */
 	      if (b->disposition == disp_disable)
@@ -5493,6 +5486,7 @@ bpstat_stop_status (const address_space *aspace,
 		    b->enable_state = bp_disabled;
 		  removed_any = 1;
 		}
+	      gdb::observers::breakpoint_modified.notify (b);
 	      if (b->silent)
 		bs->print = 0;
 	      bs->commands = b->commands;
@@ -7357,9 +7351,10 @@ set_longjmp_breakpoint_for_call_dummy (void)
    TP.  Remove those which can no longer be found in the current frame
    stack.
 
-   You should call this function only at places where it is safe to currently
-   unwind the whole stack.  Failed stack unwind would discard live dummy
-   frames.  */
+   If the unwind fails then there is not sufficient information to discard
+   dummy frames.  In this case, elide the clean up and the dummy frames will
+   be cleaned up next time this function is called from a location where
+   unwinding is possible.  */
 
 void
 check_longjmp_breakpoint_for_call_dummy (struct thread_info *tp)
@@ -7371,12 +7366,55 @@ check_longjmp_breakpoint_for_call_dummy (struct thread_info *tp)
       {
 	struct breakpoint *dummy_b = b->related_breakpoint;
 
+	/* Find the bp_call_dummy breakpoint in the list of breakpoints
+	   chained off b->related_breakpoint.  */
 	while (dummy_b != b && dummy_b->type != bp_call_dummy)
 	  dummy_b = dummy_b->related_breakpoint;
+
+	/* If there was no bp_call_dummy breakpoint then there's nothing
+	   more to do.  Or, if the dummy frame associated with the
+	   bp_call_dummy is still on the stack then we need to leave this
+	   bp_call_dummy in place.  */
 	if (dummy_b->type != bp_call_dummy
 	    || frame_find_by_id (dummy_b->frame_id) != NULL)
 	  continue;
-	
+
+	/* We didn't find the dummy frame on the stack, this could be
+	   because we have longjmp'd to a stack frame that is previous to
+	   the dummy frame, or it could be because the stack unwind is
+	   broken at some point between the longjmp frame and the dummy
+	   frame.
+
+	   Next we figure out why the stack unwind stopped.  If it looks
+	   like the unwind is complete then we assume the dummy frame has
+	   been jumped over, however, if the unwind stopped for an
+	   unexpected reason then we assume the stack unwind is currently
+	   broken, and that we will (eventually) return to the dummy
+	   frame.
+
+	   It might be tempting to consider using frame_id_inner here, but
+	   that is not safe.   There is no guarantee that the stack frames
+	   we are looking at here are even on the same stack as the
+	   original dummy frame, hence frame_id_inner can't be used.  See
+	   the comments on frame_id_inner for more details.  */
+	bool unwind_finished_unexpectedly = false;
+	for (struct frame_info *fi = get_current_frame (); fi != nullptr; )
+	  {
+	    struct frame_info *prev = get_prev_frame (fi);
+	    if (prev == nullptr)
+	      {
+		/* FI is the last stack frame.  Why did this frame not
+		   unwind further?  */
+		auto stop_reason = get_frame_unwind_stop_reason (fi);
+		if (stop_reason != UNWIND_NO_REASON
+		    && stop_reason != UNWIND_OUTERMOST)
+		  unwind_finished_unexpectedly = true;
+	      }
+	    fi = prev;
+	  }
+	if (unwind_finished_unexpectedly)
+	  continue;
+
 	dummy_frame_discard (dummy_b->frame_id, tp);
 
 	while (b->related_breakpoint != b)
@@ -8144,7 +8182,7 @@ catch_load_or_unload (const char *arg, int from_tty, int is_load,
 		      struct cmd_list_element *command)
 {
   const int enabled = 1;
-  bool temp = get_cmd_context (command) == CATCH_TEMPORARY;
+  bool temp = command->context () == CATCH_TEMPORARY;
 
   add_solib_catchpoint (arg, is_load, temp, enabled);
 }
@@ -11228,7 +11266,7 @@ catch_fork_command_1 (const char *arg, int from_tty,
   const char *cond_string = NULL;
   catch_fork_kind fork_kind;
 
-  fork_kind = (catch_fork_kind) (uintptr_t) get_cmd_context (command);
+  fork_kind = (catch_fork_kind) (uintptr_t) command->context ();
   bool temp = (fork_kind == catch_fork_temporary
 	       || fork_kind == catch_vfork_temporary);
 
@@ -11272,7 +11310,7 @@ catch_exec_command_1 (const char *arg, int from_tty,
 {
   struct gdbarch *gdbarch = get_current_arch ();
   const char *cond_string = NULL;
-  bool temp = get_cmd_context (command) == CATCH_TEMPORARY;
+  bool temp = command->context () == CATCH_TEMPORARY;
 
   if (!arg)
     arg = "";
@@ -12230,9 +12268,9 @@ breakpoint::~breakpoint ()
 
 /* See breakpoint.h.  */
 
-bp_locations_range breakpoint::locations ()
+bp_location_range breakpoint::locations ()
 {
-  return bp_locations_range (this->loc);
+  return bp_location_range (this->loc);
 }
 
 static struct bp_location *
@@ -15152,7 +15190,7 @@ static struct cmd_list_element *tcatch_cmdlist;
 
 void
 add_catch_command (const char *name, const char *docstring,
-		   cmd_const_sfunc_ftype *sfunc,
+		   cmd_func_ftype *func,
 		   completer_ftype *completer,
 		   void *user_data_catch,
 		   void *user_data_tcatch)
@@ -15161,14 +15199,14 @@ add_catch_command (const char *name, const char *docstring,
 
   command = add_cmd (name, class_breakpoint, docstring,
 		     &catch_cmdlist);
-  set_cmd_sfunc (command, sfunc);
-  set_cmd_context (command, user_data_catch);
+  command->func = func;
+  command->set_context (user_data_catch);
   set_cmd_completer (command, completer);
 
   command = add_cmd (name, class_breakpoint, docstring,
 		     &tcatch_cmdlist);
-  set_cmd_sfunc (command, sfunc);
-  set_cmd_context (command, user_data_tcatch);
+  command->func = func;
+  command->set_context (user_data_tcatch);
   set_cmd_completer (command, completer);
 }
 

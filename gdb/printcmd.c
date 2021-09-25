@@ -1266,19 +1266,26 @@ print_value (value *val, const value_print_options &opts)
 static bool
 should_validate_memtags (struct value *value)
 {
-  if (target_supports_memory_tagging ()
-      && gdbarch_tagged_address_p (target_gdbarch (), value))
-    {
-      gdb_assert (value != nullptr && value_type (value) != nullptr);
+  gdb_assert (value != nullptr && value_type (value) != nullptr);
 
-      enum type_code code = value_type (value)->code ();
+  if (!target_supports_memory_tagging ())
+    return false;
 
-      return (code == TYPE_CODE_PTR
-	      || code == TYPE_CODE_REF
-	      || code == TYPE_CODE_METHODPTR
-	      || code == TYPE_CODE_MEMBERPTR);
-    }
-  return false;
+  enum type_code code = value_type (value)->code ();
+
+  /* Skip non-address values.  */
+  if (code != TYPE_CODE_PTR
+      && !TYPE_IS_REFERENCE (value_type (value)))
+    return false;
+
+  /* OK, we have an address value.  Check we have a complete value we
+     can extract.  */
+  if (value_optimized_out (value)
+      || !value_entirely_available (value))
+    return false;
+
+  /* We do.  Check whether it includes any tags.  */
+  return gdbarch_tagged_address_p (target_gdbarch (), value);
 }
 
 /* Helper for parsing arguments for print_command_1.  */
@@ -1321,26 +1328,42 @@ print_command_1 (const char *args, int voidprint)
 		    value_type (val)->code () != TYPE_CODE_VOID))
     {
       /* If memory tagging validation is on, check if the tag is valid.  */
-      if (print_opts.memory_tag_violations && should_validate_memtags (val)
-	  && !gdbarch_memtag_matches_p (target_gdbarch (), val))
+      if (print_opts.memory_tag_violations)
 	{
-	  /* Fetch the logical tag.  */
-	  struct value *tag
-	    = gdbarch_get_memtag (target_gdbarch (), val,
-				  memtag_type::logical);
-	  std::string ltag
-	    = gdbarch_memtag_to_string (target_gdbarch (), tag);
+	  try
+	    {
+	      if (should_validate_memtags (val)
+		  && !gdbarch_memtag_matches_p (target_gdbarch (), val))
+		{
+		  /* Fetch the logical tag.  */
+		  struct value *tag
+		    = gdbarch_get_memtag (target_gdbarch (), val,
+					  memtag_type::logical);
+		  std::string ltag
+		    = gdbarch_memtag_to_string (target_gdbarch (), tag);
 
-	  /* Fetch the allocation tag.  */
-	  tag = gdbarch_get_memtag (target_gdbarch (), val,
-				    memtag_type::allocation);
-	  std::string atag
-	    = gdbarch_memtag_to_string (target_gdbarch (), tag);
+		  /* Fetch the allocation tag.  */
+		  tag = gdbarch_get_memtag (target_gdbarch (), val,
+					    memtag_type::allocation);
+		  std::string atag
+		    = gdbarch_memtag_to_string (target_gdbarch (), tag);
 
-	  printf_filtered (_("Logical tag (%s) does not match the "
-			     "allocation tag (%s).\n"),
-			   ltag.c_str (), atag.c_str ());
+		  printf_filtered (_("Logical tag (%s) does not match the "
+				     "allocation tag (%s).\n"),
+				   ltag.c_str (), atag.c_str ());
+		}
+	    }
+	  catch (gdb_exception_error &ex)
+	    {
+	      if (ex.error == TARGET_CLOSE_ERROR)
+		throw;
+
+	      fprintf_filtered (gdb_stderr,
+				_("Could not validate memory tag: %s\n"),
+				ex.message->c_str ());
+	    }
 	}
+
       print_value (val, print_opts);
     }
 }
@@ -1525,8 +1548,7 @@ info_symbol_command (const char *arg, int from_tty)
 
 	sect_addr = overlay_mapped_address (addr, osect);
 
-	if (obj_section_addr (osect) <= sect_addr
-	    && sect_addr < obj_section_endaddr (osect)
+	if (osect->addr () <= sect_addr && sect_addr < osect->endaddr ()
 	    && (msymbol
 		= lookup_minimal_symbol_by_pc_section (sect_addr,
 						       osect).minsym))
@@ -1661,8 +1683,7 @@ info_address_command (const char *exp, int from_tty)
     }
 
   printf_filtered ("Symbol \"");
-  fprintf_symbol_filtered (gdb_stdout, sym->print_name (),
-			   current_language->la_language, DMGL_ANSI);
+  fputs_filtered (sym->print_name (), gdb_stdout);
   printf_filtered ("\" is ");
   val = SYMBOL_VALUE (sym);
   if (SYMBOL_OBJFILE_OWNED (sym))

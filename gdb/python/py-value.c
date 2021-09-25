@@ -400,7 +400,7 @@ valpy_get_dynamic_type (PyObject *self, void *closure)
       type = value_type (val);
       type = check_typedef (type);
 
-      if (((type->code () == TYPE_CODE_PTR) || TYPE_IS_REFERENCE (type))
+      if (type->is_pointer_or_reference ()
 	  && (TYPE_TARGET_TYPE (type)->code () == TYPE_CODE_STRUCT))
 	{
 	  struct value *target;
@@ -851,7 +851,7 @@ value_has_field (struct value *v, PyObject *field)
     {
       val_type = value_type (v);
       val_type = check_typedef (val_type);
-      if (TYPE_IS_REFERENCE (val_type) || val_type->code () == TYPE_CODE_PTR)
+      if (val_type->is_pointer_or_reference ())
 	val_type = check_typedef (TYPE_TARGET_TYPE (val_type));
 
       type_code = val_type->code ();
@@ -992,7 +992,7 @@ valpy_getitem (PyObject *self, PyObject *key)
       scoped_value_mark free_values;
 
       if (field)
-	res_val = value_struct_elt (&tmp, NULL, field.get (), NULL,
+	res_val = value_struct_elt (&tmp, {}, field.get (), NULL,
 				    "struct/class/union");
       else if (bitpos >= 0)
 	res_val = value_struct_elt_bitpos (&tmp, bitpos, field_type,
@@ -1958,6 +1958,33 @@ gdbpy_history (PyObject *self, PyObject *args)
     }
 
   return value_to_value_object (res_val);
+}
+
+/* Add a gdb.Value into GDB's history, and return (as an integer) the
+   position of the newly added value.  */
+PyObject *
+gdbpy_add_history (PyObject *self, PyObject *args)
+{
+  PyObject *value_obj;
+
+  if (!PyArg_ParseTuple (args, "O", &value_obj))
+    return nullptr;
+
+  struct value *value = convert_value_from_python (value_obj);
+  if (value == nullptr)
+    return nullptr;
+
+  try
+    {
+      int idx = record_latest_value (value);
+      return gdb_py_object_from_longest (idx).release ();
+    }
+  catch (const gdb_exception &except)
+    {
+      GDB_PY_HANDLE_EXCEPTION (except);
+    }
+
+  return nullptr;
 }
 
 /* Return the value of a convenience variable.  */

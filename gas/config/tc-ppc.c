@@ -1014,18 +1014,15 @@ ppc_xcoff_section_is_initialized (struct ppc_xcoff_section *section)
 
 /* Initialize a ppc_xcoff_section.
    Dummy symbols are used to ensure the position of .text over .data
-   and .tdata.  These symbols won't be output.  */
+   and .tdata.  Moreover, they allow all algorithms here to be sure that
+   csects isn't NULL.  These symbols won't be output.  */
 static void
-ppc_init_xcoff_section (struct ppc_xcoff_section *s, segT seg,
-			bool need_dummy)
+ppc_init_xcoff_section (struct ppc_xcoff_section *s, segT seg)
 {
   s->segment = seg;
   s->next_subsegment = 2;
-  if (need_dummy)
-    {
-      s->csects = symbol_make ("dummy\001");
-      symbol_get_tc (s->csects)->within = s->csects;
-    }
+  s->csects = symbol_make ("dummy\001");
+  symbol_get_tc (s->csects)->within = s->csects;
 }
 
 /* The current csect.  */
@@ -1881,9 +1878,9 @@ md_begin (void)
   /* Create XCOFF sections with .text in first, as it's creating dummy symbols
      to serve as initial csects.  This forces the text csects to precede the
      data csects.  These symbols will not be output.  */
-  ppc_init_xcoff_section (&ppc_xcoff_text_section, text_section, true);
-  ppc_init_xcoff_section (&ppc_xcoff_data_section, data_section, true);
-  ppc_init_xcoff_section (&ppc_xcoff_bss_section, bss_section, false);
+  ppc_init_xcoff_section (&ppc_xcoff_text_section, text_section);
+  ppc_init_xcoff_section (&ppc_xcoff_data_section, data_section);
+  ppc_init_xcoff_section (&ppc_xcoff_bss_section, bss_section);
 #endif
 }
 
@@ -2901,8 +2898,13 @@ ppc_frob_label (symbolS *sym)
       symbol_remove (sym, &symbol_rootP, &symbol_lastP);
       symbol_append (sym, symbol_get_tc (ppc_current_csect)->within,
 		     &symbol_rootP, &symbol_lastP);
+      /* Update last csect symbol.  */
       symbol_get_tc (ppc_current_csect)->within = sym;
-      symbol_get_tc (sym)->within = ppc_current_csect;
+
+      /* Some labels like .bs are using within differently.
+         So avoid changing it, if it's already set.  */
+      if (symbol_get_tc (sym)->within == NULL)
+	symbol_get_tc (sym)->within = ppc_current_csect;
     }
 #endif
 
@@ -4039,6 +4041,11 @@ md_assemble (char *str)
 	 boundaries.  */
       frag_align_code (6, 4);
       record_alignment (now_seg, 6);
+#ifdef OBJ_XCOFF
+      /* Update alignment of the containing csect.  */
+      if (symbol_get_tc (ppc_current_csect)->align < 6)
+	symbol_get_tc (ppc_current_csect)->align = 6;
+#endif
 
       /* Update "dot" in any expressions used by this instruction, and
 	 a label attached to the instruction.  By "attached" we mean
@@ -4390,8 +4397,7 @@ ppc_comm (int lcomm)
       section = &ppc_xcoff_tbss_section;
       if (!ppc_xcoff_section_is_initialized (section))
 	{
-	  ppc_init_xcoff_section (section,
-				  subseg_new (".tbss", 0), false);
+	  ppc_init_xcoff_section (section, subseg_new (".tbss", 0));
 	  bfd_set_section_flags (section->segment,
 				 SEC_ALLOC | SEC_THREAD_LOCAL);
 	  seg_info (section->segment)->bss = 1;
@@ -4548,8 +4554,7 @@ ppc_change_csect (symbolS *sym, offsetT align)
 	  /* Create .tdata section if not yet done.  */
 	  if (!ppc_xcoff_section_is_initialized (section))
 	    {
-	      ppc_init_xcoff_section (section, subseg_new (".tdata", 0),
-				      true);
+	      ppc_init_xcoff_section (section, subseg_new (".tdata", 0));
 	      bfd_set_section_flags (section->segment, SEC_ALLOC
 				     | SEC_LOAD | SEC_RELOC | SEC_DATA
 				     | SEC_THREAD_LOCAL);
@@ -4560,8 +4565,7 @@ ppc_change_csect (symbolS *sym, offsetT align)
 	  /* Create .tbss section if not yet done.  */
 	  if (!ppc_xcoff_section_is_initialized (section))
 	    {
-	      ppc_init_xcoff_section (section, subseg_new (".tbss", 0),
-				      false);
+	      ppc_init_xcoff_section (section, subseg_new (".tbss", 0));
 	      bfd_set_section_flags (section->segment, SEC_ALLOC |
 				     SEC_THREAD_LOCAL);
 	      seg_info (section->segment)->bss = 1;
@@ -4623,7 +4627,7 @@ ppc_change_debug_section (unsigned int idx, subsegT subseg)
   flagword oldflags;
   const struct xcoff_dwsect_name *dw = &xcoff_dwsect_names[idx];
 
-  sec = subseg_new (dw->name, subseg);
+  sec = subseg_new (dw->xcoff_name, subseg);
   oldflags = bfd_section_flags (sec);
   if (oldflags == SEC_NO_FLAGS)
     {
@@ -4713,7 +4717,7 @@ ppc_dwsect (int ignore ATTRIBUTE_UNUSED)
   else
     {
       /* Create a new dw subsection.  */
-      subseg = XNEW (struct dw_subsection);
+      subseg = XCNEW (struct dw_subsection);
 
       if (opt_label == NULL)
         {
@@ -5051,7 +5055,6 @@ ppc_stabx (int ignore ATTRIBUTE_UNUSED)
             as_bad (_(".stabx of storage class stsym must be within .bs/.es"));
 
           symbol_get_tc (sym)->within = ppc_current_block;
-          symbol_get_tc (exp.X_add_symbol)->within = ppc_current_block;
         }
     }
 
@@ -5675,7 +5678,6 @@ ppc_machine (int ignore ATTRIBUTE_UNUSED)
   if (cpu_string != NULL)
     {
       ppc_cpu_t old_cpu = ppc_cpu;
-      ppc_cpu_t new_cpu;
       char *p;
 
       for (p = cpu_string; *p != 0; p++)
@@ -5698,10 +5700,23 @@ ppc_machine (int ignore ATTRIBUTE_UNUSED)
 	  else
 	    ppc_cpu = cpu_history[--curr_hist];
 	}
-      else if ((new_cpu = ppc_parse_cpu (ppc_cpu, &sticky, cpu_string)) != 0)
-	ppc_cpu = new_cpu;
       else
-	as_bad (_("invalid machine `%s'"), cpu_string);
+	{
+	  ppc_cpu_t new_cpu;
+	  /* Not using the global "sticky" variable here results in
+	     none of the extra functional unit command line options,
+	     -many, -maltivec, -mspe, -mspe2, -mvle, -mvsx, being in
+	     force after selecting a new cpu with .machine.
+	     ".machine altivec" and other extra functional unit
+	     options do not count as a new machine, instead they add
+	     to currently selected opcodes.  */
+	  ppc_cpu_t machine_sticky = 0;
+	  new_cpu = ppc_parse_cpu (ppc_cpu, &machine_sticky, cpu_string);
+	  if (new_cpu != 0)
+	    ppc_cpu = new_cpu;
+	  else
+	    as_bad (_("invalid machine `%s'"), cpu_string);
+	}
 
       if (ppc_cpu != old_cpu)
 	ppc_setup_opcodes ();
@@ -5986,7 +6001,11 @@ ppc_frob_symbol (symbolS *sym)
 	      a->x_csect.x_scnlen.l = (S_GET_VALUE (symbol_get_tc (sym)->next)
 				       - S_GET_VALUE (sym));
 	    }
-	  a->x_csect.x_smtyp = (symbol_get_tc (sym)->align << 3) | XTY_SD;
+	  if (symbol_get_tc (sym)->symbol_class == XMC_BS
+	      || symbol_get_tc (sym)->symbol_class == XMC_UL)
+	    a->x_csect.x_smtyp = (symbol_get_tc (sym)->align << 3) | XTY_CM;
+	  else
+	    a->x_csect.x_smtyp = (symbol_get_tc (sym)->align << 3) | XTY_SD;
 	}
       else if (S_GET_SEGMENT (sym) == bss_section
 	       || S_GET_SEGMENT (sym) == ppc_xcoff_tbss_section.segment)
@@ -6415,7 +6434,8 @@ ppc_fix_adjustable (fixS *fix)
   /* Adjust a reloc against a .lcomm symbol to be against the base
      .lcomm.  */
   if (symseg == bss_section
-      && ! S_IS_EXTERNAL (fix->fx_addsy))
+      && ! S_IS_EXTERNAL (fix->fx_addsy)
+      && symbol_get_tc (fix->fx_addsy)->subseg == 0)
     {
       symbolS *sy = symbol_get_frag (fix->fx_addsy)->fr_symbol;
 
@@ -7411,11 +7431,9 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
 	symbol_get_bfdsym (fixP->fx_addsy)->flags |= BSF_KEEP;
     }
 #else
-  if (fixP->fx_r_type != BFD_RELOC_PPC_TOC16
-      && fixP->fx_r_type != BFD_RELOC_PPC_TOC16_HI
-      && fixP->fx_r_type != BFD_RELOC_PPC_TOC16_LO)
-    fixP->fx_addnumber = 0;
-  else
+  if (fixP->fx_r_type == BFD_RELOC_PPC_TOC16
+      || fixP->fx_r_type == BFD_RELOC_PPC_TOC16_HI
+      || fixP->fx_r_type == BFD_RELOC_PPC_TOC16_LO)
     {
       /* We want to use the offset within the toc, not the actual VMA
 	 of the symbol.  */
@@ -7430,6 +7448,15 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
       /* Set *valP to avoid errors.  */
       *valP = value;
     }
+  else if (fixP->fx_r_type == BFD_RELOC_PPC_TLSM
+	   || fixP->fx_r_type == BFD_RELOC_PPC64_TLSM)
+    /* AIX ld expects the section contents for these relocations
+       to be zero.  Arrange for that to occur when
+       bfd_install_relocation is called.  */
+    fixP->fx_addnumber = (- bfd_section_vma (S_GET_SEGMENT (fixP->fx_addsy))
+			  - S_GET_VALUE (fixP->fx_addsy));
+  else
+    fixP->fx_addnumber = 0;
 #endif
 }
 
@@ -7460,7 +7487,7 @@ tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
     }
   reloc->addend = fixp->fx_addnumber;
 
-  if (fixp->fx_subsy && fixp->fx_addsy)
+  if (fixp->fx_subsy != NULL)
     {
       relocs[1] = reloc = XNEW (arelent);
       relocs[2] = NULL;
@@ -7474,9 +7501,11 @@ tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
 
       if (reloc->howto == (reloc_howto_type *) NULL)
         {
-          as_bad_where (fixp->fx_file, fixp->fx_line,
-            _("reloc %d not supported by object file format"),
-            BFD_RELOC_PPC_NEG);
+	  as_bad_subtract (fixp);
+	  free (relocs[1]->sym_ptr_ptr);
+	  free (relocs[1]);
+	  free (relocs[0]->sym_ptr_ptr);
+	  free (relocs[0]);
 	  relocs[0] = NULL;
         }
     }

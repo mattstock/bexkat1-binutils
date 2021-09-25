@@ -309,6 +309,7 @@ hppa_linux_sigtramp_frame_sniffer (const struct frame_unwind *self,
 }
 
 static const struct frame_unwind hppa_linux_sigtramp_frame_unwind = {
+  "hppa linux sigtramp",
   SIGTRAMP_FRAME,
   default_frame_unwind_stop_reason,
   hppa_linux_sigtramp_frame_this_id,
@@ -371,8 +372,8 @@ hppa_linux_find_global_pointer (struct gdbarch *gdbarch,
 	{
 	  CORE_ADDR addr, endaddr;
 
-	  addr = obj_section_addr (osect);
-	  endaddr = obj_section_endaddr (osect);
+	  addr = osect->addr ();
+	  endaddr = osect->endaddr ();
 
 	  while (addr < endaddr)
 	    {
@@ -500,7 +501,7 @@ hppa_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   /* GNU/Linux uses SVR4-style shared libraries.  */
   set_solib_svr4_fetch_link_map_offsets
-    (gdbarch, svr4_ilp32_fetch_link_map_offsets);
+    (gdbarch, linux_ilp32_fetch_link_map_offsets);
 
   tdep->in_solib_call_trampoline = hppa_in_solib_call_trampoline;
   set_gdbarch_skip_trampoline_code (gdbarch, hppa_skip_trampoline_code);

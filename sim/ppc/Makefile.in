@@ -25,12 +25,16 @@ srccom = $(srcdir)/../common
 srcroot = $(srcdir)/../..
 srcsim = $(srcdir)/..
 
+# Helper code from gnulib.
+GNULIB_PARENT_DIR = ../..
+include $(GNULIB_PARENT_DIR)/gnulib/Makefile.gnulib.inc
+
+# Settings from top-level configure.
+include ../arch-subdir.mk
+
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 
-host_alias = @host_alias@
-target_alias = @target_alias@
-program_transform_name = @program_transform_name@
 bindir = @bindir@
 libdir = @libdir@
 tooldir = $(libdir)/$(target_alias)
@@ -53,68 +57,44 @@ includedir = @includedir@
 # This can be referenced by the gettext configuration code.
 top_builddir = ..
 
-EXEEXT = @EXEEXT@
 SHELL = /bin/sh
 
-INSTALL = @INSTALL@
-INSTALL_PROGRAM = @INSTALL_PROGRAM@
-INSTALL_DATA = @INSTALL_DATA@
-
-AR = @AR@
-AR_FLAGS = rc
-CC = @CC@
-CFLAGS = @CFLAGS@
-WERROR_CFLAGS = @WERROR_CFLAGS@
-CC_FOR_BUILD = @CC_FOR_BUILD@
-CFLAGS_FOR_BUILD = @CFLAGS_FOR_BUILD@
 BISON = bison
 MAKEINFO = makeinfo
-RANLIB = @RANLIB@
 
-INLINE_CFLAGS = @sim_inline@
-ENDIAN_CFLAGS = @sim_endian@
-HOSTENDIAN_CFLAGS = @sim_hostendian@
+INLINE_CFLAGS = $(SIM_INLINE)
 SMP_CFLAGS = @sim_smp@
 XOR_ENDIAN_CFLAGS = @sim_xor_endian@
 BITSIZE_CFLAGS = @sim_bitsize@
 HOSTBITSIZE_CFLAGS = @sim_hostbitsize@
 TIMEBASE_CFLAGS = @sim_timebase@
-ALIGNMENT_CFLAGS = @sim_alignment@
 FLOAT_CFLAGS = @sim_float@
-RESERVED_CFLAGS = @sim_reserved@
 MONITOR_CFLAGS = @sim_monitor@
 MODEL_CFLAGS = @sim_model@ @sim_default_model@ @sim_model_issue@
 TERMIO_CFLAGS = @sim_termio@
-WARNING_CFLAGS = @sim_warnings@
 DEVZERO_CFLAGS = @sim_devzero@
 CONFIG_CFLAGS = \
-  $(ENDIAN_CFLAGS) \
-  $(HOSTENDIAN_CFLAGS) \
   $(SMP_CFLAGS) \
   $(XOR_ENDIAN_CFLAGS) \
   $(BITSIZE_CFLAGS) \
   $(HOSTBITSIZE_CFLAGS) \
   $(TIMEBASE_CFLAGS) \
-  $(ALIGNMENT_CFLAGS) \
   $(FLOAT_CFLAGS) \
-  $(RESERVED_CFLAGS) \
   $(MONITOR_CFLAGS) \
   $(MODEL_CFLAGS) \
   $(TERMIO_CFLAGS) \
   $(DEVZERO_CFLAGS)
 SIM_FPU_CFLAGS = @sim_fpu_cflags@
 
-STD_CFLAGS	= $(CFLAGS) $(WERROR_CFLAGS) $(INLINE_CFLAGS) $(CONFIG_CFLAGS) $(WARNING_CFLAGS) $(INCLUDES) $(INTL_CFLAGS) $(SIM_FPU_CFLAGS)
+STD_CFLAGS	= $(CFLAGS) $(WERROR_CFLAGS) $(INLINE_CFLAGS) $(CONFIG_CFLAGS) $(WARN_CFLAGS) $(INCLUDES) $(INCGNU) $(INTL_CFLAGS) $(SIM_FPU_CFLAGS)
 NOWARN_CFLAGS	= $(CFLAGS) $(INLINE_CFLAGS) $(CONFIG_CFLAGS) $(INCLUDES) $(SIM_FPU_CFLAGS)
-BUILD_CFLAGS	= $(CFLAGS_FOR_BUILD) $(INCLUDES) $(WARNING_CFLAGS)
+BUILD_CFLAGS	= $(CFLAGS_FOR_BUILD) $(INCLUDES) $(WARN_CFLAGS)
 
-LDFLAGS_FOR_BUILD	=
-LIBS = @LIBS@
+LIBS = $(COMMON_LIBS) @LIBS@ $(LIBGNU) $(LIBGNU_EXTRA_LIBS)
 
 COMPILE_FOR_BUILD = $(CC_FOR_BUILD) $(BUILD_CFLAGS)
 LINK_FOR_BUILD = $(CC_FOR_BUILD) $(BUILD_CFLAGS) $(LDFLAGS_FOR_BUILD) -o $@
 
-CONFIG_FILE = @sim_config@
 IGEN_OPCODE_RULES = @sim_opcode@
 IGEN_DECODE_MECHANISM = @sim_decode_mechanism@
 IGEN_DUPLICATE = @sim_dup@
@@ -147,20 +127,16 @@ LIB_INCLUDES	= -I$(srcdir)/../../include
 BFD_INCLUDES	= -I../../bfd -I$(srcdir)/../../bfd
 GDB_INCLUDES	= -I../../gdb -I$(srcdir)/../../gdb  -I$(srcdir)/../../gdb/config
 
-INCLUDES	= -I. -I$(srcdir) $(LIB_INCLUDES) $(BFD_INCLUDES) $(GDB_INCLUDES)
+INCLUDES	= -I. -I$(srcdir) $(LIB_INCLUDES) $(BFD_INCLUDES) $(GDB_INCLUDES) -I../..
 
 LIBIBERTY_LIB	= ../../libiberty/libiberty.a
 BFD_LIB		= ../../bfd/libbfd.a
-ZLIB		= @zlibdir@ -lz
-
-LIBINTL = @LIBINTL@
-LIBINTL_DEP = @LIBINTL_DEP@
-INTL_CFLAGS = @INCINTL@
+ZLIB		= $(zlibdir) -lz
 
 
 TARGETLIB	= libsim.a
 
-all:	run $(TARGETLIB) $(GDB_OBJ)
+all:	run$(EXEEXT) $(TARGETLIB) $(GDB_OBJ)
 
 .c.o:
 	$(CC) -c $(STD_CFLAGS) $<
@@ -191,7 +167,6 @@ ALTIVEC_REGISTERS_H = \
 BASICS_H = \
 	basics.h \
 	$(CONFIG_H) \
-	$(PPC_CONFIG_H) \
 	$(INLINE_H) \
 	$(SIM_CALLBACKS_H) \
 	$(DEBUG_H) \
@@ -424,9 +399,6 @@ MODEL_H = \
 PK_H = \
         pk.h
 
-PPC_CONFIG_H = \
-        ppc-config.h
-
 SEMANTICS_H = \
         semantics.h
 
@@ -460,8 +432,7 @@ BUILT_SRC_WO_CONFIG = \
 
 BUILT_SRC = \
 	$(BUILT_SRC_WO_CONFIG) \
-	config.h \
-	ppc-config.h 
+	config.h
 
 LIB_INLINE_SRC = \
 	psim.c \
@@ -495,6 +466,9 @@ MAIN_SRC = \
 	gdb-sim.c \
 	sim_calls.c
 
+COMMON_OBJS_NAMES = \
+	version.o
+COMMON_OBJS = $(COMMON_OBJS_NAMES:%=../common/common_libcommon_a-%)
 
 # NOTE: semantics, idecode and psim put last so smaller files are compiled
 #       first
@@ -529,7 +503,7 @@ LIB_OBJ = \
 	support.o \
 	@sim_fpu@ \
 	psim.o \
-	version.o \
+	$(COMMON_OBJS) \
 	$(PACKAGE_OBJ) \
 	$(HW_OBJ) \
 	options.o
@@ -544,10 +518,10 @@ PACKAGE_SRC = @sim_pk_src@
 PACKAGE_OBJ = @sim_pk_obj@
 
 
-psim: $(TARGETLIB) main.o $(LIBIBERTY_LIB) $(BFD_LIB) $(LIBINTL_DEP)
+psim$(EXEEXT): $(TARGETLIB) main.o $(LIBIBERTY_LIB) $(BFD_LIB) $(LIBINTL_DEP)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o psim$(EXEEXT) main.o $(TARGETLIB) $(BFD_LIB) $(ZLIB) $(LIBINTL) $(LIBIBERTY_LIB) $(LIBS)
 
-run: psim
+run$(EXEEXT): psim$(EXEEXT)
 	rm -f run$(EXEEXT)
 	ln psim$(EXEEXT) run$(EXEEXT)
 
@@ -556,18 +530,12 @@ $(TARGETLIB): tmp-igen tmp-dgen tmp-hw tmp-pk tmp-defines $(LIB_OBJ) $(GDB_OBJ)
 	$(AR) $(AR_FLAGS) $(TARGETLIB) $(LIB_OBJ) $(GDB_OBJ)
 	$(RANLIB) $(TARGETLIB)
 
-version.c: Makefile $(srcroot)/gdb/version.in $(srcroot)/bfd/version.h $(srcroot)/sim/common/create-version.sh
-	$(SHELL) $(srcroot)/sim/common/create-version.sh $(srcroot)/gdb $@.tmp
-	$(SHELL) $(srcroot)/move-if-change $@.tmp $@
-	touch $@
-version.o: version.c $(version_h)
-
 psim.o: psim.c $(CPU_H) $(IDECODE_H) $(OPTIONS_H) $(TREE_H) $(BFD_H)
 
 bits.o: bits.c $(BASICS_H)
 
 debug.o: debug.c $(CONFIG_H) $(BASICS_H)
-filter_filename.o: filter_filename.c $(CONFIG_H) $(PPC_CONFIG_H) $(FILTER_FILENAME_H)
+filter_filename.o: filter_filename.c $(CONFIG_H) $(FILTER_FILENAME_H)
 
 sim-endian.o: sim-endian.c $(CONFIG_H) $(BASICS_H) $(SIM_ENDIAN_N_H)
 
@@ -672,10 +640,6 @@ tmp-defines: config.h Makefile
 # Rules to create the built c source code files
 #
 
-ppc-config.h: $(CONFIG_FILE)
-	cp $(srcdir)/$(CONFIG_FILE) ppc-config.h
-
-
 tmp-dgen: dgen ppc-spr-table $(srcdir)/../../move-if-change
 	$(DGEN) $(DGEN_FLAGS) \
 		-r $(srcdir)/ppc-spr-table \
@@ -731,7 +695,7 @@ igen: igen.o table.o lf.o misc.o filter_host.o ld-decode.o ld-cache.o filter.o l
 filter_host.c: filter_filename.c
 	cat $(srcdir)/filter_filename.c > filter_host.c
 
-filter_host.o: filter_host.c $(CONFIG_H) $(PPC_CONFIG_H) $(FILTER_FILENAME_H)
+filter_host.o: filter_host.c $(CONFIG_H) $(FILTER_FILENAME_H)
 	$(COMPILE_FOR_BUILD) -c filter_host.c
 
 table.o: table.c $(CONFIG_H) $(MISC_H) $(LF_H) $(TABLE_H)
@@ -882,7 +846,7 @@ distclean realclean: clean
 	rm -f TAGS Makefile config.cache config.status config.h defines.h stamp-h config.log
 
 maintainer-clean: distclean
-	rm -f *~ *.log ppc-config.h core *.core
+	rm -f *~ *.log core *.core
 
 Makefile: Makefile.in config.status
 	CONFIG_FILES=Makefile CONFIG_HEADERS= $(SHELL) ./config.status
@@ -895,6 +859,18 @@ config.status: configure
 	$(SHELL) ./config.status --recheck
 
 check:
+
+html:
+clean-html:
+install-html:
+
+info:
+clean-info:
+install-info:
+
+pdf:
+clean-pdf:
+install-pdf:
 
 install: installdirs
 	a=`basename "$$(pwd)"`; \

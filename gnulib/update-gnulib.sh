@@ -30,8 +30,12 @@
 
 # The list of gnulib modules we are importing in GDB.
 IMPORTED_GNULIB_MODULES="\
+    accept \
     alloca \
+    bind \
     canonicalize-lgpl \
+    chown \
+    connect \
     count-one-bits \
     dirent \
     dirfd \
@@ -49,22 +53,28 @@ IMPORTED_GNULIB_MODULES="\
     inttypes \
     lstat \
     limits-h \
+    listen \
     memchr \
     memmem \
     mkdir \
     mkdtemp \
     mkostemp \
+    netdb \
     pathmax \
     rawmemchr \
     readlink \
     rename \
+    select \
     setenv \
+    setsockopt \
     signal-h \
+    socket \
     strchrnul \
     strerror_r-posix \
     strstr \
     strtok_r \
     sys_stat \
+    sys_wait \
     time_r \
     unistd \
     unsetenv \

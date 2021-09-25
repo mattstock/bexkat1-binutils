@@ -3783,6 +3783,7 @@ rs6000_frame_prev_register (struct frame_info *this_frame,
 
 static const struct frame_unwind rs6000_frame_unwind =
 {
+  "rs6000 prologue",
   NORMAL_FRAME,
   default_frame_unwind_stop_reason,
   rs6000_frame_this_id,
@@ -3882,6 +3883,7 @@ rs6000_epilogue_frame_sniffer (const struct frame_unwind *self,
 
 static const struct frame_unwind rs6000_epilogue_frame_unwind =
 {
+  "rs6000 epilogue",
   NORMAL_FRAME,
   default_frame_unwind_stop_reason,
   rs6000_epilogue_frame_this_id, rs6000_epilogue_frame_prev_register,
@@ -7260,7 +7262,6 @@ powerpc_set_soft_float (const char *args, int from_tty,
   struct gdbarch_info info;
 
   /* Update the architecture.  */
-  gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, _("could not update architecture"));
 }
@@ -7269,7 +7270,6 @@ static void
 powerpc_set_vector_abi (const char *args, int from_tty,
 			struct cmd_list_element *c)
 {
-  struct gdbarch_info info;
   int vector_abi;
 
   for (vector_abi = POWERPC_VEC_AUTO;
@@ -7287,7 +7287,7 @@ powerpc_set_vector_abi (const char *args, int from_tty,
 		    powerpc_vector_abi_string);
 
   /* Update the architecture.  */
-  gdbarch_info_init (&info);
+  gdbarch_info info;
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, _("could not update architecture"));
 }
@@ -7369,6 +7369,14 @@ CORE_ADDR
 ppc_insn_ds_field (unsigned int insn)
 {
   return ((((CORE_ADDR) insn & 0xfffc) ^ 0x8000) - 0x8000);
+}
+
+CORE_ADDR
+ppc_insn_prefix_dform (unsigned int insn1, unsigned int insn2)
+{
+  /* result is 34-bits  */
+  return (CORE_ADDR) ((((insn1 & 0x3ffff) ^ 0x20000) - 0x20000) << 16)
+    | (CORE_ADDR)(insn2 & 0xffff);
 }
 
 /* Initialization code.  */

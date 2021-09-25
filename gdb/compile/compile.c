@@ -43,6 +43,7 @@
 #include "gdbsupport/gdb_optional.h"
 #include "gdbsupport/gdb_unlinker.h"
 #include "gdbsupport/pathstuff.h"
+#include "gdbsupport/scoped_ignore_signal.h"
 
 
 
@@ -754,6 +755,10 @@ compile_to_object (struct command_line *cmd, const char *cmd_string,
   if (compile_debug)
     fprintf_unfiltered (gdb_stdlog, "source file produced: %s\n\n",
 			fnames.source_file ());
+
+  /* If we don't do this, then GDB simply exits
+     when the compiler dies.  */
+  scoped_ignore_sigpipe ignore_sigpipe;
 
   /* Call the compiler and start the compilation process.  */
   compiler->set_source_file (fnames.source_file ());

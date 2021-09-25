@@ -93,7 +93,7 @@ struct value *
 expression::evaluate (struct type *expect_type, enum noside noside)
 {
   gdb::optional<enable_thread_stack_temporaries> stack_temporaries;
-  if (target_has_execution ()
+  if (target_has_execution () && inferior_ptid != null_ptid
       && language_defn->la_language == language_cplus
       && !thread_stack_temporaries_enabled_p (inferior_thread ()))
     stack_temporaries.emplace (inferior_thread ());
@@ -872,6 +872,8 @@ structop_base_operation::evaluate_funcall
      (struct type *expect_type, struct expression *exp, enum noside noside,
       const std::vector<operation_up> &args)
 {
+  /* Allocate space for the function call arguments, Including space for a
+     `this' pointer at the start.  */
   std::vector<value *> vals (args.size () + 1);
   /* First, evaluate the structure into vals[0].  */
   enum exp_opcode op = opcode ();
@@ -918,9 +920,13 @@ structop_base_operation::evaluate_funcall
 	}
     }
 
+  /* Evaluate the arguments.  The '+ 1' here is to allow for the `this'
+     pointer we placed into vals[0].  */
   for (int i = 0; i < args.size (); ++i)
     vals[i + 1] = args[i]->evaluate_with_coercion (exp, noside);
-  gdb::array_view<value *> arg_view = vals;
+
+  /* The array view includes the `this' pointer.  */
+  gdb::array_view<value *> arg_view (vals);
 
   int static_memfuncp;
   value *callee;
@@ -941,7 +947,7 @@ structop_base_operation::evaluate_funcall
     {
       struct value *temp = vals[0];
 
-      callee = value_struct_elt (&temp, &vals[1], tstr,
+      callee = value_struct_elt (&temp, arg_view, tstr,
 				 &static_memfuncp,
 				 op == STRUCTOP_STRUCT
 				 ? "structure" : "structure pointer");
@@ -1126,7 +1132,7 @@ eval_op_structop_struct (struct type *expect_type, struct expression *exp,
 			 enum noside noside,
 			 struct value *arg1, const char *string)
 {
-  struct value *arg3 = value_struct_elt (&arg1, NULL, string,
+  struct value *arg3 = value_struct_elt (&arg1, {}, string,
 					 NULL, "structure");
   if (noside == EVAL_AVOID_SIDE_EFFECTS)
     arg3 = value_zero (value_type (arg3), VALUE_LVAL (arg3));
@@ -1182,7 +1188,7 @@ eval_op_structop_ptr (struct type *expect_type, struct expression *exp,
       }
   }
 
-  struct value *arg3 = value_struct_elt (&arg1, NULL, string,
+  struct value *arg3 = value_struct_elt (&arg1, {}, string,
 					 NULL, "structure pointer");
   if (noside == EVAL_AVOID_SIDE_EFFECTS)
     arg3 = value_zero (value_type (arg3), VALUE_LVAL (arg3));
@@ -1590,12 +1596,10 @@ eval_op_ind (struct type *expect_type, struct expression *exp,
 	 There is a risk that this dereference will have side-effects
 	 in the inferior, but being able to print accurate type
 	 information seems worth the risk. */
-      if ((type->code () != TYPE_CODE_PTR
-	   && !TYPE_IS_REFERENCE (type))
+      if (!type->is_pointer_or_reference ()
 	  || !is_dynamic_type (TYPE_TARGET_TYPE (type)))
 	{
-	  if (type->code () == TYPE_CODE_PTR
-	      || TYPE_IS_REFERENCE (type)
+	  if (type->is_pointer_or_reference ()
 	      /* In C you can dereference an array to get the 1st elt.  */
 	      || type->code () == TYPE_CODE_ARRAY)
 	    return value_zero (TYPE_TARGET_TYPE (type),
@@ -2200,7 +2204,7 @@ logical_and_operation::evaluate (struct type *expect_type,
     }
   else
     {
-      int tem = value_logical_not (arg1);
+      bool tem = value_logical_not (arg1);
       if (!tem)
 	{
 	  arg2 = std::get<1> (m_storage)->evaluate (nullptr, exp, noside);
@@ -2229,7 +2233,7 @@ logical_or_operation::evaluate (struct type *expect_type,
     }
   else
     {
-      int tem = value_logical_not (arg1);
+      bool tem = value_logical_not (arg1);
       if (tem)
 	{
 	  arg2 = std::get<1> (m_storage)->evaluate (nullptr, exp, noside);
@@ -2700,8 +2704,7 @@ unop_ind_base_operation::evaluate_for_sizeof (struct expression *exp,
   value *val = std::get<0> (m_storage)->evaluate (nullptr, exp,
 						  EVAL_AVOID_SIDE_EFFECTS);
   struct type *type = check_typedef (value_type (val));
-  if (type->code () != TYPE_CODE_PTR
-      && !TYPE_IS_REFERENCE (type)
+  if (!type->is_pointer_or_reference ()
       && type->code () != TYPE_CODE_ARRAY)
     error (_("Attempt to take contents of a non-pointer value."));
   type = TYPE_TARGET_TYPE (type);

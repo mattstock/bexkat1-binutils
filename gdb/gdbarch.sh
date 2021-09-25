@@ -608,7 +608,8 @@ v;int;significant_addr_bit;;;;;;0
 # Return a string representation of the memory tag TAG.
 m;std::string;memtag_to_string;struct value *tag;tag;;default_memtag_to_string;;0
 
-# Return true if ADDRESS contains a tag and false otherwise.
+# Return true if ADDRESS contains a tag and false otherwise.  ADDRESS
+# must be either a pointer or a reference type.
 m;bool;tagged_address_p;struct value *address;address;;default_tagged_address_p;;0
 
 # Return true if the tag from ADDRESS matches the memory tag for that
@@ -1533,24 +1534,22 @@ struct gdbarch_list
 
 struct gdbarch_info
 {
-  /* Use default: NULL (ZERO).  */
-  const struct bfd_arch_info *bfd_arch_info;
+  gdbarch_info ()
+    /* Ensure the union is zero-initialized.  Relies on the fact that there's
+       no member larger than TDESC_DATA.  */
+    : tdesc_data ()
+  {}
 
-  /* Use default: BFD_ENDIAN_UNKNOWN (NB: is not ZERO).  */
-  enum bfd_endian byte_order;
+  const struct bfd_arch_info *bfd_arch_info = nullptr;
 
-  enum bfd_endian byte_order_for_code;
+  enum bfd_endian byte_order = BFD_ENDIAN_UNKNOWN;
 
-  /* Use default: NULL (ZERO).  */
-  bfd *abfd;
+  enum bfd_endian byte_order_for_code = BFD_ENDIAN_UNKNOWN;
 
-  /* Use default: NULL (ZERO).  */
+  bfd *abfd = nullptr;
+
   union
     {
-      /* Architecture-specific information.  The generic form for targets
-	 that have extra requirements.  */
-      struct gdbarch_tdep_info *tdep_info;
-
       /* Architecture-specific target description data.  Numerous targets
 	 need only this, so give them an easy way to hold it.  */
       struct tdesc_arch_data *tdesc_data;
@@ -1561,11 +1560,9 @@ struct gdbarch_info
       int *id;
     };
 
-  /* Use default: GDB_OSABI_UNINITIALIZED (-1).  */
-  enum gdb_osabi osabi;
+  enum gdb_osabi osabi = GDB_OSABI_UNKNOWN;
 
-  /* Use default: NULL (ZERO).  */
-  const struct target_desc *target_desc;
+  const struct target_desc *target_desc = nullptr;
 };
 
 typedef struct gdbarch *(gdbarch_init_ftype) (struct gdbarch_info info, struct gdbarch_list *arches);
@@ -1579,12 +1576,11 @@ extern void gdbarch_register (enum bfd_architecture architecture,
 			      gdbarch_dump_tdep_ftype *);
 
 
-/* Return a freshly allocated, NULL terminated, array of the valid
-   architecture names.  Since architectures are registered during the
-   _initialize phase this function only returns useful information
-   once initialization has been completed.  */
+/* Return a vector of the valid architecture names.  Since architectures are
+   registered during the _initialize phase this function only returns useful
+   information once initialization has been completed.  */
 
-extern const char **gdbarch_printable_names (void);
+extern std::vector<const char *> gdbarch_printable_names ();
 
 
 /* Helper function.  Search the list of ARCHES for a GDBARCH that
@@ -1641,8 +1637,8 @@ extern int gdbarch_update_p (struct gdbarch_info info);
 
 /* Helper function.  Find an architecture matching info.
 
-   INFO should be initialized using gdbarch_info_init, relevant fields
-   set, and then finished using gdbarch_info_fill.
+   INFO should have relevant fields set, and then finished using
+   gdbarch_info_fill.
 
    Returns the corresponding architecture, or NULL if no matching
    architecture was found.  */
@@ -2333,40 +2329,30 @@ struct gdbarch_registration
 
 static struct gdbarch_registration *gdbarch_registry = NULL;
 
-static void
-append_name (const char ***buf, int *nr, const char *name)
-{
-  *buf = XRESIZEVEC (const char *, *buf, *nr + 1);
-  (*buf)[*nr] = name;
-  *nr += 1;
-}
-
-const char **
-gdbarch_printable_names (void)
+std::vector<const char *>
+gdbarch_printable_names ()
 {
   /* Accumulate a list of names based on the registed list of
      architectures.  */
-  int nr_arches = 0;
-  const char **arches = NULL;
-  struct gdbarch_registration *rego;
+  std::vector<const char *> arches;
 
-  for (rego = gdbarch_registry;
-       rego != NULL;
+  for (gdbarch_registration *rego = gdbarch_registry;
+       rego != nullptr;
        rego = rego->next)
     {
-      const struct bfd_arch_info *ap;
-      ap = bfd_lookup_arch (rego->bfd_architecture, 0);
-      if (ap == NULL)
+      const struct bfd_arch_info *ap
+	= bfd_lookup_arch (rego->bfd_architecture, 0);
+      if (ap == nullptr)
 	internal_error (__FILE__, __LINE__,
 			_("gdbarch_architecture_names: multi-arch unknown"));
       do
 	{
-	  append_name (&arches, &nr_arches, ap->printable_name);
+	  arches.push_back (ap->printable_name);
 	  ap = ap->next;
 	}
       while (ap != NULL);
     }
-  append_name (&arches, &nr_arches, NULL);
+
   return arches;
 }
 
@@ -2479,9 +2465,6 @@ gdbarch_find_by_info (struct gdbarch_info info)
       fprintf_unfiltered (gdb_stdlog,
 			  "gdbarch_find_by_info: info.abfd %s\n",
 			  host_address_to_string (info.abfd));
-      fprintf_unfiltered (gdb_stdlog,
-			  "gdbarch_find_by_info: info.tdep_info %s\n",
-			  host_address_to_string (info.tdep_info));
     }
 
   /* Find the tdep code that knows about this architecture.  */
