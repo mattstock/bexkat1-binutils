@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+   Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
    Written by Elena Zannoni <ezannoni@cygnus.com> of Cygnus Solutions.
 
@@ -41,14 +41,12 @@
 #include "gdbsupport/gdb_select.h"
 #include "gdbsupport/gdb-sigmask.h"
 #include "async-event.h"
+#include "bt-utils.h"
+#include "pager.h"
 
 /* readline include files.  */
 #include "readline/readline.h"
 #include "readline/history.h"
-
-#ifdef HAVE_EXECINFO_H
-# include <execinfo.h>
-#endif /* HAVE_EXECINFO_H */
 
 /* readline defines this.  */
 #undef savestring
@@ -102,12 +100,7 @@ int call_stdin_event_handler_again_p;
 
 /* When true GDB will produce a minimal backtrace when a fatal signal is
    reached (within GDB code).  */
-static bool bt_on_fatal_signal
-#ifdef HAVE_EXECINFO_BACKTRACE
-  = true;
-#else
-  = false;
-#endif /* HAVE_EXECINFO_BACKTRACE */
+static bool bt_on_fatal_signal = GDB_PRINT_INTERNAL_BACKTRACE_INIT_ON;
 
 /* Implement 'maintenance show backtrace-on-fatal-signal'.  */
 
@@ -115,21 +108,7 @@ static void
 show_bt_on_fatal_signal (struct ui_file *file, int from_tty,
 			 struct cmd_list_element *cmd, const char *value)
 {
-  fprintf_filtered (file, _("Backtrace on a fatal signal is %s.\n"), value);
-}
-
-/* Implement 'maintenance set backtrace-on-fatal-signal'.  */
-
-static void
-set_bt_on_fatal_signal (const char *args, int from_tty, cmd_list_element *c)
-{
-#ifndef HAVE_EXECINFO_BACKTRACE
-  if (bt_on_fatal_signal)
-    {
-      bt_on_fatal_signal = false;
-      error (_("support for this feature is not compiled into GDB"));
-    }
-#endif
+  gdb_printf (file, _("Backtrace on a fatal signal is %s.\n"), value);
 }
 
 /* Signal handling variables.  */
@@ -323,7 +302,7 @@ change_line_handler (int editing)
    is typing would lose input.  */
 
 /* Whether we've registered a callback handler with readline.  */
-static int callback_handler_installed;
+static bool callback_handler_installed;
 
 /* See event-top.h, and above.  */
 
@@ -333,7 +312,7 @@ gdb_rl_callback_handler_remove (void)
   gdb_assert (current_ui == main_ui);
 
   rl_callback_handler_remove ();
-  callback_handler_installed = 0;
+  callback_handler_installed = false;
 }
 
 /* See event-top.h, and above.  Note this wrapper doesn't have an
@@ -351,7 +330,7 @@ gdb_rl_callback_handler_install (const char *prompt)
   gdb_assert (!callback_handler_installed);
 
   rl_callback_handler_install (prompt, gdb_rl_callback_handler);
-  callback_handler_installed = 1;
+  callback_handler_installed = true;
 }
 
 /* See event-top.h, and above.  */
@@ -449,7 +428,7 @@ display_gdb_prompt (const char *new_prompt)
       /* Don't use a _filtered function here.  It causes the assumed
 	 character position to be off, since the newline we read from
 	 the user is not accounted for.  */
-      fprintf_unfiltered (gdb_stdout, "%s", actual_gdb_prompt.c_str ());
+      printf_unfiltered ("%s", actual_gdb_prompt.c_str ());
       gdb_flush (gdb_stdout);
     }
 }
@@ -461,13 +440,11 @@ display_gdb_prompt (const char *new_prompt)
 static std::string
 top_level_prompt (void)
 {
-  char *prompt;
-
   /* Give observers a chance of changing the prompt.  E.g., the python
      `gdb.prompt_hook' is installed as an observer.  */
-  gdb::observers::before_prompt.notify (get_prompt ());
+  gdb::observers::before_prompt.notify (get_prompt ().c_str ());
 
-  prompt = get_prompt ();
+  const std::string &prompt = get_prompt ();
 
   if (annotation_level >= 2)
     {
@@ -478,7 +455,7 @@ top_level_prompt (void)
 	 beginning.  */
       const char suffix[] = "\n\032\032prompt\n";
 
-      return std::string (prefix) + prompt + suffix;
+      return std::string (prefix) + prompt.c_str () + suffix;
     }
 
   return prompt;
@@ -518,7 +495,7 @@ stdin_event_handler (int error, gdb_client_data client_data)
       if (main_ui == ui)
 	{
 	  /* If stdin died, we may as well kill gdb.  */
-	  printf_unfiltered (_("error detected on stdin\n"));
+	  gdb_printf (gdb_stderr, _("error detected on stdin\n"));
 	  quit_command ((char *) 0, 0);
 	}
       else
@@ -697,11 +674,7 @@ handle_line_of_input (struct buffer *cmd_line_buffer,
   cmd_line_buffer->used_size = 0;
 
   if (from_tty && annotation_level > 1)
-    {
-      printf_unfiltered (("\n\032\032post-"));
-      puts_unfiltered (annotation_suffix);
-      printf_unfiltered (("\n"));
-    }
+    printf_unfiltered (("\n\032\032post-%s\n"), annotation_suffix);
 
 #define SERVER_COMMAND_PREFIX "server "
   server_command = startswith (cmd, SERVER_COMMAND_PREFIX);
@@ -790,7 +763,25 @@ command_line_handler (gdb::unique_xmalloc_ptr<char> &&rl)
       /* stdin closed.  The connection with the terminal is gone.
 	 This happens at the end of a testsuite run, after Expect has
 	 hung up but GDB is still alive.  In such a case, we just quit
-	 gdb killing the inferior program too.  */
+	 gdb killing the inferior program too.  This also happens if the
+	 user sends EOF, which is usually bound to ctrl+d.
+
+	 What we want to do in this case is print "quit" after the GDB
+	 prompt, as if the user had just typed "quit" and pressed return.
+
+	 This used to work just fine, but unfortunately, doesn't play well
+	 with readline's bracketed paste mode.  By the time we get here,
+	 readline has already sent the control sequence to leave bracketed
+	 paste mode, and this sequence ends with a '\r' character.  As a
+	 result, if bracketed paste mode is on, and we print quit here,
+	 then this will overwrite the prompt.
+
+	 To work around this issue, when bracketed paste mode is enabled,
+	 we first print '\n' to move to the next line, and then print the
+	 quit.  This isn't ideal, but avoids corrupting the prompt.  */
+      const char *value = rl_variable_value ("enable-bracketed-paste");
+      if (value != nullptr && strcmp (value, "on") == 0)
+	printf_unfiltered ("\n");
       printf_unfiltered ("quit\n");
       execute_command ("quit", 1);
     }
@@ -820,22 +811,25 @@ gdb_readline_no_editing_callback (gdb_client_data client_data)
   int c;
   char *result;
   struct buffer line_buffer;
-  static int done_once = 0;
   struct ui *ui = current_ui;
 
   buffer_init (&line_buffer);
+
+  FILE *stream = ui->instream != nullptr ? ui->instream : ui->stdin_stream;
+  gdb_assert (stream != nullptr);
 
   /* Unbuffer the input stream, so that, later on, the calls to fgetc
      fetch only one char at the time from the stream.  The fgetc's will
      get up to the first newline, but there may be more chars in the
      stream after '\n'.  If we buffer the input and fgetc drains the
      stream, getting stuff beyond the newline as well, a select, done
-     afterwards will not trigger.  */
-  if (!done_once && !ISATTY (ui->instream))
-    {
-      setbuf (ui->instream, NULL);
-      done_once = 1;
-    }
+     afterwards will not trigger.
+
+     This unbuffering was, at one point, not applied if the input stream
+     was a tty, however, the buffering can cause problems, even for a tty,
+     in some cases.  Please ensure that any changes in this area run the MI
+     tests with the FORCE_SEPARATE_MI_TTY=1 flag being passed.  */
+  setbuf (stream, NULL);
 
   /* We still need the while loop here, even though it would seem
      obvious to invoke gdb_readline_no_editing_callback at every
@@ -849,7 +843,7 @@ gdb_readline_no_editing_callback (gdb_client_data client_data)
     {
       /* Read from stdin if we are executing a user defined command.
 	 This is the right thing for prompt_for_continue, at least.  */
-      c = fgetc (ui->instream != NULL ? ui->instream : ui->stdin_stream);
+      c = fgetc (stream);
 
       if (c == EOF)
 	{
@@ -904,7 +898,7 @@ unblock_signal (int sig)
 static void ATTRIBUTE_NORETURN
 handle_fatal_signal (int sig)
 {
-#ifdef HAVE_EXECINFO_BACKTRACE
+#ifdef GDB_PRINT_INTERNAL_BACKTRACE
   const auto sig_write = [] (const char *msg) -> void
   {
     gdb_stderr->write_async_safe (msg, strlen (msg));
@@ -917,19 +911,8 @@ handle_fatal_signal (int sig)
       sig_write (strsignal (sig));
       sig_write ("\n");
 
-      /* Allow up to 25 frames of backtrace.  */
-      void *buffer[25];
-      int frames = backtrace (buffer, ARRAY_SIZE (buffer));
-      sig_write (_("----- Backtrace -----\n"));
-      if (gdb_stderr->fd () > -1)
-	{
-	  backtrace_symbols_fd (buffer, frames, gdb_stderr->fd ());
-	  if (frames == ARRAY_SIZE (buffer))
-	    sig_write (_("Backtrace might be incomplete.\n"));
-	}
-      else
-	sig_write (_("Backtrace unavailable\n"));
-      sig_write ("---------------------\n");
+      gdb_internal_backtrace ();
+
       sig_write (_("A fatal error internal to GDB has been detected, "
 		   "further\ndebugging is not possible.  GDB will now "
 		   "terminate.\n\n"));
@@ -944,7 +927,7 @@ handle_fatal_signal (int sig)
 
       gdb_stderr->flush ();
     }
-#endif /* HAVE_EXECINF_BACKTRACE */
+#endif
 
   /* If possible arrange for SIG to have its default behaviour (which
      should be to terminate the current process), unblock SIG, and reraise
@@ -1253,8 +1236,8 @@ async_disconnect (gdb_client_data arg)
 
   catch (const gdb_exception &exception)
     {
-      fputs_filtered ("Could not kill the program being debugged",
-		      gdb_stderr);
+      gdb_puts ("Could not kill the program being debugged",
+		gdb_stderr);
       exception_print (gdb_stderr, exception);
     }
 
@@ -1286,13 +1269,13 @@ handle_sigtstp (int sig)
 static void
 async_sigtstp_handler (gdb_client_data arg)
 {
-  char *prompt = get_prompt ();
+  const std::string &prompt = get_prompt ();
 
   signal (SIGTSTP, SIG_DFL);
   unblock_signal (SIGTSTP);
   raise (SIGTSTP);
   signal (SIGTSTP, handle_sigtstp);
-  printf_unfiltered ("%s", prompt);
+  printf_unfiltered ("%s", prompt.c_str ());
   gdb_flush (gdb_stdout);
 
   /* Forget about any previous command -- null line now will do
@@ -1318,9 +1301,9 @@ gdb_setup_readline (int editing)
      mess it up here.  The sync stuff should really go away over
      time.  */
   if (!batch_silent)
-    gdb_stdout = new stdio_file (ui->outstream);
+    gdb_stdout = new pager_file (new stdio_file (ui->outstream));
   gdb_stderr = new stderr_file (ui->errstream);
-  gdb_stdlog = gdb_stderr;  /* for moment */
+  gdb_stdlog = new timestamped_file (gdb_stderr);
   gdb_stdtarg = gdb_stderr; /* for moment */
   gdb_stdtargerr = gdb_stderr; /* for moment */
 
@@ -1423,7 +1406,7 @@ static void
 show_debug_event_loop_command (struct ui_file *file, int from_tty,
 			       struct cmd_list_element *cmd, const char *value)
 {
-  fprintf_filtered (file, _("Event loop debugging is %s.\n"), value);
+  gdb_printf (file, _("Event loop debugging is %s.\n"), value);
 }
 
 void _initialize_event_top ();
@@ -1449,7 +1432,7 @@ Use \"on\" to enable, \"off\" to disable.\n\
 If enabled, GDB will produce a minimal backtrace if it encounters a fatal\n\
 signal from within GDB itself.  This is a mechanism to help diagnose\n\
 crashes within GDB, not a mechanism for debugging inferiors."),
-			   set_bt_on_fatal_signal,
+			   gdb_internal_backtrace_set_cmd,
 			   show_bt_on_fatal_signal,
 			   &maintenance_set_cmdlist,
 			   &maintenance_show_cmdlist);

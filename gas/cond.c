@@ -1,5 +1,5 @@
 /* cond.c - conditional assembly pseudo-ops, and .include
-   Copyright (C) 1990-2021 Free Software Foundation, Inc.
+   Copyright (C) 1990-2022 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -561,6 +561,7 @@ cond_finish_check (int nest)
 	as_bad_where (current_cframe->else_file_line.file,
 		      current_cframe->else_file_line.line,
 		      _("here is the \"else\" of the unterminated conditional"));
+      cond_exit_macro (nest);
     }
 }
 

@@ -1,6 +1,6 @@
 /* Common target-dependent code for ppc64 GDB, the GNU debugger.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -89,7 +89,7 @@ ppc64_plt_entry_point (struct frame_info *frame, CORE_ADDR plt_off)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  ppc_gdbarch_tdep *tdep = (ppc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   CORE_ADDR tocp;
 
   if (execution_direction == EXEC_REVERSE)
@@ -798,6 +798,6 @@ ppc64_elf_make_msymbol_special (asymbol *sym, struct minimal_symbol *msym)
   if ((sym->flags & BSF_SYNTHETIC) != 0 && sym->udata.p != NULL)
     {
       elf_symbol_type *elf_sym = (elf_symbol_type *) sym->udata.p;
-      SET_MSYMBOL_SIZE (msym, elf_sym->internal_elf_sym.st_size);
+      msym->set_size (elf_sym->internal_elf_sym.st_size);
     }
 }

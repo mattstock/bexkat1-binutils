@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2021 Free Software Foundation, Inc.
+/* Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -40,9 +40,9 @@ static void
 show_can_use_agent (struct ui_file *file, int from_tty,
 		    struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file,
-		    _("Debugger's willingness to use agent in inferior "
-		      "as a helper is %s.\n"), value);
+  gdb_printf (file,
+	      _("Debugger's willingness to use agent in inferior "
+		"as a helper is %s.\n"), value);
 }
 
 static void

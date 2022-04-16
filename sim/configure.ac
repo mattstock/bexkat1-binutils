@@ -65,6 +65,7 @@ m4_define([SIM_BUILD_TARGET], [dnl
   m4_if($2, [true], [dnl
     AC_CONFIG_SUBDIRS($1)
   ], [dnl
+    AC_CONFIG_FILES($1/.gdbinit:common/gdbinit.in)
     AC_CONFIG_FILES($1/Makefile.sim:$1/Makefile.in)
     AC_CONFIG_COMMANDS([$1/Makefile],
 [sed -n \
@@ -92,15 +93,19 @@ dnl arg[2] is the arch subdir name.
 dnl arg[3] is whether the arch has a dedicated configure script.
 dnl arg[4] is any additional shell code to run for this arch.
 m4_define([SIM_TARGET], [dnl
+  sim_enable_arch_$2=false
   case "${targ}" in
     all|$1)
       if test "${targ}" = "${target}"; then
         SIM_PRIMARY_TARGET=$2
       fi
       SIM_BUILD_TARGET($2, $3)
+      sim_enable_arch_$2=true
       $4
       ;;
   esac
+  SIM_AC_TOOLCHAIN_FOR_TARGET($2)
+  AM_CONDITIONAL([SIM_ENABLE_ARCH_$2], [${sim_enable_arch_$2}])
 ])
 
 dnl WHEN ADDING ENTRIES TO THIS MATRIX:
@@ -148,10 +153,12 @@ if test "${enable_sim}" != no; then
   done
 
   if test "x${enable_example_sims}" = xyes; then
+    SIM_AC_TOOLCHAIN_FOR_TARGET(example-synacor)
     SIM_BUILD_TARGET([example-synacor])
   fi
 fi
 AM_CONDITIONAL([SIM_ENABLE_IGEN], [test "$sim_igen" = "yes"])
+AM_CONDITIONAL([ENABLE_SIM], [test -n "$SIM_SUBDIRS"])
 
 dnl Standard (and optional) simulator options.
 dnl Eventually all simulators will support these.
@@ -181,5 +188,5 @@ dnl Some arches have unique configure flags.
 m4_include([frv/acinclude.m4])
 m4_include([rx/acinclude.m4])
 
-AC_CONFIG_FILES([arch-subdir.mk Makefile])
+AC_CONFIG_FILES([arch-subdir.mk Makefile .gdbinit:gdbinit.in])
 AC_OUTPUT

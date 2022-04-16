@@ -1,6 +1,6 @@
 /* The find command.
 
-   Copyright (C) 2008-2021 Free Software Foundation, Inc.
+   Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -121,7 +121,7 @@ parse_find_args (const char *args, ULONGEST *max_countp,
       len = value_as_long (v);
       if (len == 0)
 	{
-	  printf_filtered (_("Empty search range.\n"));
+	  gdb_printf (_("Empty search range.\n"));
 	  return pattern_buf;
 	}
       if (len < 0)
@@ -185,7 +185,7 @@ parse_find_args (const char *args, ULONGEST *max_countp,
 	}
       else
 	{
-	  const gdb_byte *contents = value_contents (v);
+	  const gdb_byte *contents = value_contents (v).data ();
 	  pattern_buf.insert (pattern_buf.end (), contents,
 			      contents + TYPE_LENGTH (t));
 	}
@@ -247,7 +247,7 @@ find_command (const char *args, int from_tty)
 	break;
 
       print_address (gdbarch, found_addr, gdb_stdout);
-      printf_filtered ("\n");
+      gdb_printf ("\n");
       ++found_count;
       last_found_addr = found_addr;
 
@@ -274,10 +274,10 @@ find_command (const char *args, int from_tty)
     }
 
   if (found_count == 0)
-    printf_filtered ("Pattern not found.\n");
+    gdb_printf ("Pattern not found.\n");
   else
-    printf_filtered ("%d pattern%s found.\n", found_count,
-		     found_count > 1 ? "s" : "");
+    gdb_printf ("%d pattern%s found.\n", found_count,
+		found_count > 1 ? "s" : "");
 }
 
 void _initialize_mem_search ();

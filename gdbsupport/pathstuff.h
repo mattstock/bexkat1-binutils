@@ -1,6 +1,6 @@
 /* Path manipulation routines for GDB and gdbserver.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -135,5 +135,8 @@ extern const char *get_shell ();
    /tmp/foo -> /tmp/foo-XXXXXX).  */
 
 extern gdb::char_vector make_temp_filename (const std::string &f);
+
+/* String containing the current directory (what getwd would return).  */
+extern char *current_directory;
 
 #endif /* COMMON_PATHSTUFF_H */

@@ -1,6 +1,6 @@
 /* Support routines for manipulating internal types for GDB.
 
-   Copyright (C) 1992-2021 Free Software Foundation, Inc.
+   Copyright (C) 1992-2022 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
@@ -37,18 +37,22 @@
 #include "cp-support.h"
 #include "bcache.h"
 #include "dwarf2/loc.h"
+#include "dwarf2/read.h"
 #include "gdbcore.h"
 #include "floatformat.h"
 #include "f-lang.h"
 #include <algorithm>
 #include "gmp-utils.h"
 
+/* The value of an invalid conversion badness.  */
+#define INVALID_CONVERSION 100
+
 /* Initialize BADNESS constants.  */
 
-const struct rank LENGTH_MISMATCH_BADNESS = {100,0};
+const struct rank LENGTH_MISMATCH_BADNESS = {INVALID_CONVERSION,0};
 
-const struct rank TOO_FEW_PARAMS_BADNESS = {100,0};
-const struct rank INCOMPATIBLE_TYPE_BADNESS = {100,0};
+const struct rank TOO_FEW_PARAMS_BADNESS = {INVALID_CONVERSION,0};
+const struct rank INCOMPATIBLE_TYPE_BADNESS = {INVALID_CONVERSION,0};
 
 const struct rank EXACT_MATCH_BADNESS = {0,0};
 
@@ -81,6 +85,10 @@ const struct floatformat *floatformats_ieee_double[BFD_ENDIAN_UNKNOWN] = {
   &floatformat_ieee_double_big,
   &floatformat_ieee_double_little
 };
+const struct floatformat *floatformats_ieee_quad[BFD_ENDIAN_UNKNOWN] = {
+  &floatformat_ieee_quad_big,
+  &floatformat_ieee_quad_little
+};
 const struct floatformat *floatformats_ieee_double_littlebyte_bigword[BFD_ENDIAN_UNKNOWN] = {
   &floatformat_ieee_double_big,
   &floatformat_ieee_double_littlebyte_bigword
@@ -100,10 +108,6 @@ const struct floatformat *floatformats_arm_ext[BFD_ENDIAN_UNKNOWN] = {
 const struct floatformat *floatformats_ia64_spill[BFD_ENDIAN_UNKNOWN] = {
   &floatformat_ia64_spill_big,
   &floatformat_ia64_spill_little
-};
-const struct floatformat *floatformats_ia64_quad[BFD_ENDIAN_UNKNOWN] = {
-  &floatformat_ia64_quad_big,
-  &floatformat_ia64_quad_little
 };
 const struct floatformat *floatformats_vax_f[BFD_ENDIAN_UNKNOWN] = {
   &floatformat_vax_f,
@@ -141,9 +145,9 @@ show_opaque_type_resolution (struct ui_file *file, int from_tty,
 			     struct cmd_list_element *c, 
 			     const char *value)
 {
-  fprintf_filtered (file, _("Resolution of opaque struct/class/union types "
-			    "(if set before loading symbols) is %s.\n"),
-		    value);
+  gdb_printf (file, _("Resolution of opaque struct/class/union types "
+		      "(if set before loading symbols) is %s.\n"),
+	      value);
 }
 
 /* A function to show whether C++ overload debugging is enabled.  */
@@ -152,8 +156,8 @@ static void
 show_overload_debug (struct ui_file *file, int from_tty,
 		     struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("Debugging of C++ overloading is %s.\n"), 
-		    value);
+  gdb_printf (file, _("Debugging of C++ overloading is %s.\n"), 
+	      value);
 }
 
 /* A function to show the status of strict type checking.  */
@@ -162,7 +166,7 @@ static void
 show_strict_type_checking (struct ui_file *file, int from_tty,
 			   struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("Strict type checking is %s.\n"), value);
+  gdb_printf (file, _("Strict type checking is %s.\n"), value);
 }
 
 
@@ -1067,12 +1071,12 @@ get_discrete_low_bound (struct type *type)
 	  {
 	    /* The enums may not be sorted by value, so search all
 	       entries.  */
-	    LONGEST low = TYPE_FIELD_ENUMVAL (type, 0);
+	    LONGEST low = type->field (0).loc_enumval ();
 
 	    for (int i = 0; i < type->num_fields (); i++)
 	      {
-		if (TYPE_FIELD_ENUMVAL (type, i) < low)
-		  low = TYPE_FIELD_ENUMVAL (type, i);
+		if (type->field (i).loc_enumval () < low)
+		  low = type->field (i).loc_enumval ();
 	      }
 
 	    /* Set unsigned indicator if warranted.  */
@@ -1138,12 +1142,12 @@ get_discrete_high_bound (struct type *type)
 	  {
 	    /* The enums may not be sorted by value, so search all
 	       entries.  */
-	    LONGEST high = TYPE_FIELD_ENUMVAL (type, 0);
+	    LONGEST high = type->field (0).loc_enumval ();
 
 	    for (int i = 0; i < type->num_fields (); i++)
 	      {
-		if (TYPE_FIELD_ENUMVAL (type, i) > high)
-		  high = TYPE_FIELD_ENUMVAL (type, i);
+		if (type->field (i).loc_enumval () > high)
+		  high = type->field (i).loc_enumval ();
 	      }
 
 	    return high;
@@ -1249,7 +1253,7 @@ discrete_position (struct type *type, LONGEST val)
 
       for (i = 0; i < type->num_fields (); i += 1)
 	{
-	  if (val == TYPE_FIELD_ENUMVAL (type, i))
+	  if (val == type->field (i).loc_enumval ())
 	    return i;
 	}
 
@@ -1689,8 +1693,8 @@ lookup_typename (const struct language_defn *language,
 
   sym = lookup_symbol_in_language (name, block, VAR_DOMAIN,
 				   language->la_language, NULL).symbol;
-  if (sym != NULL && SYMBOL_CLASS (sym) == LOC_TYPEDEF)
-    return SYMBOL_TYPE (sym);
+  if (sym != NULL && sym->aclass () == LOC_TYPEDEF)
+    return sym->type ();
 
   if (noerr)
     return NULL;
@@ -1737,12 +1741,12 @@ lookup_struct (const char *name, const struct block *block)
     {
       error (_("No struct type named %s."), name);
     }
-  if (SYMBOL_TYPE (sym)->code () != TYPE_CODE_STRUCT)
+  if (sym->type ()->code () != TYPE_CODE_STRUCT)
     {
       error (_("This context has class, union or enum %s, not a struct."),
 	     name);
     }
-  return (SYMBOL_TYPE (sym));
+  return (sym->type ());
 }
 
 /* Lookup a union type named "union NAME",
@@ -1759,7 +1763,7 @@ lookup_union (const char *name, const struct block *block)
   if (sym == NULL)
     error (_("No union type named %s."), name);
 
-  t = SYMBOL_TYPE (sym);
+  t = sym->type ();
 
   if (t->code () == TYPE_CODE_UNION)
     return t;
@@ -1782,12 +1786,12 @@ lookup_enum (const char *name, const struct block *block)
     {
       error (_("No enum type named %s."), name);
     }
-  if (SYMBOL_TYPE (sym)->code () != TYPE_CODE_ENUM)
+  if (sym->type ()->code () != TYPE_CODE_ENUM)
     {
       error (_("This context has class, struct or union %s, not an enum."), 
 	     name);
     }
-  return (SYMBOL_TYPE (sym));
+  return (sym->type ());
 }
 
 /* Lookup a template type named "template NAME<TYPE>",
@@ -1812,12 +1816,12 @@ lookup_template_type (const char *name, struct type *type,
     {
       error (_("No template type named %s."), name);
     }
-  if (SYMBOL_TYPE (sym)->code () != TYPE_CODE_STRUCT)
+  if (sym->type ()->code () != TYPE_CODE_STRUCT)
     {
       error (_("This context has class, union or enum %s, not a struct."),
 	     name);
     }
-  return (SYMBOL_TYPE (sym));
+  return (sym->type ());
 }
 
 /* See gdbtypes.h.  */
@@ -1846,19 +1850,19 @@ lookup_struct_elt (struct type *type, const char *name, int noerr)
 
   for (i = type->num_fields () - 1; i >= TYPE_N_BASECLASSES (type); i--)
     {
-      const char *t_field_name = TYPE_FIELD_NAME (type, i);
+      const char *t_field_name = type->field (i).name ();
 
       if (t_field_name && (strcmp_iw (t_field_name, name) == 0))
 	{
-	  return {&type->field (i), TYPE_FIELD_BITPOS (type, i)};
+	  return {&type->field (i), type->field (i).loc_bitpos ()};
 	}
-     else if (!t_field_name || *t_field_name == '\0')
+      else if (!t_field_name || *t_field_name == '\0')
 	{
 	  struct_elt elt
 	    = lookup_struct_elt (type->field (i).type (), name, 1);
 	  if (elt.field != NULL)
 	    {
-	      elt.offset += TYPE_FIELD_BITPOS (type, i);
+	      elt.offset += type->field (i).loc_bitpos ();
 	      return elt;
 	    }
 	}
@@ -2153,7 +2157,7 @@ is_dynamic_type_internal (struct type *type, int top_level)
 	      return 1;
 	    /* If the field is at a fixed offset, then it is not
 	       dynamic.  */
-	    if (TYPE_FIELD_LOC_KIND (type, i) != FIELD_LOC_KIND_DWARF_BLOCK)
+	    if (type->field (i).loc_kind () != FIELD_LOC_KIND_DWARF_BLOCK)
 	      continue;
 	    /* Do not consider C++ virtual base types to be dynamic
 	       due to the field's offset being dynamic; these are
@@ -2190,27 +2194,34 @@ static struct type *resolve_dynamic_type_internal
    and stride information set to undefined.  The RESOLVE_P set to false
    case will be used when evaluating a dynamic array that is not
    allocated, or not associated, i.e. the bounds information might not be
-   initialized yet.  */
+   initialized yet.
+
+   RANK is the array rank for which we are resolving this range, and is a
+   zero based count.  The rank should never be negative.
+*/
 
 static struct type *
 resolve_dynamic_range (struct type *dyn_range_type,
 		       struct property_addr_info *addr_stack,
-		       bool resolve_p = true)
+		       int rank, bool resolve_p = true)
 {
   CORE_ADDR value;
   struct type *static_range_type, *static_target_type;
   struct dynamic_prop low_bound, high_bound, stride;
 
   gdb_assert (dyn_range_type->code () == TYPE_CODE_RANGE);
+  gdb_assert (rank >= 0);
 
   const struct dynamic_prop *prop = &dyn_range_type->bounds ()->low;
-  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value))
+  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value,
+					     { (CORE_ADDR) rank }))
     low_bound.set_const_val (value);
   else
     low_bound.set_undefined ();
 
   prop = &dyn_range_type->bounds ()->high;
-  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value))
+  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value,
+					     { (CORE_ADDR) rank }))
     {
       high_bound.set_const_val (value);
 
@@ -2223,7 +2234,8 @@ resolve_dynamic_range (struct type *dyn_range_type,
 
   bool byte_stride_p = dyn_range_type->bounds ()->flag_is_byte_stride;
   prop = &dyn_range_type->bounds ()->stride;
-  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value))
+  if (resolve_p && dwarf2_evaluate_property (prop, NULL, addr_stack, &value,
+					     { (CORE_ADDR) rank }))
     {
       stride.set_const_val (value);
 
@@ -2254,18 +2266,29 @@ resolve_dynamic_range (struct type *dyn_range_type,
   return static_range_type;
 }
 
-/* Resolves dynamic bound values of an array or string type TYPE to static
-   ones.  ADDR_STACK is a stack of struct property_addr_info to be used if
-   needed during the dynamic resolution.
+/* Helper function for resolve_dynamic_array_or_string.  This function
+   resolves the properties for a single array at RANK within a nested array
+   of arrays structure.  The RANK value is greater than or equal to 0, and
+   starts at it's maximum value and goes down by 1 for each recursive call
+   to this function.  So, for a 3-dimensional array, the first call to this
+   function has RANK == 2, then we call ourselves recursively with RANK ==
+   1, than again with RANK == 0, and at that point we should return.
+
+   TYPE is updated as the dynamic properties are resolved, and so, should
+   be a copy of the dynamic type, rather than the original dynamic type
+   itself.
+
+   ADDR_STACK is a stack of struct property_addr_info to be used if needed
+   during the dynamic resolution.
 
    When RESOLVE_P is true then the dynamic properties of TYPE are
    evaluated, otherwise the dynamic properties of TYPE are not evaluated,
    instead we assume the array is not allocated/associated yet.  */
 
 static struct type *
-resolve_dynamic_array_or_string (struct type *type,
-				 struct property_addr_info *addr_stack,
-				 bool resolve_p = true)
+resolve_dynamic_array_or_string_1 (struct type *type,
+				   struct property_addr_info *addr_stack,
+				   int rank, bool resolve_p)
 {
   CORE_ADDR value;
   struct type *elt_type;
@@ -2279,7 +2302,9 @@ resolve_dynamic_array_or_string (struct type *type,
   gdb_assert (type->code () == TYPE_CODE_ARRAY
 	      || type->code () == TYPE_CODE_STRING);
 
-  type = copy_type (type);
+  /* As the rank is a zero based count we expect this to never be
+     negative.  */
+  gdb_assert (rank >= 0);
 
   /* Resolve the allocated and associated properties before doing anything
      else.  If an array is not allocated or not associated then (at least
@@ -2309,11 +2334,16 @@ resolve_dynamic_array_or_string (struct type *type,
     }
 
   range_type = check_typedef (type->index_type ());
-  range_type = resolve_dynamic_range (range_type, addr_stack, resolve_p);
+  range_type
+    = resolve_dynamic_range (range_type, addr_stack, rank, resolve_p);
 
   ary_dim = check_typedef (TYPE_TARGET_TYPE (type));
   if (ary_dim != NULL && ary_dim->code () == TYPE_CODE_ARRAY)
-    elt_type = resolve_dynamic_array_or_string (ary_dim, addr_stack, resolve_p);
+    {
+      ary_dim = copy_type (ary_dim);
+      elt_type = resolve_dynamic_array_or_string_1 (ary_dim, addr_stack,
+						    rank - 1, resolve_p);
+    }
   else
     elt_type = TYPE_TARGET_TYPE (type);
 
@@ -2339,6 +2369,86 @@ resolve_dynamic_array_or_string (struct type *type,
 
   return create_array_type_with_stride (type, elt_type, range_type, NULL,
 					bit_stride);
+}
+
+/* Resolve an array or string type with dynamic properties, return a new
+   type with the dynamic properties resolved to actual values.  The
+   ADDR_STACK represents the location of the object being resolved.  */
+
+static struct type *
+resolve_dynamic_array_or_string (struct type *type,
+				 struct property_addr_info *addr_stack)
+{
+  CORE_ADDR value;
+  int rank = 0;
+
+  /* For dynamic type resolution strings can be treated like arrays of
+     characters.  */
+  gdb_assert (type->code () == TYPE_CODE_ARRAY
+	      || type->code () == TYPE_CODE_STRING);
+
+  type = copy_type (type);
+
+  /* Resolve the rank property to get rank value.  */
+  struct dynamic_prop *prop = TYPE_RANK_PROP (type);
+  if (dwarf2_evaluate_property (prop, nullptr, addr_stack, &value))
+    {
+      prop->set_const_val (value);
+      rank = value;
+
+      if (rank == 0)
+	{
+	  /* The dynamic property list juggling below was from the original
+	     patch.  I don't understand what this is all about, so I've
+	     commented it out for now and added the following error.  */
+	  error (_("failed to resolve dynamic array rank"));
+	}
+      else if (type->code () == TYPE_CODE_STRING && rank != 1)
+	{
+	  /* What would this even mean?  A string with a dynamic rank
+	     greater than 1.  */
+	  error (_("unable to handle string with dynamic rank greater than 1"));
+	}
+      else if (rank > 1)
+	{
+	  /* Arrays with dynamic rank are initially just an array type
+	     with a target type that is the array element.
+
+	     However, now we know the rank of the array we need to build
+	     the array of arrays structure that GDB expects, that is we
+	     need an array type that has a target which is an array type,
+	     and so on, until eventually, we have the element type at the
+	     end of the chain.  Create all the additional array types here
+	     by copying the top level array type.  */
+	  struct type *element_type = TYPE_TARGET_TYPE (type);
+	  struct type *rank_type = type;
+	  for (int i = 1; i < rank; i++)
+	    {
+	      TYPE_TARGET_TYPE (rank_type) = copy_type (rank_type);
+	      rank_type = TYPE_TARGET_TYPE (rank_type);
+	    }
+	  TYPE_TARGET_TYPE (rank_type) = element_type;
+	}
+    }
+  else
+    {
+      rank = 1;
+
+      for (struct type *tmp_type = check_typedef (TYPE_TARGET_TYPE (type));
+	   tmp_type->code () == TYPE_CODE_ARRAY;
+	   tmp_type = check_typedef (TYPE_TARGET_TYPE (tmp_type)))
+	++rank;
+    }
+
+  /* The rank that we calculated above is actually a count of the number of
+     ranks.  However, when we resolve the type of each individual array
+     rank we should actually use a rank "offset", e.g. an array with a rank
+     count of 1 (calculated above) will use the rank offset 0 in order to
+     resolve the details of the first array dimension.  As a result, we
+     reduce the rank by 1 here.  */
+  --rank;
+
+  return resolve_dynamic_array_or_string_1 (type, addr_stack, rank, true);
 }
 
 /* Resolve dynamic bounds of members of the union TYPE to static
@@ -2453,7 +2563,7 @@ compute_variant_fields_inner (struct type *type,
     {
       int idx = part.discriminant_index;
 
-      if (TYPE_FIELD_LOC_KIND (type, idx) != FIELD_LOC_KIND_BITPOS)
+      if (type->field (idx).loc_kind () != FIELD_LOC_KIND_BITPOS)
 	error (_("Cannot determine struct field location"
 		 " (invalid location kind)"));
 
@@ -2463,7 +2573,7 @@ compute_variant_fields_inner (struct type *type,
       else
 	{
 	  CORE_ADDR addr = (addr_stack->addr
-			    + (TYPE_FIELD_BITPOS (type, idx)
+			    + (type->field (idx).loc_bitpos ()
 			       / TARGET_CHAR_BIT));
 
 	  LONGEST bitsize = TYPE_FIELD_BITSIZE (type, idx);
@@ -2474,7 +2584,7 @@ compute_variant_fields_inner (struct type *type,
 	  gdb_byte bits[sizeof (ULONGEST)];
 	  read_memory (addr, bits, size);
 
-	  LONGEST bitpos = (TYPE_FIELD_BITPOS (type, idx)
+	  LONGEST bitpos = (type->field (idx).loc_bitpos ()
 			    % TARGET_CHAR_BIT);
 
 	  discr_value = unpack_bits_as_long (type->field (idx).type (),
@@ -2585,21 +2695,21 @@ resolve_dynamic_struct (struct type *type,
       if (field_is_static (&resolved_type->field (i)))
 	continue;
 
-      if (TYPE_FIELD_LOC_KIND (resolved_type, i) == FIELD_LOC_KIND_DWARF_BLOCK)
+      if (resolved_type->field (i).loc_kind () == FIELD_LOC_KIND_DWARF_BLOCK)
 	{
 	  struct dwarf2_property_baton baton;
 	  baton.property_type
 	    = lookup_pointer_type (resolved_type->field (i).type ());
-	  baton.locexpr = *TYPE_FIELD_DWARF_BLOCK (resolved_type, i);
+	  baton.locexpr = *resolved_type->field (i).loc_dwarf_block ();
 
 	  struct dynamic_prop prop;
 	  prop.set_locexpr (&baton);
 
 	  CORE_ADDR addr;
 	  if (dwarf2_evaluate_property (&prop, nullptr, addr_stack, &addr,
-					true))
-	    SET_FIELD_BITPOS (resolved_type->field (i),
-			      TARGET_CHAR_BIT * (addr - addr_stack->addr));
+					{addr_stack->addr}))
+	    resolved_type->field (i).set_loc_bitpos
+	      (TARGET_CHAR_BIT * (addr - addr_stack->addr));
 	}
 
       /* As we know this field is not a static field, the field's
@@ -2609,24 +2719,25 @@ resolve_dynamic_struct (struct type *type,
 	 that verification indicates a bug in our code, the error
 	 is not severe enough to suggest to the user he stops
 	 his debugging session because of it.  */
-      if (TYPE_FIELD_LOC_KIND (resolved_type, i) != FIELD_LOC_KIND_BITPOS)
+      if (resolved_type->field (i).loc_kind () != FIELD_LOC_KIND_BITPOS)
 	error (_("Cannot determine struct field location"
 		 " (invalid location kind)"));
 
       pinfo.type = check_typedef (resolved_type->field (i).type ());
+      size_t offset = resolved_type->field (i).loc_bitpos () / TARGET_CHAR_BIT;
       pinfo.valaddr = addr_stack->valaddr;
-      pinfo.addr
-	= (addr_stack->addr
-	   + (TYPE_FIELD_BITPOS (resolved_type, i) / TARGET_CHAR_BIT));
+      if (!pinfo.valaddr.empty ())
+	pinfo.valaddr = pinfo.valaddr.slice (offset);
+      pinfo.addr = addr_stack->addr + offset;
       pinfo.next = addr_stack;
 
       resolved_type->field (i).set_type
 	(resolve_dynamic_type_internal (resolved_type->field (i).type (),
 					&pinfo, 0));
-      gdb_assert (TYPE_FIELD_LOC_KIND (resolved_type, i)
+      gdb_assert (resolved_type->field (i).loc_kind ()
 		  == FIELD_LOC_KIND_BITPOS);
 
-      new_bit_length = TYPE_FIELD_BITPOS (resolved_type, i);
+      new_bit_length = resolved_type->field (i).loc_bitpos ();
       if (TYPE_FIELD_BITSIZE (resolved_type, i) != 0)
 	new_bit_length += TYPE_FIELD_BITSIZE (resolved_type, i);
       else
@@ -2725,7 +2836,12 @@ resolve_dynamic_type_internal (struct type *type,
 	  break;
 
 	case TYPE_CODE_RANGE:
-	  resolved_type = resolve_dynamic_range (type, addr_stack);
+	  /* Pass 0 for the rank value here, which indicates this is a
+	     range for the first rank of an array.  The assumption is that
+	     this rank value is not actually required for the resolution of
+	     the dynamic range, otherwise, we'd be resolving this range
+	     within the context of a dynamic array.  */
+	  resolved_type = resolve_dynamic_range (type, addr_stack, 0);
 	  break;
 
 	case TYPE_CODE_UNION:
@@ -2904,7 +3020,7 @@ check_typedef (struct type *type)
 	    }
 	  sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0).symbol;
 	  if (sym)
-	    TYPE_TARGET_TYPE (type) = SYMBOL_TYPE (sym);
+	    TYPE_TARGET_TYPE (type) = sym->type ();
 	  else					/* TYPE_CODE_UNDEF */
 	    TYPE_TARGET_TYPE (type) = alloc_type_arch (type->arch ());
 	}
@@ -2998,11 +3114,11 @@ check_typedef (struct type *type)
 	  /* Same as above for opaque types, we can replace the stub
 	     with the complete type only if they are in the same
 	     objfile.  */
-	  if (SYMBOL_TYPE (sym)->objfile_owner () == type->objfile_owner ())
-	    type = make_qualified_type (SYMBOL_TYPE (sym),
+	  if (sym->type ()->objfile_owner () == type->objfile_owner ())
+	    type = make_qualified_type (sym->type (),
 					type->instance_flags (), type);
 	  else
-	    type = SYMBOL_TYPE (sym);
+	    type = sym->type ();
 	}
     }
 
@@ -3077,8 +3193,8 @@ check_stub_method (struct type *type, int method_id, int signature_id)
   struct gdbarch *gdbarch = type->arch ();
   struct fn_field *f;
   char *mangled_name = gdb_mangle_name (type, method_id, signature_id);
-  char *demangled_name = gdb_demangle (mangled_name,
-				       DMGL_PARAMS | DMGL_ANSI);
+  gdb::unique_xmalloc_ptr<char> demangled_name
+    = gdb_demangle (mangled_name, DMGL_PARAMS | DMGL_ANSI);
   char *argtypetext, *p;
   int depth = 0, argcount = 1;
   struct field *argtypes;
@@ -3086,7 +3202,7 @@ check_stub_method (struct type *type, int method_id, int signature_id)
 
   /* Make sure we got back a function string that we can use.  */
   if (demangled_name)
-    p = strchr (demangled_name, '(');
+    p = strchr (demangled_name.get (), '(');
   else
     p = NULL;
 
@@ -3177,8 +3293,6 @@ check_stub_method (struct type *type, int method_id, int signature_id)
 			argtypes, argcount, p[-2] == '.');
   mtype->set_is_stub (false);
   TYPE_FN_FIELD_STUB (f, signature_id) = 0;
-
-  xfree (demangled_name);
 }
 
 /* This is the external interface to check_stub_method, above.  This
@@ -3878,7 +3992,7 @@ is_unique_ancestor (struct type *base, struct value *val)
   int offset = -1;
 
   return is_unique_ancestor_worker (base, value_type (val), &offset,
-				    value_contents_for_printing (val),
+				    value_contents_for_printing (val).data (),
 				    value_embedded_offset (val),
 				    value_address (val), val) == 1;
 }
@@ -3901,6 +4015,17 @@ type_byte_order (const struct type *type)
     }
 
   return byteorder;
+}
+
+/* See gdbtypes.h.  */
+
+bool
+is_nocall_function (const struct type *type)
+{
+  gdb_assert (type->code () == TYPE_CODE_FUNC
+	      || type->code () == TYPE_CODE_METHOD);
+
+  return TYPE_CALLING_CONVENTION (type) == DW_CC_nocall;
 }
 
 
@@ -3955,8 +4080,14 @@ compare_badness (const badness_vector &a, const badness_vector &b)
 {
   int i;
   int tmp;
-  short found_pos = 0;		/* any positives in c? */
-  short found_neg = 0;		/* any negatives in c? */
+  /* Any positives in comparison? */
+  bool found_pos = false;
+  /* Any negatives in comparison? */
+  bool found_neg = false;
+  /* Did A have any INVALID_CONVERSION entries.  */
+  bool a_invalid = false;
+  /* Did B have any INVALID_CONVERSION entries.  */
+  bool b_invalid = false;
 
   /* differing sizes => incomparable */
   if (a.size () != b.size ())
@@ -3967,12 +4098,27 @@ compare_badness (const badness_vector &a, const badness_vector &b)
     {
       tmp = compare_ranks (b[i], a[i]);
       if (tmp > 0)
-	found_pos = 1;
+	found_pos = true;
       else if (tmp < 0)
-	found_neg = 1;
+	found_neg = true;
+      if (a[i].rank >= INVALID_CONVERSION)
+	a_invalid = true;
+      if (b[i].rank >= INVALID_CONVERSION)
+	b_invalid = true;
     }
 
-  if (found_pos)
+  /* B will only be considered better than or incomparable to A if
+     they both have invalid entries, or if neither does.  That is, if
+     A has only valid entries, and B has an invalid entry, then A will
+     be considered better than B, even if B happens to be better for
+     some parameter.  */
+  if (a_invalid != b_invalid)
+    {
+      if (a_invalid)
+	return 3;		/* A > B */
+      return 2;			/* A < B */
+    }
+  else if (found_pos)
     {
       if (found_neg)
 	return 1;		/* incomparable */
@@ -4204,39 +4350,37 @@ check_types_equal (struct type *type1, struct type *type2,
 
 	  if (FIELD_ARTIFICIAL (*field1) != FIELD_ARTIFICIAL (*field2)
 	      || FIELD_BITSIZE (*field1) != FIELD_BITSIZE (*field2)
-	      || FIELD_LOC_KIND (*field1) != FIELD_LOC_KIND (*field2))
+	      || field1->loc_kind () != field2->loc_kind ())
 	    return false;
-	  if (!compare_maybe_null_strings (FIELD_NAME (*field1),
-					   FIELD_NAME (*field2)))
+	  if (!compare_maybe_null_strings (field1->name (), field2->name ()))
 	    return false;
-	  switch (FIELD_LOC_KIND (*field1))
+	  switch (field1->loc_kind ())
 	    {
 	    case FIELD_LOC_KIND_BITPOS:
-	      if (FIELD_BITPOS (*field1) != FIELD_BITPOS (*field2))
+	      if (field1->loc_bitpos () != field2->loc_bitpos ())
 		return false;
 	      break;
 	    case FIELD_LOC_KIND_ENUMVAL:
-	      if (FIELD_ENUMVAL (*field1) != FIELD_ENUMVAL (*field2))
+	      if (field1->loc_enumval () != field2->loc_enumval ())
 		return false;
 	      /* Don't compare types of enum fields, because they don't
 		 have a type.  */
 	      continue;
 	    case FIELD_LOC_KIND_PHYSADDR:
-	      if (FIELD_STATIC_PHYSADDR (*field1)
-		  != FIELD_STATIC_PHYSADDR (*field2))
+	      if (field1->loc_physaddr () != field2->loc_physaddr ())
 		return false;
 	      break;
 	    case FIELD_LOC_KIND_PHYSNAME:
-	      if (!compare_maybe_null_strings (FIELD_STATIC_PHYSNAME (*field1),
-					       FIELD_STATIC_PHYSNAME (*field2)))
+	      if (!compare_maybe_null_strings (field1->loc_physname (),
+					       field2->loc_physname ()))
 		return false;
 	      break;
 	    case FIELD_LOC_KIND_DWARF_BLOCK:
 	      {
 		struct dwarf2_locexpr_baton *block1, *block2;
 
-		block1 = FIELD_DWARF_BLOCK (*field1);
-		block2 = FIELD_DWARF_BLOCK (*field2);
+		block1 = field1->loc_dwarf_block ();
+		block2 = field2->loc_dwarf_block ();
 		if (block1->per_cu != block2->per_cu
 		    || block1->size != block2->size
 		    || memcmp (block1->data, block2->data, block1->size) != 0)
@@ -4246,7 +4390,7 @@ check_types_equal (struct type *type1, struct type *type2,
 	    default:
 	      internal_error (__FILE__, __LINE__, _("Unsupported field kind "
 						    "%d by check_types_equal"),
-			      FIELD_LOC_KIND (*field1));
+			      field1->loc_kind ());
 	    }
 
 	  worklist->emplace_back (field1->type (), field2->type ());
@@ -4733,7 +4877,8 @@ rank_one_type_parm_set (struct type *parm, struct type *arg, struct value *value
  * Return 0 if they are identical types;
  * Otherwise, return an integer which corresponds to how compatible
  * PARM is to ARG.  The higher the return value, the worse the match.
- * Generally the "bad" conversions are all uniformly assigned a 100.  */
+ * Generally the "bad" conversions are all uniformly assigned
+ * INVALID_CONVERSION.  */
 
 struct rank
 rank_one_type (struct type *parm, struct type *arg, struct value *value)
@@ -4802,10 +4947,10 @@ rank_one_type (struct type *parm, struct type *arg, struct value *value)
   if (overload_debug)
     {
       /* Debugging only.  */
-      fprintf_filtered (gdb_stderr,
-			"------ Arg is %s [%d], parm is %s [%d]\n",
-			arg->name (), arg->code (),
-			parm->name (), parm->code ());
+      gdb_printf (gdb_stderr,
+		  "------ Arg is %s [%d], parm is %s [%d]\n",
+		  arg->name (), arg->code (),
+		  parm->name (), parm->code ());
     }
 
   /* x -> y means arg of type x being supplied for parameter of type y.  */
@@ -4854,12 +4999,12 @@ print_bit_vector (B_TYPE *bits, int nbits)
     {
       if ((bitno % 8) == 0)
 	{
-	  puts_filtered (" ");
+	  gdb_puts (" ");
 	}
       if (B_TST (bits, bitno))
-	printf_filtered (("1"));
+	gdb_printf (("1"));
       else
-	printf_filtered (("0"));
+	gdb_printf (("0"));
     }
 }
 
@@ -4876,8 +5021,9 @@ print_args (struct field *args, int nargs, int spaces)
 
       for (i = 0; i < nargs; i++)
 	{
-	  printf_filtered ("%*s[%d] name '%s'\n", spaces, "", i,
-			   args[i].name != NULL ? args[i].name : "<NULL>");
+	  gdb_printf
+	    ("%*s[%d] name '%s'\n", spaces, "", i,
+	     args[i].name () != NULL ? args[i].name () : "<NULL>");
 	  recursive_dump_type (args[i].type (), spaces + 2);
 	}
     }
@@ -4891,8 +5037,8 @@ field_is_static (struct field *f)
      have a dedicated flag that would be set for static fields when
      the type is being created.  But in practice, checking the field
      loc_kind should give us an accurate answer.  */
-  return (FIELD_LOC_KIND (*f) == FIELD_LOC_KIND_PHYSNAME
-	  || FIELD_LOC_KIND (*f) == FIELD_LOC_KIND_PHYSADDR);
+  return (f->loc_kind () == FIELD_LOC_KIND_PHYSNAME
+	  || f->loc_kind () == FIELD_LOC_KIND_PHYSADDR);
 }
 
 static void
@@ -4902,65 +5048,61 @@ dump_fn_fieldlists (struct type *type, int spaces)
   int overload_idx;
   struct fn_field *f;
 
-  printf_filtered ("%*sfn_fieldlists ", spaces, "");
-  gdb_print_host_address (TYPE_FN_FIELDLISTS (type), gdb_stdout);
-  printf_filtered ("\n");
+  gdb_printf ("%*sfn_fieldlists %s\n", spaces, "",
+	      host_address_to_string (TYPE_FN_FIELDLISTS (type)));
   for (method_idx = 0; method_idx < TYPE_NFN_FIELDS (type); method_idx++)
     {
       f = TYPE_FN_FIELDLIST1 (type, method_idx);
-      printf_filtered ("%*s[%d] name '%s' (", spaces + 2, "",
-		       method_idx,
-		       TYPE_FN_FIELDLIST_NAME (type, method_idx));
-      gdb_print_host_address (TYPE_FN_FIELDLIST_NAME (type, method_idx),
-			      gdb_stdout);
-      printf_filtered (_(") length %d\n"),
-		       TYPE_FN_FIELDLIST_LENGTH (type, method_idx));
+      gdb_printf
+	("%*s[%d] name '%s' (%s) length %d\n", spaces + 2, "",
+	 method_idx,
+	 TYPE_FN_FIELDLIST_NAME (type, method_idx),
+	 host_address_to_string (TYPE_FN_FIELDLIST_NAME (type, method_idx)),
+	 TYPE_FN_FIELDLIST_LENGTH (type, method_idx));
       for (overload_idx = 0;
 	   overload_idx < TYPE_FN_FIELDLIST_LENGTH (type, method_idx);
 	   overload_idx++)
 	{
-	  printf_filtered ("%*s[%d] physname '%s' (",
-			   spaces + 4, "", overload_idx,
-			   TYPE_FN_FIELD_PHYSNAME (f, overload_idx));
-	  gdb_print_host_address (TYPE_FN_FIELD_PHYSNAME (f, overload_idx),
-				  gdb_stdout);
-	  printf_filtered (")\n");
-	  printf_filtered ("%*stype ", spaces + 8, "");
-	  gdb_print_host_address (TYPE_FN_FIELD_TYPE (f, overload_idx), 
-				  gdb_stdout);
-	  printf_filtered ("\n");
+	  gdb_printf
+	    ("%*s[%d] physname '%s' (%s)\n",
+	     spaces + 4, "", overload_idx,
+	     TYPE_FN_FIELD_PHYSNAME (f, overload_idx),
+	     host_address_to_string (TYPE_FN_FIELD_PHYSNAME (f,
+							     overload_idx)));
+	  gdb_printf
+	    ("%*stype %s\n", spaces + 8, "",
+	     host_address_to_string (TYPE_FN_FIELD_TYPE (f, overload_idx)));
 
 	  recursive_dump_type (TYPE_FN_FIELD_TYPE (f, overload_idx),
 			       spaces + 8 + 2);
 
-	  printf_filtered ("%*sargs ", spaces + 8, "");
-	  gdb_print_host_address (TYPE_FN_FIELD_ARGS (f, overload_idx), 
-				  gdb_stdout);
-	  printf_filtered ("\n");
+	  gdb_printf
+	    ("%*sargs %s\n", spaces + 8, "",
+	     host_address_to_string (TYPE_FN_FIELD_ARGS (f, overload_idx)));
 	  print_args (TYPE_FN_FIELD_ARGS (f, overload_idx),
 		      TYPE_FN_FIELD_TYPE (f, overload_idx)->num_fields (),
 		      spaces + 8 + 2);
-	  printf_filtered ("%*sfcontext ", spaces + 8, "");
-	  gdb_print_host_address (TYPE_FN_FIELD_FCONTEXT (f, overload_idx),
-				  gdb_stdout);
-	  printf_filtered ("\n");
+	  gdb_printf
+	    ("%*sfcontext %s\n", spaces + 8, "",
+	     host_address_to_string (TYPE_FN_FIELD_FCONTEXT (f,
+							     overload_idx)));
 
-	  printf_filtered ("%*sis_const %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_CONST (f, overload_idx));
-	  printf_filtered ("%*sis_volatile %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_VOLATILE (f, overload_idx));
-	  printf_filtered ("%*sis_private %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_PRIVATE (f, overload_idx));
-	  printf_filtered ("%*sis_protected %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_PROTECTED (f, overload_idx));
-	  printf_filtered ("%*sis_stub %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_STUB (f, overload_idx));
-	  printf_filtered ("%*sdefaulted %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_DEFAULTED (f, overload_idx));
-	  printf_filtered ("%*sis_deleted %d\n", spaces + 8, "",
-			   TYPE_FN_FIELD_DELETED (f, overload_idx));
-	  printf_filtered ("%*svoffset %u\n", spaces + 8, "",
-			   TYPE_FN_FIELD_VOFFSET (f, overload_idx));
+	  gdb_printf ("%*sis_const %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_CONST (f, overload_idx));
+	  gdb_printf ("%*sis_volatile %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_VOLATILE (f, overload_idx));
+	  gdb_printf ("%*sis_private %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_PRIVATE (f, overload_idx));
+	  gdb_printf ("%*sis_protected %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_PROTECTED (f, overload_idx));
+	  gdb_printf ("%*sis_stub %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_STUB (f, overload_idx));
+	  gdb_printf ("%*sdefaulted %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_DEFAULTED (f, overload_idx));
+	  gdb_printf ("%*sis_deleted %d\n", spaces + 8, "",
+		      TYPE_FN_FIELD_DELETED (f, overload_idx));
+	  gdb_printf ("%*svoffset %u\n", spaces + 8, "",
+		      TYPE_FN_FIELD_VOFFSET (f, overload_idx));
 	}
     }
 }
@@ -4968,53 +5110,49 @@ dump_fn_fieldlists (struct type *type, int spaces)
 static void
 print_cplus_stuff (struct type *type, int spaces)
 {
-  printf_filtered ("%*svptr_fieldno %d\n", spaces, "",
-		   TYPE_VPTR_FIELDNO (type));
-  printf_filtered ("%*svptr_basetype ", spaces, "");
-  gdb_print_host_address (TYPE_VPTR_BASETYPE (type), gdb_stdout);
-  puts_filtered ("\n");
+  gdb_printf ("%*svptr_fieldno %d\n", spaces, "",
+	      TYPE_VPTR_FIELDNO (type));
+  gdb_printf ("%*svptr_basetype %s\n", spaces, "",
+	      host_address_to_string (TYPE_VPTR_BASETYPE (type)));
   if (TYPE_VPTR_BASETYPE (type) != NULL)
     recursive_dump_type (TYPE_VPTR_BASETYPE (type), spaces + 2);
 
-  printf_filtered ("%*sn_baseclasses %d\n", spaces, "",
-		   TYPE_N_BASECLASSES (type));
-  printf_filtered ("%*snfn_fields %d\n", spaces, "",
-		   TYPE_NFN_FIELDS (type));
+  gdb_printf ("%*sn_baseclasses %d\n", spaces, "",
+	      TYPE_N_BASECLASSES (type));
+  gdb_printf ("%*snfn_fields %d\n", spaces, "",
+	      TYPE_NFN_FIELDS (type));
   if (TYPE_N_BASECLASSES (type) > 0)
     {
-      printf_filtered ("%*svirtual_field_bits (%d bits at *",
-		       spaces, "", TYPE_N_BASECLASSES (type));
-      gdb_print_host_address (TYPE_FIELD_VIRTUAL_BITS (type), 
-			      gdb_stdout);
-      printf_filtered (")");
+      gdb_printf
+	("%*svirtual_field_bits (%d bits at *%s)",
+	 spaces, "", TYPE_N_BASECLASSES (type),
+	 host_address_to_string (TYPE_FIELD_VIRTUAL_BITS (type)));
 
       print_bit_vector (TYPE_FIELD_VIRTUAL_BITS (type),
 			TYPE_N_BASECLASSES (type));
-      puts_filtered ("\n");
+      gdb_puts ("\n");
     }
   if (type->num_fields () > 0)
     {
       if (TYPE_FIELD_PRIVATE_BITS (type) != NULL)
 	{
-	  printf_filtered ("%*sprivate_field_bits (%d bits at *",
-			   spaces, "", type->num_fields ());
-	  gdb_print_host_address (TYPE_FIELD_PRIVATE_BITS (type), 
-				  gdb_stdout);
-	  printf_filtered (")");
+	  gdb_printf
+	    ("%*sprivate_field_bits (%d bits at *%s)",
+	     spaces, "", type->num_fields (),
+	     host_address_to_string (TYPE_FIELD_PRIVATE_BITS (type)));
 	  print_bit_vector (TYPE_FIELD_PRIVATE_BITS (type),
 			    type->num_fields ());
-	  puts_filtered ("\n");
+	  gdb_puts ("\n");
 	}
       if (TYPE_FIELD_PROTECTED_BITS (type) != NULL)
 	{
-	  printf_filtered ("%*sprotected_field_bits (%d bits at *",
-			   spaces, "", type->num_fields ());
-	  gdb_print_host_address (TYPE_FIELD_PROTECTED_BITS (type), 
-				  gdb_stdout);
-	  printf_filtered (")");
+	  gdb_printf
+	    ("%*sprotected_field_bits (%d bits at *%s",
+	     spaces, "", type->num_fields (),
+	     host_address_to_string (TYPE_FIELD_PROTECTED_BITS (type)));
 	  print_bit_vector (TYPE_FIELD_PROTECTED_BITS (type),
 			    type->num_fields ());
-	  puts_filtered ("\n");
+	  gdb_puts ("\n");
 	}
     }
   if (TYPE_NFN_FIELDS (type) > 0)
@@ -5022,8 +5160,8 @@ print_cplus_stuff (struct type *type, int spaces)
       dump_fn_fieldlists (type, spaces);
     }
 
-  printf_filtered ("%*scalling_convention %d\n", spaces, "",
-		   TYPE_CPLUS_CALLING_CONVENTION (type));
+  gdb_printf ("%*scalling_convention %d\n", spaces, "",
+	      TYPE_CPLUS_CALLING_CONVENTION (type));
 }
 
 /* Print the contents of the TYPE's type_specific union, assuming that
@@ -5035,10 +5173,10 @@ print_gnat_stuff (struct type *type, int spaces)
   struct type *descriptive_type = TYPE_DESCRIPTIVE_TYPE (type);
 
   if (descriptive_type == NULL)
-    printf_filtered ("%*sno descriptive type\n", spaces + 2, "");
+    gdb_printf ("%*sno descriptive type\n", spaces + 2, "");
   else
     {
-      printf_filtered ("%*sdescriptive type\n", spaces + 2, "");
+      gdb_printf ("%*sdescriptive type\n", spaces + 2, "");
       recursive_dump_type (descriptive_type, spaces + 4);
     }
 }
@@ -5049,8 +5187,8 @@ print_gnat_stuff (struct type *type, int spaces)
 static void
 print_fixed_point_type_info (struct type *type, int spaces)
 {
-  printf_filtered ("%*sscaling factor: %s\n", spaces + 2, "",
-		   type->fixed_point_scaling_factor ().str ().c_str ());
+  gdb_printf ("%*sscaling factor: %s\n", spaces + 2, "",
+	      type->fixed_point_scaling_factor ().str ().c_str ());
 }
 
 static struct obstack dont_print_type_obstack;
@@ -5063,14 +5201,14 @@ dump_dynamic_prop (dynamic_prop const& prop)
   switch (prop.kind ())
     {
     case PROP_CONST:
-      printf_filtered ("%s", plongest (prop.const_val ()));
+      gdb_printf ("%s", plongest (prop.const_val ()));
       break;
     case PROP_UNDEFINED:
-      printf_filtered ("(undefined)");
+      gdb_printf ("(undefined)");
       break;
     case PROP_LOCEXPR:
     case PROP_LOCLIST:
-      printf_filtered ("(dynamic)");
+      gdb_printf ("(dynamic)");
       break;
     default:
       gdb_assert_not_reached ("unhandled prop kind");
@@ -5099,9 +5237,9 @@ recursive_dump_type (struct type *type, int spaces)
 	{
 	  if (type == first_dont_print[i])
 	    {
-	      printf_filtered ("%*stype node ", spaces, "");
-	      gdb_print_host_address (type, gdb_stdout);
-	      printf_filtered (_(" <same as already seen type>\n"));
+	      gdb_printf ("%*stype node %s", spaces, "",
+			  host_address_to_string (type));
+	      gdb_printf (_(" <same as already seen type>\n"));
 	      return;
 	    }
 	}
@@ -5109,247 +5247,234 @@ recursive_dump_type (struct type *type, int spaces)
       obstack_ptr_grow (&dont_print_type_obstack, type);
     }
 
-  printf_filtered ("%*stype node ", spaces, "");
-  gdb_print_host_address (type, gdb_stdout);
-  printf_filtered ("\n");
-  printf_filtered ("%*sname '%s' (", spaces, "",
-		   type->name () ? type->name () : "<NULL>");
-  gdb_print_host_address (type->name (), gdb_stdout);
-  printf_filtered (")\n");
-  printf_filtered ("%*scode 0x%x ", spaces, "", type->code ());
+  gdb_printf ("%*stype node %s\n", spaces, "",
+	      host_address_to_string (type));
+  gdb_printf ("%*sname '%s' (%s)\n", spaces, "",
+	      type->name () ? type->name () : "<NULL>",
+	      host_address_to_string (type->name ()));
+  gdb_printf ("%*scode 0x%x ", spaces, "", type->code ());
   switch (type->code ())
     {
     case TYPE_CODE_UNDEF:
-      printf_filtered ("(TYPE_CODE_UNDEF)");
+      gdb_printf ("(TYPE_CODE_UNDEF)");
       break;
     case TYPE_CODE_PTR:
-      printf_filtered ("(TYPE_CODE_PTR)");
+      gdb_printf ("(TYPE_CODE_PTR)");
       break;
     case TYPE_CODE_ARRAY:
-      printf_filtered ("(TYPE_CODE_ARRAY)");
+      gdb_printf ("(TYPE_CODE_ARRAY)");
       break;
     case TYPE_CODE_STRUCT:
-      printf_filtered ("(TYPE_CODE_STRUCT)");
+      gdb_printf ("(TYPE_CODE_STRUCT)");
       break;
     case TYPE_CODE_UNION:
-      printf_filtered ("(TYPE_CODE_UNION)");
+      gdb_printf ("(TYPE_CODE_UNION)");
       break;
     case TYPE_CODE_ENUM:
-      printf_filtered ("(TYPE_CODE_ENUM)");
+      gdb_printf ("(TYPE_CODE_ENUM)");
       break;
     case TYPE_CODE_FLAGS:
-      printf_filtered ("(TYPE_CODE_FLAGS)");
+      gdb_printf ("(TYPE_CODE_FLAGS)");
       break;
     case TYPE_CODE_FUNC:
-      printf_filtered ("(TYPE_CODE_FUNC)");
+      gdb_printf ("(TYPE_CODE_FUNC)");
       break;
     case TYPE_CODE_INT:
-      printf_filtered ("(TYPE_CODE_INT)");
+      gdb_printf ("(TYPE_CODE_INT)");
       break;
     case TYPE_CODE_FLT:
-      printf_filtered ("(TYPE_CODE_FLT)");
+      gdb_printf ("(TYPE_CODE_FLT)");
       break;
     case TYPE_CODE_VOID:
-      printf_filtered ("(TYPE_CODE_VOID)");
+      gdb_printf ("(TYPE_CODE_VOID)");
       break;
     case TYPE_CODE_SET:
-      printf_filtered ("(TYPE_CODE_SET)");
+      gdb_printf ("(TYPE_CODE_SET)");
       break;
     case TYPE_CODE_RANGE:
-      printf_filtered ("(TYPE_CODE_RANGE)");
+      gdb_printf ("(TYPE_CODE_RANGE)");
       break;
     case TYPE_CODE_STRING:
-      printf_filtered ("(TYPE_CODE_STRING)");
+      gdb_printf ("(TYPE_CODE_STRING)");
       break;
     case TYPE_CODE_ERROR:
-      printf_filtered ("(TYPE_CODE_ERROR)");
+      gdb_printf ("(TYPE_CODE_ERROR)");
       break;
     case TYPE_CODE_MEMBERPTR:
-      printf_filtered ("(TYPE_CODE_MEMBERPTR)");
+      gdb_printf ("(TYPE_CODE_MEMBERPTR)");
       break;
     case TYPE_CODE_METHODPTR:
-      printf_filtered ("(TYPE_CODE_METHODPTR)");
+      gdb_printf ("(TYPE_CODE_METHODPTR)");
       break;
     case TYPE_CODE_METHOD:
-      printf_filtered ("(TYPE_CODE_METHOD)");
+      gdb_printf ("(TYPE_CODE_METHOD)");
       break;
     case TYPE_CODE_REF:
-      printf_filtered ("(TYPE_CODE_REF)");
+      gdb_printf ("(TYPE_CODE_REF)");
       break;
     case TYPE_CODE_CHAR:
-      printf_filtered ("(TYPE_CODE_CHAR)");
+      gdb_printf ("(TYPE_CODE_CHAR)");
       break;
     case TYPE_CODE_BOOL:
-      printf_filtered ("(TYPE_CODE_BOOL)");
+      gdb_printf ("(TYPE_CODE_BOOL)");
       break;
     case TYPE_CODE_COMPLEX:
-      printf_filtered ("(TYPE_CODE_COMPLEX)");
+      gdb_printf ("(TYPE_CODE_COMPLEX)");
       break;
     case TYPE_CODE_TYPEDEF:
-      printf_filtered ("(TYPE_CODE_TYPEDEF)");
+      gdb_printf ("(TYPE_CODE_TYPEDEF)");
       break;
     case TYPE_CODE_NAMESPACE:
-      printf_filtered ("(TYPE_CODE_NAMESPACE)");
+      gdb_printf ("(TYPE_CODE_NAMESPACE)");
       break;
     case TYPE_CODE_FIXED_POINT:
-      printf_filtered ("(TYPE_CODE_FIXED_POINT)");
+      gdb_printf ("(TYPE_CODE_FIXED_POINT)");
       break;
     default:
-      printf_filtered ("(UNKNOWN TYPE CODE)");
+      gdb_printf ("(UNKNOWN TYPE CODE)");
       break;
     }
-  puts_filtered ("\n");
-  printf_filtered ("%*slength %s\n", spaces, "",
-		   pulongest (TYPE_LENGTH (type)));
+  gdb_puts ("\n");
+  gdb_printf ("%*slength %s\n", spaces, "",
+	      pulongest (TYPE_LENGTH (type)));
   if (type->is_objfile_owned ())
-    {
-      printf_filtered ("%*sobjfile ", spaces, "");
-      gdb_print_host_address (type->objfile_owner (), gdb_stdout);
-    }
+    gdb_printf ("%*sobjfile %s\n", spaces, "",
+		host_address_to_string (type->objfile_owner ()));
   else
-    {
-      printf_filtered ("%*sgdbarch ", spaces, "");
-      gdb_print_host_address (type->arch_owner (), gdb_stdout);
-    }
-  printf_filtered ("\n");
-  printf_filtered ("%*starget_type ", spaces, "");
-  gdb_print_host_address (TYPE_TARGET_TYPE (type), gdb_stdout);
-  printf_filtered ("\n");
+    gdb_printf ("%*sgdbarch %s\n", spaces, "",
+		host_address_to_string (type->arch_owner ()));
+  gdb_printf ("%*starget_type %s\n", spaces, "",
+	      host_address_to_string (TYPE_TARGET_TYPE (type)));
   if (TYPE_TARGET_TYPE (type) != NULL)
     {
       recursive_dump_type (TYPE_TARGET_TYPE (type), spaces + 2);
     }
-  printf_filtered ("%*spointer_type ", spaces, "");
-  gdb_print_host_address (TYPE_POINTER_TYPE (type), gdb_stdout);
-  printf_filtered ("\n");
-  printf_filtered ("%*sreference_type ", spaces, "");
-  gdb_print_host_address (TYPE_REFERENCE_TYPE (type), gdb_stdout);
-  printf_filtered ("\n");
-  printf_filtered ("%*stype_chain ", spaces, "");
-  gdb_print_host_address (TYPE_CHAIN (type), gdb_stdout);
-  printf_filtered ("\n");
-  printf_filtered ("%*sinstance_flags 0x%x", spaces, "", 
-		   (unsigned) type->instance_flags ());
+  gdb_printf ("%*spointer_type %s\n", spaces, "",
+	      host_address_to_string (TYPE_POINTER_TYPE (type)));
+  gdb_printf ("%*sreference_type %s\n", spaces, "",
+	      host_address_to_string (TYPE_REFERENCE_TYPE (type)));
+  gdb_printf ("%*stype_chain %s\n", spaces, "",
+	      host_address_to_string (TYPE_CHAIN (type)));
+  gdb_printf ("%*sinstance_flags 0x%x", spaces, "", 
+	      (unsigned) type->instance_flags ());
   if (TYPE_CONST (type))
     {
-      puts_filtered (" TYPE_CONST");
+      gdb_puts (" TYPE_CONST");
     }
   if (TYPE_VOLATILE (type))
     {
-      puts_filtered (" TYPE_VOLATILE");
+      gdb_puts (" TYPE_VOLATILE");
     }
   if (TYPE_CODE_SPACE (type))
     {
-      puts_filtered (" TYPE_CODE_SPACE");
+      gdb_puts (" TYPE_CODE_SPACE");
     }
   if (TYPE_DATA_SPACE (type))
     {
-      puts_filtered (" TYPE_DATA_SPACE");
+      gdb_puts (" TYPE_DATA_SPACE");
     }
   if (TYPE_ADDRESS_CLASS_1 (type))
     {
-      puts_filtered (" TYPE_ADDRESS_CLASS_1");
+      gdb_puts (" TYPE_ADDRESS_CLASS_1");
     }
   if (TYPE_ADDRESS_CLASS_2 (type))
     {
-      puts_filtered (" TYPE_ADDRESS_CLASS_2");
+      gdb_puts (" TYPE_ADDRESS_CLASS_2");
     }
   if (TYPE_RESTRICT (type))
     {
-      puts_filtered (" TYPE_RESTRICT");
+      gdb_puts (" TYPE_RESTRICT");
     }
   if (TYPE_ATOMIC (type))
     {
-      puts_filtered (" TYPE_ATOMIC");
+      gdb_puts (" TYPE_ATOMIC");
     }
-  puts_filtered ("\n");
+  gdb_puts ("\n");
 
-  printf_filtered ("%*sflags", spaces, "");
+  gdb_printf ("%*sflags", spaces, "");
   if (type->is_unsigned ())
     {
-      puts_filtered (" TYPE_UNSIGNED");
+      gdb_puts (" TYPE_UNSIGNED");
     }
   if (type->has_no_signedness ())
     {
-      puts_filtered (" TYPE_NOSIGN");
+      gdb_puts (" TYPE_NOSIGN");
     }
   if (type->endianity_is_not_default ())
     {
-      puts_filtered (" TYPE_ENDIANITY_NOT_DEFAULT");
+      gdb_puts (" TYPE_ENDIANITY_NOT_DEFAULT");
     }
   if (type->is_stub ())
     {
-      puts_filtered (" TYPE_STUB");
+      gdb_puts (" TYPE_STUB");
     }
   if (type->target_is_stub ())
     {
-      puts_filtered (" TYPE_TARGET_STUB");
+      gdb_puts (" TYPE_TARGET_STUB");
     }
   if (type->is_prototyped ())
     {
-      puts_filtered (" TYPE_PROTOTYPED");
+      gdb_puts (" TYPE_PROTOTYPED");
     }
   if (type->has_varargs ())
     {
-      puts_filtered (" TYPE_VARARGS");
+      gdb_puts (" TYPE_VARARGS");
     }
   /* This is used for things like AltiVec registers on ppc.  Gcc emits
      an attribute for the array type, which tells whether or not we
      have a vector, instead of a regular array.  */
   if (type->is_vector ())
     {
-      puts_filtered (" TYPE_VECTOR");
+      gdb_puts (" TYPE_VECTOR");
     }
   if (type->is_fixed_instance ())
     {
-      puts_filtered (" TYPE_FIXED_INSTANCE");
+      gdb_puts (" TYPE_FIXED_INSTANCE");
     }
   if (type->stub_is_supported ())
     {
-      puts_filtered (" TYPE_STUB_SUPPORTED");
+      gdb_puts (" TYPE_STUB_SUPPORTED");
     }
   if (TYPE_NOTTEXT (type))
     {
-      puts_filtered (" TYPE_NOTTEXT");
+      gdb_puts (" TYPE_NOTTEXT");
     }
-  puts_filtered ("\n");
-  printf_filtered ("%*snfields %d ", spaces, "", type->num_fields ());
+  gdb_puts ("\n");
+  gdb_printf ("%*snfields %d ", spaces, "", type->num_fields ());
   if (TYPE_ASSOCIATED_PROP (type) != nullptr
       || TYPE_ALLOCATED_PROP (type) != nullptr)
     {
-      printf_filtered ("%*s", spaces, "");
+      gdb_printf ("%*s", spaces, "");
       if (TYPE_ASSOCIATED_PROP (type) != nullptr)
 	{
-	  printf_filtered ("associated ");
+	  gdb_printf ("associated ");
 	  dump_dynamic_prop (*TYPE_ASSOCIATED_PROP (type));
 	}
       if (TYPE_ALLOCATED_PROP (type) != nullptr)
 	{
 	  if (TYPE_ASSOCIATED_PROP (type) != nullptr)
-	    printf_filtered ("  ");
-	  printf_filtered ("allocated ");
+	    gdb_printf ("  ");
+	  gdb_printf ("allocated ");
 	  dump_dynamic_prop (*TYPE_ALLOCATED_PROP (type));
 	}
-      printf_filtered ("\n");
+      gdb_printf ("\n");
     }
-  gdb_print_host_address (type->fields (), gdb_stdout);
-  puts_filtered ("\n");
+  gdb_printf ("%s\n", host_address_to_string (type->fields ()));
   for (idx = 0; idx < type->num_fields (); idx++)
     {
       if (type->code () == TYPE_CODE_ENUM)
-	printf_filtered ("%*s[%d] enumval %s type ", spaces + 2, "",
-			 idx, plongest (TYPE_FIELD_ENUMVAL (type, idx)));
+	gdb_printf ("%*s[%d] enumval %s type ", spaces + 2, "",
+		    idx, plongest (type->field (idx).loc_enumval ()));
       else
-	printf_filtered ("%*s[%d] bitpos %s bitsize %d type ", spaces + 2, "",
-			 idx, plongest (TYPE_FIELD_BITPOS (type, idx)),
-			 TYPE_FIELD_BITSIZE (type, idx));
-      gdb_print_host_address (type->field (idx).type (), gdb_stdout);
-      printf_filtered (" name '%s' (",
-		       TYPE_FIELD_NAME (type, idx) != NULL
-		       ? TYPE_FIELD_NAME (type, idx)
-		       : "<NULL>");
-      gdb_print_host_address (TYPE_FIELD_NAME (type, idx), gdb_stdout);
-      printf_filtered (")\n");
+	gdb_printf ("%*s[%d] bitpos %s bitsize %d type ", spaces + 2, "",
+		    idx, plongest (type->field (idx).loc_bitpos ()),
+		    TYPE_FIELD_BITSIZE (type, idx));
+      gdb_printf ("%s name '%s' (%s)\n",
+		  host_address_to_string (type->field (idx).type ()),
+		  type->field (idx).name () != NULL
+		  ? type->field (idx).name ()
+		  : "<NULL>",
+		  host_address_to_string (type->field (idx).name ()));
       if (type->field (idx).type () != NULL)
 	{
 	  recursive_dump_type (type->field (idx).type (), spaces + 4);
@@ -5357,56 +5482,52 @@ recursive_dump_type (struct type *type, int spaces)
     }
   if (type->code () == TYPE_CODE_RANGE)
     {
-      printf_filtered ("%*slow ", spaces, "");
+      gdb_printf ("%*slow ", spaces, "");
       dump_dynamic_prop (type->bounds ()->low);
-      printf_filtered ("  high ");
+      gdb_printf ("  high ");
       dump_dynamic_prop (type->bounds ()->high);
-      printf_filtered ("\n");
+      gdb_printf ("\n");
     }
 
   switch (TYPE_SPECIFIC_FIELD (type))
     {
       case TYPE_SPECIFIC_CPLUS_STUFF:
-	printf_filtered ("%*scplus_stuff ", spaces, "");
-	gdb_print_host_address (TYPE_CPLUS_SPECIFIC (type), 
-				gdb_stdout);
-	puts_filtered ("\n");
+	gdb_printf ("%*scplus_stuff %s\n", spaces, "",
+		    host_address_to_string (TYPE_CPLUS_SPECIFIC (type)));
 	print_cplus_stuff (type, spaces);
 	break;
 
       case TYPE_SPECIFIC_GNAT_STUFF:
-	printf_filtered ("%*sgnat_stuff ", spaces, "");
-	gdb_print_host_address (TYPE_GNAT_SPECIFIC (type), gdb_stdout);
-	puts_filtered ("\n");
+	gdb_printf ("%*sgnat_stuff %s\n", spaces, "",
+		    host_address_to_string (TYPE_GNAT_SPECIFIC (type)));
 	print_gnat_stuff (type, spaces);
 	break;
 
       case TYPE_SPECIFIC_FLOATFORMAT:
-	printf_filtered ("%*sfloatformat ", spaces, "");
+	gdb_printf ("%*sfloatformat ", spaces, "");
 	if (TYPE_FLOATFORMAT (type) == NULL
 	    || TYPE_FLOATFORMAT (type)->name == NULL)
-	  puts_filtered ("(null)");
+	  gdb_puts ("(null)");
 	else
-	  puts_filtered (TYPE_FLOATFORMAT (type)->name);
-	puts_filtered ("\n");
+	  gdb_puts (TYPE_FLOATFORMAT (type)->name);
+	gdb_puts ("\n");
 	break;
 
       case TYPE_SPECIFIC_FUNC:
-	printf_filtered ("%*scalling_convention %d\n", spaces, "",
-			 TYPE_CALLING_CONVENTION (type));
+	gdb_printf ("%*scalling_convention %d\n", spaces, "",
+		    TYPE_CALLING_CONVENTION (type));
 	/* tail_call_list is not printed.  */
 	break;
 
       case TYPE_SPECIFIC_SELF_TYPE:
-	printf_filtered ("%*sself_type ", spaces, "");
-	gdb_print_host_address (TYPE_SELF_TYPE (type), gdb_stdout);
-	puts_filtered ("\n");
+	gdb_printf ("%*sself_type %s\n", spaces, "",
+		    host_address_to_string (TYPE_SELF_TYPE (type)));
 	break;
 
       case TYPE_SPECIFIC_FIXED_POINT:
-	printf_filtered ("%*sfixed_point_info ", spaces, "");
+	gdb_printf ("%*sfixed_point_info ", spaces, "");
 	print_fixed_point_type_info (type, spaces);
-	puts_filtered ("\n");
+	gdb_puts ("\n");
 	break;
 
     case TYPE_SPECIFIC_INT:
@@ -5414,8 +5535,8 @@ recursive_dump_type (struct type *type, int spaces)
 	{
 	  unsigned bit_size = type->bit_size ();
 	  unsigned bit_off = type->bit_offset ();
-	  printf_filtered ("%*s bit size = %u, bit offset = %u\n", spaces, "",
-			   bit_size, bit_off);
+	  gdb_printf ("%*s bit size = %u, bit offset = %u\n", spaces, "",
+		      bit_size, bit_off);
 	}
       break;
     }
@@ -5557,36 +5678,33 @@ copy_type_recursive (struct objfile *objfile,
 	    new_type->field (i).set_type
 	      (copy_type_recursive (objfile, type->field (i).type (),
 				    copied_types));
-	  if (TYPE_FIELD_NAME (type, i))
-	    TYPE_FIELD_NAME (new_type, i) = 
-	      xstrdup (TYPE_FIELD_NAME (type, i));
-	  switch (TYPE_FIELD_LOC_KIND (type, i))
+	  if (type->field (i).name ())
+	    new_type->field (i).set_name (xstrdup (type->field (i).name ()));
+
+	  switch (type->field (i).loc_kind ())
 	    {
 	    case FIELD_LOC_KIND_BITPOS:
-	      SET_FIELD_BITPOS (new_type->field (i),
-				TYPE_FIELD_BITPOS (type, i));
+	      new_type->field (i).set_loc_bitpos (type->field (i).loc_bitpos ());
 	      break;
 	    case FIELD_LOC_KIND_ENUMVAL:
-	      SET_FIELD_ENUMVAL (new_type->field (i),
-				 TYPE_FIELD_ENUMVAL (type, i));
+	      new_type->field (i).set_loc_enumval (type->field (i).loc_enumval ());
 	      break;
 	    case FIELD_LOC_KIND_PHYSADDR:
-	      SET_FIELD_PHYSADDR (new_type->field (i),
-				  TYPE_FIELD_STATIC_PHYSADDR (type, i));
+	      new_type->field (i).set_loc_physaddr
+		(type->field (i).loc_physaddr ());
 	      break;
 	    case FIELD_LOC_KIND_PHYSNAME:
-	      SET_FIELD_PHYSNAME (new_type->field (i),
-				  xstrdup (TYPE_FIELD_STATIC_PHYSNAME (type,
-								       i)));
+	      new_type->field (i).set_loc_physname
+		(xstrdup (type->field (i).loc_physname ()));
 	      break;
             case FIELD_LOC_KIND_DWARF_BLOCK:
-              SET_FIELD_DWARF_BLOCK (new_type->field (i),
-                                     TYPE_FIELD_DWARF_BLOCK (type, i));
+              new_type->field (i).set_loc_dwarf_block
+		(type->field (i).loc_dwarf_block ());
               break;
 	    default:
 	      internal_error (__FILE__, __LINE__,
 			      _("Unexpected type field location kind: %d"),
-			      TYPE_FIELD_LOC_KIND (type, i));
+			      type->field (i).loc_kind ());
 	    }
 	}
     }
@@ -5846,11 +5964,11 @@ append_flags_type_field (struct type *type, int start_bitpos, int nr_bits,
   gdb_assert (nr_bits >= 1 && (start_bitpos + nr_bits) <= type_bitsize);
   gdb_assert (name != NULL);
 
-  TYPE_FIELD_NAME (type, field_nr) = xstrdup (name);
-  type->field (field_nr).set_type (field_type);
-  SET_FIELD_BITPOS (type->field (field_nr), start_bitpos);
-  TYPE_FIELD_BITSIZE (type, field_nr) = nr_bits;
   type->set_num_fields (type->num_fields () + 1);
+  type->field (field_nr).set_name (xstrdup (name));
+  type->field (field_nr).set_type (field_type);
+  type->field (field_nr).set_loc_bitpos (start_bitpos);
+  TYPE_FIELD_BITSIZE (type, field_nr) = nr_bits;
 }
 
 /* Special version of append_flags_type_field to add a flag field.
@@ -5897,7 +6015,7 @@ append_composite_type_field_raw (struct type *t, const char *name,
   f = &t->field (t->num_fields () - 1);
   memset (f, 0, sizeof f[0]);
   f[0].set_type (field);
-  FIELD_NAME (f[0]) = name;
+  f[0].set_name (name);
   return f;
 }
 
@@ -5920,21 +6038,19 @@ append_composite_type_field_aligned (struct type *t, const char *name,
       TYPE_LENGTH (t) = TYPE_LENGTH (t) + TYPE_LENGTH (field);
       if (t->num_fields () > 1)
 	{
-	  SET_FIELD_BITPOS (f[0],
-			    (FIELD_BITPOS (f[-1])
-			     + (TYPE_LENGTH (f[-1].type ())
-				* TARGET_CHAR_BIT)));
+	  f->set_loc_bitpos
+	    (f[-1].loc_bitpos () + (TYPE_LENGTH (f[-1].type ()) * TARGET_CHAR_BIT));
 
 	  if (alignment)
 	    {
 	      int left;
 
 	      alignment *= TARGET_CHAR_BIT;
-	      left = FIELD_BITPOS (f[0]) % alignment;
+	      left = f[0].loc_bitpos () % alignment;
 
 	      if (left)
 		{
-		  SET_FIELD_BITPOS (f[0], FIELD_BITPOS (f[0]) + (alignment - left));
+		  f->set_loc_bitpos (f[0].loc_bitpos () + (alignment - left));
 		  TYPE_LENGTH (t) += (alignment - left) / TARGET_CHAR_BIT;
 		}
 	    }
@@ -6307,6 +6423,17 @@ objfile_type (struct objfile *objfile)
 
   objfile_type_data.set (objfile, objfile_type);
   return objfile_type;
+}
+
+/* See gdbtypes.h.  */
+
+CORE_ADDR
+call_site::pc () const
+{
+  compunit_symtab *cust = this->per_objfile->get_symtab (this->per_cu);
+  CORE_ADDR delta
+	= this->per_objfile->objfile->section_offsets[cust->block_line_section ()];
+  return m_unrelocated_pc + delta;
 }
 
 void _initialize_gdbtypes ();

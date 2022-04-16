@@ -1,5 +1,5 @@
 /* tc-tic54x.c -- Assembly code for the Texas Instruments TMS320C54X
-   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+   Copyright (C) 1999-2022 Free Software Foundation, Inc.
    Contributed by Timothy Wall (twall@cygnus.com)
 
    This file is part of GAS, the GNU Assembler.
@@ -4966,7 +4966,7 @@ tic54x_adjust_symtab (void)
     {
       unsigned lineno;
       const char * filename = as_where (&lineno);
-      c_dot_file_symbol (filename, 0);
+      c_dot_file_symbol (filename);
     }
 }
 

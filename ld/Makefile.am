@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2012-2021 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2022 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -410,6 +410,7 @@ ALL_64_EMULATION_SOURCES = \
 	eelf32elmipvxworks.c \
 	eelf32l4300.c \
 	eelf32lmip.c \
+	eelf32loongarch.c \
 	eelf32lr5900.c \
 	eelf32lr5900n32.c \
 	eelf32lriscv.c \
@@ -440,6 +441,7 @@ ALL_64_EMULATION_SOURCES = \
 	eelf64btsmip.c \
 	eelf64btsmip_fbsd.c \
 	eelf64hppa.c \
+	eelf64loongarch.c \
 	eelf64lppc.c \
 	eelf64lppc_fbsd.c \
 	eelf64lriscv.c \
@@ -453,10 +455,6 @@ ALL_64_EMULATION_SOURCES = \
 	eelf64rdos.c \
 	eelf64tilegx.c \
 	eelf64tilegx_be.c \
-	eelf_k1om.c \
-	eelf_k1om_fbsd.c \
-	eelf_l1om.c \
-	eelf_l1om_fbsd.c \
 	eelf_mipsel_haiku.c \
 	eelf_x86_64.c \
 	eelf_x86_64_cloudabi.c \
@@ -507,38 +505,38 @@ STAGESTUFF = *.@OBJEXT@ ldscripts/* e*.c
 # yacc will produce working code which contain compile time warnings.
 ldgram.@OBJEXT@: ldgram.c
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `test -f ldgram.c || echo $(srcdir)/`ldgram.c $(NO_WERROR)
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `test -f ldgram.c || echo $(srcdir)/`ldgram.c $(NO_WERROR)
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='ldgram.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c `test -f ldgram.c || echo $(srcdir)/`ldgram.c $(NO_WERROR)
+	$(AM_V_CC)$(COMPILE) -c `test -f ldgram.c || echo $(srcdir)/`ldgram.c $(NO_WERROR)
 endif
 
 ldlex-wrapper.@OBJEXT@: ldlex-wrapper.c ldlex.c
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $(srcdir)/ldlex-wrapper.c $(NO_WERROR)
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $(srcdir)/ldlex-wrapper.c $(NO_WERROR)
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='ldlex-wrapper.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c $(srcdir)/ldlex-wrapper.c $(NO_WERROR)
+	$(AM_V_CC)$(COMPILE) -c $(srcdir)/ldlex-wrapper.c $(NO_WERROR)
 endif
 
 deffilep.@OBJEXT@: deffilep.c
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `test -f deffilep.c || echo $(srcdir)/`deffilep.c $(NO_WERROR)
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `test -f deffilep.c || echo $(srcdir)/`deffilep.c $(NO_WERROR)
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='deffilep.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c `test -f deffilep.c || echo $(srcdir)/`deffilep.c $(NO_WERROR)
+	$(AM_V_CC)$(COMPILE) -c `test -f deffilep.c || echo $(srcdir)/`deffilep.c $(NO_WERROR)
 endif
 
 SRC_POTFILES = $(CFILES) $(HFILES)
@@ -554,18 +552,18 @@ po/BLD-POTFILES.in: @MAINT@ Makefile $(BLD_POTFILES)
 
 ldmain.@OBJEXT@: ldmain.c config.status
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
 	  -DDEFAULT_EMULATION='"$(EMUL)"' \
 	  -DBINDIR='"$(bindir)"' -DTOOLBINDIR='"$(tooldir)/bin"' \
 	  -DTARGET='"@target@"' @TARGET_SYSTEM_ROOT_DEFINE@ \
 	  $(srcdir)/ldmain.c
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='ldmain.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c -DDEFAULT_EMULATION='"$(EMUL)"' \
+	$(AM_V_CC)$(COMPILE) -c -DDEFAULT_EMULATION='"$(EMUL)"' \
 	  -DBINDIR='"$(bindir)"' -DTOOLBINDIR='"$(tooldir)/bin"' \
 	  -DTARGET='"@target@"' @TARGET_SYSTEM_ROOT_DEFINE@ \
 	  $(srcdir)/ldmain.c
@@ -573,31 +571,31 @@ endif
 
 ldfile.@OBJEXT@: ldfile.c config.status
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
 	-DSCRIPTDIR='"$(scriptdir)"' -DBINDIR='"$(bindir)"' -DTOOLBINDIR='"$(tooldir)/bin"' \
 	 $(srcdir)/ldfile.c
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='ldfile.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c -DSCRIPTDIR='"$(scriptdir)"' -DBINDIR='"$(bindir)"' \
+	$(AM_V_CC)$(COMPILE) -c -DSCRIPTDIR='"$(scriptdir)"' -DBINDIR='"$(bindir)"' \
 	  -DTOOLBINDIR='"$(tooldir)/bin"' \
 	  $(srcdir)/ldfile.c
 endif
 
 eelf32_spu.@OBJEXT@: eelf32_spu.c
 if am__fastdepCC
-	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
+	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ \
 	  -DEMBEDSPU="\"`echo embedspu | sed '$(transform)'`\"" eelf32_spu.c
-	mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_at)mv -f $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 else
 if AMDEP
 	source='eelf32_spu.c' object='$@' libtool=no @AMDEPBACKSLASH@
 	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 endif
-	$(COMPILE) -c -DEMBEDSPU="\"`echo embedspu | sed '$(transform)'`\"" \
+	$(AM_V_CC)$(COMPILE) -c -DEMBEDSPU="\"`echo embedspu | sed '$(transform)'`\"" \
 	  eelf32_spu.c
 endif
 
@@ -617,7 +615,7 @@ ldemul-list.h: Makefile
 	mv ldemul-tmp.h ldemul-list.h
 
 stringify.sed: ${srcdir}/emultempl/$(STRINGIFY)
-	  cp ${srcdir}/emultempl/$(STRINGIFY) stringify.sed
+	  $(AM_V_GEN)cp ${srcdir}/emultempl/$(STRINGIFY) stringify.sed
 
 if AMDEP
   GENDEPDIR=$(DEPDIR)
@@ -635,12 +633,12 @@ GEN_DEPENDS = $(srcdir)/genscripts.sh stringify.sed
 # (The recursive variable expansion is portable.)
 
 run-genscripts:
-	${GENSCRIPTS} $(script_target) "$($(script_tdirname))"
+	$(AM_V_at)${GENSCRIPTS} $(script_target) "$($(script_tdirname))"
 
 .PHONY: run-genscripts
 
 $(ALL_EMULATION_SOURCES) $(ALL_64_EMULATION_SOURCES): $(GEN_DEPENDS)
-	base=`echo $@ | sed -e 's,e\(.*\).c,\1,'`; \
+	$(AM_V_GEN)base=`echo $@ | sed -e 's,e\(.*\).c,\1,'`; \
 	$(MAKE) run-genscripts "script_target=$$base" "script_tdirname=tdir_$$base"
 
 # It's a pity we can't generate these include "./deps/e*.Pc" lines
@@ -903,6 +901,7 @@ $(ALL_EMULATION_SOURCES) $(ALL_64_EMULATION_SOURCES): $(GEN_DEPENDS)
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32elmip.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32elmipvxworks.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32l4300.Pc@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32loongarch.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32lmip.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32lr5900.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32lr5900n32.Pc@am__quote@
@@ -936,6 +935,7 @@ $(ALL_EMULATION_SOURCES) $(ALL_64_EMULATION_SOURCES): $(GEN_DEPENDS)
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64hppa.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64lppc.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64lppc_fbsd.Pc@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64loongarch.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64lriscv.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64lriscv_lp64.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64lriscv_lp64f.Pc@am__quote@
@@ -947,10 +947,6 @@ $(ALL_EMULATION_SOURCES) $(ALL_64_EMULATION_SOURCES): $(GEN_DEPENDS)
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64rdos.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64tilegx.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64tilegx_be.Pc@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_k1om.Pc@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_k1om_fbsd.Pc@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_l1om.Pc@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_l1om_fbsd.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_mipsel_haiku.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_x86_64.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_x86_64_cloudabi.Pc@am__quote@
@@ -1003,11 +999,11 @@ check-DEJAGNU: site.exp
 	fi
 
 development.exp: $(BFDDIR)/development.sh
-	$(EGREP) "(development|experimental)=" $(BFDDIR)/development.sh  \
+	$(AM_V_GEN)$(EGREP) "(development|experimental)=" $(BFDDIR)/development.sh  \
 	  | $(AWK) -F= '{ print "set " $$1 " " $$2 }' > $@
 
 enablings.exp:
-	echo "set enable_libctf ${enable_libctf}" >> $@
+	$(AM_V_GEN)echo "set enable_libctf ${enable_libctf}" >> $@
 #
 #
 # Build a dummy plugin using libtool.
@@ -1041,20 +1037,20 @@ libdep_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 # because almost all configs use "gen" version of manual.
 #  Set DOCVER above to change.
 configdoc.texi:	${DOCVER}-doc.texi
-	cp ${srcdir}/${DOCVER}-doc.texi ./configdoc.texi
-	chmod u+w ./configdoc.texi
+	$(AM_V_GEN)cp ${srcdir}/${DOCVER}-doc.texi ./configdoc.texi
+	$(AM_V_at)chmod u+w ./configdoc.texi
 
 # Build the man page from the texinfo file
 # The sed command removes the no-adjust Nroff command so that
 # the man output looks standard.
 ld.1: $(srcdir)/ld.texi configdoc.texi
-	touch $@
-	-$(TEXI2POD) $(MANCONF) < $(srcdir)/ld.texi > ld.pod
-	-($(POD2MAN) ld.pod | \
+	$(AM_V_GEN)touch $@
+	$(AM_V_at)-$(TEXI2POD) $(MANCONF) < $(srcdir)/ld.texi > ld.pod
+	$(AM_V_at)-($(POD2MAN) ld.pod | \
 		sed -e '/^.if n .na/d' > $@.T$$$$ && \
 		mv -f $@.T$$$$ $@) || \
 		(rm -f $@.T$$$$ && exit 1)
-	rm -f ld.pod
+	$(AM_V_at)rm -f ld.pod
 
 MAINTAINERCLEANFILES = configdoc.texi ld.1
 
@@ -1114,8 +1110,8 @@ info-recursive: ld.1
 
 html-local: doc/ld/index.html
 doc/ld/index.html: ld.texi $(ld_TEXINFOS)
-	$(MKDIR_P) doc
-	$(AM_V_at)$(MAKEINFOHTML) $(AM_MAKEINFOHTMLFLAGS) $(MAKEINFOFLAGS) \
+	$(AM_V_at)$(MKDIR_P) doc
+	$(AM_V_GEN)$(MAKEINFOHTML) $(AM_MAKEINFOHTMLFLAGS) $(MAKEINFOFLAGS) \
 	  --split=node -I$(srcdir) $(srcdir)/ld.texi -o doc/ld
 
 DISTCLEANFILES = site.exp development.exp enablings.exp site.bak stringify.sed

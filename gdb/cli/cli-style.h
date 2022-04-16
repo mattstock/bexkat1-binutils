@@ -1,6 +1,6 @@
 /* CLI stylizing
 
-   Copyright (C) 2018-2021 Free Software Foundation, Inc.
+   Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -127,6 +127,9 @@ extern cli_style_option version_style;
 
 /* True if source styling is enabled.  */
 extern bool source_styling;
+
+/* True if disassembler styling is enabled.  */
+extern bool disassembler_styling;
 
 /* True if styling is enabled.  */
 extern bool cli_styling;

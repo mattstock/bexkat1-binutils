@@ -1,6 +1,6 @@
 /* Declarations for value printing routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -164,12 +164,6 @@ extern void print_function_pointer_address (const struct value_print_options *op
 					    struct gdbarch *gdbarch,
 					    CORE_ADDR address,
 					    struct ui_file *stream);
-
-extern int read_string (CORE_ADDR addr, int len, int width,
-			unsigned int fetchlimit,
-			enum bfd_endian byte_order,
-			gdb::unique_xmalloc_ptr<gdb_byte> *buffer,
-			int *bytes_read);
 
 /* Helper function to check the validity of some bits of a value.
 

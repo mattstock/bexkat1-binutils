@@ -1,5 +1,5 @@
 /* RISC-V spec version controlling support.
-   Copyright (C) 2019-2020 Free Software Foundation, Inc.
+   Copyright (C) 2019-2022 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -32,6 +32,7 @@ enum riscv_spec_class
   PRIV_SPEC_CLASS_1P9P1,
   PRIV_SPEC_CLASS_1P10,
   PRIV_SPEC_CLASS_1P11,
+  PRIV_SPEC_CLASS_1P12,
   PRIV_SPEC_CLASS_DRAFT,
 };
 

@@ -1,6 +1,6 @@
 /* Python interface to lazy strings.
 
-   Copyright (C) 2010-2021 Free Software Foundation, Inc.
+   Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -73,7 +73,7 @@ stpy_get_encoding (PyObject *self, void *closure)
   /* An encoding can be set to NULL by the user, so check before
      attempting a Python FromString call.  If NULL return Py_None.  */
   if (self_string->encoding)
-    result = PyString_FromString (self_string->encoding);
+    result = PyUnicode_FromString (self_string->encoding);
   else
     {
       result = Py_None;

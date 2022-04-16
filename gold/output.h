@@ -1,6 +1,6 @@
 // output.h -- manage the output file for gold   -*- C++ -*-
 
-// Copyright (C) 2006-2021 Free Software Foundation, Inc.
+// Copyright (C) 2006-2022 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -2633,7 +2633,8 @@ class Output_data_got : public Output_data_got_base
 
     // Write the GOT entry to an output view.
     void
-    write(unsigned int got_indx, unsigned char* pov) const;
+    write(Output_data_got_base* got, unsigned int got_indx,
+	  unsigned char* pov) const;
 
    private:
     enum

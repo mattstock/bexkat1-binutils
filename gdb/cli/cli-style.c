@@ -1,6 +1,6 @@
 /* CLI colorizing
 
-   Copyright (C) 2018-2021 Free Software Foundation, Inc.
+   Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,6 +37,11 @@ bool cli_styling = true;
    consulted when cli_styling is true.  */
 
 bool source_styling = true;
+
+/* True if disassembler styling is enabled.  Note that this is only
+   consulted when cli_styling is true.  */
+
+bool disassembler_styling = true;
 
 /* Name of colors; must correspond to ui_file_style::basic_color.  */
 static const char * const cli_colors[] = {
@@ -182,9 +187,9 @@ do_show (const char *what, struct ui_file *file,
 	 const char *value)
 {
   cli_style_option *cso = (cli_style_option *) cmd->context ();
-  fputs_filtered (_("The "), file);
+  gdb_puts (_("The "), file);
   fprintf_styled (file, cso->style (), _("\"%s\" style"), cso->name ());
-  fprintf_filtered (file, _(" %s is: %s\n"), what, value);
+  gdb_printf (file, _(" %s is: %s\n"), what, value);
 }
 
 /* See cli-style.h.  */
@@ -226,10 +231,9 @@ cli_style_option::add_setshow_commands (enum command_class theclass,
 					struct cmd_list_element **show_list,
 					bool skip_intensity)
 {
-  add_basic_prefix_cmd (m_name, no_class, prefix_doc, &m_set_list,
-			0, set_list);
-  add_show_prefix_cmd (m_name, no_class, prefix_doc, &m_show_list,
-		       0, show_list);
+  add_setshow_prefix_cmd (m_name, theclass, prefix_doc, prefix_doc,
+			  &m_set_list, &m_show_list, set_list, show_list);
+
   set_show_commands commands;
 
   commands = add_setshow_enum_cmd
@@ -275,11 +279,19 @@ cli_style_option::add_setshow_commands (enum command_class theclass,
 static cmd_list_element *style_set_list;
 static cmd_list_element *style_show_list;
 
+/* The command list for 'set style disassembler'.  */
+
+static cmd_list_element *style_disasm_set_list;
+
+/* The command list for 'show style disassembler'.  */
+
+static cmd_list_element *style_disasm_show_list;
+
 static void
 set_style_enabled  (const char *args, int from_tty, struct cmd_list_element *c)
 {
   g_source_cache.clear ();
-  gdb::observers::source_styling_changed.notify ();
+  gdb::observers::styling_changed.notify ();
 }
 
 static void
@@ -287,9 +299,9 @@ show_style_enabled (struct ui_file *file, int from_tty,
 		    struct cmd_list_element *c, const char *value)
 {
   if (cli_styling)
-    fprintf_filtered (file, _("CLI output styling is enabled.\n"));
+    gdb_printf (file, _("CLI output styling is enabled.\n"));
   else
-    fprintf_filtered (file, _("CLI output styling is disabled.\n"));
+    gdb_printf (file, _("CLI output styling is disabled.\n"));
 }
 
 static void
@@ -297,23 +309,36 @@ show_style_sources (struct ui_file *file, int from_tty,
 		    struct cmd_list_element *c, const char *value)
 {
   if (source_styling)
-    fprintf_filtered (file, _("Source code styling is enabled.\n"));
+    gdb_printf (file, _("Source code styling is enabled.\n"));
   else
-    fprintf_filtered (file, _("Source code styling is disabled.\n"));
+    gdb_printf (file, _("Source code styling is disabled.\n"));
+}
+
+/* Implement 'show style disassembler'.  */
+
+static void
+show_style_disassembler (struct ui_file *file, int from_tty,
+			 struct cmd_list_element *c, const char *value)
+{
+  if (disassembler_styling)
+    gdb_printf (file, _("Disassembler output styling is enabled.\n"));
+  else
+    gdb_printf (file, _("Disassembler output styling is disabled.\n"));
 }
 
 void _initialize_cli_style ();
 void
 _initialize_cli_style ()
 {
-  add_basic_prefix_cmd ("style", no_class, _("\
+  add_setshow_prefix_cmd ("style", no_class,
+			  _("\
 Style-specific settings.\n\
 Configure various style-related variables, such as colors"),
-		  &style_set_list, 0, &setlist);
-  add_show_prefix_cmd ("style", no_class, _("\
+			  _("\
 Style-specific settings.\n\
 Configure various style-related variables, such as colors"),
-		  &style_show_list, 0, &showlist);
+			  &style_set_list, &style_show_list,
+			  &setlist, &showlist);
 
   add_setshow_boolean_cmd ("enabled", no_class, &cli_styling, _("\
 Set whether CLI styling is enabled."), _("\
@@ -336,6 +361,25 @@ available if the appropriate extension is available at runtime."
 #endif
 			   ), set_style_enabled, show_style_sources,
 			   &style_set_list, &style_show_list);
+
+  add_setshow_prefix_cmd ("disassembler", no_class,
+			  _("\
+Style-specific settings for the disassembler.\n\
+Configure various disassembler style-related variables."),
+			  _("\
+Style-specific settings for the disassembler.\n\
+Configure various disassembler style-related variables."),
+			  &style_disasm_set_list, &style_disasm_show_list,
+			  &style_set_list, &style_show_list);
+
+  add_setshow_boolean_cmd ("enabled", no_class, &disassembler_styling, _("\
+Set whether disassembler output styling is enabled."), _("\
+Show whether disassembler output styling is enabled."), _("\
+If enabled, disassembler output is styled.  Disassembler highlighting\n\
+requires the Python Pygments library, if this library is not available\n\
+then disassembler highlighting will not be possible."
+			   ), set_style_enabled, show_style_disassembler,
+			   &style_disasm_set_list, &style_disasm_show_list);
 
   file_name_style.add_setshow_commands (no_class, _("\
 Filename display styling.\n\

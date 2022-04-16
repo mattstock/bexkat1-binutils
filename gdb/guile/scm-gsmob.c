@@ -1,6 +1,6 @@
 /* GDB/Scheme smobs (gsmob is pronounced "jee smob")
 
-   Copyright (C) 2014-2021 Free Software Foundation, Inc.
+   Copyright (C) 2014-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -191,16 +191,13 @@ gdbscm_gsmob_kind (SCM self)
   SCM smob, result;
   scm_t_bits smobnum;
   const char *name;
-  char *kind;
 
   smob = gsscm_get_gsmob_arg_unsafe (self, SCM_ARG1, FUNC_NAME);
 
   smobnum = SCM_SMOBNUM (smob);
   name = SCM_SMOBNAME (smobnum);
-  kind = xstrprintf ("<%s>", name);
-  result = scm_from_latin1_symbol (kind);
-  xfree (kind);
-
+  gdb::unique_xmalloc_ptr<char> kind = xstrprintf ("<%s>", name);
+  result = scm_from_latin1_symbol (kind.get ());
   return result;
 }
 

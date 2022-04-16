@@ -1,5 +1,5 @@
 /* Remote serial support interface definitions for GDB, the GNU Debugger.
-   Copyright (C) 1992-2021 Free Software Foundation, Inc.
+   Copyright (C) 1992-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -169,7 +169,7 @@ extern serial_ttystate serial_copy_tty_state (struct serial *scb,
 
 extern int serial_set_tty_state (struct serial *scb, serial_ttystate ttystate);
 
-/* printf_filtered a user-comprehensible description of ttystate on
+/* gdb_printf a user-comprehensible description of ttystate on
    the specified STREAM.  FIXME: At present this sends output to the
    default stream - GDB_STDOUT.  */
 

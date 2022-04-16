@@ -1,6 +1,6 @@
 /* GDB CLI command scripting.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,6 +29,7 @@
 #include "cli/cli-decode.h"
 #include "cli/cli-script.h"
 #include "cli/cli-style.h"
+#include "gdbcmd.h"
 
 #include "extension.h"
 #include "interps.h"
@@ -423,31 +424,14 @@ std::string
 execute_control_commands_to_string (struct command_line *commands,
 				    int from_tty)
 {
-  /* GDB_STDOUT should be better already restored during these
-     restoration callbacks.  */
-  set_batch_flag_and_restore_page_info save_page_info;
+  std::string result;
 
-  string_file str_file;
+  execute_fn_to_string (result, [&] ()
+    {
+      execute_control_commands (commands, from_tty);
+    }, false);
 
-  {
-    current_uiout->redirect (&str_file);
-    ui_out_redirect_pop redirect_popper (current_uiout);
-
-    scoped_restore save_stdout
-      = make_scoped_restore (&gdb_stdout, &str_file);
-    scoped_restore save_stderr
-      = make_scoped_restore (&gdb_stderr, &str_file);
-    scoped_restore save_stdlog
-      = make_scoped_restore (&gdb_stdlog, &str_file);
-    scoped_restore save_stdtarg
-      = make_scoped_restore (&gdb_stdtarg, &str_file);
-    scoped_restore save_stdtargerr
-      = make_scoped_restore (&gdb_stdtargerr, &str_file);
-
-    execute_control_commands (commands, from_tty);
-  }
-
-  return std::move (str_file.string ());
+  return result;
 }
 
 void
@@ -512,14 +496,14 @@ print_command_trace (const char *fmt, ...)
     return;
 
   for (i=0; i < command_nest_depth; i++)
-    printf_filtered ("+");
+    gdb_printf ("+");
 
   va_list args;
 
   va_start (args, fmt);
-  vprintf_filtered (fmt, args);
+  gdb_vprintf (fmt, args);
   va_end (args);
-  puts_filtered ("\n");
+  gdb_puts ("\n");
 }
 
 /* Helper for execute_control_command.  */
@@ -1663,15 +1647,15 @@ show_user_1 (struct cmd_list_element *c, const char *prefix, const char *name,
     {
       struct command_line *cmdlines = c->user_commands.get ();
 
-      fprintf_filtered (stream, "User %scommand \"",
-			c->is_prefix () ? "prefix" : "");
+      gdb_printf (stream, "User %scommand \"",
+		  c->is_prefix () ? "prefix" : "");
       fprintf_styled (stream, title_style.style (), "%s%s",
 		      prefix, name);
-      fprintf_filtered (stream, "\":\n");
+      gdb_printf (stream, "\":\n");
       if (cmdlines)
 	{
 	  print_command_lines (current_uiout, cmdlines, 1);
-	  fputs_filtered ("\n", stream);
+	  gdb_puts ("\n", stream);
 	}
     }
 

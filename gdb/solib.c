@@ -1,6 +1,6 @@
 /* Handle shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 1990-2021 Free Software Foundation, Inc.
+   Copyright (C) 1990-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -23,13 +23,14 @@
 #include <fcntl.h>
 #include "symtab.h"
 #include "bfd.h"
+#include "build-id.h"
 #include "symfile.h"
 #include "objfiles.h"
 #include "gdbcore.h"
 #include "command.h"
 #include "target.h"
 #include "frame.h"
-#include "gdb_regex.h"
+#include "gdbsupport/gdb_regex.h"
 #include "inferior.h"
 #include "gdbsupport/environ.h"
 #include "language.h"
@@ -48,6 +49,8 @@
 #include "filesystem.h"
 #include "gdb_bfd.h"
 #include "gdbsupport/filestuff.h"
+#include "gdbsupport/scoped_fd.h"
+#include "debuginfod-support.h"
 #include "source.h"
 #include "cli/cli-style.h"
 
@@ -98,14 +101,14 @@ struct target_so_ops *current_target_so_ops;
 /* If non-empty, this is a search path for loading non-absolute shared library
    symbol files.  This takes precedence over the environment variables PATH
    and LD_LIBRARY_PATH.  */
-static char *solib_search_path = NULL;
+static std::string solib_search_path;
 static void
 show_solib_search_path (struct ui_file *file, int from_tty,
 			struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("The search path for loading non-absolute "
-			    "shared library symbol files is %s.\n"),
-		    value);
+  gdb_printf (file, _("The search path for loading non-absolute "
+		      "shared library symbol files is %s.\n"),
+	      value);
 }
 
 /* Same as HAVE_DOS_BASED_FILE_SYSTEM, but useable as an rvalue.  */
@@ -157,7 +160,7 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
   int found_file = -1;
   gdb::unique_xmalloc_ptr<char> temp_pathname;
   const char *fskind = effective_target_file_system_kind ();
-  const char *sysroot = gdb_sysroot;
+  const char *sysroot = gdb_sysroot.c_str ();
   int prefix_len, orig_prefix_len;
 
   /* If the absolute prefix starts with "target:" but the filesystem
@@ -257,7 +260,8 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
     }
 
   /* Now see if we can open it.  */
-  found_file = gdb_open_cloexec (temp_pathname.get (), O_RDONLY | O_BINARY, 0);
+  found_file = gdb_open_cloexec (temp_pathname.get (),
+				 O_RDONLY | O_BINARY, 0).release ();
 
   /* If the search in gdb_sysroot failed, and the path name has a
      drive spec (e.g, c:/foo), try stripping ':' from the drive spec,
@@ -278,7 +282,7 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
 				   in_pathname + 2, (char *) NULL));
 
       found_file = gdb_open_cloexec (temp_pathname.get (),
-				     O_RDONLY | O_BINARY, 0);
+				     O_RDONLY | O_BINARY, 0).release ();
       if (found_file < 0)
 	{
 	  /* If the search in gdb_sysroot still failed, try fully
@@ -292,7 +296,7 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
 				       in_pathname + 2, (char *) NULL));
 
 	  found_file = gdb_open_cloexec (temp_pathname.get (),
-					 O_RDONLY | O_BINARY, 0);
+					 O_RDONLY | O_BINARY, 0).release ();
 	}
     }
 
@@ -321,8 +325,8 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
 
   /* If not found, and we're looking for a solib, search the
      solib_search_path (if any).  */
-  if (is_solib && found_file < 0 && solib_search_path != NULL)
-    found_file = openp (solib_search_path,
+  if (is_solib && found_file < 0 && !solib_search_path.empty ())
+    found_file = openp (solib_search_path.c_str (),
 			OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH,
 			in_pathname, O_RDONLY | O_BINARY, &temp_pathname);
 
@@ -330,8 +334,8 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
      solib_search_path (if any) for the basename only (ignoring the
      path).  This is to allow reading solibs from a path that differs
      from the opened path.  */
-  if (is_solib && found_file < 0 && solib_search_path != NULL)
-    found_file = openp (solib_search_path,
+  if (is_solib && found_file < 0 && !solib_search_path.empty ())
+    found_file = openp (solib_search_path.c_str (),
 			OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH,
 			target_lbasename (fskind, in_pathname),
 			O_RDONLY | O_BINARY, &temp_pathname);
@@ -380,7 +384,7 @@ exec_file_find (const char *in_pathname, int *fd)
   if (in_pathname == NULL)
     return NULL;
 
-  if (*gdb_sysroot != '\0' && IS_TARGET_ABSOLUTE_PATH (fskind, in_pathname))
+  if (!gdb_sysroot.empty () && IS_TARGET_ABSOLUTE_PATH (fskind, in_pathname))
     {
       result = solib_find_1 (in_pathname, fd, false);
 
@@ -510,12 +514,61 @@ solib_bfd_open (const char *pathname)
   /* Check bfd arch.  */
   b = gdbarch_bfd_arch_info (target_gdbarch ());
   if (!b->compatible (b, bfd_get_arch_info (abfd.get ())))
-    warning (_("`%s': Shared library architecture %s is not compatible "
-	       "with target architecture %s."), bfd_get_filename (abfd.get ()),
-	     bfd_get_arch_info (abfd.get ())->printable_name,
-	     b->printable_name);
+    error (_("`%s': Shared library architecture %s is not compatible "
+	     "with target architecture %s."), bfd_get_filename (abfd.get ()),
+	   bfd_get_arch_info (abfd.get ())->printable_name,
+	   b->printable_name);
 
   return abfd;
+}
+
+/* Mapping of a core file's shared library sonames to their respective
+   build-ids.  Added to the registries of core file bfds.  */
+
+typedef std::unordered_map<std::string, std::string> soname_build_id_map;
+
+/* Key used to associate a soname_build_id_map to a core file bfd.  */
+
+static const struct bfd_key<soname_build_id_map> cbfd_soname_build_id_data_key;
+
+/* See solib.h.  */
+
+void
+set_cbfd_soname_build_id (gdb_bfd_ref_ptr abfd,
+			  const char *soname,
+			  const bfd_build_id *build_id)
+{
+  gdb_assert (abfd.get () != nullptr);
+  gdb_assert (soname != nullptr);
+  gdb_assert (build_id != nullptr);
+
+  soname_build_id_map *mapptr = cbfd_soname_build_id_data_key.get (abfd.get ());
+
+  if (mapptr == nullptr)
+    mapptr = cbfd_soname_build_id_data_key.emplace (abfd.get ());
+
+  (*mapptr)[soname] = build_id_to_string (build_id);
+}
+
+/* See solib.h.  */
+
+gdb::unique_xmalloc_ptr<char>
+get_cbfd_soname_build_id (gdb_bfd_ref_ptr abfd, const char *soname)
+{
+  if (abfd.get () == nullptr || soname == nullptr)
+    return {};
+
+  soname_build_id_map *mapptr
+    = cbfd_soname_build_id_data_key.get (abfd.get ());
+
+  if (mapptr == nullptr)
+    return {};
+
+  auto it = mapptr->find (lbasename (soname));
+  if (it == mapptr->end ())
+    return {};
+
+  return make_unique_xstrdup (it->second.c_str ());
 }
 
 /* Given a pointer to one of the shared objects in our list of mapped
@@ -537,6 +590,36 @@ solib_map_sections (struct so_list *so)
 
   gdb::unique_xmalloc_ptr<char> filename (tilde_expand (so->so_name));
   gdb_bfd_ref_ptr abfd (ops->bfd_open (filename.get ()));
+  gdb::unique_xmalloc_ptr<char> build_id_hexstr
+    = get_cbfd_soname_build_id (current_program_space->cbfd, so->so_name);
+
+  /* If we already know the build-id of this solib from a core file, verify
+     it matches ABFD's build-id.  If there is a mismatch or the solib wasn't
+     found, attempt to query debuginfod for the correct solib.  */
+  if (build_id_hexstr.get () != nullptr)
+    {
+      bool mismatch = false;
+
+      if (abfd != nullptr && abfd->build_id != nullptr)
+	{
+	  std::string build_id = build_id_to_string (abfd->build_id);
+
+	  if (build_id != build_id_hexstr.get ())
+	    mismatch = true;
+	}
+      if (abfd == nullptr || mismatch)
+	{
+	  scoped_fd fd = debuginfod_exec_query ((const unsigned char*)
+						build_id_hexstr.get (),
+						0, so->so_name, &filename);
+
+	  if (fd.get () >= 0)
+	    abfd = ops->bfd_open (filename.get ());
+	  else if (mismatch)
+	    warning (_("Build-id of %ps does not match core file."),
+		     styled_string (file_name_style.style (), filename.get ()));
+	}
+    }
 
   if (abfd == NULL)
     return 0;
@@ -939,11 +1022,11 @@ solib_add (const char *pattern, int from_tty, int readsyms)
     {
       if (pattern != NULL)
 	{
-	  printf_unfiltered (_("Loading symbols for shared libraries: %s\n"),
-			     pattern);
+	  gdb_printf (_("Loading symbols for shared libraries: %s\n"),
+		      pattern);
 	}
       else
-	printf_unfiltered (_("Loading symbols for shared libraries.\n"));
+	gdb_printf (_("Loading symbols for shared libraries.\n"));
     }
 
   current_program_space->solib_add_generation++;
@@ -988,8 +1071,8 @@ solib_add (const char *pattern, int from_tty, int readsyms)
 		  /* If no pattern was given, be quiet for shared
 		     libraries we have already loaded.  */
 		  if (pattern && (from_tty || info_verbose))
-		    printf_unfiltered (_("Symbols already loaded for %s\n"),
-				       gdb->so_name);
+		    gdb_printf (_("Symbols already loaded for %s\n"),
+				gdb->so_name);
 		}
 	      else if (solib_read_symbols (gdb, add_flags))
 		loaded_any_symbols = true;
@@ -1000,7 +1083,7 @@ solib_add (const char *pattern, int from_tty, int readsyms)
       breakpoint_re_set ();
 
     if (from_tty && pattern && ! any_matches)
-      printf_unfiltered
+      gdb_printf
 	("No loaded shared libraries match the pattern `%s'.\n", pattern);
 
     if (loaded_any_symbols)
@@ -1276,7 +1359,7 @@ static void
 reload_shared_libraries_1 (int from_tty)
 {
   if (print_symbol_loading_p (from_tty, 0, 0))
-    printf_unfiltered (_("Loading symbols for shared libraries.\n"));
+    gdb_printf (_("Loading symbols for shared libraries.\n"));
 
   for (struct so_list *so : current_program_space->solibs ())
     {
@@ -1396,18 +1479,18 @@ gdb_sysroot_changed (const char *ignored, int from_tty,
   const char *old_prefix = "remote:";
   const char *new_prefix = TARGET_SYSROOT_PREFIX;
 
-  if (startswith (gdb_sysroot, old_prefix))
+  if (startswith (gdb_sysroot.c_str (), old_prefix))
     {
       static bool warning_issued = false;
 
       gdb_assert (strlen (old_prefix) == strlen (new_prefix));
-      memcpy (gdb_sysroot, new_prefix, strlen (new_prefix));
+      gdb_sysroot = new_prefix + gdb_sysroot.substr (strlen (old_prefix));
 
       if (!warning_issued)
 	{
 	  warning (_("\"%s\" is deprecated, use \"%s\" instead."),
 		   old_prefix, new_prefix);
-	  warning (_("sysroot set to \"%s\"."), gdb_sysroot);
+	  warning (_("sysroot set to \"%s\"."), gdb_sysroot.c_str ());
 
 	  warning_issued = true;
 	}
@@ -1420,8 +1503,8 @@ static void
 show_auto_solib_add (struct ui_file *file, int from_tty,
 		     struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("Autoloading of shared library symbols is %s.\n"),
-		    value);
+  gdb_printf (file, _("Autoloading of shared library symbols is %s.\n"),
+	      value);
 }
 
 
@@ -1468,9 +1551,9 @@ gdb_bfd_lookup_symbol_from_symtab (bfd *abfd,
 		{
 		  struct minimal_symbol msym {};
 
-		  SET_MSYMBOL_VALUE_ADDRESS (&msym, symaddr);
+		  msym.set_value_address (symaddr);
 		  gdbarch_elf_make_msymbol_special (gdbarch, sym, &msym);
-		  symaddr = MSYMBOL_VALUE_RAW_ADDRESS (&msym);
+		  symaddr = msym.value_raw_address ();
 		}
 
 	      /* BFD symbols are section relative.  */
@@ -1583,6 +1666,43 @@ gdb_bfd_scan_elf_dyntag (const int desired_dyntag, bfd *abfd, CORE_ADDR *ptr,
   }
 
   return 0;
+}
+
+/* See solib.h.  */
+
+gdb::unique_xmalloc_ptr<char>
+gdb_bfd_read_elf_soname (const char *filename)
+{
+  gdb_bfd_ref_ptr abfd = gdb_bfd_open (filename, gnutarget);
+
+  if (abfd == nullptr)
+    return {};
+
+  /* Check that ABFD is an ET_DYN ELF file.  */
+  if (!bfd_check_format (abfd.get (), bfd_object)
+      || !(bfd_get_file_flags (abfd.get ()) & DYNAMIC))
+    return {};
+
+  CORE_ADDR idx;
+  if (!gdb_bfd_scan_elf_dyntag (DT_SONAME, abfd.get (), &idx, nullptr))
+    return {};
+
+  struct bfd_section *dynstr = bfd_get_section_by_name (abfd.get (), ".dynstr");
+  int sect_size = bfd_section_size (dynstr);
+  if (dynstr == nullptr || sect_size <= idx)
+    return {};
+
+  /* Read soname from the string table.  */
+  gdb::byte_vector dynstr_buf;
+  if (!gdb_bfd_get_full_section_contents (abfd.get (), dynstr, &dynstr_buf))
+    return {};
+
+  /* Ensure soname is null-terminated before returning a copy.  */
+  char *soname = (char *) dynstr_buf.data () + idx;
+  if (strnlen (soname, sect_size - idx) == sect_size - idx)
+    return {};
+
+  return make_unique_xstrdup (soname);
 }
 
 /* Lookup the value for a specific symbol from symbol table.  Look up symbol

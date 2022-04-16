@@ -1,3 +1,191 @@
+2022-04-13  Alexander von Gluck IV  <kallisti5@unixzen.com>
+
+	* config.bfd (x86-haiku): Add i386_pei_vec as a selectable format.
+
+2022-04-08  Nick Clifton  <nickc@redhat.com>
+
+	PR 29038
+	* coffgen.c (coff_find_nearest_line_with_names): Fix typo
+	retrieving saved bias.
+
+2022-04-07  Mark Harmstone  <mark@harmstone.com>
+
+	* coff-i386.c (in_reloc_p): Add R_SECTION.
+	(howto_table): Add R_SECTION.
+	(coff_pe_i386_relocation_section): Add support for R_SECTION.
+	(coff_i386_reloc_type_lookup): Add support for
+	BFD_RELOC_16_SECCIDX.
+	* coff-x86_64.c (in_reloc_p): Add R_SECTION.
+	(howto_table): Add R_SECTION.
+	(coff_pe_amd64_relocation_section): Add support for R_SECTION.
+	(coff_amd64_reloc_type_lookup): Add support for
+	BFD_RELOC_16_SECCIDX.
+	* reloc.c: Add BFD_RELOC_16_SECIDX.
+	* bfd-in2.h: Regenerate.
+	* libbfd.h: Regenerate.
+
+2022-04-01  John Baldwin  <jhb@FreeBSD.org>
+
+	* elf-bfd.h (elfcore_write_x86_segbases): New.
+	* elf.c (elfcore_grok_freebsd_note): Add pseudosections for
+	NT_FREEBSD_X86_SEGBASES register notes.
+	(elfcore_write_x86_segbases): New.
+	(elfcore_write_register_note): Write NT_FREEBSD_X86_SEGBASES
+	register notes.
+
+2022-04-01  John Baldwin  <jhb@FreeBSD.org>
+
+	* elf.c (elfcore_grok_freebsd_note): Remove checks for namesz.
+
+2022-03-22  Steiner H Gunderson  <steinar+sourceware@gunderson.no>
+
+	* dwarf2.c (_bfd_dwarf2_find_nearest_line): if a function name is
+	found, but no line number info, then return a result of 2.
+
+2022-03-21  Steiner H Gunderson  <steinar+sourceware@gunderson.no>
+
+	PR 28978
+	* dwarf2.c (scan_unit_for_symbols): When performing second pass,
+	check to see if the function or variable being processed is the
+	same as the previous one.
+
+2022-03-18  Viorel Preoteasa  <viorel.preoteasa@gmail.com>
+
+	PR 28924
+	* elf32-arm.c (THM_MAX_FWD_BRANCH_OFFSET): Fix definition.
+	(THM2_MAX_FWD_BRANCH_OFFSET): Likewise.
+
+2022-03-16  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.am (ALL_MACHINES, ALL_MACHINES_CFILES):
+	Add cpu-amdgcn.c.
+	(BFD64_BACKENDS): Add elf64-amdgcn.lo.
+	(BFD64_BACKENDS_CFILES): Add elf64-amdgcn.c.
+	* Makefile.in: Re-generate.
+	* cpu-amdgcn.c: New.
+	* elf64-amdgcn.c: New.
+	* archures.c (bfd_architecture): Add bfd_arch_amdgcn and related
+	mach defines.
+	(bfd_amdgcn_arch): New.
+	(bfd_archures_list): Add bfd_amdgcn_arch.
+	* bfd-in2.h: Re-generate.
+	* config.bfd: Handle amdgcn* target.
+	* configure.ac: Handle amdgcn_elf64_le_vec.
+	* configure: Re-generate.
+	* elf-bfd.h (elf_target_id): Add AMDGCN_ELF_DATA.
+	* targets.c (amdgcn_elf64_le_vec): New.
+	(_bfd_target_vector): Add amdgcn_elf64_le_vec.
+
+2022-03-01  Torbjörn Svensson  <torbjorn.svensson@st.com>
+	    Fred Eisele  <fredrick.eisele@gmail.com>
+
+	PR 25713
+	* bfdio.c (_bfd_real_fopen): Fix typo.
+
+2022-03-01  Nick Clifton  <nickc@redhat.com>
+
+	PR 28848
+	* elf32-arm.c (elf32_arm_merge_eabi_attributes): If the first
+	input bfd has a Tag_ABI_HardFP_use set to 3 but does not also have
+	TAG_FP_arch set then reset the TAG_ABI_HardFP_use.
+
+2022-02-28  Torbjörn Svensson  <torbjorn.svensson@st.com>
+	    Fred Eisele  <fredrick.eisele@gmail.com>
+
+	PR 25713
+	* bfdio.c (_bfd_real_fopen): Fix handling of paths longer than 260
+	characters on Windows hosts.
+
+2022-02-28  Nick Clifton  <nickc@redhat.com>
+
+	PR 28886
+	* config.bfd: Update error message for obsolete configurations.
+
+2022-02-17  Nick Clifton  <nickc@redhat.com>
+
+	* po/sr.po: Updated Serbian translation.
+
+2022-02-16  Fangrui Song  <maskray@google.com>
+	Nick Clifton  <nickc@redhat.com>
+
+	PR ld/28841
+	* bfd-in2.h (struct bfd_section): Add type.
+	(discarded_section): Add field.
+	* elf.c (elf_fake_sections): Handle bfd_section::type.
+	* section.c (BFD_FAKE_SECTION): Add field.
+	* mri.c (mri_draw_tree): Update function call.
+
+2022-02-11  Michael Forney  <mforney@mforney.org>
+
+        * bfd.c (bfd_set_gp_value): Remove return with expression
+        in void function.
+
+2022-02-09  Nick Clifton  <nickc@redhat.com>
+
+	* config.bfd: Move pending obsolesence targets into the definitely
+	obsolete list.
+
+2022-02-02  Nick Clifton  <nickc@redhat.com>
+
+	PR 28834
+	* dwarf2.c (read_section): Change the heuristic that checks for
+	overlarge dwarf debug info sections.
+
+2022-02-02  Stafford Horne  <shorne@gmail.com>
+
+	PR 28735
+	* elf32-or1k.c (or1k_elf_got16_no_overflow_howto): Define.
+	(or1k_elf_relocate_section): Use new howto instead of trying to
+	mask out relocation bits.
+
+2022-01-24  Roland McGrath  <mcgrathr@google.com>
+
+	* doc/local.mk (%D%/bfdver.texi): Add mkdir command.
+
+2022-01-24  Nick Clifton  <nickc@redhat.com>
+
+	* po/fr.po: Updated French translation.
+	* po/ro.po: Updated Romanian translation.
+	* po/uk.po: Updated Ukranian translation.
+
+2022-01-22  Nick Clifton  <nickc@redhat.com>
+
+	* version.m4: Change to 2.38.50.
+	* configure: Regenerate.
+	* po/bfd.pot: Regenerate.
+
+2022-01-22  Nick Clifton  <nickc@redhat.com>
+
+	* 2.38 release branch created.
+
+2022-01-17  Nick Clifton  <nickc@redhat.com>
+
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+	* doc/Makefile.in: Regenerate.
+	* po/bfd.pot: Regenerate.
+
+2021-12-15  Nikita Popov  <npv1310@gmail.com>
+
+	PR 28687
+	* dwarf1.c (parse_die): Fix undefined behaviour in range tests.
+
+2021-11-17  Nick Clifton  <nickc@redhat.com>
+
+	PR 28452
+	* elf.c (assign_file_positions_for_non_load_sections): Replace
+	assertion with a warning message.
+
+2021-10-19  Nick Clifton  <nickc@redhat.com>
+
+	* linker.c (_bfd_generic_link_add_one_symbol): Test for a NULL
+	name before checking to see if the symbol is __gnu_lto_slim.
+	* archive.c (_bfd_compute_and_write_armap): Likewise.
+
+2021-09-27  Nick Alcock  <nick.alcock@oracle.com>
+
+	* configure: Regenerate.
+
 2021-09-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* archures.c (bfd_arch_list): Use 'char *' instead of 'char **'
@@ -2118,7 +2306,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021 Free Software Foundation, Inc.
+Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

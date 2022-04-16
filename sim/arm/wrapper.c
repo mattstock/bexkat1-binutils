@@ -1,5 +1,5 @@
 /* run front end support for arm
-   Copyright (C) 1995-2021 Free Software Foundation, Inc.
+   Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
    This file is part of ARM SIM.
 
@@ -66,6 +66,19 @@ static char opbuf[1000];
 
 static int ATTRIBUTE_PRINTF (2, 3)
 op_printf (char *buf, const char *fmt, ...)
+{
+  int ret;
+  va_list ap;
+
+  va_start (ap, fmt);
+  ret = vsprintf (opbuf + strlen (opbuf), fmt, ap);
+  va_end (ap);
+  return ret;
+}
+
+static int ATTRIBUTE_PRINTF (3, 4)
+op_styled_printf (char *buf, enum disassembler_style style,
+		  const char *fmt, ...)
 {
   int ret;
   va_list ap;
@@ -321,7 +334,7 @@ sim_create_inferior (SIM_DESC sd ATTRIBUTE_UNUSED,
     }
 
   memset (& info, 0, sizeof (info));
-  INIT_DISASSEMBLE_INFO (info, stdout, op_printf);
+  INIT_DISASSEMBLE_INFO (info, stdout, op_printf, op_styled_printf);
   info.read_memory_func = sim_dis_read;
   info.arch = bfd_get_arch (abfd);
   info.mach = bfd_get_mach (abfd);
@@ -825,10 +838,7 @@ sim_open (SIM_OPEN_KIND kind,
     }
 
   /* Check for/establish the a reference program image.  */
-  if (sim_analyze_program (sd,
-			   (STATE_PROG_ARGV (sd) != NULL
-			    ? *STATE_PROG_ARGV (sd)
-			    : NULL), abfd) != SIM_RC_OK)
+  if (sim_analyze_program (sd, STATE_PROG_FILE (sd), abfd) != SIM_RC_OK)
     {
       free_state (sd);
       return 0;

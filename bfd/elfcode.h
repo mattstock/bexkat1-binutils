@@ -1,5 +1,5 @@
 /* ELF executable support for BFD.
-   Copyright (C) 1991-2021 Free Software Foundation, Inc.
+   Copyright (C) 1991-2022 Free Software Foundation, Inc.
 
    Written by Fred Fish @ Cygnus Support, from information published
    in "UNIX System V Release 4, Programmers Guide: ANSI C and
@@ -325,9 +325,10 @@ elf_swap_shdr_in (bfd *abfd,
 	  && ((ufile_ptr) dst->sh_offset > filesize
 	      || dst->sh_size > filesize - dst->sh_offset))
 	{
+	  if (!abfd->read_only)
+	    _bfd_error_handler (_("warning: %pB has a section "
+				  "extending past end of file"), abfd);
 	  abfd->read_only = 1;
-	  _bfd_error_handler (_("warning: %pB has a section "
-				"extending past end of file"), abfd);
 	}
     }
   dst->sh_link = H_GET_32 (abfd, src->sh_link);
@@ -995,6 +996,19 @@ elf_write_relocs (bfd *abfd, asection *sec, void *data)
 	  *failedp = true;
 	  return;
 	}
+
+#if defined(BFD64) && ARCH_SIZE == 32
+      if (rela_hdr->sh_type == SHT_RELA
+	  && ptr->howto->bitsize > 32
+	  && ptr->addend - INT32_MIN > UINT32_MAX)
+	{
+	  _bfd_error_handler (_("%pB: %pA+%"BFD_VMA_FMT"x: "
+				"relocation addend %"BFD_VMA_FMT"x too large"),
+			      abfd, sec, ptr->address, ptr->addend);
+	  *failedp = true;
+	  bfd_set_error (bfd_error_bad_value);
+	}
+#endif
 
       src_rela.r_offset = ptr->address + addr_offset;
       src_rela.r_info = ELF_R_INFO (n, ptr->howto->type);

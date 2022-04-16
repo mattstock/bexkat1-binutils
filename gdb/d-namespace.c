@@ -1,6 +1,6 @@
 /* Helper routines for D support in GDB.
 
-   Copyright (C) 2014-2021 Free Software Foundation, Inc.
+   Copyright (C) 2014-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -23,7 +23,7 @@
 #include "language.h"
 #include "namespace.h"
 #include "d-lang.h"
-#include "gdb_obstack.h"
+#include "gdbsupport/gdb_obstack.h"
 #include "gdbarch.h"
 
 /* This returns the length of first component of NAME, which should be
@@ -130,7 +130,7 @@ d_lookup_symbol (const struct language_defn *langdef,
 	  if (lang_this.symbol == NULL)
 	    return {};
 
-	  type = check_typedef (TYPE_TARGET_TYPE (SYMBOL_TYPE (lang_this.symbol)));
+	  type = check_typedef (TYPE_TARGET_TYPE (lang_this.symbol->type ()));
 	  classname = type->name ();
 	  nested = name;
 	}
@@ -151,7 +151,7 @@ d_lookup_symbol (const struct language_defn *langdef,
 	return {};
 
       /* Look for a symbol named NESTED in this class.  */
-      sym = d_lookup_nested_symbol (SYMBOL_TYPE (class_sym.symbol),
+      sym = d_lookup_nested_symbol (class_sym.symbol->type (),
 				    nested.c_str (), block);
     }
 

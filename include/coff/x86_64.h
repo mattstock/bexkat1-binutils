@@ -1,5 +1,5 @@
 /* COFF information for AMD 64.
-   Copyright (C) 2006-2021 Free Software Foundation, Inc.
+   Copyright (C) 2006-2022 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -97,6 +97,7 @@ struct external_reloc
 
 #define R_DIR32		 6
 #define R_IMAGEBASE	 7
+#define R_SECTION	10
 #define R_SECREL32	11
 #define R_RELBYTE	15
 #define R_RELWORD	16

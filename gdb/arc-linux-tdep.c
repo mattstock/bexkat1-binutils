@@ -1,6 +1,6 @@
 /* Target dependent code for GNU/Linux ARC.
 
-   Copyright 2020-2021 Free Software Foundation, Inc.
+   Copyright 2020-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,6 +24,7 @@
 #include "opcode/arc.h"
 #include "osabi.h"
 #include "solib-svr4.h"
+#include "disasm.h"
 
 /* ARC header files.  */
 #include "opcodes/arc-dis.h"
@@ -410,7 +411,7 @@ static std::vector<CORE_ADDR>
 arc_linux_software_single_step (struct regcache *regcache)
 {
   struct gdbarch *gdbarch = regcache->arch ();
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  arc_gdbarch_tdep *tdep = (arc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   struct disassemble_info di = arc_disassemble_info (gdbarch);
 
   /* Read current instruction.  */
@@ -508,7 +509,7 @@ arc_linux_skip_solib_resolver (struct gdbarch *gdbarch, CORE_ADDR pc)
     {
       if (resolver.minsym != nullptr)
 	{
-	  CORE_ADDR res_addr = BMSYMBOL_VALUE_ADDRESS (resolver);
+	  CORE_ADDR res_addr = resolver.value_address ();
 	  arc_linux_debug_printf ("pc = %s, resolver at %s",
 				  print_core_address (gdbarch, pc),
 				  print_core_address (gdbarch, res_addr));
@@ -518,7 +519,7 @@ arc_linux_skip_solib_resolver (struct gdbarch *gdbarch, CORE_ADDR pc)
 				print_core_address (gdbarch, pc));
     }
 
-  if (resolver.minsym != nullptr && BMSYMBOL_VALUE_ADDRESS (resolver) == pc)
+  if (resolver.minsym != nullptr && resolver.value_address () == pc)
     {
       /* Find the return address.  */
       return frame_unwind_caller_pc (get_current_frame ());
@@ -692,7 +693,7 @@ arc_linux_core_read_description (struct gdbarch *gdbarch,
 static void
 arc_linux_init_osabi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  arc_gdbarch_tdep *tdep = (arc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
 
   arc_linux_debug_printf ("GNU/Linux OS/ABI initialization.");
 

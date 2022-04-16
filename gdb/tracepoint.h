@@ -1,5 +1,5 @@
 /* Data structures associated with tracepoints in GDB.
-   Copyright (C) 1997-2021 Free Software Foundation, Inc.
+   Copyright (C) 1997-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -159,7 +159,7 @@ struct trace_status
 
 struct trace_status *current_trace_status (void);
 
-extern char *default_collect;
+extern std::string default_collect;
 
 extern int trace_regblock_size;
 
@@ -313,11 +313,6 @@ private:
 extern void
   parse_static_tracepoint_marker_definition (const char *line, const char **pp,
 					     static_tracepoint_marker *marker);
-
-/* A hook used to notify the UI of tracepoint operations.  */
-
-extern void (*deprecated_trace_find_hook) (char *arg, int from_tty);
-extern void (*deprecated_trace_start_stop_hook) (int start, int from_tty);
 
 /* Returns the current traceframe number.  */
 extern int get_traceframe_number (void);

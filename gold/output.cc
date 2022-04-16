@@ -1,6 +1,6 @@
 // output.cc -- manage the output file for gold
 
-// Copyright (C) 2006-2021 Free Software Foundation, Inc.
+// Copyright (C) 2006-2022 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -1367,6 +1367,7 @@ Output_data_group<size, big_endian>::do_write(Output_file* of)
 template<int got_size, bool big_endian>
 void
 Output_data_got<got_size, big_endian>::Got_entry::write(
+    Output_data_got_base* got,
     unsigned int got_indx,
     unsigned char* pov) const
 {
@@ -1421,7 +1422,7 @@ Output_data_got<got_size, big_endian>::Got_entry::write(
 	    if (this->use_plt_or_tls_offset_
 		&& gsym->type() == elfcpp::STT_TLS)
 	      val += parameters->target().tls_offset_for_global(gsym,
-								got_indx,
+								got, got_indx,
 								this->addend_);
 	  }
       }
@@ -1451,7 +1452,7 @@ Output_data_got<got_size, big_endian>::Got_entry::write(
 	    val = convert_types<Valtype, uint64_t>(lval);
 	    if (this->use_plt_or_tls_offset_ && is_tls)
 	      val += parameters->target().tls_offset_for_local(object, lsi,
-							       got_indx,
+							       got, got_indx,
 							       this->addend_);
 	  }
       }
@@ -1699,7 +1700,7 @@ Output_data_got<got_size, big_endian>::do_write(Output_file* of)
   unsigned char* pov = oview;
   for (unsigned int i = 0; i < this->entries_.size(); ++i)
     {
-      this->entries_[i].write(i, pov);
+      this->entries_[i].write(this, i, pov);
       pov += add;
     }
 

@@ -1,5 +1,5 @@
 /* ECOFF debugging support.
-   Copyright (C) 1993-2021 Free Software Foundation, Inc.
+   Copyright (C) 1993-2022 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
    This file was put together by Ian Lance Taylor <ian@cygnus.com>.  A
    good deal of it comes directly from mips-tfile.c, by Michael
@@ -2312,7 +2312,7 @@ add_file (const char *file_name, int indx ATTRIBUTE_UNUSED, int fake)
    compiler output, only in hand coded assembler.  */
 
 void
-ecoff_new_file (const char *name, int appfile ATTRIBUTE_UNUSED)
+ecoff_new_file (const char *name)
 {
   if (cur_file_ptr != NULL && filename_cmp (cur_file_ptr->name, name) == 0)
     return;

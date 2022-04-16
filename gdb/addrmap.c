@@ -1,6 +1,6 @@
 /* addrmap.c --- implementation of address map data structure.
 
-   Copyright (C) 2007-2021 Free Software Foundation, Inc.
+   Copyright (C) 2007-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -19,7 +19,7 @@
 
 #include "defs.h"
 #include "splay-tree.h"
-#include "gdb_obstack.h"
+#include "gdbsupport/gdb_obstack.h"
 #include "addrmap.h"
 #include "gdbsupport/selftest.h"
 
@@ -612,10 +612,10 @@ addrmap_dump (struct addrmap *map, struct ui_file *outfile, void *payload)
       addr_str = "<ends here>";
 
     if (matches || previous_matched)
-      fprintf_filtered (outfile, "  %s%s %s\n",
-			payload != nullptr ? "  " : "",
-			core_addr_to_string (start_addr),
-			addr_str);
+      gdb_printf (outfile, "  %s%s %s\n",
+		  payload != nullptr ? "  " : "",
+		  core_addr_to_string (start_addr),
+		  addr_str);
 
     previous_matched = matches;
 

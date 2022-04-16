@@ -1,5 +1,5 @@
 /* RISC-V disassembler
-   Copyright (C) 2011-2021 Free Software Foundation, Inc.
+   Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
    Contributed by Andrew Waterman (andrew@sifive.com).
    Based on MIPS target.
@@ -27,12 +27,25 @@
 #include "opintl.h"
 #include "elf-bfd.h"
 #include "elf/riscv.h"
-#include "cpu-riscv.h"
+#include "elfxx-riscv.h"
 
 #include <stdint.h>
 #include <ctype.h>
 
+static enum riscv_spec_class default_isa_spec = ISA_SPEC_CLASS_DRAFT - 1;
 static enum riscv_spec_class default_priv_spec = PRIV_SPEC_CLASS_NONE;
+
+unsigned xlen = 0;
+
+static riscv_subset_list_t riscv_subsets;
+static riscv_parse_subset_t riscv_rps_dis =
+{
+  &riscv_subsets,	/* subset_list.  */
+  opcodes_error_handler,/* error_handler.  */
+  &xlen,		/* xlen.  */
+  &default_isa_spec,	/* isa_spec.  */
+  false,		/* check_unknown_prefixed_ext.  */
+};
 
 struct riscv_private_data
 {
@@ -152,7 +165,7 @@ arg_print (struct disassemble_info *info, unsigned long val,
 	   const char* const* array, size_t size)
 {
   const char *s = val >= size || array[val] == NULL ? "unknown" : array[val];
-  (*info->fprintf_func) (info->stream, "%s", s);
+  (*info->fprintf_styled_func) (info->stream, dis_style_text, "%s", s);
 }
 
 static void
@@ -177,41 +190,45 @@ maybe_print_address (struct riscv_private_data *pd, int base_reg, int offset,
 /* Print insn arguments for 32/64-bit code.  */
 
 static void
-print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
+print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info)
 {
   struct riscv_private_data *pd = info->private_data;
   int rs1 = (l >> OP_SH_RS1) & OP_MASK_RS1;
   int rd = (l >> OP_SH_RD) & OP_MASK_RD;
-  fprintf_ftype print = info->fprintf_func;
+  fprintf_styled_ftype print = info->fprintf_styled_func;
+  const char *opargStart;
 
-  if (*d != '\0')
-    print (info->stream, "\t");
+  if (*oparg != '\0')
+    print (info->stream, dis_style_text, "\t");
 
-  for (; *d != '\0'; d++)
+  for (; *oparg != '\0'; oparg++)
     {
-      switch (*d)
+      opargStart = oparg;
+      switch (*oparg)
 	{
 	case 'C': /* RVC */
-	  switch (*++d)
+	  switch (*++oparg)
 	    {
 	    case 's': /* RS1 x8-x15.  */
 	    case 'w': /* RS1 x8-x15.  */
-	      print (info->stream, "%s",
+	      print (info->stream, dis_style_register, "%s",
 		     riscv_gpr_names[EXTRACT_OPERAND (CRS1S, l) + 8]);
 	      break;
 	    case 't': /* RS2 x8-x15.  */
 	    case 'x': /* RS2 x8-x15.  */
-	      print (info->stream, "%s",
+	      print (info->stream, dis_style_register, "%s",
 		     riscv_gpr_names[EXTRACT_OPERAND (CRS2S, l) + 8]);
 	      break;
 	    case 'U': /* RS1, constrained to equal RD.  */
-	      print (info->stream, "%s", riscv_gpr_names[rd]);
+	      print (info->stream, dis_style_register,
+		     "%s", riscv_gpr_names[rd]);
 	      break;
 	    case 'c': /* RS1, constrained to equal sp.  */
-	      print (info->stream, "%s", riscv_gpr_names[X_SP]);
+	      print (info->stream, dis_style_register, "%s",
+		     riscv_gpr_names[X_SP]);
 	      break;
 	    case 'V': /* RS2 */
-	      print (info->stream, "%s",
+	      print (info->stream, dis_style_register, "%s",
 		     riscv_gpr_names[EXTRACT_OPERAND (CRS2, l)]);
 	      break;
 	    case 'o':
@@ -221,31 +238,40 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	      if (info->mach == bfd_mach_riscv64
 		  && ((l & MASK_C_ADDIW) == MATCH_C_ADDIW) && rd != 0)
 		maybe_print_address (pd, rd, EXTRACT_CITYPE_IMM (l), 1);
-	      print (info->stream, "%d", (int)EXTRACT_CITYPE_IMM (l));
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_CITYPE_IMM (l));
 	      break;
 	    case 'k':
-	      print (info->stream, "%d", (int)EXTRACT_CLTYPE_LW_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CLTYPE_LW_IMM (l));
 	      break;
 	    case 'l':
-	      print (info->stream, "%d", (int)EXTRACT_CLTYPE_LD_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CLTYPE_LD_IMM (l));
 	      break;
 	    case 'm':
-	      print (info->stream, "%d", (int)EXTRACT_CITYPE_LWSP_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CITYPE_LWSP_IMM (l));
 	      break;
 	    case 'n':
-	      print (info->stream, "%d", (int)EXTRACT_CITYPE_LDSP_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CITYPE_LDSP_IMM (l));
 	      break;
 	    case 'K':
-	      print (info->stream, "%d", (int)EXTRACT_CIWTYPE_ADDI4SPN_IMM (l));
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_CIWTYPE_ADDI4SPN_IMM (l));
 	      break;
 	    case 'L':
-	      print (info->stream, "%d", (int)EXTRACT_CITYPE_ADDI16SP_IMM (l));
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_CITYPE_ADDI16SP_IMM (l));
 	      break;
 	    case 'M':
-	      print (info->stream, "%d", (int)EXTRACT_CSSTYPE_SWSP_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CSSTYPE_SWSP_IMM (l));
 	      break;
 	    case 'N':
-	      print (info->stream, "%d", (int)EXTRACT_CSSTYPE_SDSP_IMM (l));
+	      print (info->stream, dis_style_address_offset, "%d",
+		     (int)EXTRACT_CSSTYPE_SDSP_IMM (l));
 	      break;
 	    case 'p':
 	      info->target = EXTRACT_CBTYPE_IMM (l) + pc;
@@ -256,22 +282,100 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	      (*info->print_address_func) (info->target, info);
 	      break;
 	    case 'u':
-	      print (info->stream, "0x%x",
+	      print (info->stream, dis_style_immediate, "0x%x",
 		     (int)(EXTRACT_CITYPE_IMM (l) & (RISCV_BIGIMM_REACH-1)));
 	      break;
 	    case '>':
-	      print (info->stream, "0x%x", (int)EXTRACT_CITYPE_IMM (l) & 0x3f);
+	      print (info->stream, dis_style_immediate, "0x%x",
+		     (int)EXTRACT_CITYPE_IMM (l) & 0x3f);
 	      break;
 	    case '<':
-	      print (info->stream, "0x%x", (int)EXTRACT_CITYPE_IMM (l) & 0x1f);
+	      print (info->stream, dis_style_immediate, "0x%x",
+		     (int)EXTRACT_CITYPE_IMM (l) & 0x1f);
 	      break;
 	    case 'T': /* Floating-point RS2.  */
-	      print (info->stream, "%s",
+	      print (info->stream, dis_style_register, "%s",
 		     riscv_fpr_names[EXTRACT_OPERAND (CRS2, l)]);
 	      break;
 	    case 'D': /* Floating-point RS2 x8-x15.  */
-	      print (info->stream, "%s",
+	      print (info->stream, dis_style_register, "%s",
 		     riscv_fpr_names[EXTRACT_OPERAND (CRS2S, l) + 8]);
+	      break;
+	    }
+	  break;
+
+	case 'V': /* RVV */
+	  switch (*++oparg)
+	    {
+	    case 'd':
+	    case 'f':
+	      print (info->stream, dis_style_register, "%s",
+		     riscv_vecr_names_numeric[EXTRACT_OPERAND (VD, l)]);
+	      break;
+	    case 'e':
+	      if (!EXTRACT_OPERAND (VWD, l))
+		print (info->stream, dis_style_register, "%s",
+		       riscv_gpr_names[0]);
+	      else
+		print (info->stream, dis_style_register, "%s",
+		       riscv_vecr_names_numeric[EXTRACT_OPERAND (VD, l)]);
+	      break;
+	    case 's':
+	      print (info->stream, dis_style_register, "%s",
+		     riscv_vecr_names_numeric[EXTRACT_OPERAND (VS1, l)]);
+	      break;
+	    case 't':
+	    case 'u': /* VS1 == VS2 already verified at this point.  */
+	    case 'v': /* VD == VS1 == VS2 already verified at this point.  */
+	      print (info->stream, dis_style_register, "%s",
+		     riscv_vecr_names_numeric[EXTRACT_OPERAND (VS2, l)]);
+	      break;
+	    case '0':
+	      print (info->stream, dis_style_register, "%s",
+		     riscv_vecr_names_numeric[0]);
+	      break;
+	    case 'b':
+	    case 'c':
+	      {
+		int imm = (*oparg == 'b') ? EXTRACT_RVV_VB_IMM (l)
+					  : EXTRACT_RVV_VC_IMM (l);
+		unsigned int imm_vlmul = EXTRACT_OPERAND (VLMUL, imm);
+		unsigned int imm_vsew = EXTRACT_OPERAND (VSEW, imm);
+		unsigned int imm_vta = EXTRACT_OPERAND (VTA, imm);
+		unsigned int imm_vma = EXTRACT_OPERAND (VMA, imm);
+		unsigned int imm_vtype_res = (imm >> 8);
+
+		if (imm_vsew < ARRAY_SIZE (riscv_vsew)
+		    && imm_vlmul < ARRAY_SIZE (riscv_vlmul)
+		    && imm_vta < ARRAY_SIZE (riscv_vta)
+		    && imm_vma < ARRAY_SIZE (riscv_vma)
+		    && !imm_vtype_res
+		    && riscv_vsew[imm_vsew] != NULL
+		    && riscv_vlmul[imm_vlmul] != NULL)
+		  print (info->stream, dis_style_text, "%s,%s,%s,%s",
+			 riscv_vsew[imm_vsew],
+			 riscv_vlmul[imm_vlmul], riscv_vta[imm_vta],
+			 riscv_vma[imm_vma]);
+		else
+		  print (info->stream, dis_style_immediate, "%d", imm);
+	      }
+	      break;
+	    case 'i':
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_RVV_VI_IMM (l));
+	      break;
+	    case 'j':
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_RVV_VI_UIMM (l));
+	      break;
+	    case 'k':
+	      print (info->stream, dis_style_immediate, "%d",
+		     (int)EXTRACT_RVV_OFFSET (l));
+	      break;
+	    case 'm':
+	      if (! EXTRACT_OPERAND (VMASK, l))
+		print (info->stream, dis_style_register, ",%s",
+		       riscv_vecm_names_numeric[0]);
 	      break;
 	    }
 	  break;
@@ -281,29 +385,29 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	case ')':
 	case '[':
 	case ']':
-	  print (info->stream, "%c", *d);
+	  print (info->stream, dis_style_text, "%c", *oparg);
 	  break;
 
 	case '0':
 	  /* Only print constant 0 if it is the last argument.  */
-	  if (!d[1])
-	    print (info->stream, "0");
+	  if (!oparg[1])
+	    print (info->stream, dis_style_immediate, "0");
 	  break;
 
 	case 'b':
 	case 's':
 	  if ((l & MASK_JALR) == MATCH_JALR)
 	    maybe_print_address (pd, rs1, 0, 0);
-	  print (info->stream, "%s", riscv_gpr_names[rs1]);
+	  print (info->stream, dis_style_register, "%s", riscv_gpr_names[rs1]);
 	  break;
 
 	case 't':
-	  print (info->stream, "%s",
+	  print (info->stream, dis_style_register, "%s",
 		 riscv_gpr_names[EXTRACT_OPERAND (RS2, l)]);
 	  break;
 
 	case 'u':
-	  print (info->stream, "0x%x",
+	  print (info->stream, dis_style_immediate, "0x%x",
 		 (unsigned)EXTRACT_UTYPE_IMM (l) >> RISCV_IMM_BITS);
 	  break;
 
@@ -332,12 +436,19 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	  if (info->mach == bfd_mach_riscv64
 	      && ((l & MASK_ADDIW) == MATCH_ADDIW) && rs1 != 0)
 	    maybe_print_address (pd, rs1, EXTRACT_ITYPE_IMM (l), 1);
-	  print (info->stream, "%d", (int)EXTRACT_ITYPE_IMM (l));
+	  print (info->stream, dis_style_immediate, "%d",
+		 (int)EXTRACT_ITYPE_IMM (l));
 	  break;
 
 	case 'q':
 	  maybe_print_address (pd, rs1, EXTRACT_STYPE_IMM (l), 0);
-	  print (info->stream, "%d", (int)EXTRACT_STYPE_IMM (l));
+	  print (info->stream, dis_style_address_offset, "%d",
+		 (int)EXTRACT_STYPE_IMM (l));
+	  break;
+
+	case 'f':
+	  print (info->stream, dis_style_address_offset, "%d",
+		 (int)EXTRACT_STYPE_IMM (l));
 	  break;
 
 	case 'a':
@@ -357,36 +468,45 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	    pd->hi_addr[rd] = EXTRACT_UTYPE_IMM (l);
 	  else if ((l & MASK_C_LUI) == MATCH_C_LUI)
 	    pd->hi_addr[rd] = EXTRACT_CITYPE_LUI_IMM (l);
-	  print (info->stream, "%s", riscv_gpr_names[rd]);
+	  print (info->stream, dis_style_register, "%s", riscv_gpr_names[rd]);
+	  break;
+
+	case 'y':
+	  print (info->stream, dis_style_text, "0x%x",
+		 (int)EXTRACT_OPERAND (BS, l));
 	  break;
 
 	case 'z':
-	  print (info->stream, "%s", riscv_gpr_names[0]);
+	  print (info->stream, dis_style_register, "%s", riscv_gpr_names[0]);
 	  break;
 
 	case '>':
-	  print (info->stream, "0x%x", (int)EXTRACT_OPERAND (SHAMT, l));
+	  print (info->stream, dis_style_immediate, "0x%x",
+		 (int)EXTRACT_OPERAND (SHAMT, l));
 	  break;
 
 	case '<':
-	  print (info->stream, "0x%x", (int)EXTRACT_OPERAND (SHAMTW, l));
+	  print (info->stream, dis_style_immediate, "0x%x",
+		 (int)EXTRACT_OPERAND (SHAMTW, l));
 	  break;
 
 	case 'S':
 	case 'U':
-	  print (info->stream, "%s", riscv_fpr_names[rs1]);
+	  print (info->stream, dis_style_register, "%s", riscv_fpr_names[rs1]);
 	  break;
 
 	case 'T':
-	  print (info->stream, "%s", riscv_fpr_names[EXTRACT_OPERAND (RS2, l)]);
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_fpr_names[EXTRACT_OPERAND (RS2, l)]);
 	  break;
 
 	case 'D':
-	  print (info->stream, "%s", riscv_fpr_names[rd]);
+	  print (info->stream, dis_style_register, "%s", riscv_fpr_names[rd]);
 	  break;
 
 	case 'R':
-	  print (info->stream, "%s", riscv_fpr_names[EXTRACT_OPERAND (RS3, l)]);
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_fpr_names[EXTRACT_OPERAND (RS3, l)]);
 	  break;
 
 	case 'E':
@@ -419,20 +539,26 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	      }
 
 	    if (riscv_csr_hash[csr] != NULL)
-	      print (info->stream, "%s", riscv_csr_hash[csr]);
+	      print (info->stream, dis_style_text, "%s", riscv_csr_hash[csr]);
 	    else
-	      print (info->stream, "0x%x", csr);
+	      print (info->stream, dis_style_text, "0x%x", csr);
 	    break;
 	  }
 
+	case 'Y':
+	  print (info->stream, dis_style_text, "0x%x",
+		 (int) EXTRACT_OPERAND (RNUM, l));
+	  break;
+
 	case 'Z':
-	  print (info->stream, "%d", rs1);
+	  print (info->stream, dis_style_text, "%d", rs1);
 	  break;
 
 	default:
 	  /* xgettext:c-format */
-	  print (info->stream, _("# internal error, undefined modifier (%c)"),
-		 *d);
+	  print (info->stream, dis_style_text,
+		 _("# internal error, undefined modifier (%c)"),
+		 *opargStart);
 	  return;
 	}
     }
@@ -500,8 +626,6 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
   op = riscv_hash[OP_HASH_IDX (word)];
   if (op != NULL)
     {
-      unsigned xlen = 0;
-
       /* If XLEN is not known, get its value from the ELF class.  */
       if (info->mach == bfd_mach_riscv64)
 	xlen = 64;
@@ -512,6 +636,10 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
 	  Elf_Internal_Ehdr *ehdr = elf_elfheader (info->section->owner);
 	  xlen = ehdr->e_ident[EI_CLASS] == ELFCLASS64 ? 64 : 32;
 	}
+
+      /* If arch has ZFINX flags, use gpr for disassemble.  */
+      if(riscv_subset_supports (&riscv_rps_dis, "zfinx"))
+	riscv_fpr_names = riscv_gpr_names_abi;
 
       for (; op->name; op++)
 	{
@@ -525,15 +653,20 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
 	  if ((op->xlen_requirement != 0) && (op->xlen_requirement != xlen))
 	    continue;
 
+	  if (!riscv_multi_subset_supports (&riscv_rps_dis, op->insn_class))
+	    continue;
+
 	  /* It's a match.  */
-	  (*info->fprintf_func) (info->stream, "%s", op->name);
+	  (*info->fprintf_styled_func) (info->stream, dis_style_mnemonic,
+					"%s", op->name);
 	  print_insn_args (op->args, word, memaddr, info);
 
 	  /* Try to disassemble multi-instruction addressing sequences.  */
 	  if (pd->print_addr != (bfd_vma)-1)
 	    {
 	      info->target = pd->print_addr;
-	      (*info->fprintf_func) (info->stream, " # ");
+	      (*info->fprintf_styled_func)
+		(info->stream, dis_style_comment_start, " # ");
 	      (*info->print_address_func) (info->target, info);
 	      pd->print_addr = -1;
 	    }
@@ -575,19 +708,24 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
     case 2:
     case 4:
     case 8:
-      (*info->fprintf_func) (info->stream, ".%dbyte\t0x%llx",
-                             insnlen, (unsigned long long) word);
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, ".%dbyte\t", insnlen);
+      (*info->fprintf_styled_func) (info->stream, dis_style_immediate,
+				    "0x%llx", (unsigned long long) word);
       break;
     default:
       {
         int i;
-        (*info->fprintf_func) (info->stream, ".byte\t");
+	(*info->fprintf_styled_func)
+	  (info->stream, dis_style_assembler_directive, ".byte\t");
         for (i = 0; i < insnlen; ++i)
           {
             if (i > 0)
-              (*info->fprintf_func) (info->stream, ", ");
-            (*info->fprintf_func) (info->stream, "0x%02x",
-                                   (unsigned int) (word & 0xff));
+	      (*info->fprintf_styled_func) (info->stream, dis_style_text,
+					    ", ");
+	    (*info->fprintf_styled_func) (info->stream, dis_style_immediate,
+					  "0x%02x",
+					  (unsigned int) (word & 0xff));
             word >>= 8;
           }
       }
@@ -766,23 +904,35 @@ riscv_disassemble_data (bfd_vma memaddr ATTRIBUTE_UNUSED,
     {
     case 1:
       info->bytes_per_line = 6;
-      (*info->fprintf_func) (info->stream, ".byte\t0x%02llx",
-			     (unsigned long long) data);
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, ".byte\t");
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, "0x%02llx",
+	 (unsigned long long) data);
       break;
     case 2:
       info->bytes_per_line = 8;
-      (*info->fprintf_func) (info->stream, ".short\t0x%04llx",
-			     (unsigned long long) data);
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, ".short\t");
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_immediate, "0x%04llx",
+	 (unsigned long long) data);
       break;
     case 4:
       info->bytes_per_line = 8;
-      (*info->fprintf_func) (info->stream, ".word\t0x%08llx",
-			     (unsigned long long) data);
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, ".word\t");
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_immediate, "0x%08llx",
+	 (unsigned long long) data);
       break;
     case 8:
       info->bytes_per_line = 8;
-      (*info->fprintf_func) (info->stream, ".dword\t0x%016llx",
-			     (unsigned long long) data);
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_assembler_directive, ".dword\t");
+      (*info->fprintf_styled_func)
+	(info->stream, dis_style_immediate, "0x%016llx",
+	 (unsigned long long) data);
       break;
     default:
       abort ();
@@ -850,11 +1000,13 @@ print_insn_riscv (bfd_vma memaddr, struct disassemble_info *info)
 disassembler_ftype
 riscv_get_disassembler (bfd *abfd)
 {
+  const char *default_arch = "rv64gc";
+
   if (abfd)
     {
       const struct elf_backend_data *ebd = get_elf_backend_data (abfd);
       if (ebd)
-        {
+	{
 	  const char *sec_name = ebd->obj_attrs_section;
 	  if (bfd_get_section_by_name (abfd, sec_name) != NULL)
 	    {
@@ -866,10 +1018,14 @@ riscv_get_disassembler (bfd *abfd)
 						      attr[Tag_b].i,
 						      attr[Tag_c].i,
 						      &default_priv_spec);
+	      default_arch = attr[Tag_RISCV_arch].s;
 	    }
-        }
+	}
     }
-   return print_insn_riscv;
+
+  riscv_release_subset_list (&riscv_subsets);
+  riscv_parse_subset (&riscv_rps_dis, default_arch);
+  return print_insn_riscv;
 }
 
 /* Prevent use of the fake labels that are generated as part of the DWARF
@@ -889,24 +1045,153 @@ riscv_symbol_is_valid (asymbol * sym,
   return (strcmp (name, RISCV_FAKE_LABEL_NAME) != 0
 	  && !riscv_elf_is_mapping_symbols (name));
 }
+
+
+/* Indices into option argument vector for options accepting an argument.
+   Use RISCV_OPTION_ARG_NONE for options accepting no argument.  */
+
+typedef enum
+{
+  RISCV_OPTION_ARG_NONE = -1,
+  RISCV_OPTION_ARG_PRIV_SPEC,
+
+  RISCV_OPTION_ARG_COUNT
+} riscv_option_arg_t;
+
+/* Valid RISCV disassembler options.  */
+
+static struct
+{
+  const char *name;
+  const char *description;
+  riscv_option_arg_t arg;
+} riscv_options[] =
+{
+  { "numeric",
+    N_("Print numeric register names, rather than ABI names."),
+    RISCV_OPTION_ARG_NONE },
+  { "no-aliases",
+    N_("Disassemble only into canonical instructions."),
+    RISCV_OPTION_ARG_NONE },
+  { "priv-spec=",
+    N_("Print the CSR according to the chosen privilege spec."),
+    RISCV_OPTION_ARG_PRIV_SPEC }
+};
+
+/* Build the structure representing valid RISCV disassembler options.
+   This is done dynamically for maintenance ease purpose; a static
+   initializer would be unreadable.  */
+
+const disasm_options_and_args_t *
+disassembler_options_riscv (void)
+{
+  static disasm_options_and_args_t *opts_and_args;
+
+  if (opts_and_args == NULL)
+    {
+      size_t num_options = ARRAY_SIZE (riscv_options);
+      size_t num_args = RISCV_OPTION_ARG_COUNT;
+      disasm_option_arg_t *args;
+      disasm_options_t *opts;
+      size_t i, priv_spec_count;
+
+      args = XNEWVEC (disasm_option_arg_t, num_args + 1);
+
+      args[RISCV_OPTION_ARG_PRIV_SPEC].name = "SPEC";
+      priv_spec_count = PRIV_SPEC_CLASS_DRAFT - PRIV_SPEC_CLASS_NONE - 1;
+      args[RISCV_OPTION_ARG_PRIV_SPEC].values
+        = XNEWVEC (const char *, priv_spec_count + 1);
+      for (i = 0; i < priv_spec_count; i++)
+	args[RISCV_OPTION_ARG_PRIV_SPEC].values[i]
+          = riscv_priv_specs[i].name;
+      /* The array we return must be NULL terminated.  */
+      args[RISCV_OPTION_ARG_PRIV_SPEC].values[i] = NULL;
+
+      /* The array we return must be NULL terminated.  */
+      args[num_args].name = NULL;
+      args[num_args].values = NULL;
+
+      opts_and_args = XNEW (disasm_options_and_args_t);
+      opts_and_args->args = args;
+
+      opts = &opts_and_args->options;
+      opts->name = XNEWVEC (const char *, num_options + 1);
+      opts->description = XNEWVEC (const char *, num_options + 1);
+      opts->arg = XNEWVEC (const disasm_option_arg_t *, num_options + 1);
+      for (i = 0; i < num_options; i++)
+	{
+	  opts->name[i] = riscv_options[i].name;
+	  opts->description[i] = _(riscv_options[i].description);
+	  if (riscv_options[i].arg != RISCV_OPTION_ARG_NONE)
+	    opts->arg[i] = &args[riscv_options[i].arg];
+	  else
+	    opts->arg[i] = NULL;
+	}
+      /* The array we return must be NULL terminated.  */
+      opts->name[i] = NULL;
+      opts->description[i] = NULL;
+      opts->arg[i] = NULL;
+    }
+
+  return opts_and_args;
+}
 
 void
 print_riscv_disassembler_options (FILE *stream)
 {
+  const disasm_options_and_args_t *opts_and_args;
+  const disasm_option_arg_t *args;
+  const disasm_options_t *opts;
+  size_t max_len = 0;
+  size_t i;
+  size_t j;
+
+  opts_and_args = disassembler_options_riscv ();
+  opts = &opts_and_args->options;
+  args = opts_and_args->args;
+
   fprintf (stream, _("\n\
-The following RISC-V-specific disassembler options are supported for use\n\
+The following RISC-V specific disassembler options are supported for use\n\
 with the -M switch (multiple options should be separated by commas):\n"));
+  fprintf (stream, "\n");
 
-  fprintf (stream, _("\n\
-  numeric         Print numeric register names, rather than ABI names.\n"));
+  /* Compute the length of the longest option name.  */
+  for (i = 0; opts->name[i] != NULL; i++)
+    {
+      size_t len = strlen (opts->name[i]);
 
-  fprintf (stream, _("\n\
-  no-aliases      Disassemble only into canonical instructions, rather\n\
-                  than into pseudoinstructions.\n"));
+      if (opts->arg[i] != NULL)
+	len += strlen (opts->arg[i]->name);
+      if (max_len < len)
+	max_len = len;
+    }
 
-  fprintf (stream, _("\n\
-  priv-spec=PRIV  Print the CSR according to the chosen privilege spec\n\
-                  (1.9, 1.9.1, 1.10, 1.11).\n"));
+  for (i = 0, max_len++; opts->name[i] != NULL; i++)
+    {
+      fprintf (stream, "  %s", opts->name[i]);
+      if (opts->arg[i] != NULL)
+	fprintf (stream, "%s", opts->arg[i]->name);
+      if (opts->description[i] != NULL)
+	{
+	  size_t len = strlen (opts->name[i]);
+
+	  if (opts->arg != NULL && opts->arg[i] != NULL)
+	    len += strlen (opts->arg[i]->name);
+	  fprintf (stream, "%*c %s", (int) (max_len - len), ' ',
+                   opts->description[i]);
+	}
+      fprintf (stream, "\n");
+    }
+
+  for (i = 0; args[i].name != NULL; i++)
+    {
+      fprintf (stream, _("\n\
+  For the options above, the following values are supported for \"%s\":\n   "),
+	       args[i].name);
+      for (j = 0; args[i].values[j] != NULL; j++)
+	fprintf (stream, " %s", args[i].values[j]);
+      fprintf (stream, _("\n"));
+    }
 
   fprintf (stream, _("\n"));
 }

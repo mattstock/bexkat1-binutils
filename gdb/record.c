@@ -1,6 +1,6 @@
 /* Process record and replay target for GDB, the GNU debugger.
 
-   Copyright (C) 2008-2021 Free Software Foundation, Inc.
+   Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -55,7 +55,7 @@ struct cmd_list_element *info_record_cmdlist = NULL;
 
 #define DEBUG(msg, args...)						\
   if (record_debug)							\
-    fprintf_unfiltered (gdb_stdlog, "record: " msg "\n", ##args)
+    gdb_printf (gdb_stdlog, "record: " msg "\n", ##args)
 
 /* See record.h.  */
 
@@ -257,8 +257,8 @@ static void
 show_record_debug (struct ui_file *file, int from_tty,
 		   struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("Debugging of process record target is %s.\n"),
-		    value);
+  gdb_printf (file, _("Debugging of process record target is %s.\n"),
+	      value);
 }
 
 /* Alias for "target record".  */
@@ -279,14 +279,14 @@ cmd_record_delete (const char *args, int from_tty)
 
   if (!target_record_is_replaying (inferior_ptid))
     {
-      printf_unfiltered (_("Already at end of record list.\n"));
+      gdb_printf (_("Already at end of record list.\n"));
       return;
     }
 
   if (!target_supports_delete_record ())
     {
-      printf_unfiltered (_("The current record target does not support "
-			   "this operation.\n"));
+      gdb_printf (_("The current record target does not support "
+		    "this operation.\n"));
       return;
     }
 
@@ -308,8 +308,8 @@ cmd_record_stop (const char *args, int from_tty)
   record_stop (t);
   record_unpush (t);
 
-  printf_unfiltered (_("Process record is stopped and all execution "
-		       "logs are deleted.\n"));
+  gdb_printf (_("Process record is stopped and all execution "
+		"logs are deleted.\n"));
 
   gdb::observers::record_changed.notify (current_inferior (), 0, NULL, NULL);
 }
@@ -325,11 +325,11 @@ info_record_command (const char *args, int from_tty)
   t = find_record_target ();
   if (t == NULL)
     {
-      printf_filtered (_("No recording is currently active.\n"));
+      gdb_printf (_("No recording is currently active.\n"));
       return;
     }
 
-  printf_filtered (_("Active record target: %s\n"), t->shortname ());
+  gdb_printf (_("Active record target: %s\n"), t->shortname ());
   t->info_record ();
 }
 
@@ -793,17 +793,16 @@ A size of \"unlimited\" means unlimited lines.  The default is 10."),
 
   add_com_alias ("rec", record_cmd, class_obscure, 1);
 
-  cmd_list_element *set_record_cmd
-    = add_basic_prefix_cmd ("record", class_support,
-			    _("Set record options."), &set_record_cmdlist,
-			    0, &setlist);
-  add_alias_cmd ("rec", set_record_cmd, class_obscure, 1, &setlist);
+  set_show_commands setshow_record_cmds
+    = add_setshow_prefix_cmd ("record", class_support,
+			      _("Set record options."),
+			      _("Show record options."),
+			      &set_record_cmdlist, &show_record_cmdlist,
+			      &setlist, &showlist);
 
-  cmd_list_element *show_record_cmd
-    = add_show_prefix_cmd ("record", class_support,
-			   _("Show record options."), &show_record_cmdlist,
-			   0, &showlist);
-  add_alias_cmd ("rec", show_record_cmd, class_obscure, 1, &showlist);
+
+  add_alias_cmd ("rec", setshow_record_cmds.set, class_obscure, 1, &setlist);
+  add_alias_cmd ("rec", setshow_record_cmds.show, class_obscure, 1, &showlist);
 
   cmd_list_element *info_record_cmd
     = add_prefix_cmd ("record", class_support, info_record_command,

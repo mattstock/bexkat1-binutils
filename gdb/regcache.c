@@ -1,6 +1,6 @@
 /* Cache and manage the values of registers for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -620,15 +620,12 @@ template<typename T, typename>
 enum register_status
 readable_regcache::raw_read (int regnum, T *val)
 {
-  gdb_byte *buf;
-  enum register_status status;
-
   assert_regnum (regnum);
-  buf = (gdb_byte *) alloca (m_descr->sizeof_register[regnum]);
-  status = raw_read (regnum, buf);
+  size_t len = m_descr->sizeof_register[regnum];
+  gdb_byte *buf = (gdb_byte *) alloca (len);
+  register_status status = raw_read (regnum, buf);
   if (status == REG_VALID)
-    *val = extract_integer<T> (buf,
-			       m_descr->sizeof_register[regnum],
+    *val = extract_integer<T> ({buf, len},
 			       gdbarch_byte_order (m_descr->gdbarch));
   else
     *val = 0;
@@ -712,7 +709,7 @@ readable_regcache::cooked_read (int regnum, gdb_byte *buf)
       computed = gdbarch_pseudo_register_read_value (m_descr->gdbarch,
 						     this, regnum);
       if (value_entirely_available (computed))
-	memcpy (buf, value_contents_raw (computed),
+	memcpy (buf, value_contents_raw (computed).data (),
 		m_descr->sizeof_register[regnum]);
       else
 	{
@@ -749,7 +746,7 @@ readable_regcache::cooked_read_value (int regnum)
 	 direction than in the other one, even though the value-based
 	 API is preferred.  */
       if (cooked_read (regnum,
-		       value_contents_raw (result)) == REG_UNAVAILABLE)
+		       value_contents_raw (result).data ()) == REG_UNAVAILABLE)
 	mark_value_bytes_unavailable (result, 0,
 				      TYPE_LENGTH (value_type (result)));
 
@@ -772,14 +769,12 @@ template<typename T, typename>
 enum register_status
 readable_regcache::cooked_read (int regnum, T *val)
 {
-  enum register_status status;
-  gdb_byte *buf;
-
   gdb_assert (regnum >= 0 && regnum < m_descr->nr_cooked_registers);
-  buf = (gdb_byte *) alloca (m_descr->sizeof_register[regnum]);
-  status = cooked_read (regnum, buf);
+  size_t len = m_descr->sizeof_register[regnum];
+  gdb_byte *buf = (gdb_byte *) alloca (len);
+  register_status status = cooked_read (regnum, buf);
   if (status == REG_VALID)
-    *val = extract_integer<T> (buf, m_descr->sizeof_register[regnum],
+    *val = extract_integer<T> ({buf, len},
 			       gdbarch_byte_order (m_descr->gdbarch));
   else
     *val = 0;
@@ -1169,7 +1164,12 @@ regcache::transfer_regset_register (struct regcache *out_regcache, int regnum,
 	memset (out_buf + offs + reg_size, 0, slot_size - reg_size);
     }
   else if (in_buf != nullptr)
-    out_regcache->raw_supply_part (regnum, 0, reg_size, in_buf + offs);
+    {
+      /* Zero-extend the register value if the slot is smaller than the register.  */
+      if (slot_size < register_size (gdbarch, regnum))
+	out_regcache->raw_supply_zeroed (regnum);
+      out_regcache->raw_supply_part (regnum, 0, reg_size, in_buf + offs);
+    }
   else
     {
       /* Invalidate the register.  */
@@ -1383,34 +1383,34 @@ regcache::debug_print_register (const char *func,  int regno)
 {
   struct gdbarch *gdbarch = arch ();
 
-  fprintf_unfiltered (gdb_stdlog, "%s ", func);
+  gdb_printf (gdb_stdlog, "%s ", func);
   if (regno >= 0 && regno < gdbarch_num_regs (gdbarch)
       && gdbarch_register_name (gdbarch, regno) != NULL
       && gdbarch_register_name (gdbarch, regno)[0] != '\0')
-    fprintf_unfiltered (gdb_stdlog, "(%s)",
-			gdbarch_register_name (gdbarch, regno));
+    gdb_printf (gdb_stdlog, "(%s)",
+		gdbarch_register_name (gdbarch, regno));
   else
-    fprintf_unfiltered (gdb_stdlog, "(%d)", regno);
+    gdb_printf (gdb_stdlog, "(%d)", regno);
   if (regno >= 0 && regno < gdbarch_num_regs (gdbarch))
     {
       enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
       int size = register_size (gdbarch, regno);
       gdb_byte *buf = register_buffer (regno);
 
-      fprintf_unfiltered (gdb_stdlog, " = ");
+      gdb_printf (gdb_stdlog, " = ");
       for (int i = 0; i < size; i++)
 	{
-	  fprintf_unfiltered (gdb_stdlog, "%02x", buf[i]);
+	  gdb_printf (gdb_stdlog, "%02x", buf[i]);
 	}
       if (size <= sizeof (LONGEST))
 	{
 	  ULONGEST val = extract_unsigned_integer (buf, size, byte_order);
 
-	  fprintf_unfiltered (gdb_stdlog, " %s %s",
-			      core_addr_to_string_nz (val), plongest (val));
+	  gdb_printf (gdb_stdlog, " %s %s",
+		      core_addr_to_string_nz (val), plongest (val));
 	}
     }
-  fprintf_unfiltered (gdb_stdlog, "\n");
+  gdb_printf (gdb_stdlog, "\n");
 }
 
 /* Implement 'maint flush register-cache' command.  */
@@ -1421,7 +1421,7 @@ reg_flush_command (const char *command, int from_tty)
   /* Force-flush the register cache.  */
   registers_changed ();
   if (from_tty)
-    printf_filtered (_("Register cache flushed.\n"));
+    gdb_printf (_("Register cache flushed.\n"));
 }
 
 void
@@ -1441,7 +1441,7 @@ register_dump::dump (ui_file *file)
     {
       /* Name.  */
       if (regnum < 0)
-	fprintf_unfiltered (file, " %-10s", "Name");
+	gdb_printf (file, " %-10s", "Name");
       else
 	{
 	  const char *p = gdbarch_register_name (m_gdbarch, regnum);
@@ -1450,31 +1450,31 @@ register_dump::dump (ui_file *file)
 	    p = "";
 	  else if (p[0] == '\0')
 	    p = "''";
-	  fprintf_unfiltered (file, " %-10s", p);
+	  gdb_printf (file, " %-10s", p);
 	}
 
       /* Number.  */
       if (regnum < 0)
-	fprintf_unfiltered (file, " %4s", "Nr");
+	gdb_printf (file, " %4s", "Nr");
       else
-	fprintf_unfiltered (file, " %4d", regnum);
+	gdb_printf (file, " %4d", regnum);
 
       /* Relative number.  */
       if (regnum < 0)
-	fprintf_unfiltered (file, " %4s", "Rel");
+	gdb_printf (file, " %4s", "Rel");
       else if (regnum < gdbarch_num_regs (m_gdbarch))
-	fprintf_unfiltered (file, " %4d", regnum);
+	gdb_printf (file, " %4d", regnum);
       else
-	fprintf_unfiltered (file, " %4d",
-			    (regnum - gdbarch_num_regs (m_gdbarch)));
+	gdb_printf (file, " %4d",
+		    (regnum - gdbarch_num_regs (m_gdbarch)));
 
       /* Offset.  */
       if (regnum < 0)
-	fprintf_unfiltered (file, " %6s  ", "Offset");
+	gdb_printf (file, " %6s  ", "Offset");
       else
 	{
-	  fprintf_unfiltered (file, " %6ld",
-			      descr->register_offset[regnum]);
+	  gdb_printf (file, " %6ld",
+		      descr->register_offset[regnum]);
 	  if (register_offset != descr->register_offset[regnum]
 	      || (regnum > 0
 		  && (descr->register_offset[regnum]
@@ -1484,19 +1484,19 @@ register_dump::dump (ui_file *file)
 	    {
 	      if (!footnote_register_offset)
 		footnote_register_offset = ++footnote_nr;
-	      fprintf_unfiltered (file, "*%d", footnote_register_offset);
+	      gdb_printf (file, "*%d", footnote_register_offset);
 	    }
 	  else
-	    fprintf_unfiltered (file, "  ");
+	    gdb_printf (file, "  ");
 	  register_offset = (descr->register_offset[regnum]
 			     + descr->sizeof_register[regnum]);
 	}
 
       /* Size.  */
       if (regnum < 0)
-	fprintf_unfiltered (file, " %5s ", "Size");
+	gdb_printf (file, " %5s ", "Size");
       else
-	fprintf_unfiltered (file, " %5ld", descr->sizeof_register[regnum]);
+	gdb_printf (file, " %5ld", descr->sizeof_register[regnum]);
 
       /* Type.  */
       {
@@ -1522,24 +1522,24 @@ register_dump::dump (ui_file *file)
 	    if (startswith (t, blt))
 	      t += strlen (blt);
 	  }
-	fprintf_unfiltered (file, " %-15s", t);
+	gdb_printf (file, " %-15s", t);
       }
 
       /* Leading space always present.  */
-      fprintf_unfiltered (file, " ");
+      gdb_printf (file, " ");
 
       dump_reg (file, regnum);
 
-      fprintf_unfiltered (file, "\n");
+      gdb_printf (file, "\n");
     }
 
   if (footnote_register_offset)
-    fprintf_unfiltered (file, "*%d: Inconsistent register offsets.\n",
-			footnote_register_offset);
+    gdb_printf (file, "*%d: Inconsistent register offsets.\n",
+		footnote_register_offset);
   if (footnote_register_type_name_null)
-    fprintf_unfiltered (file,
-			"*%d: Register type's name NULL.\n",
-			footnote_register_type_name_null);
+    gdb_printf (file,
+		"*%d: Register type's name NULL.\n",
+		footnote_register_type_name_null);
 }
 
 #if GDB_SELF_TEST

@@ -1,7 +1,7 @@
 /* Get info from stack frames; convert between frames, blocks,
    functions and pc values.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -95,7 +95,7 @@ get_pc_function_start (CORE_ADDR pc)
 
       if (symbol)
 	{
-	  bl = SYMBOL_BLOCK_VALUE (symbol);
+	  bl = symbol->value_block ();
 	  return BLOCK_ENTRY_PC (bl);
 	}
     }
@@ -103,7 +103,7 @@ get_pc_function_start (CORE_ADDR pc)
   msymbol = lookup_minimal_symbol_by_pc (pc);
   if (msymbol.minsym)
     {
-      CORE_ADDR fstart = BMSYMBOL_VALUE_ADDRESS (msymbol);
+      CORE_ADDR fstart = msymbol.value_address ();
 
       if (find_pc_section (fstart))
 	return fstart;
@@ -254,10 +254,10 @@ find_pc_partial_function_sym (CORE_ADDR pc,
       f = find_pc_sect_function (mapped_pc, section);
       if (f != NULL
 	  && (msymbol.minsym == NULL
-	      || (BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (f))
-		  >= BMSYMBOL_VALUE_ADDRESS (msymbol))))
+	      || (BLOCK_ENTRY_PC (f->value_block ())
+		  >= msymbol.value_address ())))
 	{
-	  const struct block *b = SYMBOL_BLOCK_VALUE (f);
+	  const struct block *b = f->value_block ();
 
 	  cache_pc_function_sym = f;
 	  cache_pc_function_section = section;
@@ -326,7 +326,7 @@ find_pc_partial_function_sym (CORE_ADDR pc,
       return false;
     }
 
-  cache_pc_function_low = BMSYMBOL_VALUE_ADDRESS (msymbol);
+  cache_pc_function_low = msymbol.value_address ();
   cache_pc_function_sym = msymbol.minsym;
   cache_pc_function_section = section;
   cache_pc_function_high = minimal_symbol_upper_bound (msymbol);
@@ -425,8 +425,8 @@ find_function_type (CORE_ADDR pc)
 {
   struct symbol *sym = find_pc_function (pc);
 
-  if (sym != NULL && BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (sym)) == pc)
-    return SYMBOL_TYPE (sym);
+  if (sym != NULL && BLOCK_ENTRY_PC (sym->value_block ()) == pc)
+    return sym->type ();
 
   return NULL;
 }

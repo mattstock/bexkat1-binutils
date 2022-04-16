@@ -1,6 +1,6 @@
 /* Target dependent code for ARC architecture, for GDB.
 
-   Copyright 2005-2021 Free Software Foundation, Inc.
+   Copyright 2005-2022 Free Software Foundation, Inc.
    Contributed by Synopsys Inc.
 
    This file is part of GDB.
@@ -110,7 +110,7 @@ enum arc_regnum
 /* Special value for register offset arrays.  */
 #define ARC_OFFSET_NO_REGISTER (-1)
 
-#define arc_print(fmt, args...) fprintf_unfiltered (gdb_stdlog, fmt, ##args)
+#define arc_print(fmt, args...) gdb_printf (gdb_stdlog, fmt, ##args)
 
 extern bool arc_debug;
 
@@ -121,27 +121,27 @@ extern bool arc_debug;
 
 /* Target-dependent information.  */
 
-struct gdbarch_tdep
+struct arc_gdbarch_tdep : gdbarch_tdep
 {
   /* Offset to PC value in jump buffer.  If this is negative, longjmp
      support will be disabled.  */
-  int jb_pc;
+  int jb_pc = 0;
 
   /* Whether target has hardware (aka zero-delay) loops.  */
-  bool has_hw_loops;
+  bool has_hw_loops = false;
 
   /* Detect sigtramp.  */
-  bool (*is_sigtramp) (struct frame_info *);
+  bool (*is_sigtramp) (struct frame_info *) = nullptr;
 
   /* Get address of sigcontext for sigtramp.  */
-  CORE_ADDR (*sigcontext_addr) (struct frame_info *);
+  CORE_ADDR (*sigcontext_addr) (struct frame_info *) = nullptr;
 
   /* Offset of registers in `struct sigcontext'.  */
-  const int *sc_reg_offset;
+  const int *sc_reg_offset = nullptr;
 
   /* Number of registers in sc_reg_offsets.  Most likely a ARC_LAST_REGNUM,
      but in theory it could be less, so it is kept separate.  */
-  int sc_num_regs;
+  int sc_num_regs = 0;
 };
 
 /* Utility functions used by other ARC-specific modules.  */

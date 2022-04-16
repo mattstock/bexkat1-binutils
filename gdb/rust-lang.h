@@ -1,6 +1,6 @@
 /* Rust language support definitions for GDB, the GNU debugger.
 
-   Copyright (C) 2016-2021 Free Software Foundation, Inc.
+   Copyright (C) 2016-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -84,8 +84,9 @@ public:
 
   /* See language.h.  */
 
-  bool sniff_from_mangled_name (const char *mangled,
-				char **demangled) const override
+  bool sniff_from_mangled_name
+       (const char *mangled, gdb::unique_xmalloc_ptr<char> *demangled)
+       const override
   {
     *demangled = gdb_demangle (mangled, DMGL_PARAMS | DMGL_ANSI);
     return *demangled != NULL;
@@ -93,7 +94,8 @@ public:
 
   /* See language.h.  */
 
-  char *demangle_symbol (const char *mangled, int options) const override
+  gdb::unique_xmalloc_ptr<char> demangle_symbol (const char *mangled,
+						 int options) const override
   {
     return gdb_demangle (mangled, options);
   }
@@ -111,9 +113,8 @@ public:
   {
     type = check_typedef (TYPE_TARGET_TYPE (check_typedef (type)));
     std::string name = type_to_string (type);
-    return gdb::unique_xmalloc_ptr<char>
-      (xstrprintf ("*(%s as *mut %s)", core_addr_to_string (addr),
-		   name.c_str ()));
+    return xstrprintf ("*(%s as *mut %s)", core_addr_to_string (addr),
+		       name.c_str ());
   }
 
   /* See language.h.  */
@@ -121,6 +122,11 @@ public:
   void value_print_inner
 	(struct value *val, struct ui_file *stream, int recurse,
 	 const struct value_print_options *options) const override;
+
+  /* See language.h.  */
+
+  void value_print (struct value *val, struct ui_file *stream,
+		    const struct value_print_options *options) const override;
 
   /* See language.h.  */
 
@@ -132,11 +138,11 @@ public:
 
     if (symbol_lookup_debug)
       {
-	fprintf_unfiltered (gdb_stdlog,
-			    "rust_lookup_symbol_non_local"
-			    " (%s, %s (scope %s), %s)\n",
-			    name, host_address_to_string (block),
-			    block_scope (block), domain_name (domain));
+	gdb_printf (gdb_stdlog,
+		    "rust_lookup_symbol_non_local"
+		    " (%s, %s (scope %s), %s)\n",
+		    name, host_address_to_string (block),
+		    block_scope (block), domain_name (domain));
       }
 
     /* Look up bare names in the block's scope.  */
@@ -177,9 +183,9 @@ public:
   void printchar (int ch, struct type *chtype,
 		  struct ui_file *stream) const override
   {
-    fputs_filtered ("'", stream);
+    gdb_puts ("'", stream);
     emitchar (ch, chtype, stream, '\'');
-    fputs_filtered ("'", stream);
+    gdb_puts ("'", stream);
   }
 
   /* See language.h.  */
@@ -195,9 +201,9 @@ public:
 		      struct ui_file *stream) const override
   {
     type = check_typedef (type);
-    fprintf_filtered (stream, "type %s = ", new_symbol->print_name ());
+    gdb_printf (stream, "type %s = ", new_symbol->print_name ());
     type_print (type, "", stream, 0);
-    fprintf_filtered (stream, ";");
+    gdb_printf (stream, ";");
   }
 
   /* See language.h.  */

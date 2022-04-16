@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2021 Free Software Foundation, Inc.
+# Copyright (C) 2007-2022 Free Software Foundation, Inc.
 
 # This file is part of GDB.
 
@@ -47,6 +47,7 @@
 WHICH = mips-linux mips-dsp-linux \
 	mips64-linux mips64-dsp-linux \
 	nios2-linux \
+	or1k-linux \
 	rs6000/powerpc-32 \
 	rs6000/powerpc-32l rs6000/powerpc-altivec32l rs6000/powerpc-e500l \
 	rs6000/powerpc-64l rs6000/powerpc-altivec64l rs6000/powerpc-vsx32l \
@@ -172,6 +173,7 @@ GDB = false
 aarch64-feature = 1
 arm-feature = 1
 i386-feature = 1
+loongarch-feature = 1
 riscv-feature = 1
 tic6x-feature = 1
 
@@ -203,6 +205,7 @@ FEATURE_XMLFILES = aarch64-core.xml \
 	arm/arm-core.xml \
 	arm/arm-fpa.xml \
 	arm/arm-m-profile.xml \
+	arm/arm-m-profile-mve.xml \
 	arm/arm-m-profile-with-fpa.xml \
 	arm/arm-vfpv2.xml \
 	arm/arm-vfpv3.xml \
@@ -213,7 +216,6 @@ FEATURE_XMLFILES = aarch64-core.xml \
 	i386/32bit-avx.xml \
 	i386/32bit-mpx.xml \
 	i386/32bit-avx512.xml \
-	i386/32bit-pkeys.xml \
 	i386/32bit-segments.xml \
 	i386/64bit-avx512.xml \
 	i386/64bit-core.xml \
@@ -221,9 +223,11 @@ FEATURE_XMLFILES = aarch64-core.xml \
 	i386/64bit-segments.xml \
 	i386/64bit-avx.xml \
 	i386/64bit-linux.xml \
-	i386/64bit-pkeys.xml \
 	i386/64bit-sse.xml \
+	i386/pkeys.xml \
 	i386/x32-core.xml \
+	loongarch/base32.xml \
+	loongarch/base64.xml \
 	riscv/rv32e-xregs.xml \
 	riscv/32bit-cpu.xml \
 	riscv/32bit-fpu.xml \

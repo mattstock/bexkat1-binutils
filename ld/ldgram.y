@@ -1,5 +1,5 @@
 /* A YACC grammar to parse a superset of the AT&T linker scripting language.
-   Copyright (C) 1991-2021 Free Software Foundation, Inc.
+   Copyright (C) 1991-2022 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support (steve@cygnus.com).
 
    This file is part of the GNU Binutils.
@@ -47,6 +47,7 @@
 #endif
 
 static enum section_type sectype;
+static etree_type *sectype_value;
 static lang_memory_region_type *region;
 
 static bool ldgram_had_keep = false;
@@ -139,6 +140,7 @@ static int error_index;
 %token LD_FEATURE
 %token NOLOAD DSECT COPY INFO OVERLAY
 %token READONLY
+%token TYPE
 %token DEFINED TARGET_K SEARCH_DIR MAP ENTRY
 %token <integer> NEXT
 %token SIZEOF ALIGNOF ADDR LOADADDR MAX_K MIN_K
@@ -1058,9 +1060,8 @@ section:	NAME
 			{
 			  ldlex_popstate ();
 			  ldlex_wild ();
-			  lang_enter_output_section_statement($1, $3, sectype,
-							      $5, $7, $4,
-							      $8, $6);
+			  lang_enter_output_section_statement ($1, $3, sectype,
+					sectype_value, $5, $7, $4, $8, $6);
 			}
 		'{'
 		statement_list_opt
@@ -1130,8 +1131,10 @@ type:
 	|  COPY    { sectype = noalloc_section; }
 	|  INFO    { sectype = noalloc_section; }
 	|  OVERLAY { sectype = noalloc_section; }
+        |  READONLY '(' TYPE '=' exp ')' { sectype = typed_readonly_section; sectype_value = $5; }
 	|  READONLY { sectype = readonly_section; }
-	;
+	|  TYPE '=' exp { sectype = type_section; sectype_value = $3; }
+        ;
 
 atype:
 		'(' type ')'
@@ -1262,6 +1265,10 @@ phdr_type:
 			    $$ = exp_intop (0x6474e550);
 			  else if (strcmp (s, "PT_GNU_STACK") == 0)
 			    $$ = exp_intop (0x6474e551);
+			  else if (strcmp (s, "PT_GNU_RELRO") == 0)
+			    $$ = exp_intop (0x6474e552);
+			  else if (strcmp (s, "PT_GNU_PROPERTY") == 0)
+			    $$ = exp_intop (0x6474e553);
 			  else
 			    {
 			      einfo (_("\

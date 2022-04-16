@@ -2,7 +2,7 @@
    Written by Fred Fish <fnf@cygnus.com>
    Rewritten by Jim Blandy <jimb@cygnus.com>
 
-   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+   Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -157,7 +157,7 @@ struct bcache
   /* Print statistics on this bcache's memory usage and efficacity at
      eliminating duplication.  TYPE should be a string describing the
      kind of data this bcache holds.  Statistics are printed using
-     `printf_filtered' and its ilk.  */
+     `gdb_printf' and its ilk.  */
   void print_statistics (const char *type);
   int memory_used ();
 

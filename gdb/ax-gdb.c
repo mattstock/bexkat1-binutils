@@ -1,6 +1,6 @@
 /* GDB-specific functions for operating on agent expressions.
 
-   Copyright (C) 1998-2021 Free Software Foundation, Inc.
+   Copyright (C) 1998-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -499,7 +499,7 @@ gen_offset (struct agent_expr *ax, int offset)
 static void
 gen_sym_offset (struct agent_expr *ax, struct symbol *var)
 {
-  gen_offset (ax, SYMBOL_VALUE (var));
+  gen_offset (ax, var->value_longest ());
 }
 
 
@@ -510,7 +510,7 @@ static void
 gen_var_ref (struct agent_expr *ax, struct axs_value *value, struct symbol *var)
 {
   /* Dereference any typedefs.  */
-  value->type = check_typedef (SYMBOL_TYPE (var));
+  value->type = check_typedef (var->type ());
   value->optimized_out = 0;
 
   if (SYMBOL_COMPUTED_OPS (var) != NULL)
@@ -520,15 +520,15 @@ gen_var_ref (struct agent_expr *ax, struct axs_value *value, struct symbol *var)
     }
 
   /* I'm imitating the code in read_var_value.  */
-  switch (SYMBOL_CLASS (var))
+  switch (var->aclass ())
     {
     case LOC_CONST:		/* A constant, like an enum value.  */
-      ax_const_l (ax, (LONGEST) SYMBOL_VALUE (var));
+      ax_const_l (ax, (LONGEST) var->value_longest ());
       value->kind = axs_rvalue;
       break;
 
     case LOC_LABEL:		/* A goto label, being used as a value.  */
-      ax_const_l (ax, (LONGEST) SYMBOL_VALUE_ADDRESS (var));
+      ax_const_l (ax, (LONGEST) var->value_address ());
       value->kind = axs_rvalue;
       break;
 
@@ -540,7 +540,7 @@ gen_var_ref (struct agent_expr *ax, struct axs_value *value, struct symbol *var)
       /* Variable at a fixed location in memory.  Easy.  */
     case LOC_STATIC:
       /* Push the address of the variable.  */
-      ax_const_l (ax, SYMBOL_VALUE_ADDRESS (var));
+      ax_const_l (ax, var->value_address ());
       value->kind = axs_lvalue_memory;
       break;
 
@@ -571,7 +571,7 @@ gen_var_ref (struct agent_expr *ax, struct axs_value *value, struct symbol *var)
       break;
 
     case LOC_BLOCK:
-      ax_const_l (ax, BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (var)));
+      ax_const_l (ax, BLOCK_ENTRY_PC (var->value_block ()));
       value->kind = axs_rvalue;
       break;
 
@@ -603,13 +603,13 @@ gen_var_ref (struct agent_expr *ax, struct axs_value *value, struct symbol *var)
 	  error (_("Couldn't resolve symbol `%s'."), var->print_name ());
 
 	/* Push the address of the variable.  */
-	ax_const_l (ax, BMSYMBOL_VALUE_ADDRESS (msym));
+	ax_const_l (ax, msym.value_address ());
 	value->kind = axs_lvalue_memory;
       }
       break;
 
     case LOC_COMPUTED:
-      gdb_assert_not_reached (_("LOC_COMPUTED variable missing a method"));
+      gdb_assert_not_reached ("LOC_COMPUTED variable missing a method");
 
     case LOC_OPTIMIZED_OUT:
       /* Flag this, but don't say anything; leave it up to callers to
@@ -1310,14 +1310,14 @@ gen_primitive_field (struct agent_expr *ax, struct axs_value *value,
   if (TYPE_FIELD_PACKED (type, fieldno))
     gen_bitfield_ref (ax, value, type->field (fieldno).type (),
 		      (offset * TARGET_CHAR_BIT
-		       + TYPE_FIELD_BITPOS (type, fieldno)),
+		       + type->field (fieldno).loc_bitpos ()),
 		      (offset * TARGET_CHAR_BIT
-		       + TYPE_FIELD_BITPOS (type, fieldno)
+		       + type->field (fieldno).loc_bitpos ()
 		       + TYPE_FIELD_BITSIZE (type, fieldno)));
   else
     {
       gen_offset (ax, offset
-		  + TYPE_FIELD_BITPOS (type, fieldno) / TARGET_CHAR_BIT);
+		  + type->field (fieldno).loc_bitpos () / TARGET_CHAR_BIT);
       value->kind = axs_lvalue_memory;
       value->type = type->field (fieldno).type ();
     }
@@ -1337,7 +1337,7 @@ gen_struct_ref_recursive (struct agent_expr *ax, struct axs_value *value,
 
   for (i = type->num_fields () - 1; i >= nbases; i--)
     {
-      const char *this_name = TYPE_FIELD_NAME (type, i);
+      const char *this_name = type->field (i).name ();
 
       if (this_name)
 	{
@@ -1438,16 +1438,16 @@ static void
 gen_static_field (struct agent_expr *ax, struct axs_value *value,
 		  struct type *type, int fieldno)
 {
-  if (TYPE_FIELD_LOC_KIND (type, fieldno) == FIELD_LOC_KIND_PHYSADDR)
+  if (type->field (fieldno).loc_kind () == FIELD_LOC_KIND_PHYSADDR)
     {
-      ax_const_l (ax, TYPE_FIELD_STATIC_PHYSADDR (type, fieldno));
+      ax_const_l (ax, type->field (fieldno).loc_physaddr ());
       value->kind = axs_lvalue_memory;
       value->type = type->field (fieldno).type ();
       value->optimized_out = 0;
     }
   else
     {
-      const char *phys_name = TYPE_FIELD_STATIC_PHYSNAME (type, fieldno);
+      const char *phys_name = type->field (fieldno).loc_physname ();
       struct symbol *sym = lookup_symbol (phys_name, 0, VAR_DOMAIN, 0).symbol;
 
       if (sym)
@@ -1481,7 +1481,7 @@ gen_struct_elt_for_reference (struct agent_expr *ax, struct axs_value *value,
 
   for (i = t->num_fields () - 1; i >= TYPE_N_BASECLASSES (t); i--)
     {
-      const char *t_field_name = TYPE_FIELD_NAME (t, i);
+      const char *t_field_name = t->field (i).name ();
 
       if (t_field_name && strcmp (t_field_name, fieldname) == 0)
 	{
@@ -1823,6 +1823,25 @@ unop_cast_operation::do_generate_ax (struct expression *exp,
 {
   std::get<0> (m_storage)->generate_ax (exp, ax, value,
 					std::get<1> (m_storage));
+}
+
+void
+unop_extract_operation::do_generate_ax (struct expression *exp,
+					struct agent_expr *ax,
+					struct axs_value *value,
+					struct type *cast_type)
+{
+  std::get<0> (m_storage)->generate_ax (exp, ax, value);
+
+  struct type *to_type = get_type ();
+
+  if (!is_scalar_type (to_type))
+    error (_("can't generate agent expression to extract non-scalar type"));
+
+  if (to_type->is_unsigned ())
+    gen_extend (ax, to_type);
+  else
+    gen_sign_extend (ax, to_type);
 }
 
 void
@@ -2491,7 +2510,7 @@ agent_eval_command_one (const char *exp, int eval, CORE_ADDR pc)
 }
 
 static void
-agent_command_1 (const char *exp, int eval)
+maint_agent_command_1 (const char *exp, int eval)
 {
   /* We don't deal with overlay debugging at the moment.  We need to
      think more carefully about this.  If you copy this code into
@@ -2529,9 +2548,9 @@ agent_command_1 (const char *exp, int eval)
 }
 
 static void
-agent_command (const char *exp, int from_tty)
+maint_agent_command (const char *exp, int from_tty)
 {
-  agent_command_1 (exp, 0);
+  maint_agent_command_1 (exp, 0);
 }
 
 /* Parse the given expression, compile it into an agent expression
@@ -2539,9 +2558,9 @@ agent_command (const char *exp, int from_tty)
    expression.  */
 
 static void
-agent_eval_command (const char *exp, int from_tty)
+maint_agent_eval_command (const char *exp, int from_tty)
 {
-  agent_command_1 (exp, 1);
+  maint_agent_command_1 (exp, 1);
 }
 
 /* Parse the given expression, compile it into an agent expression
@@ -2620,7 +2639,7 @@ void _initialize_ax_gdb ();
 void
 _initialize_ax_gdb ()
 {
-  add_cmd ("agent", class_maintenance, agent_command,
+  add_cmd ("agent", class_maintenance, maint_agent_command,
 	   _("\
 Translate an expression into remote agent bytecode for tracing.\n\
 Usage: maint agent [-at LOCATION,] EXPRESSION\n\
@@ -2628,7 +2647,7 @@ If -at is given, generate remote agent bytecode for this location.\n\
 If not, generate remote agent bytecode for current frame pc address."),
 	   &maintenancelist);
 
-  add_cmd ("agent-eval", class_maintenance, agent_eval_command,
+  add_cmd ("agent-eval", class_maintenance, maint_agent_eval_command,
 	   _("\
 Translate an expression into remote agent bytecode for evaluation.\n\
 Usage: maint agent-eval [-at LOCATION,] EXPRESSION\n\

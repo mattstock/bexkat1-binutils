@@ -1,5 +1,5 @@
 /* dwarf.h - DWARF support header file
-   Copyright (C) 2005-2021 Free Software Foundation, Inc.
+   Copyright (C) 2005-2022 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -122,6 +122,7 @@ enum dwarf_section_display_enum
   gnu_debugaltlink,
   debug_sup,
   separate_debug_str,
+  note_gnu_build_id,
   max
 };
 
@@ -180,9 +181,13 @@ typedef struct
   /* This is an array of offsets to the location view table.  */
   dwarf_vma *    loc_views;
   int *          have_frame_base;
+
+  /* Information for associating location lists with CUs.  */
   unsigned int   num_loc_offsets;
   unsigned int   max_loc_offsets;
   unsigned int   num_loc_views;
+  dwarf_vma      loclists_base;
+
   /* List of .debug_ranges offsets seen in this .debug_info.  */
   dwarf_vma *    range_lists;
   unsigned int   num_range_lists;
@@ -223,6 +228,9 @@ extern int do_debug_cu_index;
 extern int do_wide;
 extern int do_debug_links;
 extern int do_follow_links;
+#ifdef HAVE_LIBDEBUGINFOD
+extern int use_debuginfod;
+#endif
 extern bool do_checks;
 
 extern int dwarf_cutoff_level;

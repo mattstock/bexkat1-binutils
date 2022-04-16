@@ -1,6 +1,6 @@
 /* DWARF 2 debugging format support for GDB.
 
-   Copyright (C) 1994-2021 Free Software Foundation, Inc.
+   Copyright (C) 1994-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -35,8 +35,8 @@ line_header::add_include_dir (const char *include_dir)
 	new_size = m_include_dirs.size ();
       else
 	new_size = m_include_dirs.size () + 1;
-      fprintf_unfiltered (gdb_stdlog, "Adding dir %zu: %s\n",
-			  new_size, include_dir);
+      gdb_printf (gdb_stdlog, "Adding dir %zu: %s\n",
+		  new_size, include_dir);
     }
   m_include_dirs.push_back (include_dir);
 }
@@ -54,13 +54,13 @@ line_header::add_file_name (const char *name,
 	new_size = file_names_size ();
       else
 	new_size = file_names_size () + 1;
-      fprintf_unfiltered (gdb_stdlog, "Adding file %zu: %s\n",
-			  new_size, name);
+      gdb_printf (gdb_stdlog, "Adding file %zu: %s\n",
+		  new_size, name);
     }
   m_file_names.emplace_back (name, d_index, mod_time, length);
 }
 
-gdb::unique_xmalloc_ptr<char>
+std::string
 line_header::file_file_name (int file) const
 {
   /* Is the file number a valid index into the line header's file name
@@ -73,26 +73,20 @@ line_header::file_file_name (int file) const
 	{
 	  const char *dir = fe->include_dir (this);
 	  if (dir != NULL)
-	    return gdb::unique_xmalloc_ptr<char> (concat (dir, SLASH_STRING,
-							  fe->name,
-							  (char *) NULL));
+	    return string_printf ("%s/%s", dir, fe->name);
 	}
-      return make_unique_xstrdup (fe->name);
+
+      return fe->name;
     }
   else
     {
       /* The compiler produced a bogus file number.  We can at least
 	 record the macro definitions made in the file, even if we
 	 won't be able to find the file by name.  */
-      char fake_name[80];
-
-      xsnprintf (fake_name, sizeof (fake_name),
-		 "<bad macro file number %d>", file);
-
       complaint (_("bad file number in macro information (%d)"),
 		 file);
 
-      return make_unique_xstrdup (fake_name);
+      return string_printf ("<bad macro file number %d>", file);
     }
 }
 
@@ -137,7 +131,7 @@ read_checked_initial_length_and_offset (bfd *abfd, const gdb_byte *buf,
 static void
 read_formatted_entries (dwarf2_per_objfile *per_objfile, bfd *abfd,
 			const gdb_byte **bufp, struct line_header *lh,
-			const struct comp_unit_head *cu_header,
+			unsigned int offset_size,
 			void (*callback) (struct line_header *lh,
 					  const char *name,
 					  dir_index d_index,
@@ -187,9 +181,12 @@ read_formatted_entries (dwarf2_per_objfile *per_objfile, bfd *abfd,
 	      break;
 
 	    case DW_FORM_line_strp:
-	      string.emplace
-		(per_objfile->read_line_string (buf, cu_header, &bytes_read));
-	      buf += bytes_read;
+	      {
+		const char *str
+		  = per_objfile->read_line_string (buf, offset_size);
+		string.emplace (str);
+		buf += offset_size;
+	      }
 	      break;
 
 	    case DW_FORM_data1:
@@ -372,7 +369,7 @@ dwarf_decode_line_header  (sect_offset sect_off, bool is_dwz,
     {
       /* Read directory table.  */
       read_formatted_entries (per_objfile, abfd, &line_ptr, lh.get (),
-			      cu_header,
+			      offset_size,
 			      [] (struct line_header *header, const char *name,
 				  dir_index d_index, unsigned int mod_time,
 				  unsigned int length)
@@ -382,7 +379,7 @@ dwarf_decode_line_header  (sect_offset sect_off, bool is_dwz,
 
       /* Read file name table.  */
       read_formatted_entries (per_objfile, abfd, &line_ptr, lh.get (),
-			      cu_header,
+			      offset_size,
 			      [] (struct line_header *header, const char *name,
 				  dir_index d_index, unsigned int mod_time,
 				  unsigned int length)

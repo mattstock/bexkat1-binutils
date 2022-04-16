@@ -1,6 +1,6 @@
 /* Memory-access and commands for "inferior" process, for GDB.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -71,16 +71,16 @@ static void step_1 (int, int, const char *);
    Arguments are separated by spaces.  Empty string (pointer to '\0')
    means no args.  */
 
-static char *inferior_args_scratch;
+static std::string inferior_args_scratch;
 
 /* Scratch area where the new cwd will be stored by 'set cwd'.  */
 
-static char *inferior_cwd_scratch;
+static std::string inferior_cwd_scratch;
 
 /* Scratch area where 'set inferior-tty' will store user-provided value.
    We'll immediate copy it into per-inferior storage.  */
 
-static char *inferior_io_terminal_scratch;
+static std::string inferior_io_terminal_scratch;
 
 /* Pid of our debugged inferior, or 0 if no inferior now.
    Since various parts of infrun.c test this to see whether there is a program
@@ -117,9 +117,9 @@ show_inferior_tty_command (struct ui_file *file, int from_tty,
      directly.  */
   const std::string &inferior_tty = current_inferior ()->tty ();
 
-  fprintf_filtered (gdb_stdout,
-		    _("Terminal for future runs of program being debugged "
-		      "is \"%s\".\n"), inferior_tty.c_str ());
+  gdb_printf (file,
+	      _("Terminal for future runs of program being debugged "
+		"is \"%s\".\n"), inferior_tty.c_str ());
 }
 
 void
@@ -177,16 +177,16 @@ show_cwd_command (struct ui_file *file, int from_tty,
   const std::string &cwd = current_inferior ()->cwd ();
 
   if (cwd.empty ())
-    fprintf_filtered (gdb_stdout,
-		      _("\
+    gdb_printf (file,
+		_("\
 You have not set the inferior's current working directory.\n\
 The inferior will inherit GDB's cwd if native debugging, or the remote\n\
 server's cwd if remote debugging.\n"));
   else
-    fprintf_filtered (gdb_stdout,
-		      _("Current working directory that will be used "
-			"when starting the inferior is \"%s\".\n"),
-		      cwd.c_str ());
+    gdb_printf (file,
+		_("Current working directory that will be used "
+		  "when starting the inferior is \"%s\".\n"),
+		cwd.c_str ());
 }
 
 
@@ -336,7 +336,7 @@ prepare_execution_command (struct target_ops *target, int background)
 {
   /* If we get a request for running in the bg but the target
      doesn't support it, error out.  */
-  if (background && !target->can_async_p ())
+  if (background && !target_can_async_p (target))
     error (_("Asynchronous execution not supported on this target."));
 
   if (!background)
@@ -395,7 +395,7 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
      to check again here.  Since reopen_exec_file doesn't do anything
      if the timestamp hasn't changed, I don't see the harm.  */
   reopen_exec_file ();
-  reread_symbols ();
+  reread_symbols (from_tty);
 
   gdb::unique_xmalloc_ptr<char> stripped = strip_bg_char (args, &async_exec);
   args = stripped.get ();
@@ -438,7 +438,8 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
       uiout->field_string (NULL, "Starting program");
       uiout->text (": ");
       if (exec_file)
-	uiout->field_string ("execfile", exec_file);
+	uiout->field_string ("execfile", exec_file,
+			     file_name_style.style ());
       uiout->spaces (1);
       uiout->field_string ("infargs", current_inferior ()->args ());
       uiout->text ("\n");
@@ -482,8 +483,7 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
     {
       thread_info *thr = inferior_thread ();
       target_waitstatus ws;
-      ws.kind = TARGET_WAITKIND_STOPPED;
-      ws.value.sig = GDB_SIGNAL_0;
+      ws.set_stopped (GDB_SIGNAL_0);
       thr->set_pending_waitstatus (ws);
     }
 
@@ -604,6 +604,8 @@ continue_1 (int all_threads)
       /* Backup current thread and selected frame and restore on scope
 	 exit.  */
       scoped_restore_current_thread restore_thread;
+      scoped_disable_commit_resumed disable_commit_resumed
+	("continue all threads in non-stop");
 
       iterate_over_threads (proceed_thread_callback, NULL);
 
@@ -624,6 +626,8 @@ continue_1 (int all_threads)
 	  */
 	  target_terminal::inferior ();
 	}
+
+      disable_commit_resumed.reset_and_commit ();
     }
   else
     {
@@ -670,7 +674,7 @@ continue_command (const char *args, int from_tty)
      stopped at.  */
   if (args != NULL)
     {
-      bpstat bs = NULL;
+      bpstat *bs = nullptr;
       int num, stat;
       int stopped = 0;
       struct thread_info *tp;
@@ -697,13 +701,13 @@ continue_command (const char *args, int from_tty)
 	    /* set_ignore_count prints a message ending with a period.
 	       So print two spaces before "Continuing.".  */
 	    if (from_tty)
-	      printf_filtered ("  ");
+	      gdb_printf ("  ");
 	    stopped = 1;
 	  }
 
       if (!stopped && from_tty)
 	{
-	  printf_filtered
+	  gdb_printf
 	    ("Not stopped at any breakpoint; argument ignored.\n");
 	}
     }
@@ -720,7 +724,7 @@ continue_command (const char *args, int from_tty)
   prepare_execution_command (current_inferior ()->top_target (), async_exec);
 
   if (from_tty)
-    printf_filtered (_("Continuing.\n"));
+    gdb_printf (_("Continuing.\n"));
 
   continue_1 (all_threads_p);
 }
@@ -845,7 +849,7 @@ step_1 (int skip_subroutines, int single_inst, const char *count_string)
      steps.  */
   thr = inferior_thread ();
   step_sm = new step_command_fsm (command_interp ());
-  thr->thread_fsm = step_sm;
+  thr->set_thread_fsm (std::unique_ptr<thread_fsm> (step_sm));
 
   step_command_fsm_prepare (step_sm, skip_subroutines,
 			    single_inst, count, thr);
@@ -862,7 +866,7 @@ step_1 (int skip_subroutines, int single_inst, const char *count_string)
 
       /* Stepped into an inline frame.  Pretend that we've
 	 stopped.  */
-      thr->thread_fsm->clean_up (thr);
+      thr->thread_fsm ()->clean_up (thr);
       proceeded = normal_stop ();
       if (!proceeded)
 	inferior_event_handler (INF_EXEC_COMPLETE);
@@ -973,9 +977,9 @@ prepare_one_step (thread_info *tp, struct step_command_fsm *sm)
 	  if (inline_skipped_frames (tp) > 0)
 	    {
 	      symbol *sym = inline_skipped_symbol (tp);
-	      if (SYMBOL_CLASS (sym) == LOC_BLOCK)
+	      if (sym->aclass () == LOC_BLOCK)
 		{
-		  const block *block = SYMBOL_BLOCK_VALUE (sym);
+		  const block *block = sym->value_block ();
 		  if (BLOCK_END (block) < tp->control.step_range_end)
 		    tp->control.step_range_end = BLOCK_END (block);
 		}
@@ -999,9 +1003,9 @@ prepare_one_step (thread_info *tp, struct step_command_fsm *sm)
 		error (_("Cannot find bounds of current function"));
 
 	      target_terminal::ours_for_output ();
-	      printf_filtered (_("Single stepping until exit from function %s,"
-				 "\nwhich has no line number information.\n"),
-			       name);
+	      gdb_printf (_("Single stepping until exit from function %s,"
+			    "\nwhich has no line number information.\n"),
+			  name);
 	    }
 	}
       else
@@ -1099,9 +1103,9 @@ jump_command (const char *arg, int from_tty)
 
   if (from_tty)
     {
-      printf_filtered (_("Continuing at "));
-      fputs_filtered (paddress (gdbarch, addr), gdb_stdout);
-      printf_filtered (".\n");
+      gdb_printf (_("Continuing at "));
+      gdb_puts (paddress (gdbarch, addr));
+      gdb_printf (".\n");
     }
 
   clear_proceed_status (0);
@@ -1175,11 +1179,11 @@ signal_command (const char *signum_exp, int from_tty)
 	      && signal_pass_state (tp->stop_signal ()))
 	    {
 	      if (!must_confirm)
-		printf_unfiltered (_("Note:\n"));
-	      printf_unfiltered (_("  Thread %s previously stopped with signal %s, %s.\n"),
-				 print_thread_id (tp),
-				 gdb_signal_to_name (tp->stop_signal ()),
-				 gdb_signal_to_string (tp->stop_signal ()));
+		gdb_printf (_("Note:\n"));
+	      gdb_printf (_("  Thread %s previously stopped with signal %s, %s.\n"),
+			  print_thread_id (tp),
+			  gdb_signal_to_name (tp->stop_signal ()),
+			  gdb_signal_to_string (tp->stop_signal ()));
 	      must_confirm = 1;
 	    }
 	}
@@ -1195,10 +1199,10 @@ signal_command (const char *signum_exp, int from_tty)
   if (from_tty)
     {
       if (oursig == GDB_SIGNAL_0)
-	printf_filtered (_("Continuing with no signal.\n"));
+	gdb_printf (_("Continuing with no signal.\n"));
       else
-	printf_filtered (_("Continuing with signal %s.\n"),
-			 gdb_signal_to_name (oursig));
+	gdb_printf (_("Continuing with signal %s.\n"),
+		    gdb_signal_to_name (oursig));
     }
 
   clear_proceed_status (0);
@@ -1332,7 +1336,7 @@ until_next_command (int from_tty)
       if (msymbol.minsym == NULL)
 	error (_("Execution is not within a known function."));
 
-      tp->control.step_range_start = BMSYMBOL_VALUE_ADDRESS (msymbol);
+      tp->control.step_range_start = msymbol.value_address ();
       /* The upper-bound of step_range is exclusive.  In order to make PC
 	 within the range, set the step_range_end with PC + 1.  */
       tp->control.step_range_end = pc + 1;
@@ -1341,8 +1345,47 @@ until_next_command (int from_tty)
     {
       sal = find_pc_line (pc, 0);
 
-      tp->control.step_range_start = BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (func));
+      tp->control.step_range_start = BLOCK_ENTRY_PC (func->value_block ());
       tp->control.step_range_end = sal.end;
+
+      /* By setting the step_range_end based on the current pc, we are
+	 assuming that the last line table entry for any given source line
+	 will have is_stmt set to true.  This is not necessarily the case,
+	 there may be additional entries for the same source line with
+	 is_stmt set false.  Consider the following code:
+
+	 for (int i = 0; i < 10; i++)
+	   loop_body ();
+
+	 Clang-13, will generate multiple line table entries at the end of
+	 the loop all associated with the 'for' line.  The first of these
+	 entries is marked is_stmt true, but the other entries are is_stmt
+	 false.
+
+	 If we only use the values in SAL, then our stepping range may not
+	 extend to the end of the loop. The until command will reach the
+	 end of the range, find a non is_stmt instruction, and step to the
+	 next is_stmt instruction. This stopping point, however, will be
+	 inside the loop, which is not what we wanted.
+
+	 Instead, we now check any subsequent line table entries to see if
+	 they are for the same line.  If they are, and they are marked
+	 is_stmt false, then we extend the end of our stepping range.
+
+	 When we finish this process the end of the stepping range will
+	 point either to a line with a different line number, or, will
+	 point at an address for the same line number that is marked as a
+	 statement.  */
+
+      struct symtab_and_line final_sal
+	= find_pc_line (tp->control.step_range_end, 0);
+
+      while (final_sal.line == sal.line && final_sal.symtab == sal.symtab
+	     && !final_sal.is_stmt)
+	{
+	  tp->control.step_range_end = final_sal.end;
+	  final_sal = find_pc_line (final_sal.end, 0);
+	}
     }
   tp->control.may_range_step = 1;
 
@@ -1352,7 +1395,7 @@ until_next_command (int from_tty)
   delete_longjmp_breakpoint_cleanup lj_deleter (thread);
 
   sm = new until_next_fsm (command_interp (), tp->global_num);
-  tp->thread_fsm = sm;
+  tp->set_thread_fsm (std::unique_ptr<thread_fsm> (sm));
   lj_deleter.release ();
 
   proceed ((CORE_ADDR) -1, GDB_SIGNAL_DEFAULT);
@@ -1402,19 +1445,27 @@ advance_command (const char *arg, int from_tty)
   until_break_command (arg, from_tty, 1);
 }
 
-/* Return the value of the result of a function at the end of a 'finish'
-   command/BP.  DTOR_DATA (if not NULL) can represent inferior registers
-   right after an inferior call has finished.  */
+/* See inferior.h.  */
 
 struct value *
-get_return_value (struct value *function, struct type *value_type)
+get_return_value (struct symbol *func_symbol, struct value *function)
 {
   regcache *stop_regs = get_current_regcache ();
   struct gdbarch *gdbarch = stop_regs->arch ();
   struct value *value;
 
-  value_type = check_typedef (value_type);
+  struct type *value_type
+    = check_typedef (TYPE_TARGET_TYPE (func_symbol->type ()));
   gdb_assert (value_type->code () != TYPE_CODE_VOID);
+
+  if (is_nocall_function (check_typedef (::value_type (function))))
+    {
+      warning (_("Function '%s' does not follow the target calling "
+		 "convention, cannot determine its returned value."),
+	       func_symbol->print_name ());
+
+      return nullptr;
+    }
 
   /* FIXME: 2003-09-27: When returning from a nested inferior function
      call, it's possible (with no help from the architecture vector)
@@ -1431,7 +1482,7 @@ get_return_value (struct value *function, struct type *value_type)
     case RETURN_VALUE_ABI_PRESERVES_ADDRESS:
       value = allocate_value (value_type);
       gdbarch_return_value (gdbarch, function, value_type, stop_regs,
-			    value_contents_raw (value), NULL);
+			    value_contents_raw (value).data (), NULL);
       break;
     case RETURN_VALUE_STRUCT_CONVENTION:
       value = NULL;
@@ -1564,7 +1615,7 @@ finish_command_fsm::should_stop (struct thread_info *tp)
       /* We're done.  */
       set_finished ();
 
-      rv->type = TYPE_TARGET_TYPE (SYMBOL_TYPE (function));
+      rv->type = TYPE_TARGET_TYPE (function->type ());
       if (rv->type == NULL)
 	internal_error (__FILE__, __LINE__,
 			_("finish_command: function has no target type"));
@@ -1574,7 +1625,7 @@ finish_command_fsm::should_stop (struct thread_info *tp)
 	  struct value *func;
 
 	  func = read_var_value (function, NULL, get_current_frame ());
-	  rv->value = get_return_value (func, rv->type);
+	  rv->value = get_return_value (function, func);
 	  if (rv->value != NULL)
 	    rv->value_history_index = record_latest_value (rv->value);
 	}
@@ -1759,7 +1810,7 @@ finish_command (const char *arg, int from_tty)
 
   sm = new finish_command_fsm (command_interp ());
 
-  tp->thread_fsm = sm;
+  tp->set_thread_fsm (std::unique_ptr<thread_fsm> (sm));
 
   /* Finishing from an inline frame is completely different.  We don't
      try to show the "return value" - no way to locate it.  */
@@ -1780,7 +1831,7 @@ finish_command (const char *arg, int from_tty)
 	 source.  */
       if (from_tty)
 	{
-	  printf_filtered (_("Run till exit from "));
+	  gdb_printf (_("Run till exit from "));
 	  print_stack_frame (get_selected_frame (NULL), 1, LOCATION, 0);
 	}
 
@@ -1797,15 +1848,15 @@ finish_command (const char *arg, int from_tty)
   if (from_tty)
     {
       if (execution_direction == EXEC_REVERSE)
-	printf_filtered (_("Run back to call of "));
+	gdb_printf (_("Run back to call of "));
       else
 	{
-	  if (sm->function != NULL && TYPE_NO_RETURN (sm->function->type)
+	  if (sm->function != NULL && TYPE_NO_RETURN (sm->function->type ())
 	      && !query (_("warning: Function %s does not return normally.\n"
 			   "Try to finish anyway? "),
 			 sm->function->print_name ()))
 	    error (_("Not confirmed."));
-	  printf_filtered (_("Run till exit from "));
+	  gdb_printf (_("Run till exit from "));
 	}
 
       print_stack_frame (get_selected_frame (NULL), 1, LOCATION, 0);
@@ -1828,14 +1879,14 @@ finish_command (const char *arg, int from_tty)
 static void
 info_program_command (const char *args, int from_tty)
 {
-  bpstat bs;
+  bpstat *bs;
   int num, stat;
   ptid_t ptid;
   process_stratum_target *proc_target;
 
   if (!target_has_execution ())
     {
-      printf_filtered (_("The program being debugged is not being run.\n"));
+      gdb_printf (_("The program being debugged is not being run.\n"));
       return;
     }
 
@@ -1861,10 +1912,10 @@ info_program_command (const char *args, int from_tty)
   stat = bpstat_num (&bs, &num);
 
   target_files_info ();
-  printf_filtered (_("Program stopped at %s.\n"),
-		   paddress (target_gdbarch (), tp->stop_pc ()));
+  gdb_printf (_("Program stopped at %s.\n"),
+	      paddress (target_gdbarch (), tp->stop_pc ()));
   if (tp->control.stop_step)
-    printf_filtered (_("It stopped after being stepped.\n"));
+    gdb_printf (_("It stopped after being stepped.\n"));
   else if (stat != 0)
     {
       /* There may be several breakpoints in the same place, so this
@@ -1873,25 +1924,25 @@ info_program_command (const char *args, int from_tty)
 	{
 	  if (stat < 0)
 	    {
-	      printf_filtered (_("It stopped at a breakpoint "
-				 "that has since been deleted.\n"));
+	      gdb_printf (_("It stopped at a breakpoint "
+			    "that has since been deleted.\n"));
 	    }
 	  else
-	    printf_filtered (_("It stopped at breakpoint %d.\n"), num);
+	    gdb_printf (_("It stopped at breakpoint %d.\n"), num);
 	  stat = bpstat_num (&bs, &num);
 	}
     }
   else if (tp->stop_signal () != GDB_SIGNAL_0)
     {
-      printf_filtered (_("It stopped with signal %s, %s.\n"),
-		       gdb_signal_to_name (tp->stop_signal ()),
-		       gdb_signal_to_string (tp->stop_signal ()));
+      gdb_printf (_("It stopped with signal %s, %s.\n"),
+		  gdb_signal_to_name (tp->stop_signal ()),
+		  gdb_signal_to_string (tp->stop_signal ()));
     }
 
   if (from_tty)
     {
-      printf_filtered (_("Type \"info stack\" or \"info "
-			 "registers\" for more information.\n"));
+      gdb_printf (_("Type \"info stack\" or \"info "
+		    "registers\" for more information.\n"));
     }
 }
 
@@ -1904,16 +1955,16 @@ environment_info (const char *var, int from_tty)
 
       if (val)
 	{
-	  puts_filtered (var);
-	  puts_filtered (" = ");
-	  puts_filtered (val);
-	  puts_filtered ("\n");
+	  gdb_puts (var);
+	  gdb_puts (" = ");
+	  gdb_puts (val);
+	  gdb_puts ("\n");
 	}
       else
 	{
-	  puts_filtered ("Environment variable \"");
-	  puts_filtered (var);
-	  puts_filtered ("\" not defined.\n");
+	  gdb_puts ("Environment variable \"");
+	  gdb_puts (var);
+	  gdb_puts ("\" not defined.\n");
 	}
     }
   else
@@ -1922,8 +1973,8 @@ environment_info (const char *var, int from_tty)
 
       for (int idx = 0; envp[idx] != NULL; ++idx)
 	{
-	  puts_filtered (envp[idx]);
-	  puts_filtered ("\n");
+	  gdb_puts (envp[idx]);
+	  gdb_puts ("\n");
 	}
     }
 }
@@ -1981,9 +2032,9 @@ set_environment_command (const char *arg, int from_tty)
   std::string var (arg, p - arg);
   if (nullset)
     {
-      printf_filtered (_("Setting environment variable "
-			 "\"%s\" to null value.\n"),
-		       var.c_str ());
+      gdb_printf (_("Setting environment variable "
+		    "\"%s\" to null value.\n"),
+		  var.c_str ());
       current_inferior ()->environment.set (var.c_str (), "");
     }
   else
@@ -2011,9 +2062,9 @@ static const char path_var_name[] = "PATH";
 static void
 path_info (const char *args, int from_tty)
 {
-  puts_filtered ("Executable and object file path: ");
-  puts_filtered (current_inferior ()->environment.get (path_var_name));
-  puts_filtered ("\n");
+  gdb_puts ("Executable and object file path: ");
+  gdb_puts (current_inferior ()->environment.get (path_var_name));
+  gdb_puts ("\n");
 }
 
 /* Add zero or more directories to the front of the execution path.  */
@@ -2021,7 +2072,6 @@ path_info (const char *args, int from_tty)
 static void
 path_command (const char *dirname, int from_tty)
 {
-  char *exec_path;
   const char *env;
 
   dont_repeat ();
@@ -2029,10 +2079,9 @@ path_command (const char *dirname, int from_tty)
   /* Can be null if path is not set.  */
   if (!env)
     env = "";
-  exec_path = xstrdup (env);
-  mod_path (dirname, &exec_path);
-  current_inferior ()->environment.set (path_var_name, exec_path);
-  xfree (exec_path);
+  std::string exec_path = env;
+  mod_path (dirname, exec_path);
+  current_inferior ()->environment.set (path_var_name, exec_path.c_str ());
   if (from_tty)
     path_info (NULL, from_tty);
 }
@@ -2079,7 +2128,7 @@ default_print_one_register_info (struct ui_file *file,
       || regtype->code () == TYPE_CODE_DECFLOAT)
     {
       struct value_print_options opts;
-      const gdb_byte *valaddr = value_contents_for_printing (val);
+      const gdb_byte *valaddr = value_contents_for_printing (val).data ();
       enum bfd_endian byte_order = type_byte_order (regtype);
 
       get_user_print_options (&opts);
@@ -2115,8 +2164,8 @@ default_print_one_register_info (struct ui_file *file,
 	}
     }
 
-  fputs_filtered (format_stream.c_str (), file);
-  fprintf_filtered (file, "\n");
+  gdb_puts (format_stream.c_str (), file);
+  gdb_printf (file, "\n");
 }
 
 /* Print out the machine register regnum.  If regnum is -1, print all
@@ -2246,17 +2295,17 @@ registers_info (const char *addr_exp, int fpregs)
 
       /* A register group?  */
       {
-	struct reggroup *group;
-
-	for (group = reggroup_next (gdbarch, NULL);
-	     group != NULL;
-	     group = reggroup_next (gdbarch, group))
+	const struct reggroup *group = nullptr;
+	for (const struct reggroup *g : gdbarch_reggroups (gdbarch))
 	  {
 	    /* Don't bother with a length check.  Should the user
 	       enter a short register group name, go with the first
 	       group that matches.  */
-	    if (strncmp (start, reggroup_name (group), end - start) == 0)
-	      break;
+	    if (strncmp (start, g->name (), end - start) == 0)
+	      {
+		group = g;
+		break;
+	      }
 	  }
 	if (group != NULL)
 	  {
@@ -2314,7 +2363,7 @@ print_vector_info (struct ui_file *file,
 	    }
 	}
       if (!printed_something)
-	fprintf_filtered (file, "No vector information\n");
+	gdb_printf (file, "No vector information\n");
     }
 }
 
@@ -2348,12 +2397,11 @@ kill_command (const char *arg, int from_tty)
   int infnum = current_inferior ()->num;
 
   target_kill ();
+  bfd_cache_close_all ();
 
   if (print_inferior_events)
-    printf_unfiltered (_("[Inferior %d (%s) killed]\n"),
-		       infnum, pid_str.c_str ());
-
-  bfd_cache_close_all ();
+    gdb_printf (_("[Inferior %d (%s) killed]\n"),
+		infnum, pid_str.c_str ());
 }
 
 /* Used in `attach&' command.  Proceed threads of inferior INF iff
@@ -2398,7 +2446,7 @@ setup_inferior (int from_tty)
   else
     {
       reopen_exec_file ();
-      reread_symbols ();
+      reread_symbols (from_tty);
     }
 
   /* Take any necessary post-attaching actions for this platform.  */
@@ -2473,7 +2521,7 @@ attach_post_wait (int from_tty, enum attach_post_wait_mode mode)
 	{
 	  struct thread_info *lowest = inferior_thread ();
 
-	  stop_all_threads ();
+	  stop_all_threads ("attaching");
 
 	  /* It's not defined which thread will report the attach
 	     stop.  For consistency, always select the thread with
@@ -2540,6 +2588,22 @@ attach_command (const char *args, int from_tty)
   /* to_attach should push the target, so after this point we
      shouldn't refer to attach_target again.  */
   attach_target = NULL;
+
+  if (debug_infrun)
+    {
+      infrun_debug_printf ("immediately after attach:");
+      for (thread_info *thread : inferior->non_exited_threads ())
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, "
+			     "state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
+
+  /* Enable async mode if it is supported by the target.  */
+  if (target_can_async_p ())
+    target_async (1);
 
   /* Set up the "saved terminal modes" of the inferior
      based on what modes we are starting it with.  */
@@ -2838,8 +2902,8 @@ default_print_float_info (struct gdbarch *gdbarch, struct ui_file *file,
 	}
     }
   if (!printed_something)
-    fprintf_filtered (file, "No floating-point info "
-		      "available for this processor.\n");
+    gdb_printf (file, "No floating-point info "
+		"available for this processor.\n");
 }
 
 static void
@@ -2949,9 +3013,9 @@ show_print_finish (struct ui_file *file, int from_tty,
 		   struct cmd_list_element *c,
 		   const char *value)
 {
-  fprintf_filtered (file, _("\
+  gdb_printf (file, _("\
 Printing of return value after `finish' is %s.\n"),
-		    value);
+	      value);
 }
 
 

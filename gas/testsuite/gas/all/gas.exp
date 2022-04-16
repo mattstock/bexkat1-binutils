@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2021 Free Software Foundation, Inc.
+# Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -73,7 +73,8 @@ if {    ![istarget alpha*-*-*vms*]
      && ![istarget riscv*-*-*]
      && ![istarget rl78-*-*]
      && ![istarget rs6000*-*-aix*]
-     && ![istarget rx-*-*] } then {
+     && ![istarget rx-*-*]
+     && ![istarget loongarch*-*-*] } then {
     gas_test_error "diff1.s" "" "difference of two undefined symbols"
 }
 
@@ -165,9 +166,11 @@ switch -glob $target_triplet {
 	# symbols on relocs.
 	setup_xfail "m68hc1*-*-*" "m6811-*-*" "m6812-*-*" "rl78-*-*"
 	setup_xfail "riscv*-*-*" "rx-*-*" "vax*-*-*" "xgate*-*-*" "z8k-*-*"
+	setup_xfail "loongarch*-*-*" "avr-*-*"
 	run_dump_test redef2
 	setup_xfail "m68hc1*-*-*" "m6811-*-*" "m6812-*-*" "rl78-*-*"
 	setup_xfail "riscv*-*-*" "rx-*-*" "vax*-*-*" "xgate*-*-*" "z8k-*-*"
+	setup_xfail "loongarch*-*-*" "avr-*-*"
 	# rs6000-aix disallows redefinition via .comm.
 	if [is_xcoff_format] {
 	    setup_xfail *-*-*
@@ -458,6 +461,8 @@ if [is_elf_format] {
 
 run_dump_test quoted-sym-names
 
+run_list_test macro "-alm"
+
 run_list_test pr20312
 
 load_lib gas-dg.exp
@@ -499,3 +504,5 @@ run_dump_test "nop"
 run_dump_test "asciz"
 run_dump_test "pr27384"
 run_dump_test "pr27381"
+run_dump_test "multibyte1"
+run_dump_test "multibyte2"

@@ -1,6 +1,6 @@
 /* CTF format support.
 
-   Copyright (C) 2012-2021 Free Software Foundation, Inc.
+   Copyright (C) 2012-2022 Free Software Foundation, Inc.
    Contributed by Hui Zhu <hui_zhu@mentor.com>
    Contributed by Yao Qi <yao@codesourcery.com>
 
@@ -1200,7 +1200,7 @@ ctf_target::close ()
 void
 ctf_target::files_info ()
 {
-  printf_filtered ("\t`%s'\n", trace_dirname);
+  gdb_printf ("\t`%s'\n", trace_dirname);
 }
 
 /* This is the implementation of target_ops method to_fetch_registers.

@@ -1,6 +1,6 @@
 /* Self tests for disassembler for GDB, the GNU debugger.
 
-   Copyright (C) 2017-2021 Free Software Foundation, Inc.
+   Copyright (C) 2017-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -85,8 +85,19 @@ print_one_insn_test (struct gdbarch *gdbarch)
       /* PR 21003 */
       if (gdbarch_bfd_arch_info (gdbarch)->mach == bfd_mach_arc_arc601)
 	return;
+      goto generic_case;
+    case bfd_arch_i386:
+      {
+	const struct bfd_arch_info *info = gdbarch_bfd_arch_info (gdbarch);
+	/* The disassembly tests will fail on x86-linux because
+	   opcodes rejects an attempt to disassemble for an arch with
+	   a 64-bit address size when bfd_vma is 32-bit.  */
+	if (info->bits_per_address > sizeof (bfd_vma) * CHAR_BIT)
+	  return;
+      }
       /* fall through */
     default:
+    generic_case:
       {
 	/* Test disassemble breakpoint instruction.  */
 	CORE_ADDR pc = 0;
@@ -124,14 +135,14 @@ print_one_insn_test (struct gdbarch *gdbarch)
     {
       if (run_verbose ())
 	{
-	  fprintf_unfiltered (stream (), "%s ",
-			      gdbarch_bfd_arch_info (arch ())->arch_name);
+	  gdb_printf (stream (), "%s ",
+		      gdbarch_bfd_arch_info (arch ())->arch_name);
 	}
 
       int len = gdb_disassembler::print_insn (memaddr);
 
       if (run_verbose ())
-	fprintf_unfiltered (stream (), "\n");
+	gdb_printf (stream (), "\n");
 
       return len;
     }
@@ -186,6 +197,16 @@ memory_error_test (struct gdbarch *gdbarch)
       return -1;
     }
   };
+
+  if (gdbarch_bfd_arch_info (gdbarch)->arch == bfd_arch_i386)
+    {
+      const struct bfd_arch_info *info = gdbarch_bfd_arch_info (gdbarch);
+      /* This test will fail on x86-linux because opcodes rejects an
+	 attempt to disassemble for an arch with a 64-bit address size
+	 when bfd_vma is 32-bit.  */
+      if (info->bits_per_address > sizeof (bfd_vma) * CHAR_BIT)
+	return;
+    }
 
   gdb_disassembler_test di (gdbarch);
   bool saw_memory_error = false;

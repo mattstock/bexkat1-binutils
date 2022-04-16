@@ -1,5 +1,5 @@
 /* Header for GDB line completion.
-   Copyright (C) 2000-2021 Free Software Foundation, Inc.
+   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -161,13 +161,6 @@ extern const char *get_gdb_linespec_parser_quote_characters (void);
    of the decoded operator name.  If not, return 0.  */
 
 extern int is_ada_operator (const char *string);
-
-/* Find an instance of the character C in the string S that is outside
-   of all parenthesis pairs, single-quoted strings, and double-quoted
-   strings.  Also, ignore the char within a template name, like a ','
-   within foo<int, int>.  */
-
-extern const char *find_toplevel_char (const char *s, char c);
 
 /* Find the end of the (first) linespec pointed to by *STRINGP.
    STRINGP will be advanced to this point.  */

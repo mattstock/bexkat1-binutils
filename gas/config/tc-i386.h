@@ -1,5 +1,5 @@
 /* tc-i386.h -- Header file for tc-i386.c
-   Copyright (C) 1989-2021 Free Software Foundation, Inc.
+   Copyright (C) 1989-2022 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -78,14 +78,6 @@ extern unsigned long i386_mach (void);
 
 #ifndef ELF_TARGET_FORMAT32
 #define ELF_TARGET_FORMAT32	"elf32-x86-64"
-#endif
-
-#ifndef ELF_TARGET_L1OM_FORMAT
-#define ELF_TARGET_L1OM_FORMAT	"elf64-l1om"
-#endif
-
-#ifndef ELF_TARGET_K1OM_FORMAT
-#define ELF_TARGET_K1OM_FORMAT	"elf64-k1om"
 #endif
 
 #ifndef ELF_TARGET_IAMCU_FORMAT
@@ -244,8 +236,6 @@ enum processor_type
   PROCESSOR_CORE,
   PROCESSOR_CORE2,
   PROCESSOR_COREI7,
-  PROCESSOR_L1OM,
-  PROCESSOR_K1OM,
   PROCESSOR_IAMCU,
   PROCESSOR_K6,
   PROCESSOR_ATHLON,
@@ -283,6 +273,7 @@ struct i386_tc_frag_data
   unsigned int mf_type : 3;
   unsigned int classified : 1;
   unsigned int branch_type : 3;
+  unsigned int code64 : 1; /* Only set by output_branch for now.  */
 };
 
 /* We need to emit the right NOP pattern in .align frags.  This is

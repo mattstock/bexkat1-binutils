@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-dnl   Copyright (C) 2012-2021 Free Software Foundation, Inc.
+dnl   Copyright (C) 2012-2022 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ AC_CONFIG_SRCDIR(ar.c)
 AC_CANONICAL_TARGET
 
 AM_INIT_AUTOMAKE
+AM_SILENT_RULES([yes])
 
 AC_PROG_CC
 AC_GNU_SOURCE
@@ -273,6 +274,23 @@ AC_CHECK_DECLS([asprintf, environ, getc_unlocked, sbrk, stpcpy, strnlen])
 AM_ZLIB
 
 BFD_BINARY_FOPEN
+
+# Support for the msgpack C library.
+AC_ARG_WITH([msgpack],
+	    AC_HELP_STRING([--with-msgpack], [Enable msgpack support (auto/yes/no)]),
+	    [],
+	    [with_msgpack=auto])
+
+
+if test "$with_msgpack" != no; then
+  PKG_CHECK_MODULES(MSGPACK, msgpack, [
+    AC_DEFINE([HAVE_MSGPACK], [1], [Define to 1 if msgpack is available.])
+  ], [
+      if test "$with_msgpack" = yes; then
+	AC_MSG_ERROR([--with-msgpack was given, but msgpack is missing or unusable.])
+      fi
+  ])
+fi
 
 # target-specific stuff:
 
@@ -534,7 +552,7 @@ AC_SUBST(docdir)
 AC_SUBST(htmldir)
 AC_SUBST(pdfdir)
 
-AC_CONFIG_FILES(Makefile doc/Makefile po/Makefile.in:po/Make-in)
+AC_CONFIG_FILES(Makefile po/Makefile.in:po/Make-in)
 AC_OUTPUT
 
 GNU_MAKE_JOBSERVER

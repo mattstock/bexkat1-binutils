@@ -1,5 +1,5 @@
 dnl Autoconf configure snippets for common.
-dnl Copyright (C) 1995-2021 Free Software Foundation, Inc.
+dnl Copyright (C) 1995-2022 Free Software Foundation, Inc.
 dnl
 dnl This file is part of GDB.
 dnl 
@@ -55,6 +55,11 @@ AC_DEFUN([GDB_AC_COMMON], [
 		  ptrace64 sbrk setns sigaltstack sigprocmask \
 		  setpgid setpgrp getrusage getauxval sigtimedwait])
 
+  # This is needed for RHEL 5 and uclibc-ng < 1.0.39.
+  # These did not define ADDR_NO_RANDOMIZE in sys/personality.h,
+  # only in linux/personality.h.
+  AC_CHECK_DECLS([ADDR_NO_RANDOMIZE],,, [#include <sys/personality.h>])
+
   AC_CHECK_DECLS([strstr])
 
   # ----------------------- #
@@ -71,34 +76,49 @@ AC_DEFUN([GDB_AC_COMMON], [
   # Define HAVE_KINFO_GETFILE if kinfo_getfile is available.
   AC_CHECK_FUNCS(kinfo_getfile)
 
+  # ----------------------- #
+  # Check for threading.    #
+  # ----------------------- #
+
+  AC_ARG_ENABLE(threading,
+    AS_HELP_STRING([--enable-threading], [include support for parallel processing of data (yes/no)]),
+    [case "$enableval" in
+    yes) want_threading=yes ;;
+    no) want_threading=no ;;
+    *) AC_MSG_ERROR([bad value $enableval for threading]) ;;
+    esac],
+    [want_threading=yes])
+
   # Check for std::thread.  This does not work on some platforms, like
   # mingw and DJGPP.
   AC_LANG_PUSH([C++])
   AX_PTHREAD([threads=yes], [threads=no])
-  if test "$threads" = "yes"; then
-    save_LIBS="$LIBS"
-    LIBS="$PTHREAD_LIBS $LIBS"
-    save_CXXFLAGS="$CXXFLAGS"
-    CXXFLAGS="$PTHREAD_CFLAGS $save_CXXFLAGS"
-    AC_CACHE_CHECK([for std::thread],
-		   gdb_cv_cxx_std_thread,
-		   [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
-    [[#include <thread>
-      void callback() { }]],
-    [[std::thread t(callback);]])],
-				  gdb_cv_cxx_std_thread=yes,
-				  gdb_cv_cxx_std_thread=no)])
+  save_LIBS="$LIBS"
+  LIBS="$PTHREAD_LIBS $LIBS"
+  save_CXXFLAGS="$CXXFLAGS"
+  CXXFLAGS="$PTHREAD_CFLAGS $save_CXXFLAGS"
+  AC_CACHE_CHECK([for std::thread],
+		 gdb_cv_cxx_std_thread,
+		 [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+  [[#include <thread>
+    void callback() { }]],
+  [[std::thread t(callback);]])],
+				gdb_cv_cxx_std_thread=yes,
+				gdb_cv_cxx_std_thread=no)])
 
+  if test "$threads" = "yes"; then
     # This check must be here, while LIBS includes any necessary
     # threading library.
     AC_CHECK_FUNCS([pthread_sigmask pthread_setname_np])
-
-    LIBS="$save_LIBS"
-    CXXFLAGS="$save_CXXFLAGS"
   fi
-  if test "$gdb_cv_cxx_std_thread" = "yes"; then
-    AC_DEFINE(CXX_STD_THREAD, 1,
-	      [Define to 1 if std::thread works.])
+  LIBS="$save_LIBS"
+  CXXFLAGS="$save_CXXFLAGS"
+
+  if test "$want_threading" = "yes"; then
+    if test "$gdb_cv_cxx_std_thread" = "yes"; then
+      AC_DEFINE(CXX_STD_THREAD, 1,
+		[Define to 1 if std::thread works.])
+    fi
   fi
   AC_LANG_POP
 
@@ -161,6 +181,27 @@ AC_DEFUN([GDB_AC_COMMON], [
 		       [#include <intel-pt.h>])
       LIBS=$save_LIBS
     fi
+  fi
+
+  # Check if the compiler and runtime support printing long longs.
+
+  AC_CACHE_CHECK([for long long support in printf],
+		 gdb_cv_printf_has_long_long,
+		 [AC_RUN_IFELSE([AC_LANG_PROGRAM([AC_INCLUDES_DEFAULT],
+  [[char buf[32];
+    long long l = 0;
+    l = (l << 16) + 0x0123;
+    l = (l << 16) + 0x4567;
+    l = (l << 16) + 0x89ab;
+    l = (l << 16) + 0xcdef;
+    sprintf (buf, "0x%016llx", l);
+    return (strcmp ("0x0123456789abcdef", buf));]])],
+				gdb_cv_printf_has_long_long=yes,
+				gdb_cv_printf_has_long_long=no,
+				gdb_cv_printf_has_long_long=no)])
+  if test "$gdb_cv_printf_has_long_long" = yes; then
+    AC_DEFINE(PRINTF_HAS_LONG_LONG, 1,
+	      [Define to 1 if the "%ll" format works to print long longs.])
   fi
 
   BFD_SYS_PROCFS_H

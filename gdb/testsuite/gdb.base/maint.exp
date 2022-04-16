@@ -1,4 +1,4 @@
-# Copyright 1998-2021 Free Software Foundation, Inc.
+# Copyright 1998-2022 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -131,11 +131,11 @@ gdb_test_multiple "show index-cache stats" "check index cache stats" {
 }
 
 set using_index_cache 0
-gdb_test_multiple "show index-cache" "check index cache status" {
-    -re ".*is currently disabled.\r\n$gdb_prompt $" {
+gdb_test_multiple "show index-cache enabled" "check index cache status" {
+    -re ".*is off.\r\n$gdb_prompt $" {
 	set using_index_cache 0
     }
-    -re ".*is currently enabled.\r\n$gdb_prompt $" {
+    -re ".*is on.\r\n$gdb_prompt $" {
 	set using_index_cache 1
     }
 }
@@ -200,11 +200,11 @@ set re \
 	 "  Number of symbol tables: $decimal" \
 	 "  Number of symbol tables with line tables: $decimal" \
 	 "  Number of symbol tables with blockvectors: $decimal" \
-	 "(  Number of read CUs: $decimal" \
-	 "  Number of unread CUs: $decimal" \
-	 ")?(  Number of \"partial\" symbols read: $decimal" \
+	 "(  Number of \"partial\" symbols read: $decimal" \
 	 ")?(  Number of psym tables \\(not yet expanded\\): $decimal" \
 	 ")?(  Total memory used for psymbol cache: $decimal" \
+	 ")?(  Number of read CUs: $decimal" \
+	 "  Number of unread CUs: $decimal" \
 	 ")?  Total memory used for objfile obstack: $decimal" \
 	 "  Total memory used for BFD obstack: $decimal" \
 	 "  Total memory used for string cache: $decimal" \
@@ -224,10 +224,15 @@ gdb_test_no_output "maint print dummy-frames"
 
 set header 0
 set psymtabs 0
+set cooked_index 0
 set symtabs 0
 gdb_test_multiple "maint print objfiles" "" -lbl {
     -re "\r\nObject file.*maint($EXEEXT)?:  Objfile at ${hex}" {
 	set header 1
+	exp_continue
+    }
+    -re "\r\nCooked index" {
+	set cooked_index 1
 	exp_continue
     }
     -re "\r\nPsymtabs:\[\r\t \]+" {
@@ -248,6 +253,9 @@ proc maint_pass_if {val name} {
 }
 
 maint_pass_if $header   "maint print objfiles: header"
+if {$cooked_index} {
+    set have_psyms 0
+}
 if { $have_psyms } {
     maint_pass_if $psymtabs "maint print objfiles: psymtabs"
 }
@@ -432,11 +440,11 @@ gdb_test "maint" \
 set saw_srcfile 0
 gdb_test_multiple "maint info line-table" \
     "maint info line-table w/o a file name" {
-    -re "symtab: \[^\n\r\]+${srcfile} \\(\\(struct symtab \\*\\) $hex\\)\r\nlinetable: \\(\\(struct linetable \\*\\) $hex\\):\r\nINDEX\[ \t\]+LINE\[ \t\]+ADDRESS" {
+	-re "symtab: \[^\n\r\]+${srcfile} \\(\\(struct symtab \\*\\) $hex\\)\r\nlinetable: \\(\\(struct linetable \\*\\) $hex\\):\r\nINDEX\[ \t\]+LINE\[ \t\]+ADDRESS\[^\r\n\]*" {
 	set saw_srcfile 1
 	exp_continue
     }
-    -re "symtab: \[^\n\r\]+ \\(\\(struct symtab \\*\\) $hex\\)\r\nlinetable: \\(\\(struct linetable \\*\\) $hex\\):\r\nINDEX\[ \t\]+LINE\[ \t\]+ADDRESS" {
+    -re "symtab: \[^\n\r\]+ \\(\\(struct symtab \\*\\) $hex\\)\r\nlinetable: \\(\\(struct linetable \\*\\) $hex\\):\r\nINDEX\[ \t\]+LINE\[ \t\]+ADDRESS\[^\r\n\]*" {
 	# Match each symtab to avoid overflowing expect's buffer.
 	exp_continue
     }
@@ -444,7 +452,7 @@ gdb_test_multiple "maint info line-table" \
 	# For symtabs with no linetable.
 	exp_continue
     }
-    -re "^$decimal\[ \t\]+$decimal\[ \t\]+$hex\r\n" {
+    -re "^$decimal\[ \t\]+$decimal\[ \t\]+$hex\[^\r\n\]*\r\n" {
 	# Line table entries can be long too:
 	#
 	#  INDEX    LINE ADDRESS
@@ -462,8 +470,12 @@ gdb_test_multiple "maint info line-table" \
 	# Match each line to avoid overflowing expect's buffer.
 	exp_continue
     }
-    -re "^$decimal\[ \t\]+END\[ \t\]+$hex\r\n" {
+    -re "^$decimal\[ \t\]+END\[ \t\]+$hex\[^\r\n\]*\r\n" {
 	# Matches an end marker in the above.
+	exp_continue
+    }
+    -re "^\r\n" {
+	# Empty line between tables.
 	exp_continue
     }
     -re "^$gdb_prompt $" {

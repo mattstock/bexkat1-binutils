@@ -2,7 +2,7 @@
 
 %{
 
-/* Copyright (C) 1991-2021 Free Software Foundation, Inc.
+/* Copyright (C) 1991-2022 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
    This file is part of the GNU Binutils.
@@ -323,6 +323,7 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 <EXPRESSION>"DSECT"			{ RTOKEN(DSECT); }
 <EXPRESSION>"COPY"			{ RTOKEN(COPY); }
 <EXPRESSION>"INFO"			{ RTOKEN(INFO); }
+<EXPRESSION>"TYPE"			{ RTOKEN(TYPE); }
 <SCRIPT,EXPRESSION>"ONLY_IF_RO"		{ RTOKEN(ONLY_IF_RO); }
 <SCRIPT,EXPRESSION>"ONLY_IF_RW"		{ RTOKEN(ONLY_IF_RW); }
 <SCRIPT,EXPRESSION>"SPECIAL"		{ RTOKEN(SPECIAL); }
@@ -431,18 +432,10 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 	}
 
 <SCRIPT,EXPRESSION,WILD,VERS_NODE,INPUTLIST>"\""[^\"]*"\"" {
-					/* No matter the state, quotes
-					   give what's inside.  */
-					bfd_size_type len;
-					yylval.name = xstrdup (yytext + 1);
-					/* PR ld/20906.  A corrupt input file
-					   can contain bogus strings.  */
-					len = strlen (yylval.name);
-					if (len > (bfd_size_type) yyleng - 2)
-					  len = yyleng - 2;
-					yylval.name[len] = 0;
-					return NAME;
-				}
+		/* No matter the state, quotes give what's inside.  */
+		yylval.name = xmemdup (yytext + 1, yyleng - 2, yyleng - 1);
+		return NAME;
+	}
 
 <SCRIPT,EXPRESSION,WILD,VERS_START,VERS_NODE,VERS_SCRIPT,INPUTLIST>"\n" {
 				lineno++; }

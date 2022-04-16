@@ -1,6 +1,6 @@
 /* Target-dependent code for the NDS32 architecture, for GDB.
 
-   Copyright (C) 2013-2021 Free Software Foundation, Inc.
+   Copyright (C) 2013-2022 Free Software Foundation, Inc.
    Contributed by Andes Technology Corporation.
 
    This file is part of GDB.
@@ -289,7 +289,7 @@ typedef BP_MANIPULATION (nds32_break_insn) nds32_breakpoint;
 static int
 nds32_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int num)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   const int FSR = 38;
   const int FDR = FSR + 32;
 
@@ -314,16 +314,16 @@ nds32_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int num)
 }
 
 /* NDS32 register groups.  */
-static struct reggroup *nds32_cr_reggroup;
-static struct reggroup *nds32_ir_reggroup;
-static struct reggroup *nds32_mr_reggroup;
-static struct reggroup *nds32_dr_reggroup;
-static struct reggroup *nds32_pfr_reggroup;
-static struct reggroup *nds32_hspr_reggroup;
-static struct reggroup *nds32_dmar_reggroup;
-static struct reggroup *nds32_racr_reggroup;
-static struct reggroup *nds32_idr_reggroup;
-static struct reggroup *nds32_secur_reggroup;
+static const reggroup *nds32_cr_reggroup;
+static const reggroup *nds32_ir_reggroup;
+static const reggroup *nds32_mr_reggroup;
+static const reggroup *nds32_dr_reggroup;
+static const reggroup *nds32_pfr_reggroup;
+static const reggroup *nds32_hspr_reggroup;
+static const reggroup *nds32_dmar_reggroup;
+static const reggroup *nds32_racr_reggroup;
+static const reggroup *nds32_idr_reggroup;
+static const reggroup *nds32_secur_reggroup;
 
 static void
 nds32_init_reggroups (void)
@@ -343,14 +343,6 @@ nds32_init_reggroups (void)
 static void
 nds32_add_reggroups (struct gdbarch *gdbarch)
 {
-  /* Add pre-defined register groups.  */
-  reggroup_add (gdbarch, general_reggroup);
-  reggroup_add (gdbarch, float_reggroup);
-  reggroup_add (gdbarch, system_reggroup);
-  reggroup_add (gdbarch, all_reggroup);
-  reggroup_add (gdbarch, save_reggroup);
-  reggroup_add (gdbarch, restore_reggroup);
-
   /* Add NDS32 register groups.  */
   reggroup_add (gdbarch, nds32_cr_reggroup);
   reggroup_add (gdbarch, nds32_ir_reggroup);
@@ -368,7 +360,7 @@ nds32_add_reggroups (struct gdbarch *gdbarch)
 
 static int
 nds32_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
-			   struct reggroup *reggroup)
+			   const struct reggroup *reggroup)
 {
   const char *reg_name;
   const char *group_name;
@@ -398,7 +390,7 @@ nds32_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
   /* The NDS32 reggroup contains registers whose name is prefixed
      by reggroup name.  */
   reg_name = gdbarch_register_name (gdbarch, regnum);
-  group_name = reggroup_name (reggroup);
+  group_name = reggroup->name ();
   return !strncmp (reg_name, group_name, strlen (group_name));
 }
 
@@ -440,7 +432,7 @@ nds32_pseudo_register_read (struct gdbarch *gdbarch,
 			    readable_regcache *regcache, int regnum,
 			    gdb_byte *buf)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   gdb_byte reg_buf[8];
   int offset, fdr_regnum;
   enum register_status status;
@@ -479,7 +471,7 @@ nds32_pseudo_register_write (struct gdbarch *gdbarch,
 			     struct regcache *regcache, int regnum,
 			     const gdb_byte *buf)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   gdb_byte reg_buf[8];
   int offset, fdr_regnum;
 
@@ -616,7 +608,7 @@ static CORE_ADDR
 nds32_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
 			CORE_ADDR limit_pc, struct nds32_frame_cache *cache)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   /* Current scanning status.  */
   int in_prologue_bb = 0;
@@ -1177,7 +1169,7 @@ static int
 nds32_analyze_epilogue (struct gdbarch *gdbarch, CORE_ADDR pc,
 			struct nds32_frame_cache *cache)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   CORE_ADDR limit_pc;
   uint32_t insn, insn_len;
@@ -1228,7 +1220,7 @@ nds32_analyze_epilogue (struct gdbarch *gdbarch, CORE_ADDR pc,
 static int
 nds32_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   int insn_type = INSN_NORMAL;
   int ret_found = 0;
@@ -1432,7 +1424,7 @@ nds32_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
   int i;
   ULONGEST regval;
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   struct type *func_type = value_type (function);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   int abi_split = nds32_abi_split (tdep->elf_abi);
@@ -1481,7 +1473,7 @@ nds32_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
       calling_use_fpr = nds32_check_calling_use_fpr (type);
       len = TYPE_LENGTH (type);
       align = type_align (type);
-      val = value_contents (args[i]);
+      val = value_contents (args[i]).data ();
 
       /* The size of a composite type larger than 4 bytes will be rounded
 	 up to the nearest multiple of 4.  */
@@ -1660,7 +1652,7 @@ nds32_extract_return_value (struct gdbarch *gdbarch, struct type *type,
 			    struct regcache *regcache, gdb_byte *valbuf)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   int calling_use_fpr;
   int len;
@@ -1750,7 +1742,7 @@ nds32_store_return_value (struct gdbarch *gdbarch, struct type *type,
 			  struct regcache *regcache, const gdb_byte *valbuf)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  nds32_gdbarch_tdep *tdep = (nds32_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   int abi_use_fpr = nds32_abi_use_fpr (tdep->elf_abi);
   int calling_use_fpr;
   int len;
@@ -1955,7 +1947,6 @@ static struct gdbarch *
 nds32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
-  struct gdbarch_tdep *tdep;
   struct gdbarch_list *best_arch;
   tdesc_arch_data_up tdesc_data;
   const struct target_desc *tdesc = info.target_desc;
@@ -1973,7 +1964,8 @@ nds32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
        best_arch != NULL;
        best_arch = gdbarch_list_lookup_by_info (best_arch->next, &info))
     {
-      struct gdbarch_tdep *idep = gdbarch_tdep (best_arch->gdbarch);
+      nds32_gdbarch_tdep *idep
+	= (nds32_gdbarch_tdep *) gdbarch_tdep (best_arch->gdbarch);
 
       if (idep->elf_abi != elf_abi)
 	continue;
@@ -1995,7 +1987,7 @@ nds32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     return NULL;
 
   /* Allocate space for the new architecture.  */
-  tdep = XCNEW (struct gdbarch_tdep);
+  nds32_gdbarch_tdep *tdep = new nds32_gdbarch_tdep;
   tdep->fpu_freg = fpu_freg;
   tdep->use_pseudo_fsrs = use_pseudo_fsrs;
   tdep->fs0_regnum = -1;

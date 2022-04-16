@@ -1,5 +1,5 @@
 /* Common target dependent code for GDB on ARM systems.
-   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+   Copyright (C) 1988-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,6 +20,19 @@
 #define ARCH_ARM_H
 
 #include "gdbsupport/tdesc.h"
+
+/* Prologue helper macros for ARMv8.1-m PACBTI.  */
+#define IS_PAC(instruction)	(instruction == 0xf3af801d)
+#define IS_PACBTI(instruction)	(instruction == 0xf3af800d)
+#define IS_BTI(instruction)	(instruction == 0xf3af800f)
+#define IS_PACG(instruction)	((instruction & 0xfff0f0f0) == 0xfb60f000)
+#define IS_AUT(instruction)	(instruction == 0xf3af802d)
+#define IS_AUTG(instruction)	((instruction & 0xfff00ff0) == 0xfb500f00)
+
+/* DWARF register numbers according to the AADWARF32 document.  */
+enum arm_dwarf_regnum {
+  ARM_DWARF_RA_AUTH_CODE = 143
+};
 
 /* Register numbers of various important registers.  */
 
@@ -50,15 +63,23 @@ enum gdb_regnum {
   ARM_D31_REGNUM = ARM_D0_REGNUM + 31,
   ARM_FPSCR_REGNUM,
 
-  ARM_NUM_REGS,
-
   /* Other useful registers.  */
   ARM_FP_REGNUM = 11,		/* Frame register in ARM code, if used.  */
   THUMB_FP_REGNUM = 7,		/* Frame register in Thumb code, if used.  */
-  ARM_NUM_ARG_REGS = 4, 
   ARM_LAST_ARG_REGNUM = ARM_A4_REGNUM,
-  ARM_NUM_FP_ARG_REGS = 4,
   ARM_LAST_FP_ARG_REGNUM = ARM_F3_REGNUM
+};
+
+/* Register count constants.  */
+enum arm_register_counts {
+  /* Number of Q registers for MVE.  */
+  ARM_MVE_NUM_Q_REGS = 8,
+  /* Number of argument registers.  */
+  ARM_NUM_ARG_REGS = 4,
+  /* Number of floating point argument registers.  */
+  ARM_NUM_FP_ARG_REGS = 4,
+  /* Number of registers (old, defined as ARM_FPSCR_REGNUM + 1.  */
+  ARM_NUM_REGS = ARM_FPSCR_REGNUM + 1
 };
 
 /* Enum describing the different kinds of breakpoints.  */
@@ -83,6 +104,7 @@ enum arm_m_profile_type {
    ARM_M_TYPE_M_PROFILE,
    ARM_M_TYPE_VFP_D16,
    ARM_M_TYPE_WITH_FPA,
+   ARM_M_TYPE_MVE,
    ARM_M_TYPE_INVALID
 };
 

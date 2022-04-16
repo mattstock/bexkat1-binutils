@@ -1,6 +1,6 @@
 /* Everything about catch/throw catchpoints, for GDB.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,13 +27,13 @@
 #include "valprint.h"
 #include "cli/cli-utils.h"
 #include "completer.h"
-#include "gdb_obstack.h"
+#include "gdbsupport/gdb_obstack.h"
 #include "mi/mi-common.h"
 #include "linespec.h"
 #include "probe.h"
 #include "objfiles.h"
 #include "cp-abi.h"
-#include "gdb_regex.h"
+#include "gdbsupport/gdb_regex.h"
 #include "cp-support.h"
 #include "location.h"
 #include "cli/cli-decode.h"
@@ -144,7 +144,7 @@ classify_exception_breakpoint (struct breakpoint *b)
 /* Implement the 'check_status' method.  */
 
 static void
-check_status_exception_catchpoint (struct bpstats *bs)
+check_status_exception_catchpoint (struct bpstat *bs)
 {
   struct exception_catchpoint *self
     = (struct exception_catchpoint *) bs->breakpoint_at;
@@ -227,7 +227,7 @@ re_set_exception_catchpoint (struct breakpoint *self)
 }
 
 static enum print_stop_action
-print_it_exception_catchpoint (bpstat bs)
+print_it_exception_catchpoint (bpstat *bs)
 {
   struct ui_out *uiout = current_uiout;
   struct breakpoint *b = bs->breakpoint_at;
@@ -333,17 +333,17 @@ print_recreate_exception_catchpoint (struct breakpoint *b,
   enum exception_event_kind kind = classify_exception_breakpoint (b);
 
   bp_temp = b->disposition == disp_del;
-  fprintf_unfiltered (fp, bp_temp ? "tcatch " : "catch ");
+  gdb_printf (fp, bp_temp ? "tcatch " : "catch ");
   switch (kind)
     {
     case EX_EVENT_THROW:
-      fprintf_unfiltered (fp, "throw");
+      gdb_printf (fp, "throw");
       break;
     case EX_EVENT_CATCH:
-      fprintf_unfiltered (fp, "catch");
+      gdb_printf (fp, "catch");
       break;
     case EX_EVENT_RETHROW:
-      fprintf_unfiltered (fp, "rethrow");
+      gdb_printf (fp, "rethrow");
       break;
     }
   print_recreate_thread (b, fp);
@@ -510,7 +510,6 @@ static const struct internalvar_funcs exception_funcs =
 {
   compute_exception,
   NULL,
-  NULL
 };
 
 

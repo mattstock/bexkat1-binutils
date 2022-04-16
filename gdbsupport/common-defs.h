@@ -1,6 +1,6 @@
 /* Common definitions.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -212,9 +212,6 @@
 
 /* Pull in gdb::unique_xmalloc_ptr.  */
 #include "gdbsupport/gdb_unique_ptr.h"
-
-/* String containing the current directory (what getwd would return).  */
-extern char *current_directory;
 
 /* sbrk on macOS is not useful for our purposes, since sbrk(0) always
    returns the same value.  brk/sbrk on macOS is just an emulation

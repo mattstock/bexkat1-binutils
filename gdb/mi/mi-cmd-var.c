@@ -1,5 +1,5 @@
 /* MI Command Set - varobj commands.
-   Copyright (C) 2000-2021 Free Software Foundation, Inc.
+   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions (a Red Hat company).
 
@@ -125,9 +125,9 @@ mi_cmd_var_create (const char *command, char **argv, int argc)
     }
 
   if (varobjdebug)
-    fprintf_unfiltered (gdb_stdlog,
-			"Name=\"%s\", Frame=\"%s\" (%s), Expression=\"%s\"\n",
-			name, frame, hex_string (frameaddr), expr);
+    gdb_printf (gdb_stdlog,
+		"Name=\"%s\", Frame=\"%s\" (%s), Expression=\"%s\"\n",
+		name, frame, hex_string (frameaddr), expr);
 
   var = varobj_create (name, expr, frameaddr, var_type);
 

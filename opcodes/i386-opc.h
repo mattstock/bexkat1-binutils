@@ -1,5 +1,5 @@
 /* Declarations for Intel 80386 opcode table
-   Copyright (C) 2007-2021 Free Software Foundation, Inc.
+   Copyright (C) 2007-2022 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -111,10 +111,6 @@ enum
   CpuAVX512DQ,
   /* Intel AVX-512 BW Instructions support required.  */
   CpuAVX512BW,
-  /* Intel L1OM support required */
-  CpuL1OM,
-  /* Intel K1OM support required */
-  CpuK1OM,
   /* Intel IAMCU support required */
   CpuIAMCU,
   /* Xsave/xrstor New Instructions support required */
@@ -276,6 +272,9 @@ enum
   CpuTLBSYNC,
   /* SNP instructions required */
   CpuSNP,
+
+  /* NOTE: These last three items need to remain last and in this order. */
+
   /* 64bit support required  */
   Cpu64,
   /* Not supported in the 64bit mode  */
@@ -340,8 +339,6 @@ typedef union i386_cpu_flags
       unsigned int cpuavx512vl:1;
       unsigned int cpuavx512dq:1;
       unsigned int cpuavx512bw:1;
-      unsigned int cpul1om:1;
-      unsigned int cpuk1om:1;
       unsigned int cpuiamcu:1;
       unsigned int cpuxsave:1;
       unsigned int cpuxsaveopt:1;
@@ -423,6 +420,7 @@ typedef union i386_cpu_flags
       unsigned int cpuinvlpgb:1;
       unsigned int cputlbsync:1;
       unsigned int cpusnp:1;
+      /* NOTE: These last three fields need to remain last and in this order. */
       unsigned int cpu64:1;
       unsigned int cpuno64:1;
 #ifdef CpuUnused
@@ -633,8 +631,6 @@ enum
 
   /* SSE to AVX support required */
   SSE2AVX,
-  /* No AVX equivalent */
-  NoAVX,
 
   /* insn has EVEX prefix:
 	1: 512bit EVEX prefix.
@@ -760,7 +756,6 @@ typedef struct i386_opcode_modifier
   unsigned int vexsources:2;
   unsigned int sib:3;
   unsigned int sse2avx:1;
-  unsigned int noavx:1;
   unsigned int evex:3;
   unsigned int masking:2;
   unsigned int broadcast:3;

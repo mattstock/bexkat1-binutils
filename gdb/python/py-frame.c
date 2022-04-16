@@ -1,6 +1,6 @@
 /* Python interface to stack frames
 
-   Copyright (C) 2008-2021 Free Software Foundation, Inc.
+   Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -80,7 +80,7 @@ static PyObject *
 frapy_str (PyObject *self)
 {
   const frame_id &fid = ((frame_object *) self)->frame_id;
-  return PyString_FromString (fid.to_string ().c_str ());
+  return PyUnicode_FromString (fid.to_string ().c_str ());
 }
 
 /* Implementation of gdb.Frame.is_valid (self) -> Boolean.

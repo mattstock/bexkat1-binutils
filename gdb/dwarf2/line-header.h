@@ -1,6 +1,6 @@
 /* DWARF 2 debugging format support for GDB.
 
-   Copyright (C) 1994-2021 Free Software Foundation, Inc.
+   Copyright (C) 1994-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -58,9 +58,6 @@ struct file_entry
   unsigned int mod_time {};
 
   unsigned int length {};
-
-  /* True if referenced by the Line Number Program.  */
-  bool included_p {};
 
   /* The associated symbol table, if any.  */
   struct symtab *symtab {};
@@ -163,10 +160,8 @@ struct line_header
   const gdb_byte *statement_program_start {}, *statement_program_end {};
 
   /* Return file name relative to the compilation directory of file
-     number I in this object's file name table.  The result is
-     allocated using xmalloc; the caller is responsible for freeing
-     it.  */
-  gdb::unique_xmalloc_ptr<char> file_file_name (int file) const;
+     number FILE in this object's file name table.  */
+  std::string file_file_name (int file) const;
 
  private:
   /* The include_directories table.  Note these are observing

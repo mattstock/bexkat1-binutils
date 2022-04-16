@@ -1,6 +1,6 @@
 /* Target-dependent code for the Z80.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,6 +30,7 @@
 #include "inferior.h"
 #include "objfiles.h"
 #include "symfile.h"
+#include "gdbarch.h"
 
 #include "z80-tdep.h"
 #include "features/z80.c"
@@ -54,19 +55,21 @@ __gdb_break_handler:
      next frame - frame of caller, which has called current function
 */
 
-struct gdbarch_tdep
+struct z80_gdbarch_tdep : gdbarch_tdep
 {
   /* Number of bytes used for address:
       2 bytes for all Z80 family
       3 bytes for eZ80 CPUs operating in ADL mode */
-  int addr_length;
+  int addr_length = 0;
 
   /* Type for void.  */
-  struct type *void_type;
+  struct type *void_type = nullptr;
+
   /* Type for a function returning void.  */
-  struct type *func_void_type;
+  struct type *func_void_type = nullptr;
+
   /* Type for a pointer to a function.  Used for the type of PC.  */
-  struct type *pc_type;
+  struct type *pc_type = nullptr;
 };
 
 /* At any time stack frame contains following parts:
@@ -305,7 +308,8 @@ z80_scan_prologue (struct gdbarch *gdbarch, CORE_ADDR pc_beg, CORE_ADDR pc_end,
 		   struct z80_unwind_cache *info)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  int addr_len = gdbarch_tdep (gdbarch)->addr_length;
+  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  int addr_len = tdep->addr_length;
   gdb_byte prologue[32]; /* max prologue is 24 bytes: __interrupt with local array */
   int pos = 0;
   int len;
@@ -356,7 +360,7 @@ z80_scan_prologue (struct gdbarch *gdbarch, CORE_ADDR pc_beg, CORE_ADDR pc_end,
       msymbol = lookup_minimal_symbol ("__sdcc_enter_ix", NULL, NULL);
       if (msymbol.minsym)
 	{
-	  value = BMSYMBOL_VALUE_ADDRESS (msymbol);
+	  value = msymbol.value_address ();
 	  if (value == extract_unsigned_integer (&prologue[pos+1], addr_len, byte_order))
 	    {
 	      pos += 1 + addr_len;
@@ -491,8 +495,8 @@ z80_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
   if (prologue_end != 0)
     {
       struct symtab_and_line prologue_sal = find_pc_line (func_addr, 0);
-      struct compunit_symtab *compunit = SYMTAB_COMPUNIT (prologue_sal.symtab);
-      const char *debug_format = COMPUNIT_DEBUGFORMAT (compunit);
+      struct compunit_symtab *compunit = prologue_sal.symtab->compunit ();
+      const char *debug_format = compunit->debugformat ();
 
       if (debug_format != NULL &&
 	  !strncasecmp ("dwarf", debug_format, strlen("dwarf")))
@@ -560,7 +564,8 @@ z80_frame_unwind_cache (struct frame_info *this_frame,
   gdb_byte buf[sizeof(void*)];
   struct z80_unwind_cache *info;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  int addr_len = gdbarch_tdep (gdbarch)->addr_length;
+  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  int addr_len = tdep->addr_length;
 
   if (*this_prologue_cache)
     return (struct z80_unwind_cache *) *this_prologue_cache;
@@ -620,7 +625,7 @@ z80_frame_unwind_cache (struct frame_info *this_frame,
 		  msymbol = lookup_minimal_symbol (names[i], NULL, NULL);
 		  if (!msymbol.minsym)
 		    continue;
-		  if (addr == BMSYMBOL_VALUE_ADDRESS (msymbol))
+		  if (addr == msymbol.value_address ())
 		    break;
 		}
 	      if (i >= 0)
@@ -692,7 +697,7 @@ z80_frame_prev_register (struct frame_info *this_frame,
 	  ULONGEST pc;
 	  gdb_byte buf[3];
 	  struct gdbarch *gdbarch = get_frame_arch (this_frame);
-	  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+	  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
 	  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
 
 	  read_memory (info->saved_regs[Z80_PC_REGNUM].addr (),
@@ -717,7 +722,7 @@ z80_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
       struct bound_minimal_symbol bh;
       bh = lookup_minimal_symbol ("_break_handler", NULL, NULL);
       if (bh.minsym)
-	addr = BMSYMBOL_VALUE_ADDRESS (bh);
+	addr = bh.value_address ();
       else
 	{
 	  warning(_("Unable to determine inferior's software breakpoint type: "
@@ -745,11 +750,12 @@ z80_sw_breakpoint_from_kind (struct gdbarch *gdbarch, int kind, int *size)
     }
   else /* kind is non-RST address, use CALL instead, but it is dungerous */
     {
+      z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
       gdb_byte *p = break_insn;
       *p++ = 0xcd;
       *p++ = (kind >> 0) & 0xff;
       *p++ = (kind >> 8) & 0xff;
-      if (gdbarch_tdep (gdbarch)->addr_length > 2)
+      if (tdep->addr_length > 2)
 	*p++ = (kind >> 16) & 0xff;
       *size = p - break_insn;
     }
@@ -921,14 +927,13 @@ z80_read_overlay_region_table ()
   word_size = gdbarch_long_bit (gdbarch) / TARGET_CHAR_BIT;
   byte_order = gdbarch_byte_order (gdbarch);
 
-  cache_novly_regions = read_memory_integer (
-				BMSYMBOL_VALUE_ADDRESS (novly_regions_msym),
-				4, byte_order);
+  cache_novly_regions = read_memory_integer (novly_regions_msym.value_address (),
+                                             4, byte_order);
   cache_ovly_region_table
     = (unsigned int (*)[3]) xmalloc (cache_novly_regions *
 					sizeof (*cache_ovly_region_table));
   cache_ovly_region_table_base
-    = BMSYMBOL_VALUE_ADDRESS (ovly_region_table_msym);
+    = ovly_region_table_msym.value_address ();
   read_target_long_array (cache_ovly_region_table_base,
 			  (unsigned int *) cache_ovly_region_table,
 			  cache_novly_regions * 3, word_size, byte_order);
@@ -1077,7 +1082,6 @@ static struct gdbarch *
 z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
-  struct gdbarch_tdep *tdep;
   struct gdbarch_list *best_arch;
   tdesc_arch_data_up tdesc_data;
   unsigned long mach = info.bfd_arch_info->mach;
@@ -1119,7 +1123,7 @@ z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     }
 
   /* None found, create a new architecture from the information provided.  */
-  tdep = XCNEW (struct gdbarch_tdep);
+  z80_gdbarch_tdep *tdep = new z80_gdbarch_tdep;
   gdbarch = gdbarch_alloc (&info, tdep);
 
   if (mach == bfd_mach_ez80_adl)

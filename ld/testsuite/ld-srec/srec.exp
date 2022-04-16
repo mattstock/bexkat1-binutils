@@ -1,6 +1,6 @@
 # Test linking directly to S-records.
 # By Ian Lance Taylor, Cygnus Support.
-#   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+#   Copyright (C) 1999-2022 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -289,6 +289,12 @@ proc run_srec_test { test objs } {
     # relocs when output format is not ELF.
     if [istarget riscv*-*-*] {
 	setup_xfail "riscv*-*-*"
+    }
+
+    # LoongArch targets cannot convert format in the linker
+    # using the --oformat command line switch
+    if [istarget loongarch*-*-*] {
+	setup_xfail "loongarch*-*-*"
     }
 
     # V850 targets need libgcc.a

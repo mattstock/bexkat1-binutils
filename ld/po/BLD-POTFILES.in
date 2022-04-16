@@ -116,6 +116,7 @@ eelf32l4300.c
 eelf32lm32.c
 eelf32lm32fd.c
 eelf32lmip.c
+eelf32loongarch.c
 eelf32lppc.c
 eelf32lppclinux.c
 eelf32lppcnto.c
@@ -184,6 +185,7 @@ eelf64briscv_lp64f.c
 eelf64btsmip.c
 eelf64btsmip_fbsd.c
 eelf64hppa.c
+eelf64loongarch.c
 eelf64lppc.c
 eelf64lppc_fbsd.c
 eelf64lriscv.c
@@ -205,10 +207,6 @@ eelf_i386_ldso.c
 eelf_i386_sol2.c
 eelf_i386_vxworks.c
 eelf_iamcu.c
-eelf_k1om.c
-eelf_k1om_fbsd.c
-eelf_l1om.c
-eelf_l1om_fbsd.c
 eelf_mipsel_haiku.c
 eelf_s390.c
 eelf_x86_64.c

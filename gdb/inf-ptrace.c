@@ -1,6 +1,6 @@
 /* Low-level child interface to ptrace.
 
-   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+   Copyright (C) 1988-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -47,6 +47,9 @@ gdb_ptrace (PTRACE_TYPE_ARG1 request, ptid_t ptid, PTRACE_TYPE_ARG3 addr,
   return ptrace (request, pid, addr, data);
 #endif
 }
+
+/* The event pipe registered as a waitable file in the event loop.  */
+event_pipe inf_ptrace_target::m_event_pipe;
 
 inf_ptrace_target::~inf_ptrace_target ()
 {}
@@ -103,7 +106,7 @@ inf_ptrace_target::create_inferior (const char *exec_file,
 
   /* On some targets, there must be some explicit actions taken after
      the inferior has been started up.  */
-  target_post_startup_inferior (ptid);
+  post_startup_inferior (ptid);
 }
 
 /* Clean up a rotting corpse of an inferior after it died.  */
@@ -148,17 +151,7 @@ inf_ptrace_target::attach (const char *args, int from_tty)
       unpusher.reset (this);
     }
 
-  if (from_tty)
-    {
-      const char *exec_file = get_exec_file (0);
-
-      if (exec_file)
-	printf_unfiltered (_("Attaching to program: %s, %s\n"), exec_file,
-			   target_pid_to_str (ptid_t (pid)).c_str ());
-      else
-	printf_unfiltered (_("Attaching to %s\n"),
-			   target_pid_to_str (ptid_t (pid)).c_str ());
-    }
+  target_announce_attach (from_tty, pid);
 
 #ifdef PT_ATTACH
   errno = 0;
@@ -299,10 +292,14 @@ inf_ptrace_target::resume (ptid_t ptid, int step, enum gdb_signal signal)
 
 ptid_t
 inf_ptrace_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
-			 target_wait_flags options)
+			 target_wait_flags target_options)
 {
   pid_t pid;
-  int status, save_errno;
+  int options, status, save_errno;
+
+  options = 0;
+  if (target_options & TARGET_WNOHANG)
+    options |= WNOHANG;
 
   do
     {
@@ -310,23 +307,38 @@ inf_ptrace_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 
       do
 	{
-	  pid = waitpid (ptid.pid (), &status, 0);
+	  pid = waitpid (ptid.pid (), &status, options);
 	  save_errno = errno;
 	}
       while (pid == -1 && errno == EINTR);
 
       clear_sigint_trap ();
 
+      if (pid == 0)
+	{
+	  gdb_assert (target_options & TARGET_WNOHANG);
+	  ourstatus->set_ignore ();
+	  return minus_one_ptid;
+	}
+
       if (pid == -1)
 	{
-	  fprintf_unfiltered (gdb_stderr,
-			      _("Child process unexpectedly missing: %s.\n"),
-			      safe_strerror (save_errno));
+	  /* In async mode the SIGCHLD might have raced and triggered
+	     a check for an event that had already been reported.  If
+	     the event was the exit of the only remaining child,
+	     waitpid() will fail with ECHILD.  */
+	  if (ptid == minus_one_ptid && save_errno == ECHILD)
+	    {
+	      ourstatus->set_no_resumed ();
+	      return minus_one_ptid;
+	    }
 
-	  /* Claim it exited with unknown signal.  */
-	  ourstatus->kind = TARGET_WAITKIND_SIGNALLED;
-	  ourstatus->value.sig = GDB_SIGNAL_UNKNOWN;
-	  return inferior_ptid;
+	  gdb_printf (gdb_stderr,
+		      _("Child process unexpectedly missing: %s.\n"),
+		      safe_strerror (save_errno));
+
+	  ourstatus->set_ignore ();
+	  return minus_one_ptid;
 	}
 
       /* Ignore terminated detached child processes.  */
@@ -335,7 +347,8 @@ inf_ptrace_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
     }
   while (pid == -1);
 
-  store_waitstatus (ourstatus, status);
+  *ourstatus = host_status_to_waitstatus (status);
+
   return ptid_t (pid);
 }
 
@@ -507,13 +520,25 @@ inf_ptrace_target::files_info ()
 {
   struct inferior *inf = current_inferior ();
 
-  printf_filtered (_("\tUsing the running image of %s %s.\n"),
-		   inf->attach_flag ? "attached" : "child",
-		   target_pid_to_str (inferior_ptid).c_str ());
+  gdb_printf (_("\tUsing the running image of %s %s.\n"),
+	      inf->attach_flag ? "attached" : "child",
+	      target_pid_to_str (inferior_ptid).c_str ());
 }
 
 std::string
 inf_ptrace_target::pid_to_str (ptid_t ptid)
 {
   return normal_pid_to_str (ptid);
+}
+
+/* Implement the "close" target method.  */
+
+void
+inf_ptrace_target::close ()
+{
+  /* Unregister from the event loop.  */
+  if (is_async_p ())
+    async (0);
+
+  inf_child_target::close ();
 }

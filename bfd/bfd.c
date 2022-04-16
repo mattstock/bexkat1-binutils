@@ -1,5 +1,5 @@
 /* Generic BFD library interface and support routines.
-   Copyright (C) 1990-2021 Free Software Foundation, Inc.
+   Copyright (C) 1990-2022 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -1739,6 +1739,7 @@ bfd_get_sign_extend_vma (bfd *abfd)
       || strcmp (name, "pei-i386") == 0
       || strcmp (name, "pe-x86-64") == 0
       || strcmp (name, "pei-x86-64") == 0
+      || strcmp (name, "pei-aarch64-little") == 0
       || strcmp (name, "pe-arm-wince-little") == 0
       || strcmp (name, "pei-arm-wince-little") == 0
       || strcmp (name, "aixcoff-rs6000") == 0
@@ -1876,7 +1877,7 @@ DESCRIPTION
 void
 bfd_set_gp_value (bfd *abfd, bfd_vma v)
 {
-  return _bfd_set_gp_value (abfd, v);
+  _bfd_set_gp_value (abfd, v);
 }
 
 /*
@@ -2344,7 +2345,7 @@ FUNCTION
 	bfd_emul_get_commonpagesize
 
 SYNOPSIS
-	bfd_vma bfd_emul_get_commonpagesize (const char *, bool);
+	bfd_vma bfd_emul_get_commonpagesize (const char *);
 
 DESCRIPTION
 	Returns the common page size, in bytes, as determined by
@@ -2355,7 +2356,7 @@ RETURNS
 */
 
 bfd_vma
-bfd_emul_get_commonpagesize (const char *emul, bool relro)
+bfd_emul_get_commonpagesize (const char *emul)
 {
   const bfd_target *target;
 
@@ -2366,10 +2367,7 @@ bfd_emul_get_commonpagesize (const char *emul, bool relro)
       const struct elf_backend_data *bed;
 
       bed = xvec_get_elf_backend_data (target);
-      if (relro)
-	return bed->relropagesize;
-      else
-	return bed->commonpagesize;
+      return bed->commonpagesize;
     }
   return 0;
 }
@@ -2504,7 +2502,7 @@ bfd_update_compression_header (bfd *abfd, bfd_byte *contents,
 	      Elf32_External_Chdr *echdr = (Elf32_External_Chdr *) contents;
 	      bfd_put_32 (abfd, ELFCOMPRESS_ZLIB, &echdr->ch_type);
 	      bfd_put_32 (abfd, sec->size, &echdr->ch_size);
-	      bfd_put_32 (abfd, 1 << sec->alignment_power,
+	      bfd_put_32 (abfd, 1u << sec->alignment_power,
 			  &echdr->ch_addralign);
 	      /* bfd_log2 (alignof (Elf32_Chdr)) */
 	      bfd_set_section_alignment (sec, 2);
@@ -2516,7 +2514,7 @@ bfd_update_compression_header (bfd *abfd, bfd_byte *contents,
 	      bfd_put_32 (abfd, ELFCOMPRESS_ZLIB, &echdr->ch_type);
 	      bfd_put_32 (abfd, 0, &echdr->ch_reserved);
 	      bfd_put_64 (abfd, sec->size, &echdr->ch_size);
-	      bfd_put_64 (abfd, 1 << sec->alignment_power,
+	      bfd_put_64 (abfd, UINT64_C (1) << sec->alignment_power,
 			  &echdr->ch_addralign);
 	      /* bfd_log2 (alignof (Elf64_Chdr)) */
 	      bfd_set_section_alignment (sec, 3);

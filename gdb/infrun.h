@@ -1,4 +1,4 @@
-/* Copyright (C) 1986-2021 Free Software Foundation, Inc.
+/* Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -40,8 +40,8 @@ extern bool debug_infrun;
 
 /* Print "infrun" start/end debug statements.  */
 
-#define INFRUN_SCOPED_DEBUG_START_END(msg) \
-  scoped_debug_start_end (debug_infrun, "infrun", msg)
+#define INFRUN_SCOPED_DEBUG_START_END(fmt, ...) \
+  scoped_debug_start_end (debug_infrun, "infrun", fmt, ##__VA_ARGS__)
 
 /* Print "infrun" enter/exit debug statements.  */
 
@@ -124,23 +124,28 @@ extern process_stratum_target *user_visible_resume_target (ptid_t resume_ptid);
 extern int normal_stop (void);
 
 /* Return the cached copy of the last target/ptid/waitstatus returned
-   by target_wait()/deprecated_target_wait_hook().  The data is
-   actually cached by handle_inferior_event(), which gets called
-   immediately after target_wait()/deprecated_target_wait_hook().  */
+   by target_wait().  The data is actually cached by handle_inferior_event(),
+   which gets called immediately after target_wait().  */
 extern void get_last_target_status (process_stratum_target **target,
 				    ptid_t *ptid,
 				    struct target_waitstatus *status);
 
 /* Set the cached copy of the last target/ptid/waitstatus.  */
 extern void set_last_target_status (process_stratum_target *target, ptid_t ptid,
-				    struct target_waitstatus status);
+				    const target_waitstatus &status);
 
 /* Clear the cached copy of the last ptid/waitstatus returned by
    target_wait().  */
 extern void nullify_last_target_wait_ptid ();
 
-/* Stop all threads.  Only returns after everything is halted.  */
-extern void stop_all_threads (void);
+/* Stop all threads.  Only returns after everything is halted.
+
+   REASON is a string indicating the reason why we stop all threads, used in
+   debug messages.
+
+   If INF is non-nullptr, stop all threads of that inferior.  Otherwise, stop
+   all threads of all inferiors.  */
+extern void stop_all_threads (const char *reason, inferior *inf = nullptr);
 
 extern void prepare_for_detach (void);
 
@@ -209,7 +214,7 @@ extern void print_stop_event (struct ui_out *uiout, bool displays = true);
 /* Pretty print the results of target_wait, for debugging purposes.  */
 
 extern void print_target_wait_results (ptid_t waiton_ptid, ptid_t result_ptid,
-				       const struct target_waitstatus *ws);
+				       const struct target_waitstatus &ws);
 
 extern int signal_stop_state (int);
 

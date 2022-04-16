@@ -1,5 +1,5 @@
 /* Target operations for the remote server for GDB.
-   Copyright (C) 2002-2021 Free Software Foundation, Inc.
+   Copyright (C) 2002-2022 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -140,21 +140,6 @@ public:
 
      If REGNO is -1, store all registers; otherwise, store at least REGNO.  */
   virtual void store_registers (regcache *regcache, int regno) = 0;
-
-  /* Prepare to read or write memory from the inferior process.
-     Targets use this to do what is necessary to get the state of the
-     inferior such that it is possible to access memory.
-
-     This should generally only be called from client facing routines,
-     such as gdb_read_memory/gdb_write_memory, or the GDB breakpoint
-     insertion routine.
-
-     Like `read_memory' and `write_memory' below, returns 0 on success
-     and errno on failure.  */
-  virtual int prepare_to_access_memory ();
-
-  /* Undo the effects of prepare_to_access_memory.  */
-  virtual void done_accessing_memory ();
 
   /* Read memory from the inferior process.  This should generally be
      called through read_inferior_memory, which handles breakpoint shadowing.
@@ -403,9 +388,9 @@ public:
   /* Return true if target supports debugging agent.  */
   virtual bool supports_agent ();
 
-  /* Enable branch tracing for PTID based on CONF and allocate a branch trace
+  /* Enable branch tracing for TP based on CONF and allocate a branch trace
      target information struct for reading and for disabling branch trace.  */
-  virtual btrace_target_info *enable_btrace (ptid_t ptid,
+  virtual btrace_target_info *enable_btrace (thread_info *tp,
 					     const btrace_config *conf);
 
   /* Disable branch tracing.
@@ -487,6 +472,14 @@ public:
      and the handle's length via HANDLE_LEN.  */
   virtual bool thread_handle (ptid_t ptid, gdb_byte **handle,
 			      int *handle_len);
+
+  /* If THREAD is a fork child that was not reported to GDB, return its parent
+     else nullptr.  */
+  virtual thread_info *thread_pending_parent (thread_info *thread);
+
+  /* If THREAD is the parent of a fork child that was not reported to GDB,
+     return this child, else nullptr.  */
+  virtual thread_info *thread_pending_child (thread_info *thread);
 
   /* Returns true if the target can software single step.  */
   virtual bool supports_software_single_step ();
@@ -627,9 +620,9 @@ int kill_inferior (process_info *proc);
   the_target->supports_agent ()
 
 static inline struct btrace_target_info *
-target_enable_btrace (ptid_t ptid, const struct btrace_config *conf)
+target_enable_btrace (thread_info *tp, const struct btrace_config *conf)
 {
-  return the_target->enable_btrace (ptid, conf);
+  return the_target->enable_btrace (tp, conf);
 }
 
 static inline int
@@ -683,12 +676,6 @@ target_read_btrace_conf (struct btrace_target_info *tinfo,
 ptid_t mywait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	       target_wait_flags options, int connected_wait);
 
-/* Prepare to read or write memory from the inferior process.  See the
-   corresponding process_stratum_target methods for more details.  */
-
-int prepare_to_access_memory (void);
-void done_accessing_memory (void);
-
 #define target_core_of_thread(ptid)		\
   the_target->core_of_thread (ptid)
 
@@ -698,10 +685,22 @@ void done_accessing_memory (void);
 #define target_thread_handle(ptid, handle, handle_len) \
   the_target->thread_handle (ptid, handle, handle_len)
 
+static inline thread_info *
+target_thread_pending_parent (thread_info *thread)
+{
+  return the_target->thread_pending_parent (thread);
+}
+
+static inline thread_info *
+target_thread_pending_child (thread_info *thread)
+{
+  return the_target->thread_pending_child (thread);
+}
+
 int read_inferior_memory (CORE_ADDR memaddr, unsigned char *myaddr, int len);
 
 int set_desired_thread ();
 
-const char *target_pid_to_str (ptid_t);
+std::string target_pid_to_str (ptid_t);
 
 #endif /* GDBSERVER_TARGET_H */

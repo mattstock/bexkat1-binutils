@@ -1,6 +1,6 @@
 /* Interface between GDB and target environments, including files and processes
 
-   Copyright (C) 1990-2021 Free Software Foundation, Inc.
+   Copyright (C) 1990-2022 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.  Written by John Gilmore.
 
@@ -79,7 +79,7 @@ struct inferior;
 #include "btrace.h"
 #include "record.h"
 #include "command.h"
-#include "disasm.h"
+#include "disasm-flags.h"
 #include "tracepoint.h"
 
 #include "gdbsupport/break-common.h" /* For enum target_hw_bp_type.  */
@@ -626,8 +626,6 @@ struct target_ops
     virtual bool can_create_inferior ();
     virtual void create_inferior (const char *, const std::string &,
 				  char **, int);
-    virtual void post_startup_inferior (ptid_t)
-      TARGET_DEFAULT_IGNORE ();
     virtual int insert_fork_catchpoint (int)
       TARGET_DEFAULT_RETURN (1);
     virtual int remove_fork_catchpoint (int)
@@ -1153,10 +1151,10 @@ struct target_ops
     virtual bool can_use_agent ()
       TARGET_DEFAULT_RETURN (false);
 
-    /* Enable branch tracing for PTID using CONF configuration.
+    /* Enable branch tracing for TP using CONF configuration.
        Return a branch trace target information struct for reading and for
        disabling branch trace.  */
-    virtual struct btrace_target_info *enable_btrace (ptid_t ptid,
+    virtual struct btrace_target_info *enable_btrace (thread_info *tp,
 						      const struct btrace_config *conf)
       TARGET_DEFAULT_NORETURN (tcomplain ());
 
@@ -1450,6 +1448,11 @@ extern bool target_attach_no_wait ();
 
 extern void target_post_attach (int pid);
 
+/* Display a message indicating we're about to attach to a given
+   process.  */
+
+extern void target_announce_attach (int from_tty, int pid);
+
 /* Display a message indicating we're about to detach from the current
    inferior process.  */
 
@@ -1563,14 +1566,6 @@ extern void target_dumpcore (const char *filename);
    on its end.  */
 
 extern bool target_can_run_breakpoint_commands ();
-
-/* Read a string from target memory at address MEMADDR.  The string
-   will be at most LEN bytes long (note that excess bytes may be read
-   in some cases -- but these will not be returned).  Returns nullptr
-   on error.  */
-
-extern gdb::unique_xmalloc_ptr<char> target_read_string
-  (CORE_ADDR memaddr, int len, int *bytes_read = nullptr);
 
 /* For target_read_memory see target/target.h.  */
 
@@ -1687,18 +1682,6 @@ extern void target_kill (void);
    arguments, as it pleases.  */
 
 extern void target_load (const char *arg, int from_tty);
-
-/* Some targets (such as ttrace-based HPUX) don't allow us to request
-   notification of inferior events such as fork and vork immediately
-   after the inferior is created.  (This because of how gdb gets an
-   inferior created via invoking a shell to do it.  In such a scenario,
-   if the shell init file has commands in it, the shell will fork and
-   exec for each of those commands, and we will see each such fork
-   event.  Very bad.)
-
-   Such targets will supply an appropriate definition for this function.  */
-
-extern void target_post_startup_inferior (ptid_t ptid);
 
 /* On some targets, we can catch an inferior fork or vfork event when
    it occurs.  These functions insert/remove an already-created
@@ -1885,6 +1868,10 @@ extern bool target_async_permitted;
 
 /* Can the target support asynchronous execution?  */
 extern bool target_can_async_p ();
+
+/* An overload of the above that can be called when the target is not yet
+   pushed, this calls TARGET::can_async_p directly.  */
+extern bool target_can_async_p (struct target_ops *target);
 
 /* Is the target in asynchronous execution mode?  */
 extern bool target_is_async_p ();
@@ -2507,7 +2494,7 @@ extern void update_target_permissions (void);
 
 /* See to_enable_btrace in struct target_ops.  */
 extern struct btrace_target_info *
-  target_enable_btrace (ptid_t ptid, const struct btrace_config *);
+  target_enable_btrace (thread_info *tp, const struct btrace_config *);
 
 /* See to_disable_btrace in struct target_ops.  */
 extern void target_disable_btrace (struct btrace_target_info *btinfo);

@@ -1,6 +1,6 @@
 # This testcase is part of GDB, the GNU debugger.
 
-# Copyright 2019-2021 Free Software Foundation, Inc.
+# Copyright 2019-2022 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -213,7 +213,7 @@ proc test-integer {variant} {
 
     if {$variant == "zinteger" || $variant == "zuinteger"} {
 	test_gdb_complete_none \
-	    "$set_cmd " \
+	    "$set_cmd "
     } else {
 	test_gdb_complete_unique \
 	    "$set_cmd " \

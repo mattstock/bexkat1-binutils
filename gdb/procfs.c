@@ -1,6 +1,6 @@
 /* Machine independent support for Solaris /proc (process file system) for GDB.
 
-   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+   Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
    Written by Michael Snyder at Cygnus Solutions.
    Based on work by Fred Fish, Stu Grossman, Geoff Noer, and others.
@@ -45,6 +45,7 @@
 #include "observable.h"
 #include "gdbsupport/scoped_fd.h"
 #include "gdbsupport/pathstuff.h"
+#include "gdbsupport/buildargv.h"
 
 /* This module provides the interface between GDB and the
    /proc file system, which is used on many versions of Unix
@@ -1311,8 +1312,8 @@ proc_set_current_signal (procinfo *pi, int signo)
   get_last_target_status (&wait_target, &wait_ptid, &wait_status);
   if (wait_target == &the_procfs_target
       && wait_ptid == inferior_ptid
-      && wait_status.kind == TARGET_WAITKIND_STOPPED
-      && wait_status.value.sig == gdb_signal_from_host (signo)
+      && wait_status.kind () == TARGET_WAITKIND_STOPPED
+      && wait_status.sig () == gdb_signal_from_host (signo)
       && proc_get_status (pi)
       && pi->prstatus.pr_lwp.pr_info.si_signo == signo
       )
@@ -1775,19 +1776,7 @@ procfs_target::attach (const char *args, int from_tty)
       unpusher.reset (this);
     }
 
-  if (from_tty)
-    {
-      const char *exec_file = get_exec_file (0);
-
-      if (exec_file)
-	printf_filtered (_("Attaching to program `%s', %s\n"),
-			 exec_file, target_pid_to_str (ptid_t (pid)).c_str ());
-      else
-	printf_filtered (_("Attaching to %s\n"),
-			 target_pid_to_str (ptid_t (pid)).c_str ());
-
-      fflush (stdout);
-    }
+  target_announce_attach (from_tty, pid);
 
   do_attach (ptid_t (pid));
 
@@ -1798,19 +1787,7 @@ procfs_target::attach (const char *args, int from_tty)
 void
 procfs_target::detach (inferior *inf, int from_tty)
 {
-  int pid = inferior_ptid.pid ();
-
-  if (from_tty)
-    {
-      const char *exec_file;
-
-      exec_file = get_exec_file (0);
-      if (exec_file == NULL)
-	exec_file = "";
-
-      printf_filtered (_("Detaching from program: %s, %s\n"), exec_file,
-		       target_pid_to_str (ptid_t (pid)).c_str ());
-    }
+  target_announce_detach (from_tty);
 
   do_detach ();
 
@@ -1833,7 +1810,7 @@ do_attach (ptid_t ptid)
 
   if (!open_procinfo_files (pi, FD_CTL))
     {
-      fprintf_filtered (gdb_stderr, "procfs:%d -- ", __LINE__);
+      gdb_printf (gdb_stderr, "procfs:%d -- ", __LINE__);
       xsnprintf (errmsg, sizeof (errmsg),
 		 "do_attach: couldn't open /proc file for process %d",
 		 ptid.pid ());
@@ -2146,8 +2123,8 @@ wait_again:
 		if (what == SYS_lwp_exit)
 		  {
 		    if (print_thread_events)
-		      printf_unfiltered (_("[%s exited]\n"),
-					 target_pid_to_str (retval).c_str ());
+		      gdb_printf (_("[%s exited]\n"),
+				  target_pid_to_str (retval).c_str ());
 		    delete_thread (find_thread_ptid (this, retval));
 		    target_continue_no_signal (ptid);
 		    goto wait_again;
@@ -2195,9 +2172,9 @@ wait_again:
 		  }
 		else
 		  {
-		    printf_filtered (_("procfs: trapped on entry to "));
+		    gdb_printf (_("procfs: trapped on entry to "));
 		    proc_prettyprint_syscall (proc_what (pi), 0);
-		    printf_filtered ("\n");
+		    gdb_printf ("\n");
 
 		    long i, nsysargs, *sysargs;
 
@@ -2206,11 +2183,11 @@ wait_again:
 
 		    if (nsysargs > 0 && sysargs != NULL)
 		      {
-			printf_filtered (_("%ld syscall arguments:\n"),
-					 nsysargs);
+			gdb_printf (_("%ld syscall arguments:\n"),
+				    nsysargs);
 			for (i = 0; i < nsysargs; i++)
-			  printf_filtered ("#%ld: 0x%08lx\n",
-					   i, sysargs[i]);
+			  gdb_printf ("#%ld: 0x%08lx\n",
+				      i, sysargs[i]);
 		      }
 
 		    /* How to keep going without returning to wfi: */
@@ -2253,17 +2230,17 @@ wait_again:
 		else if (what == SYS_lwp_exit)
 		  {
 		    if (print_thread_events)
-		      printf_unfiltered (_("[%s exited]\n"),
-					 target_pid_to_str (retval).c_str ());
+		      gdb_printf (_("[%s exited]\n"),
+				  target_pid_to_str (retval).c_str ());
 		    delete_thread (find_thread_ptid (this, retval));
-		    status->kind = TARGET_WAITKIND_SPURIOUS;
+		    status->set_spurious ();
 		    return retval;
 		  }
 		else
 		  {
-		    printf_filtered (_("procfs: trapped on exit from "));
+		    gdb_printf (_("procfs: trapped on exit from "));
 		    proc_prettyprint_syscall (proc_what (pi), 0);
-		    printf_filtered ("\n");
+		    gdb_printf ("\n");
 
 		    long i, nsysargs, *sysargs;
 
@@ -2272,11 +2249,11 @@ wait_again:
 
 		    if (nsysargs > 0 && sysargs != NULL)
 		      {
-			printf_filtered (_("%ld syscall arguments:\n"),
-					 nsysargs);
+			gdb_printf (_("%ld syscall arguments:\n"),
+				    nsysargs);
 			for (i = 0; i < nsysargs; i++)
-			  printf_filtered ("#%ld: 0x%08lx\n",
-					   i, sysargs[i]);
+			  gdb_printf ("#%ld: 0x%08lx\n",
+				      i, sysargs[i]);
 		      }
 
 		    target_continue_no_signal (ptid);
@@ -2290,7 +2267,7 @@ wait_again:
 #else
 		if (retry < 5)
 		  {
-		    printf_filtered (_("Retry #%d:\n"), retry);
+		    gdb_printf (_("Retry #%d:\n"), retry);
 		    pi->status_valid = 0;
 		    goto wait_again;
 		  }
@@ -2306,8 +2283,7 @@ wait_again:
 		    if (!in_thread_list (this, temp_ptid))
 		      add_thread (this, temp_ptid);
 
-		    status->kind = TARGET_WAITKIND_STOPPED;
-		    status->value.sig = GDB_SIGNAL_0;
+		    status->set_stopped (GDB_SIGNAL_0);
 		    return retval;
 		  }
 #endif
@@ -2322,8 +2298,8 @@ wait_again:
 		}
 		break;
 	      default:	/* switch (why) unmatched */
-		printf_filtered ("procfs:%d -- ", __LINE__);
-		printf_filtered (_("child stopped for unknown reason:\n"));
+		gdb_printf ("procfs:%d -- ", __LINE__);
+		gdb_printf (_("child stopped for unknown reason:\n"));
 		proc_prettyprint_why (why, what, 1);
 		error (_("... giving up..."));
 		break;
@@ -2346,15 +2322,15 @@ wait_again:
 	  else	/* Flags do not indicate STOPPED.  */
 	    {
 	      /* surely this can't happen...  */
-	      printf_filtered ("procfs:%d -- process not stopped.\n",
-			       __LINE__);
+	      gdb_printf ("procfs:%d -- process not stopped.\n",
+			  __LINE__);
 	      proc_prettyprint_flags (flags, 1);
 	      error (_("procfs: ...giving up..."));
 	    }
 	}
 
       if (status)
-	store_waitstatus (status, wstat);
+	*status = host_status_to_waitstatus (wstat);
     }
 
   return retval;
@@ -2562,9 +2538,9 @@ procfs_target::files_info ()
 {
   struct inferior *inf = current_inferior ();
 
-  printf_filtered (_("\tUsing the running image of %s %s via /proc.\n"),
-		   inf->attach_flag? "attached": "child",
-		   target_pid_to_str (inferior_ptid).c_str ());
+  gdb_printf (_("\tUsing the running image of %s %s via /proc.\n"),
+	      inf->attach_flag? "attached": "child",
+	      target_pid_to_str (inferior_ptid).c_str ());
 }
 
 /* Make it die.  Wait for it to die.  Clean up after it.  Note: this
@@ -3253,19 +3229,19 @@ info_mappings_callback (struct prmap *map, find_memory_region_ftype ignore,
   pr_off = (unsigned int) map->pr_offset;
 
   if (gdbarch_addr_bit (target_gdbarch ()) == 32)
-    printf_filtered ("\t%#10lx %#10lx %#10lx %#10x %7s\n",
-		     (unsigned long) map->pr_vaddr,
-		     (unsigned long) map->pr_vaddr + map->pr_size - 1,
-		     (unsigned long) map->pr_size,
-		     pr_off,
-		     mappingflags (map->pr_mflags));
+    gdb_printf ("\t%#10lx %#10lx %#10lx %#10x %7s\n",
+		(unsigned long) map->pr_vaddr,
+		(unsigned long) map->pr_vaddr + map->pr_size - 1,
+		(unsigned long) map->pr_size,
+		pr_off,
+		mappingflags (map->pr_mflags));
   else
-    printf_filtered ("  %#18lx %#18lx %#10lx %#10x %7s\n",
-		     (unsigned long) map->pr_vaddr,
-		     (unsigned long) map->pr_vaddr + map->pr_size - 1,
-		     (unsigned long) map->pr_size,
-		     pr_off,
-		     mappingflags (map->pr_mflags));
+    gdb_printf ("  %#18lx %#18lx %#10lx %#10x %7s\n",
+		(unsigned long) map->pr_vaddr,
+		(unsigned long) map->pr_vaddr + map->pr_size - 1,
+		(unsigned long) map->pr_size,
+		pr_off,
+		mappingflags (map->pr_mflags));
 
   return 0;
 }
@@ -3278,24 +3254,24 @@ info_proc_mappings (procinfo *pi, int summary)
   if (summary)
     return;	/* No output for summary mode.  */
 
-  printf_filtered (_("Mapped address spaces:\n\n"));
+  gdb_printf (_("Mapped address spaces:\n\n"));
   if (gdbarch_ptr_bit (target_gdbarch ()) == 32)
-    printf_filtered ("\t%10s %10s %10s %10s %7s\n",
-		     "Start Addr",
-		     "  End Addr",
-		     "      Size",
-		     "    Offset",
-		     "Flags");
+    gdb_printf ("\t%10s %10s %10s %10s %7s\n",
+		"Start Addr",
+		"  End Addr",
+		"      Size",
+		"    Offset",
+		"Flags");
   else
-    printf_filtered ("  %18s %18s %10s %10s %7s\n",
-		     "Start Addr",
-		     "  End Addr",
-		     "      Size",
-		     "    Offset",
-		     "Flags");
+    gdb_printf ("  %18s %18s %10s %10s %7s\n",
+		"Start Addr",
+		"  End Addr",
+		"      Size",
+		"    Offset",
+		"Flags");
 
   iterate_over_mappings (pi, NULL, NULL, info_mappings_callback);
-  printf_filtered ("\n");
+  gdb_printf ("\n");
 }
 
 /* Implement the "info proc" command.  */
@@ -3364,17 +3340,17 @@ procfs_target::info_proc (const char *args, enum info_proc_what what)
 
   if (process)
     {
-      printf_filtered (_("process %d flags:\n"), process->pid);
+      gdb_printf (_("process %d flags:\n"), process->pid);
       proc_prettyprint_flags (proc_flags (process), 1);
       if (proc_flags (process) & (PR_STOPPED | PR_ISTOP))
 	proc_prettyprint_why (proc_why (process), proc_what (process), 1);
       if (proc_get_nthreads (process) > 1)
-	printf_filtered ("Process has %d threads.\n",
-			 proc_get_nthreads (process));
+	gdb_printf ("Process has %d threads.\n",
+		    proc_get_nthreads (process));
     }
   if (thread)
     {
-      printf_filtered (_("thread %d flags:\n"), thread->tid);
+      gdb_printf (_("thread %d flags:\n"), thread->tid);
       proc_prettyprint_flags (proc_flags (thread), 1);
       if (proc_flags (thread) & (PR_STOPPED | PR_ISTOP))
 	proc_prettyprint_why (proc_why (thread), proc_what (thread), 1);

@@ -1,5 +1,5 @@
 /* Multi-process/thread control defs for GDB, the GNU debugger.
-   Copyright (C) 1987-2021 Free Software Foundation, Inc.
+   Copyright (C) 1987-2022 Free Software Foundation, Inc.
    Contributed by Lynx Real-Time Systems, Inc.  Los Gatos, CA.
    
 
@@ -34,9 +34,20 @@ struct symtab;
 #include "gdbsupport/forward-scope-exit.h"
 #include "displaced-stepping.h"
 #include "gdbsupport/intrusive_list.h"
+#include "thread-fsm.h"
 
 struct inferior;
 struct process_stratum_target;
+
+/* When true, print debug messages related to GDB thread creation and
+   deletion.  */
+
+extern bool debug_threads;
+
+/* Print a "threads" debug statement.  */
+
+#define threads_debug_printf(fmt, ...) \
+  debug_prefixed_printf_cond (debug_threads, "threads", fmt, ##__VA_ARGS__)
 
 /* Frontend view of the thread state.  Possible extensions: stepping,
    finishing, until(ling),...
@@ -154,7 +165,7 @@ struct thread_control_state
 
   /* Chain containing status of breakpoint(s) the thread stopped
      at.  */
-  bpstat stop_bpstat = nullptr;
+  bpstat *stop_bpstat = nullptr;
 
   /* Whether the command that started the thread was a stepping
      command.  This is used to decide whether "set scheduler-locking
@@ -180,7 +191,7 @@ struct thread_suspend_state
   enum target_stop_reason stop_reason = TARGET_STOPPED_BY_NO_REASON;
 
   /* The waitstatus for this thread's last event.  */
-  struct target_waitstatus waitstatus {};
+  struct target_waitstatus waitstatus;
   /* If true WAITSTATUS hasn't been handled yet.  */
   int waitstatus_pending_p = 0;
 
@@ -235,6 +246,7 @@ class thread_info : public refcounted_object,
 {
 public:
   explicit thread_info (inferior *inf, ptid_t ptid);
+  ~thread_info ();
 
   bool deletable () const;
 
@@ -432,6 +444,32 @@ public:
     m_suspend.stop_reason = reason;
   }
 
+  /* Get the FSM associated with the thread.  */
+
+  struct thread_fsm *thread_fsm () const
+  {
+    return m_thread_fsm.get ();
+  }
+
+  /* Get the owning reference to the FSM associated with the thread.
+
+     After a call to this method, "thread_fsm () == nullptr".  */
+
+  std::unique_ptr<struct thread_fsm> release_thread_fsm ()
+  {
+    return std::move (m_thread_fsm);
+  }
+
+  /* Set the FSM associated with the current thread.
+
+     It is invalid to set the FSM if another FSM is already installed.  */
+
+  void set_thread_fsm (std::unique_ptr<struct thread_fsm> fsm)
+  {
+    gdb_assert (m_thread_fsm == nullptr);
+    m_thread_fsm = std::move (fsm);
+  }
+
   int current_line = 0;
   struct symtab *current_symtab = NULL;
 
@@ -468,11 +506,6 @@ public:
      order to keep GDB in mind that there is still a breakpoint to step over
      when GDB gets back SIGTRAP from step_resume_breakpoint.  */
   int step_after_step_resume_breakpoint = 0;
-
-  /* Pointer to the state machine manager object that handles what is
-     left to do for the thread's execution command after the target
-     stops.  Several execution commands use it.  */
-  struct thread_fsm *thread_fsm = NULL;
 
   /* This is used to remember when a fork or vfork event was caught by
      a catchpoint, and thus the event is to be followed at the next
@@ -539,6 +572,11 @@ private:
 
      Nullptr if the thread does not have a user-given name.  */
   gdb::unique_xmalloc_ptr<char> m_name;
+
+  /* Pointer to the state machine manager object that handles what is
+     left to do for the thread's execution command after the target
+     stops.  Several execution commands use it.  */
+  std::unique_ptr<struct thread_fsm> m_thread_fsm;
 };
 
 using thread_info_resumed_with_pending_wait_status_node
@@ -974,5 +1012,26 @@ extern void thread_select (const char *tidstr, class thread_info *thr);
    If THREAD has a user-given name, return it.  Otherwise, query the thread's
    target to get the name.  May return nullptr.  */
 extern const char *thread_name (thread_info *thread);
+
+/* Switch to thread TP if it is alive.  Returns true if successfully
+   switched, false otherwise.  */
+
+extern bool switch_to_thread_if_alive (thread_info *thr);
+
+/* Assuming that THR is the current thread, execute CMD.
+   If ADA_TASK is not empty, it is the Ada task ID, and will
+   be printed instead of the thread information.
+   FLAGS.QUIET controls the printing of the thread information.
+   FLAGS.CONT and FLAGS.SILENT control how to handle errors.  Can throw an
+   exception if !FLAGS.SILENT and !FLAGS.CONT and CMD fails.  */
+
+extern void thread_try_catch_cmd (thread_info *thr,
+				  gdb::optional<int> ada_task,
+				  const char *cmd, int from_tty,
+				  const qcs_flags &flags);
+
+/* Return a string representation of STATE.  */
+
+extern const char *thread_state_string (enum thread_state state);
 
 #endif /* GDBTHREAD_H */

@@ -1,5 +1,5 @@
 # Expect script for ld-plugin LTO tests
-#   Copyright (C) 2011-2021 Free Software Foundation, Inc.
+#   Copyright (C) 2011-2022 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -233,7 +233,7 @@ set lto_link_tests [list \
    [list [list "nm" "$plug_opt" "pr26389.d"]]] \
 ]
 
-if { [at_least_gcc_version 10 0] } {
+if { [at_least_gcc_version 10 0] && [check_lto_shared_available] } {
     set lto_link_tests [concat $lto_link_tests [list \
 	[list "pr25355.o" \
 	 "" \
@@ -471,6 +471,57 @@ set lto_link_elf_tests [list \
   [list {pr27441c.so} \
    {-shared -fPIC -Wl,--as-needed tmpdir/pr27441c.o tmpdir/pr27441b.so tmpdir/pr27441a.so} {-fPIC} \
    {dummy.c} {{readelf {-dW} pr27441c.d}} {pr27441c.so}] \
+  [list \
+   "Build libpr28879a.so" \
+   "-shared" \
+   "-O0 -fpic" \
+   {pr28879a.cc} \
+   {} \
+   "libpr28879a.so" \
+   "c++" \
+  ] \
+  [list \
+   "Build libpr28879b.so" \
+   "-shared -Wl,--no-as-needed tmpdir/libpr28879a.so" \
+   "-O2 -fpic" \
+   {dummy.c} \
+   {} \
+   "libpr28879b.so" \
+  ] \
+  [list \
+   "Build pr28879" \
+   "-Wl,--no-as-needed tmpdir/libpr28879b.so -Wl,-rpath-link,." \
+   "-O0 -flto -D_GLIBCXX_ASSERTIONS" \
+   {pr28879b.cc} \
+   {} \
+   "pr28879" \
+   "c++" \
+  ] \
+  [list \
+   "Build libpr28849a.so" \
+   "-shared" \
+   "-fPIC" \
+   {pr28849a.c} \
+   "" \
+   "libpr28849a.so" \
+  ] \
+  [list \
+   "Build libpr28849b.so" \
+   "-shared -Wl,--no-as-needed,tmpdir/libpr28849a.so" \
+   "" \
+   {dummy.c} \
+   "" \
+   "libpr28849b.so" \
+  ] \
+  [list \
+   "Build pr28849" \
+   "-Wl,--no-as-needed,--copy-dt-needed-entries,-rpath-link,. \
+    tmpdir/libpr28849b.so" \
+   "-O2 -flto" \
+   {pr28849b.c} \
+   {{"nm" {-D} "pr28849.d"}} \
+   "pr28849" \
+  ] \
 ]
 
 # PR 14918 checks that libgcc is not spuriously included in a shared link of

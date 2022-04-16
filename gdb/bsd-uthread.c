@@ -1,6 +1,6 @@
 /* BSD user-level threads support.
 
-   Copyright (C) 2005-2021 Free Software Foundation, Inc.
+   Copyright (C) 2005-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,7 @@
 #include "symfile.h"
 #include "target.h"
 
-#include "gdb_obstack.h"
+#include "gdbsupport/gdb_obstack.h"
 
 #include "bsd-uthread.h"
 
@@ -163,7 +163,7 @@ bsd_uthread_lookup_address (const char *name, struct objfile *objfile)
 
   sym = lookup_minimal_symbol (name, NULL, objfile);
   if (sym.minsym)
-    return BMSYMBOL_VALUE_ADDRESS (sym);
+    return sym.value_address ();
 
   return 0;
 }
@@ -389,8 +389,8 @@ bsd_uthread_target::wait (ptid_t ptid, struct target_waitstatus *status,
 
   /* If the process is no longer alive, there's no point in figuring
      out the thread ID.  It will fail anyway.  */
-  if (status->kind == TARGET_WAITKIND_SIGNALLED
-      || status->kind == TARGET_WAITKIND_EXITED)
+  if (status->kind () == TARGET_WAITKIND_SIGNALLED
+      || status->kind () == TARGET_WAITKIND_EXITED)
     return ptid;
 
   /* Fetch the corresponding thread ID, and augment the returned

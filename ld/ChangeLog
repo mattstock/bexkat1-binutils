@@ -1,3 +1,164 @@
+2022-04-07  Mark Harmstone  <mark@harmstone.com>
+
+	* testsuite/ld-pe/secidx1.s: New test source file.
+	* testsuite/ld-pe/secidx2.s: New test source file.
+	* testsuite/ld-pe/secidx.d: New test driver file.
+	* testsuite/ld-pe/secidx_64.d: New test driver file.
+	* testsuite/ld-pe/pe.exp: Add new tests.
+
+2022-03-01  Nick Clifton  <nickc@redhat.com>
+
+	PR 21964
+	* testsuite/ld-elf/pr21964-1a.c: Fix array comparisons.
+	* testsuite/ld-elf/pr21964-1b.c: Likewise.
+	* testsuite/ld-elf/pr21964-1c.c: Likewise.
+	* testsuite/ld-elf/pr21964-2a.c: Likewise.
+	* testsuite/ld-elf/pr21964-2b.c: Likewise.
+	* testsuite/ld-elf/pr21964-3a.c: Likewise.
+
+2022-02-17  Roland McGrath  <mcgrathr@google.com>
+
+	* ld.texi (Output Section Type): Fix typo in @code syntax.
+
+2022-02-17  Nick Clifton  <nickc@redhat.com>
+
+	* po/sr.po: Updated Serbian translation.
+
+2022-02-16  Fangrui Song  <maskray@google.com>
+	    Nick Clifton  <nickc@redhat.com>
+
+	PR ld/28841
+	* ld.texi: Document new output section type.
+	* ldlex.l: Add new token TYPE.
+	* ldgram.y: Handle TYPE=exp and READONLY (TYPE=exp).
+	* ldlang.h: Add type_section to list of section types.
+	* ldlang.c (lang_add_section): Handle type_section.
+	(map_input_to_output_sections): Handle type_section.
+	* testsuite/ld-scripts/output-section-types.t: Add tests.
+	* testsuite/ld-scripts/output-section-types.d: Update.
+
+2022-02-02  Nick Clifton  <nickc@redhat.com>
+
+	* po/fr.po: Updated French translation.
+
+2022-01-24  Nick Clifton  <nickc@redhat.com>
+
+	* po/bg.po: Updated Bulgarian translation.
+	* po/uk.po: Updated Ukranian translation.
+
+2022-01-22  Alexander von Gluck IV  <kallisti5@unixzen.com>
+
+	* configure.tgt (arm-haiku): Fix typo.
+	* emulparams/armelf_haiku.su (MAXPAGESIZE): Use the default value.
+	(COMMONPAGESIZE): Likewise.
+
+2022-01-22  Nick Clifton  <nickc@redhat.com>
+
+	* configure: Regenerate.
+	* po/ld.pot: Regenerate.
+
+2022-01-22  Nick Clifton  <nickc@redhat.com>
+
+	* 2.38 release branch created.
+
+2022-01-21  Nick Clifton  <nickc@redhat.com>
+
+	* po/sr.po: Updated Serbian translation.
+
+2022-01-17  Nick Clifton  <nickc@redhat.com>
+
+	* Makefile.in: Regenerate.
+	* po/ld.pot: Regenerate.
+
+2022-01-11  Martin Storsjö  <martin@martin.st>
+
+	* pe-dll.c (make_head): Prefix the symbol name with the dll name.
+	(make_tail, make_one, make_singleton_name_thunk): Likewise.
+	(make_import_fixup_entry, make_runtime_pseudo_reloc): Likewise.
+	(pe_create_runtime_relocator_reference): Likewise.
+	(pe_dll_generate_implib): Set dll_symname_len.
+	(pe_process_import_defs): Likewise.
+
+2021-12-16  Nick Clifton  <nickc@redhat.com>
+
+	PR 28686
+	* testsuite/ld-avr/avr-prop-7.d: Adjust expected output.
+	* testsuite/ld-avr/avr-prop-8.d: Likewise.
+	* testsuite/ld-avr/pr13402.d: Likewise.
+
+2021-11-30  Nick Clifton  <nickc@redhat.com>
+
+	* scripttempl/pru.sc (.pru_irq_map): Define output section.
+	* testsuite/ld-pru/pru_irq_map-1.d: New test.
+	* testsuite/ld-pru/pru_irq_map-2.d: New test.
+	* testsuite/ld-pru/pru_irq_map.s: New test.
+
+2021-11-17  Jeremy Drake  <cygwin@jdrake.com>
+
+	* emultempl/pep.em (DEFAULT_DLL_CHARACTERISTICS): Set to 0 for
+	Cygwin targets.
+	* emultempl/pep.em (DEFAULT_DLL_CHARACTERISTICS): Likewise.
+
+2021-11-17  Nick Clifton  <nickc@redhat.com>
+
+	PR 28452
+	* ldgram.y: Add support for PT_GNU_RELRO and PT_GNU_PROPERTY.
+	* ldgram.c: Regenerate.
+
+2021-11-15  Roland McGrath  <mcgrathr@google.com>
+
+	* testsuite/ld-aarch64/dt_textrel.d: Pass explicit -z notext in
+	case ld was configured with --enable-textrel-check=error.
+	* testsuite/ld-aarch64/pr22764.d: Likewise.
+	* testsuite/ld-aarch64/pr20402.d: Likewise.
+
+2021-10-25  Nick Alcock  <nick.alcock@oracle.com>
+
+	* testsuite/ld-ctf/nonrepresentable-member.*: New test.
+
+2021-10-25  Nick Alcock  <nick.alcock@oracle.com>
+
+	* testsuite/ld-ctf/array.d: Change --ctf=.ctf to --ctf.
+	* testsuite/ld-ctf/conflicting-cycle-1.B-1.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-1.B-2.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-1.parent.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-2.A-1.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-2.A-2.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-2.parent.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-3.C-1.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-3.C-2.d: Likewise.
+	* testsuite/ld-ctf/conflicting-cycle-3.parent.d: Likewise.
+	* testsuite/ld-ctf/conflicting-enums.d: Likewise.
+	* testsuite/ld-ctf/conflicting-typedefs.d: Likewise.
+	* testsuite/ld-ctf/cross-tu-cyclic-conflicting.d: Likewise.
+	* testsuite/ld-ctf/cross-tu-cyclic-nonconflicting.d: Likewise.
+	* testsuite/ld-ctf/cross-tu-into-cycle.d: Likewise.
+	* testsuite/ld-ctf/cross-tu-noncyclic.d: Likewise.
+	* testsuite/ld-ctf/cycle-1.d: Likewise.
+	* testsuite/ld-ctf/cycle-2.A.d: Likewise.
+	* testsuite/ld-ctf/cycle-2.B.d: Likewise.
+	* testsuite/ld-ctf/cycle-2.C.d: Likewise.
+	* testsuite/ld-ctf/data-func-conflicted.d: Likewise.
+	* testsuite/ld-ctf/diag-cttname-null.d: Likewise.
+	* testsuite/ld-ctf/diag-cuname.d: Likewise.
+	* testsuite/ld-ctf/diag-parlabel.d: Likewise.
+	* testsuite/ld-ctf/enum-forward.d: Likewise.
+	* testsuite/ld-ctf/enums.d: Likewise.
+	* testsuite/ld-ctf/forward.d: Likewise.
+	* testsuite/ld-ctf/function.d: Likewise.
+	* testsuite/ld-ctf/nonrepresentable.d: Likewise.
+	* testsuite/ld-ctf/slice.d: Likewise.
+	* testsuite/ld-ctf/super-sub-cycles.d: Likewise.
+
+2021-09-30  Dimitar Dimitrov  <dimitar@dinux.eu>
+
+	* scripttempl/pru.sc (.resource_table): Align the output
+	section, not the first symbol.
+
+2021-09-27  Nick Alcock  <nick.alcock@oracle.com>
+
+	* configure: Regenerate.
+
 2021-09-21  Nick Clifton  <nickc@redhat.com>
 
 	* ldlang.c (lang_end): When computing the entry point, only
@@ -1674,7 +1835,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021 Free Software Foundation, Inc.
+Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

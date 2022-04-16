@@ -1,6 +1,6 @@
 /* Target-dependent code for the CSKY architecture, for GDB.
 
-   Copyright (C) 2010-2021 Free Software Foundation, Inc.
+   Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
    Contributed by C-SKY Microsystems and Mentor Graphics.
 
@@ -61,21 +61,21 @@
 /* Control debugging information emitted in this file.  */
 static bool csky_debug = false;
 
-static struct reggroup *cr_reggroup;
-static struct reggroup *fr_reggroup;
-static struct reggroup *vr_reggroup;
-static struct reggroup *mmu_reggroup;
-static struct reggroup *prof_reggroup;
+static const reggroup *cr_reggroup;
+static const reggroup *fr_reggroup;
+static const reggroup *vr_reggroup;
+static const reggroup *mmu_reggroup;
+static const reggroup *prof_reggroup;
 
 /* Convenience function to print debug messages in prologue analysis.  */
 
 static void
 print_savedreg_msg (int regno, int offsets[], bool print_continuing)
 {
-  fprintf_unfiltered (gdb_stdlog, "csky: r%d saved at offset 0x%x\n",
-		      regno, offsets[regno]);
+  gdb_printf (gdb_stdlog, "csky: r%d saved at offset 0x%x\n",
+	      regno, offsets[regno]);
   if (print_continuing)
-    fprintf_unfiltered (gdb_stdlog, "csky: continuing\n");
+    gdb_printf (gdb_stdlog, "csky: continuing\n");
 }
 
 /*  Check whether the instruction at ADDR is 16-bit or not.  */
@@ -329,7 +329,6 @@ csky_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
   int argnum;
   int argreg = CSKY_ABI_A0_REGNUM;
   int last_arg_regnum = CSKY_ABI_LAST_ARG_REGNUM;
-  int need_dummy_stack = 0;
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   std::vector<stack_item> stack_items;
 
@@ -343,10 +342,10 @@ csky_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
     {
       if (csky_debug)
 	{
-	  fprintf_unfiltered (gdb_stdlog,
-			      "csky: struct return in %s = %s\n",
-			      gdbarch_register_name (gdbarch, argreg),
-			      paddress (gdbarch, struct_addr));
+	  gdb_printf (gdb_stdlog,
+		      "csky: struct return in %s = %s\n",
+		      gdbarch_register_name (gdbarch, argreg),
+		      paddress (gdbarch, struct_addr));
 	}
       regcache_cooked_write_unsigned (regcache, argreg, struct_addr);
       argreg++;
@@ -362,7 +361,7 @@ csky_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 
       arg_type = check_typedef (value_type (args[argnum]));
       len = TYPE_LENGTH (arg_type);
-      val = value_contents (args[argnum]);
+      val = value_contents (args[argnum]).data ();
 
       /* Copy the argument to argument registers or the dummy stack.
 	 Large arguments are split between registers and stack.
@@ -399,7 +398,6 @@ csky_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 		{
 		  /* The argument should be pushed onto the dummy stack.  */
 		  stack_items.emplace_back (4, val);
-		  need_dummy_stack += 4;
 		}
 	      len -= partial_len;
 	      val += partial_len;
@@ -535,10 +533,10 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
      saved (and where).  */
   if (csky_debug)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "csky: Scanning prologue: start_pc = 0x%x,"
-			  "limit_pc = 0x%x\n", (unsigned int) start_pc,
-			  (unsigned int) limit_pc);
+      gdb_printf (gdb_stdlog,
+		  "csky: Scanning prologue: start_pc = 0x%x,"
+		  "limit_pc = 0x%x\n", (unsigned int) start_pc,
+		  (unsigned int) limit_pc);
     }
 
   /* Default to 16 bit instruction.  */
@@ -559,9 +557,9 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 	      int offset = CSKY_32_SUBI_IMM (insn);
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: got subi sp,%d; continuing\n",
-				      offset);
+		  gdb_printf (gdb_stdlog,
+			      "csky: got subi sp,%d; continuing\n",
+			      offset);
 		}
 	      stacksize += offset;
 	      continue;
@@ -585,10 +583,10 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 	      reg_count = CSKY_32_STM_SIZE (insn);
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: got stm r%d-r%d,(sp)\n",
-				      start_register,
-				      start_register + reg_count);
+		  gdb_printf (gdb_stdlog,
+			      "csky: got stm r%d-r%d,(sp)\n",
+			      start_register,
+			      start_register + reg_count);
 		}
 
 	      for (rn = start_register, offset = 0;
@@ -598,15 +596,15 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		  register_offsets[rn] = stacksize - offset;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: r%d saved at 0x%x"
-					  " (offset %d)\n",
-					  rn, register_offsets[rn],
-					  offset);
+		      gdb_printf (gdb_stdlog,
+				  "csky: r%d saved at 0x%x"
+				  " (offset %d)\n",
+				  rn, register_offsets[rn],
+				  offset);
 		    }
 		}
 	      if (csky_debug)
-		fprintf_unfiltered (gdb_stdlog, "csky: continuing\n");
+		gdb_printf (gdb_stdlog, "csky: continuing\n");
 	      continue;
 	    }
 	  /* stw ry,(sp,disp).  */
@@ -802,36 +800,33 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 	  else if (CSKY_32_IS_PUSH (insn))
 	    {
 	      /* Push for 32_bit.  */
-	      int offset = 0;
 	      if (CSKY_32_IS_PUSH_R29 (insn))
 		{
 		  stacksize += 4;
 		  register_offsets[29] = stacksize;
 		  if (csky_debug)
 		    print_savedreg_msg (29, register_offsets, false);
-		  offset += 4;
 		}
 	      if (CSKY_32_PUSH_LIST2 (insn))
 		{
 		  int num = CSKY_32_PUSH_LIST2 (insn);
 		  int tmp = 0;
 		  stacksize += num * 4;
-		  offset += num * 4;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: push regs_array: r16-r%d\n",
-					  16 + num - 1);
+		      gdb_printf (gdb_stdlog,
+				  "csky: push regs_array: r16-r%d\n",
+				  16 + num - 1);
 		    }
 		  for (rn = 16; rn <= 16 + num - 1; rn++)
 		    {
 		       register_offsets[rn] = stacksize - tmp;
 		       if (csky_debug)
 			 {
-			   fprintf_unfiltered (gdb_stdlog,
-					       "csky: r%d saved at 0x%x"
-					       " (offset %d)\n", rn,
-					       register_offsets[rn], tmp);
+			   gdb_printf (gdb_stdlog,
+				       "csky: r%d saved at 0x%x"
+				       " (offset %d)\n", rn,
+				       register_offsets[rn], tmp);
 			 }
 		       tmp += 4;
 		    }
@@ -842,29 +837,27 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		  register_offsets[15] = stacksize;
 		  if (csky_debug)
 		    print_savedreg_msg (15, register_offsets, false);
-		  offset += 4;
 		}
 	      if (CSKY_32_PUSH_LIST1 (insn))
 		{
 		  int num = CSKY_32_PUSH_LIST1 (insn);
 		  int tmp = 0;
 		  stacksize += num * 4;
-		  offset += num * 4;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: push regs_array: r4-r%d\n",
-					  4 + num - 1);
+		      gdb_printf (gdb_stdlog,
+				  "csky: push regs_array: r4-r%d\n",
+				  4 + num - 1);
 		    }
 		  for (rn = 4; rn <= 4 + num - 1; rn++)
 		    {
 		       register_offsets[rn] = stacksize - tmp;
 		       if (csky_debug)
 			 {
-			   fprintf_unfiltered (gdb_stdlog,
-					       "csky: r%d saved at 0x%x"
-					       " (offset %d)\n", rn,
-					       register_offsets[rn], tmp);
+			   gdb_printf (gdb_stdlog,
+				       "csky: r%d saved at 0x%x"
+				       " (offset %d)\n", rn,
+				       register_offsets[rn], tmp);
 			 }
 			tmp += 4;
 		    }
@@ -872,7 +865,7 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      framesize = stacksize;
 	      if (csky_debug)
-		fprintf_unfiltered (gdb_stdlog, "csky: continuing\n");
+		gdb_printf (gdb_stdlog, "csky: continuing\n");
 	      continue;
 	    }
 	  else if (CSKY_32_IS_LRW4 (insn) || CSKY_32_IS_MOVI4 (insn)
@@ -884,8 +877,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: looking at large frame\n");
+		  gdb_printf (gdb_stdlog,
+			      "csky: looking at large frame\n");
 		}
 	      if (CSKY_32_IS_LRW4 (insn))
 		{
@@ -907,12 +900,12 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: base stacksize=0x%x\n", adjust);
+		  gdb_printf (gdb_stdlog,
+			      "csky: base stacksize=0x%x\n", adjust);
 
 		  /* May have zero or more insns which modify r4.  */
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: looking for r4 adjusters...\n");
+		  gdb_printf (gdb_stdlog,
+			      "csky: looking for r4 adjusters...\n");
 		}
 
 	      offset = 4;
@@ -925,8 +918,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust += imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: addi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: addi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_SUBI4 (insn2))
@@ -935,8 +928,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust -= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: subi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: subi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_NOR4 (insn2))
@@ -944,8 +937,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust = ~adjust;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: nor r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: nor r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_32_IS_ROTLI4 (insn2))
@@ -956,8 +949,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= temp;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: rotli r4,r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: rotli r4,r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_LISI4 (insn2))
@@ -966,8 +959,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust <<= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: lsli r4,r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: lsli r4,r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_BSETI4 (insn2))
@@ -976,8 +969,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= (1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bseti r4,r4 %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bseti r4,r4 %d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_BCLRI4 (insn2))
@@ -986,8 +979,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust &= ~(1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bclri r4,r4 %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bclri r4,r4 %d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_IXH4 (insn2))
@@ -995,8 +988,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust *= 3;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: ixh r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: ixh r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_32_IS_IXW4 (insn2))
@@ -1004,8 +997,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust *= 5;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: ixw r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: ixw r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_16_IS_ADDI4 (insn2))
@@ -1014,8 +1007,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust += imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: addi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: addi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_SUBI4 (insn2))
@@ -1024,8 +1017,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust -= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: subi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: subi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_NOR4 (insn2))
@@ -1033,8 +1026,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust = ~adjust;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: nor r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: nor r4,r4\n");
 			}
 		    }
 		  else if (CSKY_16_IS_BSETI4 (insn2))
@@ -1043,8 +1036,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= (1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bseti r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bseti r4, %d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_BCLRI4 (insn2))
@@ -1053,8 +1046,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust &= ~(1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bclri r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bclri r4, %d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_LSLI4 (insn2))
@@ -1063,8 +1056,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust <<= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: lsli r4,r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: lsli r4,r4, %d\n", imm);
 			}
 		    }
 
@@ -1074,8 +1067,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog, "csky: done looking for"
-				      " r4 adjusters\n");
+		  gdb_printf (gdb_stdlog, "csky: done looking for"
+			      " r4 adjusters\n");
 		}
 
 	      /* If the next insn adjusts the stack pointer, we keep
@@ -1087,14 +1080,14 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		  stacksize += adjust;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: found stack adjustment of"
-					  " 0x%x bytes.\n", adjust);
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: skipping to new address %s\n",
-					  core_addr_to_string_nz (addr));
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: continuing\n");
+		      gdb_printf (gdb_stdlog,
+				  "csky: found stack adjustment of"
+				  " 0x%x bytes.\n", adjust);
+		      gdb_printf (gdb_stdlog,
+				  "csky: skipping to new address %s\n",
+				  core_addr_to_string_nz (addr));
+		      gdb_printf (gdb_stdlog,
+				  "csky: continuing\n");
 		    }
 		  continue;
 		}
@@ -1103,9 +1096,9 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		 anything.  */
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: no subu sp,sp,r4; NOT altering"
-				      " stacksize.\n");
+		  gdb_printf (gdb_stdlog,
+			      "csky: no subu sp,sp,r4; NOT altering"
+			      " stacksize.\n");
 		}
 	      break;
 	    }
@@ -1120,9 +1113,9 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 	      int offset = CSKY_16_SUBI_IMM (insn);
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: got subi r0,%d; continuing\n",
-				      offset);
+		  gdb_printf (gdb_stdlog,
+			      "csky: got subi r0,%d; continuing\n",
+			      offset);
 		}
 	      stacksize += offset;
 	      continue;
@@ -1167,19 +1160,19 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		  offset += num * 4;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "csky: push regs_array: r4-r%d\n",
-					  4 + num - 1);
+		      gdb_printf (gdb_stdlog,
+				  "csky: push regs_array: r4-r%d\n",
+				  4 + num - 1);
 		    }
 		  for (rn = 4; rn <= 4 + num - 1; rn++)
 		    {
 		       register_offsets[rn] = stacksize - tmp;
 		       if (csky_debug)
 			 {
-			   fprintf_unfiltered (gdb_stdlog,
-					       "csky: r%d saved at 0x%x"
-					       " (offset %d)\n", rn,
-					       register_offsets[rn], offset);
+			   gdb_printf (gdb_stdlog,
+				       "csky: r%d saved at 0x%x"
+				       " (offset %d)\n", rn,
+				       register_offsets[rn], offset);
 			 }
 		       tmp += 4;
 		    }
@@ -1187,7 +1180,7 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      framesize = stacksize;
 	      if (csky_debug)
-		fprintf_unfiltered (gdb_stdlog, "csky: continuing\n");
+		gdb_printf (gdb_stdlog, "csky: continuing\n");
 	      continue;
 	    }
 	  else if (CSKY_16_IS_LRW4 (insn) || CSKY_16_IS_MOVI4 (insn))
@@ -1197,8 +1190,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: looking at large frame\n");
+		  gdb_printf (gdb_stdlog,
+			      "csky: looking at large frame\n");
 		}
 	      if (CSKY_16_IS_LRW4 (insn))
 		{
@@ -1216,15 +1209,15 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: base stacksize=0x%x\n", adjust);
+		  gdb_printf (gdb_stdlog,
+			      "csky: base stacksize=0x%x\n", adjust);
 		}
 
 	      /* May have zero or more instructions which modify r4.  */
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "csky: looking for r4 adjusters...\n");
+		  gdb_printf (gdb_stdlog,
+			      "csky: looking for r4 adjusters...\n");
 		}
 	      int offset = 2;
 	      insn_len = csky_get_insn (gdbarch, addr + offset, &insn2);
@@ -1236,8 +1229,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust += imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: addi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: addi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_SUBI4 (insn2))
@@ -1246,8 +1239,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust -= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: subi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: subi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_NOR4 (insn2))
@@ -1255,8 +1248,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust = ~adjust;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: nor r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: nor r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_32_IS_ROTLI4 (insn2))
@@ -1267,8 +1260,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= temp;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: rotli r4,r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: rotli r4,r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_LISI4 (insn2))
@@ -1277,8 +1270,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust <<= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: lsli r4,r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: lsli r4,r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_BSETI4 (insn2))
@@ -1287,8 +1280,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= (1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bseti r4,r4 %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bseti r4,r4 %d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_BCLRI4 (insn2))
@@ -1297,8 +1290,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust &= ~(1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bclri r4,r4 %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bclri r4,r4 %d\n", imm);
 			}
 		    }
 		  else if (CSKY_32_IS_IXH4 (insn2))
@@ -1306,8 +1299,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust *= 3;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: ixh r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: ixh r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_32_IS_IXW4 (insn2))
@@ -1315,8 +1308,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust *= 5;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: ixw r4,r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: ixw r4,r4,r4\n");
 			}
 		    }
 		  else if (CSKY_16_IS_ADDI4 (insn2))
@@ -1325,8 +1318,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust += imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: addi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: addi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_SUBI4 (insn2))
@@ -1335,8 +1328,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust -= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: subi r4,%d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: subi r4,%d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_NOR4 (insn2))
@@ -1344,8 +1337,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust = ~adjust;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: nor r4,r4\n");
+			  gdb_printf (gdb_stdlog,
+				      "csky: nor r4,r4\n");
 			}
 		    }
 		  else if (CSKY_16_IS_BSETI4 (insn2))
@@ -1354,8 +1347,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust |= (1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bseti r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bseti r4, %d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_BCLRI4 (insn2))
@@ -1364,8 +1357,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust &= ~(1 << imm);
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: bclri r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: bclri r4, %d\n", imm);
 			}
 		    }
 		  else if (CSKY_16_IS_LSLI4 (insn2))
@@ -1374,8 +1367,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		      adjust <<= imm;
 		      if (csky_debug)
 			{
-			  fprintf_unfiltered (gdb_stdlog,
-					      "csky: lsli r4,r4, %d\n", imm);
+			  gdb_printf (gdb_stdlog,
+				      "csky: lsli r4,r4, %d\n", imm);
 			}
 		    }
 
@@ -1385,8 +1378,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog, "csky: "
-				      "done looking for r4 adjusters\n");
+		  gdb_printf (gdb_stdlog, "csky: "
+			      "done looking for r4 adjusters\n");
 		}
 
 	      /* If the next instruction adjusts the stack pointer, we keep
@@ -1398,13 +1391,13 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		  stacksize += adjust;
 		  if (csky_debug)
 		    {
-		      fprintf_unfiltered (gdb_stdlog, "csky: "
-					  "found stack adjustment of 0x%x"
-					  " bytes.\n", adjust);
-		      fprintf_unfiltered (gdb_stdlog, "csky: "
-					  "skipping to new address %s\n",
-					  core_addr_to_string_nz (addr));
-		      fprintf_unfiltered (gdb_stdlog, "csky: continuing\n");
+		      gdb_printf (gdb_stdlog, "csky: "
+				  "found stack adjustment of 0x%x"
+				  " bytes.\n", adjust);
+		      gdb_printf (gdb_stdlog, "csky: "
+				  "skipping to new address %s\n",
+				  core_addr_to_string_nz (addr));
+		      gdb_printf (gdb_stdlog, "csky: continuing\n");
 		    }
 		  continue;
 		}
@@ -1413,8 +1406,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		 anything.  */
 	      if (csky_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog, "csky: no subu sp,r4; "
-				      "NOT altering stacksize.\n");
+		  gdb_printf (gdb_stdlog, "csky: no subu sp,r4; "
+			      "NOT altering stacksize.\n");
 		}
 	      break;
 	    }
@@ -1423,8 +1416,8 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
       /* This is not a prologue instruction, so stop here.  */
       if (csky_debug)
 	{
-	  fprintf_unfiltered (gdb_stdlog, "csky: insn is not a prologue"
-			      " insn -- ending scan\n");
+	  gdb_printf (gdb_stdlog, "csky: insn is not a prologue"
+		      " insn -- ending scan\n");
 	}
       break;
     }
@@ -1462,12 +1455,12 @@ csky_analyze_prologue (struct gdbarch *gdbarch,
 		{
 		  CORE_ADDR rn_value = read_memory_unsigned_integer (
 		    this_cache->saved_regs[rn].addr (), 4, byte_order);
-		  fprintf_unfiltered (gdb_stdlog, "Saved register %s "
-				      "stored at 0x%08lx, value=0x%08lx\n",
-				      csky_register_names[rn],
-				      (unsigned long)
-					this_cache->saved_regs[rn].addr (),
-				      (unsigned long) rn_value);
+		  gdb_printf (gdb_stdlog, "Saved register %s "
+			      "stored at 0x%08lx, value=0x%08lx\n",
+			      csky_register_names[rn],
+			      (unsigned long)
+			      this_cache->saved_regs[rn].addr (),
+			      (unsigned long) rn_value);
 		}
 	    }
 	}
@@ -1533,7 +1526,6 @@ static CORE_ADDR
 csky_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 {
   CORE_ADDR func_addr, func_end;
-  struct symtab_and_line sal;
   const int default_search_limit = 128;
 
   /* See if we can find the end of the prologue using the symbol table.  */
@@ -1853,7 +1845,7 @@ csky_frame_unwind_cache (struct frame_info *this_frame)
       struct bound_minimal_symbol msymbol
 	= lookup_minimal_symbol_by_pc (prologue_start);
       if (msymbol.minsym != NULL)
-	func_size = MSYMBOL_SIZE (msymbol.minsym);
+	func_size = msymbol.minsym->size ();
     }
 
   /* If FUNC_SIZE is 0 we may have a special-case use of lr
@@ -2058,8 +2050,6 @@ csky_init_reggroup ()
 static void
 csky_add_reggroups (struct gdbarch *gdbarch)
 {
-  reggroup_add (gdbarch, all_reggroup);
-  reggroup_add (gdbarch, general_reggroup);
   reggroup_add (gdbarch, cr_reggroup);
   reggroup_add (gdbarch, fr_reggroup);
   reggroup_add (gdbarch, vr_reggroup);
@@ -2071,7 +2061,7 @@ csky_add_reggroups (struct gdbarch *gdbarch)
 
 static int
 csky_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
-			  struct reggroup *reggroup)
+			  const struct reggroup *reggroup)
 {
   int raw_p;
 
@@ -2164,7 +2154,6 @@ static struct gdbarch *
 csky_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
-  struct gdbarch_tdep *tdep;
 
   /* Find a candidate among the list of pre-declared architectures.  */
   arches = gdbarch_list_lookup_by_info (arches, &info);
@@ -2173,7 +2162,7 @@ csky_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   /* None found, create a new architecture from the information
      provided.  */
-  tdep = XCNEW (struct gdbarch_tdep);
+  csky_gdbarch_tdep *tdep = new csky_gdbarch_tdep;
   gdbarch = gdbarch_alloc (&info, tdep);
 
   /* Target data types.  */

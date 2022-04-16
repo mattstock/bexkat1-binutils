@@ -1,6 +1,6 @@
 /* YACC parser for Go expressions, for GDB.
 
-   Copyright (C) 2012-2021 Free Software Foundation, Inc.
+   Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -545,7 +545,7 @@ variable:	name_not_typename ENTRY
 			{ struct symbol *sym = $1.sym.symbol;
 
 			  if (sym == NULL
-			      || !SYMBOL_IS_ARGUMENT (sym)
+			      || !sym->is_argument ()
 			      || !symbol_read_needs_frame (sym))
 			    error (_("@entry can be used only for function "
 				     "parameters, not for \"%s\""),
@@ -647,10 +647,8 @@ static int
 parse_number (struct parser_state *par_state,
 	      const char *p, int len, int parsed_float, YYSTYPE *putithere)
 {
-  /* FIXME: Shouldn't these be unsigned?  We don't deal with negative values
-     here, and we do kind of silly things like cast to unsigned.  */
-  LONGEST n = 0;
-  LONGEST prevn = 0;
+  ULONGEST n = 0;
+  ULONGEST prevn = 0;
   ULONGEST un;
 
   int i = 0;
@@ -702,7 +700,7 @@ parse_number (struct parser_state *par_state,
     }
 
   /* Handle base-switching prefixes 0x, 0t, 0d, 0.  */
-  if (p[0] == '0')
+  if (p[0] == '0' && len > 1)
     switch (p[1])
       {
       case 'x':
@@ -790,7 +788,7 @@ parse_number (struct parser_state *par_state,
 	 on 0x123456789 when LONGEST is 32 bits.  */
       if (c != 'l' && c != 'u' && n != 0)
 	{
-	  if ((unsigned_p && (ULONGEST) prevn >= (ULONGEST) n))
+	  if ((unsigned_p && prevn >= n))
 	    error (_("Numeric constant too large."));
 	}
       prevn = n;
@@ -808,7 +806,7 @@ parse_number (struct parser_state *par_state,
      the case where it is we just always shift the value more than
      once, with fewer bits each time.  */
 
-  un = (ULONGEST)n >> 2;
+  un = n >> 2;
   if (long_p == 0
       && (un >> (gdbarch_int_bit (par_state->gdbarch ()) - 2)) == 0)
     {
@@ -1018,7 +1016,6 @@ lex_one_token (struct parser_state *par_state)
 {
   int c;
   int namelen;
-  unsigned int i;
   const char *tokstart;
   int saw_structop = last_was_structop;
 
@@ -1030,23 +1027,23 @@ lex_one_token (struct parser_state *par_state)
 
   tokstart = par_state->lexptr;
   /* See if it is a special token of length 3.  */
-  for (i = 0; i < sizeof (tokentab3) / sizeof (tokentab3[0]); i++)
-    if (strncmp (tokstart, tokentab3[i].oper, 3) == 0)
+  for (const auto &token : tokentab3)
+    if (strncmp (tokstart, token.oper, 3) == 0)
       {
 	par_state->lexptr += 3;
-	yylval.opcode = tokentab3[i].opcode;
-	return tokentab3[i].token;
+	yylval.opcode = token.opcode;
+	return token.token;
       }
 
   /* See if it is a special token of length 2.  */
-  for (i = 0; i < sizeof (tokentab2) / sizeof (tokentab2[0]); i++)
-    if (strncmp (tokstart, tokentab2[i].oper, 2) == 0)
+  for (const auto &token : tokentab2)
+    if (strncmp (tokstart, token.oper, 2) == 0)
       {
 	par_state->lexptr += 2;
-	yylval.opcode = tokentab2[i].opcode;
+	yylval.opcode = token.opcode;
 	/* NOTE: -> doesn't exist in Go, so we don't need to watch for
 	   setting last_was_structop here.  */
-	return tokentab2[i].token;
+	return token.token;
       }
 
   switch (c = *tokstart)
@@ -1270,13 +1267,13 @@ lex_one_token (struct parser_state *par_state)
 
   /* Catch specific keywords.  */
   std::string copy = copy_name (yylval.sval);
-  for (i = 0; i < sizeof (ident_tokens) / sizeof (ident_tokens[0]); i++)
-    if (copy == ident_tokens[i].oper)
+  for (const auto &token : ident_tokens)
+    if (copy == token.oper)
       {
 	/* It is ok to always set this, even though we don't always
 	   strictly need to.  */
-	yylval.opcode = ident_tokens[i].opcode;
-	return ident_tokens[i].token;
+	yylval.opcode = token.opcode;
+	return token.token;
       }
 
   if (*tokstart == '$')
@@ -1339,8 +1336,8 @@ package_name_p (const char *name, const struct block *block)
   sym = lookup_symbol (name, block, STRUCT_DOMAIN, &is_a_field_of_this).symbol;
 
   if (sym
-      && SYMBOL_CLASS (sym) == LOC_TYPEDEF
-      && SYMBOL_TYPE (sym)->code () == TYPE_CODE_MODULE)
+      && sym->aclass () == LOC_TYPEDEF
+      && sym->type ()->code () == TYPE_CODE_MODULE)
     return 1;
 
   return 0;

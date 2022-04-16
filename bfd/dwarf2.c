@@ -1,5 +1,5 @@
 /* DWARF 2 support.
-   Copyright (C) 1994-2021 Free Software Foundation, Inc.
+   Copyright (C) 1994-2022 Free Software Foundation, Inc.
 
    Adapted from gdb/dwarf2read.c by Gavin Koch of Cygnus Solutions
    (gavin@cygnus.com).
@@ -557,10 +557,14 @@ read_section (bfd *	      abfd,
 
       amt = bfd_get_section_limit_octets (abfd, msec);
       filesize = bfd_get_file_size (abfd);
-      if (amt >= filesize)
+      /* PR 28834: A compressed debug section could well decompress to a size
+	 larger than the file, so we choose an arbitrary modifier of 10x in
+	 the test below.  If this ever turns out to be insufficient, it can
+	 be changed by a future update.  */
+      if (amt >= filesize * 10)
 	{
 	  /* PR 26946 */
-	  _bfd_error_handler (_("DWARF error: section %s is larger than its filesize! (0x%lx vs 0x%lx)"),
+	  _bfd_error_handler (_("DWARF error: section %s is larger than 10x its filesize! (0x%lx vs 0x%lx)"),
 			      section_name, (long) amt, (long) filesize);
 	  bfd_set_error (bfd_error_bad_value);
 	  return false;
@@ -1158,18 +1162,63 @@ read_abbrevs (bfd *abfd, bfd_uint64_t offset, struct dwarf2_debug *stash,
 
 /* Returns true if the form is one which has a string value.  */
 
-static inline bool
-is_str_attr (enum dwarf_form form)
+static bool
+is_str_form (const struct attribute *attr)
 {
-  return (form == DW_FORM_string
-	  || form == DW_FORM_strp
-	  || form == DW_FORM_strx
-	  || form == DW_FORM_strx1
-	  || form == DW_FORM_strx2
-	  || form == DW_FORM_strx3
-	  || form == DW_FORM_strx4
-	  || form == DW_FORM_line_strp
-	  || form == DW_FORM_GNU_strp_alt);
+  switch (attr->form)
+    {
+    case DW_FORM_string:
+    case DW_FORM_strp:
+    case DW_FORM_strx:
+    case DW_FORM_strx1:
+    case DW_FORM_strx2:
+    case DW_FORM_strx3:
+    case DW_FORM_strx4:
+    case DW_FORM_line_strp:
+    case DW_FORM_GNU_strp_alt:
+      return true;
+
+    default:
+      return false;
+    }
+}
+
+/* Returns true if the form is one which has an integer value.  */
+
+static bool
+is_int_form (const struct attribute *attr)
+{
+  switch (attr->form)
+    {
+    case DW_FORM_addr:
+    case DW_FORM_data2:
+    case DW_FORM_data4:
+    case DW_FORM_data8:
+    case DW_FORM_data1:
+    case DW_FORM_flag:
+    case DW_FORM_sdata:
+    case DW_FORM_udata:
+    case DW_FORM_ref_addr:
+    case DW_FORM_ref1:
+    case DW_FORM_ref2:
+    case DW_FORM_ref4:
+    case DW_FORM_ref8:
+    case DW_FORM_ref_udata:
+    case DW_FORM_sec_offset:
+    case DW_FORM_flag_present:
+    case DW_FORM_ref_sig8:
+    case DW_FORM_addrx:
+    case DW_FORM_implicit_const:
+    case DW_FORM_addrx1:
+    case DW_FORM_addrx2:
+    case DW_FORM_addrx3:
+    case DW_FORM_addrx4:
+    case DW_FORM_GNU_ref_alt:
+      return true;
+
+    default:
+      return false;
+    }
 }
 
 static const char *
@@ -1199,7 +1248,7 @@ read_attribute_value (struct attribute *  attr,
     {
       _bfd_error_handler (_("DWARF error: info pointer extends beyond end of attributes"));
       bfd_set_error (bfd_error_bad_value);
-      return info_ptr;
+      return NULL;
     }
 
   attr->form = (enum dwarf_form) form;
@@ -1250,6 +1299,7 @@ read_attribute_value (struct attribute *  attr,
       attr->u.val = read_1_byte (abfd, &info_ptr, info_ptr_end);
       break;
     case DW_FORM_data2:
+    case DW_FORM_addrx2:
     case DW_FORM_ref2:
       attr->u.val = read_2_bytes (abfd, &info_ptr, info_ptr_end);
       break;
@@ -1391,6 +1441,7 @@ non_mangled (int lang)
     case DW_LANG_PLI:
     case DW_LANG_UPC:
     case DW_LANG_C11:
+    case DW_LANG_Mips_Assembler:
       return true;
     }
 }
@@ -2493,13 +2544,12 @@ decode_line_info (struct comp_unit *unit)
   return NULL;
 }
 
-/* If ADDR is within TABLE set the output parameters and return the
-   range of addresses covered by the entry used to fill them out.
-   Otherwise set * FILENAME_PTR to NULL and return 0.
+/* If ADDR is within TABLE set the output parameters and return TRUE,
+   otherwise set *FILENAME_PTR to NULL and return FALSE.
    The parameters FILENAME_PTR, LINENUMBER_PTR and DISCRIMINATOR_PTR
    are pointers to the objects to be filled in.  */
 
-static bfd_vma
+static bool
 lookup_address_in_line_info_table (struct line_info_table *table,
 				   bfd_vma addr,
 				   const char **filename_ptr,
@@ -2558,12 +2608,12 @@ lookup_address_in_line_info_table (struct line_info_table *table,
       *linenumber_ptr = info->line;
       if (discriminator_ptr)
 	*discriminator_ptr = info->discriminator;
-      return seq->last_line->address - seq->low_pc;
+      return true;
     }
 
  fail:
   *filename_ptr = NULL;
-  return 0;
+  return false;
 }
 
 /* Read in the .debug_ranges section for future reference.  */
@@ -3037,7 +3087,7 @@ find_abstract_instance (struct comp_unit *unit,
 		case DW_AT_name:
 		  /* Prefer DW_AT_MIPS_linkage_name or DW_AT_linkage_name
 		     over DW_AT_name.  */
-		  if (name == NULL && is_str_attr (attr.form))
+		  if (name == NULL && is_str_form (&attr))
 		    {
 		      name = attr.u.str;
 		      if (non_mangled (unit->lang))
@@ -3045,16 +3095,17 @@ find_abstract_instance (struct comp_unit *unit,
 		    }
 		  break;
 		case DW_AT_specification:
-		  if (!find_abstract_instance (unit, &attr, recur_count + 1,
-					       &name, is_linkage,
-					       filename_ptr, linenumber_ptr))
+		  if (is_int_form (&attr)
+		      && !find_abstract_instance (unit, &attr, recur_count + 1,
+						  &name, is_linkage,
+						  filename_ptr, linenumber_ptr))
 		    return false;
 		  break;
 		case DW_AT_linkage_name:
 		case DW_AT_MIPS_linkage_name:
 		  /* PR 16949:  Corrupt debug info can place
 		     non-string forms into these attributes.  */
-		  if (is_str_attr (attr.form))
+		  if (is_str_form (&attr))
 		    {
 		      name = attr.u.str;
 		      *is_linkage = true;
@@ -3063,11 +3114,13 @@ find_abstract_instance (struct comp_unit *unit,
 		case DW_AT_decl_file:
 		  if (!comp_unit_maybe_decode_line_info (unit))
 		    return false;
-		  *filename_ptr = concat_filename (unit->line_table,
-						   attr.u.val);
+		  if (is_int_form (&attr))
+		    *filename_ptr = concat_filename (unit->line_table,
+						     attr.u.val);
 		  break;
 		case DW_AT_decl_line:
-		  *linenumber_ptr = attr.u.val;
+		  if (is_int_form (&attr))
+		    *linenumber_ptr = attr.u.val;
 		  break;
 		default:
 		  break;
@@ -3240,6 +3293,36 @@ lookup_var_by_offset (bfd_uint64_t offset, struct varinfo * table)
 
 /* DWARF2 Compilation unit functions.  */
 
+static struct funcinfo *
+reverse_funcinfo_list (struct funcinfo *head)
+{
+  struct funcinfo *rhead;
+  struct funcinfo *temp;
+
+  for (rhead = NULL; head; head = temp)
+    {
+      temp = head->prev_func;
+      head->prev_func = rhead;
+      rhead = head;
+    }
+  return rhead;
+}
+
+static struct varinfo *
+reverse_varinfo_list (struct varinfo *head)
+{
+  struct varinfo *rhead;
+  struct varinfo *temp;
+
+  for (rhead = NULL; head; head = temp)
+    {
+      temp = head->prev_var;
+      head->prev_var = rhead;
+      rhead = head;
+    }
+  return rhead;
+}
+
 /* Scan over each die in a comp. unit looking for functions to add
    to the function table and variables to the variable table.  */
 
@@ -3255,7 +3338,9 @@ scan_unit_for_symbols (struct comp_unit *unit)
     struct funcinfo *func;
   } *nested_funcs;
   int nested_funcs_size;
-
+  struct funcinfo *last_func;
+  struct varinfo *last_var;
+  
   /* Maintain a stack of in-scope functions and inlined functions, which we
      can use to set the caller_func field.  */
   nested_funcs_size = 32;
@@ -3389,10 +3474,16 @@ scan_unit_for_symbols (struct comp_unit *unit)
 	}
     }
 
+  unit->function_table = reverse_funcinfo_list (unit->function_table);
+  unit->variable_table = reverse_varinfo_list (unit->variable_table);
+
   /* This is the second pass over the abbrevs.  */      
   info_ptr = unit->first_child_die_ptr;
   nesting_level = 0;
   
+  last_func = NULL;
+  last_var = NULL;
+
   while (nesting_level >= 0)
     {
       unsigned int abbrev_number, i;
@@ -3428,16 +3519,32 @@ scan_unit_for_symbols (struct comp_unit *unit)
 	  || abbrev->tag == DW_TAG_entry_point
 	  || abbrev->tag == DW_TAG_inlined_subroutine)
 	{
-	  func = lookup_func_by_offset (current_offset, unit->function_table);
+	  if (last_func
+	      && last_func->prev_func
+	      && last_func->prev_func->unit_offset == current_offset)
+	    func = last_func->prev_func;
+	  else
+	    func = lookup_func_by_offset (current_offset, unit->function_table);
+
 	  if (func == NULL)
 	    goto fail;
+
+	  last_func = func;
 	}
       else if (abbrev->tag == DW_TAG_variable
 	       || abbrev->tag == DW_TAG_member)
 	{
-	  var = lookup_var_by_offset (current_offset, unit->variable_table);
+	  if (last_var
+	      && last_var->prev_var
+	      && last_var->prev_var->unit_offset == current_offset)
+	    var = last_var->prev_var;
+	  else
+	    var = lookup_var_by_offset (current_offset, unit->variable_table);
+
 	  if (var == NULL)
 	    goto fail;
+
+	  last_var = var;
 	}
 
       for (i = 0; i < abbrev->num_attrs; ++i)
@@ -3452,28 +3559,31 @@ scan_unit_for_symbols (struct comp_unit *unit)
 	      switch (attr.name)
 		{
 		case DW_AT_call_file:
-		  func->caller_file = concat_filename (unit->line_table,
-						       attr.u.val);
+		  if (is_int_form (&attr))
+		    func->caller_file = concat_filename (unit->line_table,
+							 attr.u.val);
 		  break;
 
 		case DW_AT_call_line:
-		  func->caller_line = attr.u.val;
+		  if (is_int_form (&attr))
+		    func->caller_line = attr.u.val;
 		  break;
 
 		case DW_AT_abstract_origin:
 		case DW_AT_specification:
-		  if (!find_abstract_instance (unit, &attr, 0,
-					       &func->name,
-					       &func->is_linkage,
-					       &func->file,
-					       &func->line))
+		  if (is_int_form (&attr)
+		      && !find_abstract_instance (unit, &attr, 0,
+						  &func->name,
+						  &func->is_linkage,
+						  &func->file,
+						  &func->line))
 		    goto fail;
 		  break;
 
 		case DW_AT_name:
 		  /* Prefer DW_AT_MIPS_linkage_name or DW_AT_linkage_name
 		     over DW_AT_name.  */
-		  if (func->name == NULL && is_str_attr (attr.form))
+		  if (func->name == NULL && is_str_form (&attr))
 		    {
 		      func->name = attr.u.str;
 		      if (non_mangled (unit->lang))
@@ -3485,7 +3595,7 @@ scan_unit_for_symbols (struct comp_unit *unit)
 		case DW_AT_MIPS_linkage_name:
 		  /* PR 16949:  Corrupt debug info can place
 		     non-string forms into these attributes.  */
-		  if (is_str_attr (attr.form))
+		  if (is_str_form (&attr))
 		    {
 		      func->name = attr.u.str;
 		      func->is_linkage = true;
@@ -3493,26 +3603,33 @@ scan_unit_for_symbols (struct comp_unit *unit)
 		  break;
 
 		case DW_AT_low_pc:
-		  low_pc = attr.u.val;
+		  if (is_int_form (&attr))
+		    low_pc = attr.u.val;
 		  break;
 
 		case DW_AT_high_pc:
-		  high_pc = attr.u.val;
-		  high_pc_relative = attr.form != DW_FORM_addr;
+		  if (is_int_form (&attr))
+		    {
+		      high_pc = attr.u.val;
+		      high_pc_relative = attr.form != DW_FORM_addr;
+		    }
 		  break;
 
 		case DW_AT_ranges:
-		  if (!read_rangelist (unit, &func->arange, attr.u.val))
+		  if (is_int_form (&attr)
+		      && !read_rangelist (unit, &func->arange, attr.u.val))
 		    goto fail;
 		  break;
 
 		case DW_AT_decl_file:
-		  func->file = concat_filename (unit->line_table,
-						attr.u.val);
+		  if (is_int_form (&attr))
+		    func->file = concat_filename (unit->line_table,
+						  attr.u.val);
 		  break;
 
 		case DW_AT_decl_line:
-		  func->line = attr.u.val;
+		  if (is_int_form (&attr))
+		    func->line = attr.u.val;
 		  break;
 
 		default:
@@ -3524,7 +3641,7 @@ scan_unit_for_symbols (struct comp_unit *unit)
 	      switch (attr.name)
 		{
 		case DW_AT_specification:
-		  if (attr.u.val)
+		  if (is_int_form (&attr) && attr.u.val)
 		    {
 		      struct varinfo * spec_var;
 
@@ -3551,21 +3668,23 @@ scan_unit_for_symbols (struct comp_unit *unit)
 		  break;
 
 		case DW_AT_name:
-		  if (is_str_attr (attr.form))
+		  if (is_str_form (&attr))
 		    var->name = attr.u.str;
 		  break;
 
 		case DW_AT_decl_file:
-		  var->file = concat_filename (unit->line_table,
-					       attr.u.val);
+		  if (is_int_form (&attr))
+		    var->file = concat_filename (unit->line_table,
+						 attr.u.val);
 		  break;
 
 		case DW_AT_decl_line:
-		  var->line = attr.u.val;
+		  if (is_int_form (&attr))
+		    var->line = attr.u.val;
 		  break;
 
 		case DW_AT_external:
-		  if (attr.u.val != 0)
+		  if (is_int_form (&attr) && attr.u.val != 0)
 		    var->stack = false;
 		  break;
 
@@ -3618,6 +3737,9 @@ scan_unit_for_symbols (struct comp_unit *unit)
 	    goto fail;
 	}
     }
+
+  unit->function_table = reverse_funcinfo_list (unit->function_table);
+  unit->variable_table = reverse_varinfo_list (unit->variable_table);
 
   free (nested_funcs);
   return true;
@@ -3775,31 +3897,41 @@ parse_comp_unit (struct dwarf2_debug *stash,
       switch (attr.name)
 	{
 	case DW_AT_stmt_list:
-	  unit->stmtlist = 1;
-	  unit->line_offset = attr.u.val;
+	  if (is_int_form (&attr))
+	    {
+	      unit->stmtlist = 1;
+	      unit->line_offset = attr.u.val;
+	    }
 	  break;
 
 	case DW_AT_name:
-	  if (is_str_attr (attr.form))
+	  if (is_str_form (&attr))
 	    unit->name = attr.u.str;
 	  break;
 
 	case DW_AT_low_pc:
-	  low_pc = attr.u.val;
-	  /* If the compilation unit DIE has a DW_AT_low_pc attribute,
-	     this is the base address to use when reading location
-	     lists or range lists.  */
-	  if (abbrev->tag == DW_TAG_compile_unit)
-	    unit->base_address = low_pc;
+	  if (is_int_form (&attr))
+	    {
+	      low_pc = attr.u.val;
+	      /* If the compilation unit DIE has a DW_AT_low_pc attribute,
+		 this is the base address to use when reading location
+		 lists or range lists.  */
+	      if (abbrev->tag == DW_TAG_compile_unit)
+		unit->base_address = low_pc;
+	    }
 	  break;
 
 	case DW_AT_high_pc:
-	  high_pc = attr.u.val;
-	  high_pc_relative = attr.form != DW_FORM_addr;
+	  if (is_int_form (&attr))
+	    {
+	      high_pc = attr.u.val;
+	      high_pc_relative = attr.form != DW_FORM_addr;
+	    }
 	  break;
 
 	case DW_AT_ranges:
-	  if (!read_rangelist (unit, &unit->arange, attr.u.val))
+	  if (is_int_form (&attr)
+	      && !read_rangelist (unit, &unit->arange, attr.u.val))
 	    return NULL;
 	  break;
 
@@ -3808,7 +3940,7 @@ parse_comp_unit (struct dwarf2_debug *stash,
 	    char *comp_dir = attr.u.str;
 
 	    /* PR 17512: file: 1fe726be.  */
-	    if (! is_str_attr (attr.form))
+	    if (!is_str_form (&attr))
 	      {
 		_bfd_error_handler
 		  (_("DWARF error: DW_AT_comp_dir attribute encountered with a non-string form"));
@@ -3829,7 +3961,8 @@ parse_comp_unit (struct dwarf2_debug *stash,
 	  }
 
 	case DW_AT_language:
-	  unit->lang = attr.u.val;
+	  if (is_int_form (&attr))
+	    unit->lang = attr.u.val;
 	  break;
 
 	default:
@@ -3875,14 +4008,11 @@ comp_unit_contains_address (struct comp_unit *unit, bfd_vma addr)
 }
 
 /* If UNIT contains ADDR, set the output parameters to the values for
-   the line containing ADDR.  The output parameters, FILENAME_PTR,
-   FUNCTION_PTR, and LINENUMBER_PTR, are pointers to the objects
-   to be filled in.
+   the line containing ADDR and return TRUE.  Otherwise return FALSE.
+   The output parameters, FILENAME_PTR, FUNCTION_PTR, and
+   LINENUMBER_PTR, are pointers to the objects to be filled in.  */
 
-   Returns the range of addresses covered by the entry that was used
-   to fill in *LINENUMBER_PTR or 0 if it was not filled in.  */
-
-static bfd_vma
+static bool
 comp_unit_find_nearest_line (struct comp_unit *unit,
 			     bfd_vma addr,
 			     const char **filename_ptr,
@@ -3890,7 +4020,7 @@ comp_unit_find_nearest_line (struct comp_unit *unit,
 			     unsigned int *linenumber_ptr,
 			     unsigned int *discriminator_ptr)
 {
-  bool func_p;
+  bool line_p, func_p;
 
   if (!comp_unit_maybe_decode_line_info (unit))
     return false;
@@ -3900,10 +4030,11 @@ comp_unit_find_nearest_line (struct comp_unit *unit,
   if (func_p && (*function_ptr)->tag == DW_TAG_inlined_subroutine)
     unit->stash->inliner_chain = *function_ptr;
 
-  return lookup_address_in_line_info_table (unit->line_table, addr,
-					    filename_ptr,
-					    linenumber_ptr,
-					    discriminator_ptr);
+  line_p = lookup_address_in_line_info_table (unit->line_table, addr,
+					      filename_ptr,
+					      linenumber_ptr,
+					      discriminator_ptr);
+  return line_p || func_p;
 }
 
 /* Check to see if line info is already decoded in a comp_unit.
@@ -3969,36 +4100,6 @@ comp_unit_find_line (struct comp_unit *unit,
   return lookup_symbol_in_variable_table (unit, sym, addr,
 					  filename_ptr,
 					  linenumber_ptr);
-}
-
-static struct funcinfo *
-reverse_funcinfo_list (struct funcinfo *head)
-{
-  struct funcinfo *rhead;
-  struct funcinfo *temp;
-
-  for (rhead = NULL; head; head = temp)
-    {
-      temp = head->prev_func;
-      head->prev_func = rhead;
-      rhead = head;
-    }
-  return rhead;
-}
-
-static struct varinfo *
-reverse_varinfo_list (struct varinfo *head)
-{
-  struct varinfo *rhead;
-  struct varinfo *temp;
-
-  for (rhead = NULL; head; head = temp)
-    {
-      temp = head->prev_var;
-      head->prev_var = rhead;
-      rhead = head;
-    }
-  return rhead;
 }
 
 /* Extract all interesting funcinfos and varinfos of a compilation
@@ -5084,54 +5185,17 @@ _bfd_dwarf2_find_nearest_line (bfd *abfd,
     }
   else
     {
-      bfd_vma min_range = (bfd_vma) -1;
-      const char * local_filename = NULL;
-      struct funcinfo *local_function = NULL;
-      unsigned int local_linenumber = 0;
-      unsigned int local_discriminator = 0;
-
       for (each = stash->f.all_comp_units; each; each = each->next_unit)
 	{
-	  bfd_vma range = (bfd_vma) -1;
-
 	  found = ((each->arange.high == 0
 		    || comp_unit_contains_address (each, addr))
-		   && (range = (comp_unit_find_nearest_line
-				(each, addr, &local_filename,
-				 &local_function, &local_linenumber,
-				 &local_discriminator))) != 0);
+		   && comp_unit_find_nearest_line (each, addr,
+						   filename_ptr,
+						   &function,
+						   linenumber_ptr,
+						   discriminator_ptr));
 	  if (found)
-	    {
-	      /* PRs 15935 15994: Bogus debug information may have provided us
-		 with an erroneous match.  We attempt to counter this by
-		 selecting the match that has the smallest address range
-		 associated with it.  (We are assuming that corrupt debug info
-		 will tend to result in extra large address ranges rather than
-		 extra small ranges).
-
-		 This does mean that we scan through all of the CUs associated
-		 with the bfd each time this function is called.  But this does
-		 have the benefit of producing consistent results every time the
-		 function is called.  */
-	      if (range <= min_range)
-		{
-		  if (filename_ptr && local_filename)
-		    * filename_ptr = local_filename;
-		  if (local_function)
-		    function = local_function;
-		  if (discriminator_ptr && local_discriminator)
-		    * discriminator_ptr = local_discriminator;
-		  if (local_linenumber)
-		    * linenumber_ptr = local_linenumber;
-		  min_range = range;
-		}
-	    }
-	}
-
-      if (* linenumber_ptr)
-	{
-	  found = true;
-	  goto done;
+	    goto done;
 	}
     }
 
@@ -5156,7 +5220,7 @@ _bfd_dwarf2_find_nearest_line (bfd *abfd,
 						 filename_ptr,
 						 &function,
 						 linenumber_ptr,
-						 discriminator_ptr) != 0);
+						 discriminator_ptr));
 
       if (found)
 	break;
@@ -5164,7 +5228,11 @@ _bfd_dwarf2_find_nearest_line (bfd *abfd,
 
  done:
   if (functionname_ptr && function && function->is_linkage)
-    *functionname_ptr = function->name;
+    {
+      *functionname_ptr = function->name;
+      if (!found)
+        found = 2;
+    }
   else if (functionname_ptr
 	   && (!*functionname_ptr
 	       || (function && !function->is_linkage)))
@@ -5188,8 +5256,9 @@ _bfd_dwarf2_find_nearest_line (bfd *abfd,
 	  sec_vma = section->vma;
 	  if (section->output_section != NULL)
 	    sec_vma = section->output_section->vma + section->output_offset;
-	  if (fun != NULL
-	      && fun->value + sec_vma == function->arange.low)
+	  if (fun == NULL)
+	    *functionname_ptr = function->name;
+	  else if (fun->value + sec_vma == function->arange.low)
 	    function->name = *functionname_ptr;
 	  /* Even if we didn't find a linkage name, say that we have
 	     to stop a repeated search of symbols.  */

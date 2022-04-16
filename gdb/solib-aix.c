@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2021 Free Software Foundation, Inc.
+/* Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -696,7 +696,7 @@ solib_aix_get_toc_value (CORE_ADDR pc)
 /* This module's normal_stop observer.  */
 
 static void
-solib_aix_normal_stop_observer (struct bpstats *unused_1, int unused_2)
+solib_aix_normal_stop_observer (struct bpstat *unused_1, int unused_2)
 {
   struct solib_aix_inferior_data *data
     = get_solib_aix_inferior_data (current_inferior ());
@@ -713,7 +713,7 @@ static void
 show_solib_aix_debug (struct ui_file *file, int from_tty,
 		      struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file, _("solib-aix debugging is %s.\n"), value);
+  gdb_printf (file, _("solib-aix debugging is %s.\n"), value);
 }
 
 /* The target_so_ops for AIX targets.  */

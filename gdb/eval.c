@@ -1,6 +1,6 @@
 /* Evaluate expressions for GDB.
 
-   Copyright (C) 1986-2021 Free Software Foundation, Inc.
+   Copyright (C) 1986-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -36,7 +36,7 @@
 #include "regcache.h"
 #include "user-regs.h"
 #include "valprint.h"
-#include "gdb_obstack.h"
+#include "gdbsupport/gdb_obstack.h"
 #include "objfiles.h"
 #include "typeprint.h"
 #include <ctype.h>
@@ -281,7 +281,7 @@ binop_promote (const struct language_defn *language, struct gdbarch *gdbarch,
     return;
 
   if (is_fixed_point_type (type1) || is_fixed_point_type (type2))
-        return;
+    return;
 
   if (type1->code () == TYPE_CODE_DECFLOAT
       || type2->code () == TYPE_CODE_DECFLOAT)
@@ -564,7 +564,7 @@ evaluate_var_value (enum noside noside, const block *blk, symbol *var)
       if (noside != EVAL_AVOID_SIDE_EFFECTS)
 	throw;
 
-      ret = value_zero (SYMBOL_TYPE (var), not_lval);
+      ret = value_zero (var->type (), not_lval);
     }
 
   return ret;
@@ -580,7 +580,7 @@ var_value_operation::evaluate (struct type *expect_type,
 			       enum noside noside)
 {
   symbol *var = std::get<0> (m_storage).symbol;
-  if (SYMBOL_TYPE (var)->code () == TYPE_CODE_ERROR)
+  if (var->type ()->code () == TYPE_CODE_ERROR)
     error_unknown_type (var->print_name ());
   return evaluate_var_value (noside, std::get<0> (m_storage).block, var);
 }
@@ -722,7 +722,7 @@ var_value_operation::evaluate_funcall (struct type *expect_type,
 		       NULL, std::get<0> (m_storage).symbol,
 		       NULL, &symp, NULL, 0, noside);
 
-  if (SYMBOL_TYPE (symp)->code () == TYPE_CODE_ERROR)
+  if (symp->type ()->code () == TYPE_CODE_ERROR)
     error_unknown_type (symp->print_name ());
   value *callee = evaluate_var_value (noside, std::get<0> (m_storage).block,
 				      symp);
@@ -967,6 +967,93 @@ structop_base_operation::evaluate_funcall
 				  nullptr, expect_type);
 }
 
+/* Helper for structop_base_operation::complete which recursively adds
+   field and method names from TYPE, a struct or union type, to the
+   OUTPUT list.  PREFIX is prepended to each result.  */
+
+static void
+add_struct_fields (struct type *type, completion_list &output,
+		   const char *fieldname, int namelen, const char *prefix)
+{
+  int i;
+  int computed_type_name = 0;
+  const char *type_name = NULL;
+
+  type = check_typedef (type);
+  for (i = 0; i < type->num_fields (); ++i)
+    {
+      if (i < TYPE_N_BASECLASSES (type))
+	add_struct_fields (TYPE_BASECLASS (type, i),
+			   output, fieldname, namelen, prefix);
+      else if (type->field (i).name ())
+	{
+	  if (type->field (i).name ()[0] != '\0')
+	    {
+	      if (! strncmp (type->field (i).name (),
+			     fieldname, namelen))
+		output.emplace_back (concat (prefix, type->field (i).name (),
+					     nullptr));
+	    }
+	  else if (type->field (i).type ()->code () == TYPE_CODE_UNION)
+	    {
+	      /* Recurse into anonymous unions.  */
+	      add_struct_fields (type->field (i).type (),
+				 output, fieldname, namelen, prefix);
+	    }
+	}
+    }
+
+  for (i = TYPE_NFN_FIELDS (type) - 1; i >= 0; --i)
+    {
+      const char *name = TYPE_FN_FIELDLIST_NAME (type, i);
+
+      if (name && ! strncmp (name, fieldname, namelen))
+	{
+	  if (!computed_type_name)
+	    {
+	      type_name = type->name ();
+	      computed_type_name = 1;
+	    }
+	  /* Omit constructors from the completion list.  */
+	  if (!type_name || strcmp (type_name, name))
+	    output.emplace_back (concat (prefix, name, nullptr));
+	}
+    }
+}
+
+/* See expop.h.  */
+
+bool
+structop_base_operation::complete (struct expression *exp,
+				   completion_tracker &tracker,
+				   const char *prefix)
+{
+  const std::string &fieldname = std::get<1> (m_storage);
+
+  value *lhs = std::get<0> (m_storage)->evaluate (nullptr, exp,
+						  EVAL_AVOID_SIDE_EFFECTS);
+  struct type *type = value_type (lhs);
+  for (;;)
+    {
+      type = check_typedef (type);
+      if (!type->is_pointer_or_reference ())
+	break;
+      type = TYPE_TARGET_TYPE (type);
+    }
+
+  if (type->code () == TYPE_CODE_UNION
+      || type->code () == TYPE_CODE_STRUCT)
+    {
+      completion_list result;
+
+      add_struct_fields (type, result, fieldname.c_str (),
+			 fieldname.length (), prefix);
+      tracker.add_completions (std::move (result));
+      return true;
+    }
+
+  return false;
+}
 
 } /* namespace expr */
 
@@ -1005,7 +1092,7 @@ eval_op_var_entry_value (struct type *expect_type, struct expression *exp,
 			 enum noside noside, symbol *sym)
 {
   if (noside == EVAL_AVOID_SIDE_EFFECTS)
-    return value_zero (SYMBOL_TYPE (sym), not_lval);
+    return value_zero (sym->type (), not_lval);
 
   if (SYMBOL_COMPUTED_OPS (sym) == NULL
       || SYMBOL_COMPUTED_OPS (sym)->read_variable_at_entry == NULL)
@@ -1078,16 +1165,21 @@ eval_op_register (struct type *expect_type, struct expression *exp,
     return val;
 }
 
-/* Helper function that implements the body of OP_STRING.  */
-
-struct value *
-eval_op_string (struct type *expect_type, struct expression *exp,
-		enum noside noside, int len, const char *string)
+namespace expr
 {
+
+value *
+string_operation::evaluate (struct type *expect_type,
+			    struct expression *exp,
+			    enum noside noside)
+{
+  const std::string &str = std::get<0> (m_storage);
   struct type *type = language_string_char_type (exp->language_defn,
 						 exp->gdbarch);
-  return value_string (string, len, type);
+  return value_string (str.c_str (), str.size (), type);
 }
+
+} /* namespace expr */
 
 /* Helper function that implements the body of OP_OBJC_SELECTOR.  */
 
@@ -1099,18 +1191,6 @@ eval_op_objc_selector (struct type *expect_type, struct expression *exp,
   struct type *selector_type = builtin_type (exp->gdbarch)->builtin_data_ptr;
   return value_from_longest (selector_type,
 			     lookup_child_selector (exp->gdbarch, sel));
-}
-
-/* Helper function that implements the body of BINOP_CONCAT.  */
-
-struct value *
-eval_op_concat (struct type *expect_type, struct expression *exp,
-		enum noside noside, struct value *arg1, struct value *arg2)
-{
-  if (binop_user_defined_p (BINOP_CONCAT, arg1, arg2))
-    return value_x_binop (arg1, arg2, BINOP_CONCAT, OP_NULL, noside);
-  else
-    return value_concat (arg1, arg2);
 }
 
 /* A helper function for TERNOP_SLICE.  */
@@ -2261,7 +2341,7 @@ adl_func_operation::evaluate (struct type *expect_type,
 		       NON_METHOD,
 		       nullptr, nullptr,
 		       nullptr, &symp, nullptr, 0, noside);
-  if (SYMBOL_TYPE (symp)->code () == TYPE_CODE_ERROR)
+  if (symp->type ()->code () == TYPE_CODE_ERROR)
     error_unknown_type (symp->print_name ());
   value *callee = evaluate_var_value (noside, std::get<1> (m_storage), symp);
   return evaluate_subexp_do_call (exp, noside, callee, args,
@@ -2298,7 +2378,7 @@ array_operation::evaluate_struct_tuple (struct value *struct_val,
 	error (_("too many initializers"));
       field_type = struct_type->field (fieldno).type ();
       if (field_type->code () == TYPE_CODE_UNION
-	  && TYPE_FIELD_NAME (struct_type, fieldno)[0] == '0')
+	  && struct_type->field (fieldno).name ()[0] == '0')
 	error (_("don't know which variant you want to set"));
 
       /* Here, struct_type is the type of the inner struct,
@@ -2321,13 +2401,13 @@ array_operation::evaluate_struct_tuple (struct value *struct_val,
 	val = value_cast (field_type, val);
 
       bitsize = TYPE_FIELD_BITSIZE (struct_type, fieldno);
-      bitpos = TYPE_FIELD_BITPOS (struct_type, fieldno);
-      addr = value_contents_writeable (struct_val) + bitpos / 8;
+      bitpos = struct_type->field (fieldno).loc_bitpos ();
+      addr = value_contents_writeable (struct_val).data () + bitpos / 8;
       if (bitsize)
 	modify_field (struct_type, addr,
 		      value_as_long (val), bitpos % 8, bitsize);
       else
-	memcpy (addr, value_contents (val),
+	memcpy (addr, value_contents (val).data (),
 		TYPE_LENGTH (value_type (val)));
 
     }
@@ -2351,7 +2431,7 @@ array_operation::evaluate (struct type *expect_type,
     {
       struct value *rec = allocate_value (expect_type);
 
-      memset (value_contents_raw (rec), '\0', TYPE_LENGTH (type));
+      memset (value_contents_raw (rec).data (), '\0', TYPE_LENGTH (type));
       return evaluate_struct_tuple (rec, exp, noside, nargs);
     }
 
@@ -2370,7 +2450,7 @@ array_operation::evaluate (struct type *expect_type,
 	  high_bound = (TYPE_LENGTH (type) / element_size) - 1;
 	}
       index = low_bound;
-      memset (value_contents_raw (array), 0, TYPE_LENGTH (expect_type));
+      memset (value_contents_raw (array).data (), 0, TYPE_LENGTH (expect_type));
       for (tem = nargs; --nargs >= 0;)
 	{
 	  struct value *element;
@@ -2382,9 +2462,9 @@ array_operation::evaluate (struct type *expect_type,
 	  if (index > high_bound)
 	    /* To avoid memory corruption.  */
 	    error (_("Too many array elements"));
-	  memcpy (value_contents_raw (array)
+	  memcpy (value_contents_raw (array).data ()
 		  + (index - low_bound) * element_size,
-		  value_contents (element),
+		  value_contents (element).data (),
 		  element_size);
 	  index++;
 	}
@@ -2395,7 +2475,7 @@ array_operation::evaluate (struct type *expect_type,
       && type->code () == TYPE_CODE_SET)
     {
       struct value *set = allocate_value (expect_type);
-      gdb_byte *valaddr = value_contents_raw (set);
+      gdb_byte *valaddr = value_contents_raw (set).data ();
       struct type *element_type = type->index_type ();
       struct type *check_type = element_type;
       LONGEST low_bound, high_bound;
@@ -2465,6 +2545,22 @@ array_operation::evaluate (struct type *expect_type,
       argvec[tem] = in_args[tem]->evaluate_with_coercion (exp, noside);
     }
   return value_array (tem2, tem3, argvec);
+}
+
+value *
+unop_extract_operation::evaluate (struct type *expect_type,
+				  struct expression *exp,
+				  enum noside noside)
+{
+  value *old_value = std::get<0> (m_storage)->evaluate (nullptr, exp, noside);
+  struct type *type = get_type ();
+
+  if (TYPE_LENGTH (type) > TYPE_LENGTH (value_type (old_value)))
+    error (_("length type is larger than the value type"));
+
+  struct value *result = allocate_value (type);
+  value_contents_copy (result, 0, old_value, 0, TYPE_LENGTH (type));
+  return result;
 }
 
 }
@@ -2582,13 +2678,13 @@ var_value_operation::evaluate_for_address (struct expression *exp,
 
   /* C++: The "address" of a reference should yield the address
    * of the object pointed to.  Let value_addr() deal with it.  */
-  if (TYPE_IS_REFERENCE (SYMBOL_TYPE (var)))
+  if (TYPE_IS_REFERENCE (var->type ()))
     return operation::evaluate_for_address (exp, noside);
 
   if (noside == EVAL_AVOID_SIDE_EFFECTS)
     {
-      struct type *type = lookup_pointer_type (SYMBOL_TYPE (var));
-      enum address_class sym_class = SYMBOL_CLASS (var);
+      struct type *type = lookup_pointer_type (var->type ());
+      enum address_class sym_class = var->aclass ();
 
       if (sym_class == LOC_CONST
 	  || sym_class == LOC_CONST_BYTES
@@ -2606,7 +2702,7 @@ var_value_operation::evaluate_with_coercion (struct expression *exp,
 					     enum noside noside)
 {
   struct symbol *var = std::get<0> (m_storage).symbol;
-  struct type *type = check_typedef (SYMBOL_TYPE (var));
+  struct type *type = check_typedef (var->type ());
   if (type->code () == TYPE_CODE_ARRAY
       && !type->is_vector ()
       && CAST_IS_CONVERSION (exp->language_defn))
@@ -2735,7 +2831,7 @@ value *
 var_value_operation::evaluate_for_sizeof (struct expression *exp,
 					  enum noside noside)
 {
-  struct type *type = SYMBOL_TYPE (std::get<0> (m_storage).symbol);
+  struct type *type = std::get<0> (m_storage).symbol->type ();
   if (is_dynamic_type (type))
     {
       value *val = evaluate (nullptr, exp, EVAL_NORMAL);

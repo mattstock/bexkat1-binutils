@@ -1,6 +1,6 @@
 /* Python interface to architecture
 
-   Copyright (C) 2013-2021 Free Software Foundation, Inc.
+   Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -62,14 +62,23 @@ arch_object_data_init (struct gdbarch *gdbarch)
 }
 
 /* Returns the struct gdbarch value corresponding to the given Python
-   architecture object OBJ.  */
+   architecture object OBJ, which must be a gdb.Architecture object.  */
 
 struct gdbarch *
 arch_object_to_gdbarch (PyObject *obj)
 {
-  arch_object *py_arch = (arch_object *) obj;
+  gdb_assert (gdbpy_is_architecture (obj));
 
+  arch_object *py_arch = (arch_object *) obj;
   return py_arch->gdbarch;
+}
+
+/* See python-internal.h.  */
+
+bool
+gdbpy_is_architecture (PyObject *obj)
+{
+  return PyObject_TypeCheck (obj, &arch_object_type);
 }
 
 /* Returns the Python architecture object corresponding to GDBARCH.
@@ -100,7 +109,7 @@ archpy_name (PyObject *self, PyObject *args)
   ARCHPY_REQUIRE_VALID (self, gdbarch);
 
   name = (gdbarch_bfd_arch_info (gdbarch))->printable_name;
-  return PyString_FromString (name);
+  return PyUnicode_FromString (name);
 }
 
 /* Implementation of
@@ -139,12 +148,6 @@ archpy_disassemble (PyObject *self, PyObject *args, PyObject *kw)
 	 conversion process.  */
       if (PyLong_Check (end_obj))
 	end = PyLong_AsUnsignedLongLong (end_obj);
-#if PY_MAJOR_VERSION == 2
-      else if (PyInt_Check (end_obj))
-	/* If the end_pc value is specified without a trailing 'L', end_obj will
-	   be an integer and not a long integer.  */
-	end = PyInt_AsLong (end_obj);
-#endif
       else
 	{
 	  PyErr_SetString (PyExc_TypeError,
@@ -164,7 +167,7 @@ archpy_disassemble (PyObject *self, PyObject *args, PyObject *kw)
     }
   if (count_obj)
     {
-      count = PyInt_AsLong (count_obj);
+      count = PyLong_AsLong (count_obj);
       if (PyErr_Occurred () || count < 0)
 	{
 	  PyErr_SetString (PyExc_TypeError,
@@ -213,9 +216,8 @@ archpy_disassemble (PyObject *self, PyObject *args, PyObject *kw)
       if (pc_obj == nullptr)
 	return nullptr;
 
-      gdbpy_ref<> asm_obj (PyString_FromString (!stb.empty ()
-						? stb.c_str ()
-						: "<unknown>"));
+      gdbpy_ref<> asm_obj
+	(PyUnicode_FromString (!stb.empty () ? stb.c_str () : "<unknown>"));
       if (asm_obj == nullptr)
 	return nullptr;
 
@@ -271,6 +273,83 @@ archpy_register_groups (PyObject *self, PyObject *args)
   return gdbpy_new_reggroup_iterator (gdbarch);
 }
 
+/* Implementation of gdb.integer_type.  */
+static PyObject *
+archpy_integer_type (PyObject *self, PyObject *args, PyObject *kw)
+{
+  static const char *keywords[] = { "size", "signed", NULL };
+  int size;
+  PyObject *is_signed_obj = nullptr;
+
+  if (!gdb_PyArg_ParseTupleAndKeywords (args, kw, "i|O", keywords,
+					&size, &is_signed_obj))
+    return nullptr;
+
+  /* Assume signed by default.  */
+  bool is_signed = (is_signed_obj == nullptr
+		    || PyObject_IsTrue (is_signed_obj));
+
+  struct gdbarch *gdbarch;
+  ARCHPY_REQUIRE_VALID (self, gdbarch);
+
+  const struct builtin_type *builtins = builtin_type (gdbarch);
+  struct type *type = nullptr;
+  switch (size)
+    {
+    case 0:
+      type = builtins->builtin_int0;
+      break;
+    case 8:
+      type = is_signed ? builtins->builtin_int8 : builtins->builtin_uint8;
+      break;
+    case 16:
+      type = is_signed ? builtins->builtin_int16 : builtins->builtin_uint16;
+      break;
+    case 24:
+      type = is_signed ? builtins->builtin_int24 : builtins->builtin_uint24;
+      break;
+    case 32:
+      type = is_signed ? builtins->builtin_int32 : builtins->builtin_uint32;
+      break;
+    case 64:
+      type = is_signed ? builtins->builtin_int64 : builtins->builtin_uint64;
+      break;
+    case 128:
+      type = is_signed ? builtins->builtin_int128 : builtins->builtin_uint128;
+      break;
+
+    default:
+      PyErr_SetString (PyExc_ValueError,
+		       _("no integer type of that size is available"));
+      return nullptr;
+    }
+
+  return type_to_type_object (type);
+}
+
+/* Implementation of gdb.architecture_names().  Return a list of all the
+   BFD architecture names that GDB understands.  */
+
+PyObject *
+gdbpy_all_architecture_names (PyObject *self, PyObject *args)
+{
+  gdbpy_ref<> list (PyList_New (0));
+  if (list == nullptr)
+    return nullptr;
+
+  std::vector<const char *> name_list = gdbarch_printable_names ();
+  for (const char *name : name_list)
+    {
+      gdbpy_ref <> py_name (PyUnicode_FromString (name));
+      if (py_name == nullptr)
+	return nullptr;
+      if (PyList_Append (list.get (), py_name.get ()) < 0)
+	return nullptr;
+    }
+
+ return list.release ();
+}
+
 void _initialize_py_arch ();
 void
 _initialize_py_arch ()
@@ -300,6 +379,11 @@ Return the name of the architecture as a string value." },
     "disassemble (start_pc [, end_pc [, count]]) -> List.\n\
 Return a list of at most COUNT disassembled instructions from START_PC to\n\
 END_PC." },
+  { "integer_type", (PyCFunction) archpy_integer_type,
+    METH_VARARGS | METH_KEYWORDS,
+    "integer_type (size [, signed]) -> type\n\
+Return an integer Type corresponding to the given bitsize and signed-ness.\n\
+If not specified, the type defaults to signed." },
   { "registers", (PyCFunction) archpy_registers,
     METH_VARARGS | METH_KEYWORDS,
     "registers ([ group-name ]) -> Iterator.\n\

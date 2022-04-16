@@ -1,6 +1,6 @@
 /* Manages interpreters for GDB, the GNU debugger.
 
-   Copyright (C) 2000-2021 Free Software Foundation, Inc.
+   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
    Written by Jim Ingham <jingham@apple.com> of Apple Computer, Inc.
 
@@ -93,8 +93,6 @@ public:
   /* Has the init method been run?  */
   bool inited;
 };
-
-extern void interp_add (struct ui *ui, struct interp *interp);
 
 /* Look up the interpreter for NAME, creating one if none exists yet.
    If NAME is not a interpreter type previously registered with

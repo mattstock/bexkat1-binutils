@@ -1,5 +1,5 @@
 /* Xtensa-specific support for 32-bit ELF.
-   Copyright (C) 2003-2021 Free Software Foundation, Inc.
+   Copyright (C) 2003-2022 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -910,7 +910,14 @@ xtensa_read_table_entries (bfd *abfd,
     table_entry_size -= 4;
 
   num_records = table_size / table_entry_size;
+
   table_data = retrieve_contents (abfd, table_section, true);
+  if (table_data == NULL)
+    {
+      *table_p = NULL;
+      return 0;
+    }
+
   blocks = (property_table_entry *)
     bfd_malloc (num_records * sizeof (property_table_entry));
   block_count = 0;

@@ -1,6 +1,6 @@
 /* Target-dependent code for SPARC.
 
-   Copyright (C) 2003-2021 Free Software Foundation, Inc.
+   Copyright (C) 2003-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -60,10 +60,6 @@ struct regset;
    sparc64_-prefix for 64-bit specific code and the sparc_-prefix for
    code that can handle both.  The 64-bit specific code lives in
    sparc64-tdep.c; don't add any here.  */
-
-/* The SPARC Floating-Point Quad-Precision format is similar to
-   big-endian IA-64 Quad-Precision format.  */
-#define floatformats_sparc_quad floatformats_ia64_quad
 
 /* The stack pointer is offset from the stack frame by a BIAS of 2047
    (0x7ff) for 64-bit code.  BIAS is likely to be defined on SPARC
@@ -429,7 +425,7 @@ sparc32_register_name (struct gdbarch *gdbarch, int regnum)
 static struct type *
 sparc_psr_type (struct gdbarch *gdbarch)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
 
   if (!tdep->sparc_psr_type)
     {
@@ -451,7 +447,7 @@ sparc_psr_type (struct gdbarch *gdbarch)
 static struct type *
 sparc_fsr_type (struct gdbarch *gdbarch)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
 
   if (!tdep->sparc_fsr_type)
     {
@@ -642,7 +638,7 @@ sparc32_store_arguments (struct regcache *regcache, int nargs,
 	     correct, and wasting a few bytes shouldn't be a problem.  */
 	  sp &= ~0x7;
 
-	  write_memory (sp, value_contents (args[i]), len);
+	  write_memory (sp, value_contents (args[i]).data (), len);
 	  args[i] = value_from_pointer (lookup_pointer_type (type), sp);
 	  num_elements++;
 	}
@@ -673,7 +669,7 @@ sparc32_store_arguments (struct regcache *regcache, int nargs,
 
   for (i = 0; i < nargs; i++)
     {
-      const bfd_byte *valbuf = value_contents (args[i]);
+      const bfd_byte *valbuf = value_contents (args[i]).data ();
       struct type *type = value_type (args[i]);
       int len = TYPE_LENGTH (type);
       gdb_byte buf[4];
@@ -992,7 +988,7 @@ CORE_ADDR
 sparc_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
 			CORE_ADDR current_pc, struct sparc_frame_cache *cache)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
   unsigned long insn;
   int offset = 0;
   int dest = -1;
@@ -1126,7 +1122,6 @@ sparc_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
 static CORE_ADDR
 sparc32_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 {
-  struct symtab_and_line sal;
   CORE_ADDR func_addr;
   struct sparc_frame_cache cache;
 
@@ -1234,7 +1229,7 @@ sparc_frame_cache (struct frame_info *this_frame, void **this_cache)
 static int
 sparc32_struct_return_from_sym (struct symbol *sym)
 {
-  struct type *type = check_typedef (SYMBOL_TYPE (sym));
+  struct type *type = check_typedef (sym->type ());
   enum type_code code = type->code ();
 
   if (code == TYPE_CODE_FUNC || code == TYPE_CODE_METHOD)
@@ -1684,8 +1679,9 @@ sparc_analyze_control_transfer (struct regcache *regcache,
       struct frame_info *frame = get_current_frame ();
 
       /* Trap instruction (TRAP).  */
-      return gdbarch_tdep (regcache->arch ())->step_trap (frame,
-								     insn);
+      gdbarch *arch = regcache->arch ();
+      sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (arch);
+      return tdep->step_trap (frame, insn);
     }
 
   /* FIXME: Handle DONE and RETRY instructions.  */
@@ -1735,7 +1731,7 @@ static std::vector<CORE_ADDR>
 sparc_software_single_step (struct regcache *regcache)
 {
   struct gdbarch *arch = regcache->arch ();
-  struct gdbarch_tdep *tdep = gdbarch_tdep (arch);
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (arch);
   CORE_ADDR npc, nnpc;
 
   CORE_ADDR pc, orig_npc;
@@ -1764,7 +1760,8 @@ sparc_software_single_step (struct regcache *regcache)
 static void
 sparc_write_pc (struct regcache *regcache, CORE_ADDR pc)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (regcache->arch ());
+  gdbarch *arch = regcache->arch ();
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (arch);
 
   regcache_cooked_write_unsigned (regcache, tdep->pc_regnum, pc);
   regcache_cooked_write_unsigned (regcache, tdep->npc_regnum, pc + 4);
@@ -1779,7 +1776,7 @@ sparc_iterate_over_regset_sections (struct gdbarch *gdbarch,
 				    void *cb_data,
 				    const struct regcache *regcache)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  sparc_gdbarch_tdep *tdep = (sparc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
 
   cb (".reg", tdep->sizeof_gregset, tdep->sizeof_gregset, tdep->gregset, NULL,
       cb_data);
@@ -1814,7 +1811,6 @@ validate_tdesc_registers (const struct target_desc *tdesc,
 static struct gdbarch *
 sparc32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
-  struct gdbarch_tdep *tdep;
   const struct target_desc *tdesc = info.target_desc;
   struct gdbarch *gdbarch;
   int valid_p = 1;
@@ -1825,7 +1821,7 @@ sparc32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     return arches->gdbarch;
 
   /* Allocate space for the new architecture.  */
-  tdep = XCNEW (struct gdbarch_tdep);
+  sparc_gdbarch_tdep *tdep = new sparc_gdbarch_tdep;
   gdbarch = gdbarch_alloc (&info, tdep);
 
   tdep->pc_regnum = SPARC32_PC_REGNUM;
@@ -1837,7 +1833,7 @@ sparc32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   tdep->cp0_registers_num = ARRAY_SIZE (sparc32_cp0_register_names);
 
   set_gdbarch_long_double_bit (gdbarch, 128);
-  set_gdbarch_long_double_format (gdbarch, floatformats_sparc_quad);
+  set_gdbarch_long_double_format (gdbarch, floatformats_ieee_quad);
 
   set_gdbarch_wchar_bit (gdbarch, 16);
   set_gdbarch_wchar_signed (gdbarch, 1);

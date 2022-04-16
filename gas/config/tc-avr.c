@@ -1,6 +1,6 @@
 /* tc-avr.c -- Assembler code for the ATMEL AVR
 
-   Copyright (C) 1999-2021 Free Software Foundation, Inc.
+   Copyright (C) 1999-2022 Free Software Foundation, Inc.
    Contributed by Denis Chertykov <denisc@overta.ru>
 
    This file is part of GAS, the GNU Assembler.
@@ -2819,4 +2819,30 @@ avr_pre_output_hook (void)
 {
   if (avr_opt.have_gccisr)
     bfd_map_over_sections (stdoutput, avr_check_gccisr_done, NULL);
+}
+
+/* Return false if the fixup in fixp should be left alone and not
+   adjusted.  */
+
+bool
+avr_fix_adjustable (struct fix *fixp)
+{
+  if (! linkrelax || fixp->fx_addsy == NULL)
+    return true;
+
+  /* Do not adjust relocations involving symbols in code sections,
+     because it breaks linker relaxations.  This could be fixed in the
+     linker, but this fix is simpler, and it pretty much only affects
+     object size a little bit.  */
+  if (S_GET_SEGMENT (fixp->fx_addsy)->flags & SEC_CODE)
+    return false;
+
+  /* Likewise, do not adjust symbols that won't be merged, or debug
+     symbols, because they too break relaxation.  We do want to adjust
+     other mergeable symbols, like .rodata, because code relaxations
+     need section-relative symbols to properly relax them.  */
+  if (! (S_GET_SEGMENT (fixp->fx_addsy)->flags & SEC_MERGE))
+    return false;
+
+  return true;
 }

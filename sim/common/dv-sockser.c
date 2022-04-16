@@ -1,5 +1,5 @@
 /* Serial port emulation using sockets.
-   Copyright (C) 1998-2021 Free Software Foundation, Inc.
+   Copyright (C) 1998-2022 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This program is free software; you can redistribute it and/or modify
@@ -21,24 +21,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 /* This must come before any other includes.  */
 #include "defs.h"
 
-#include <string.h>
-#include <signal.h>
-#include <stdlib.h>
+#include <errno.h>
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
+#include <netdb.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
+#include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #include "sim-main.h"
 #include "sim-assert.h"

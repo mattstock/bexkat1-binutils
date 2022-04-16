@@ -1,7 +1,7 @@
 /* Abstraction of GNU v3 abi.
    Contributed by Jim Blandy <jimb@redhat.com>
 
-   Copyright (C) 2001-2021 Free Software Foundation, Inc.
+   Copyright (C) 2001-2022 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -135,30 +135,30 @@ build_gdb_vtable_type (struct gdbarch *arch)
   offset = 0;
 
   /* ptrdiff_t vcall_and_vbase_offsets[0]; */
-  FIELD_NAME (*field) = "vcall_and_vbase_offsets";
+  field->set_name ("vcall_and_vbase_offsets");
   field->set_type (lookup_array_range_type (ptrdiff_type, 0, -1));
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
   /* ptrdiff_t offset_to_top; */
-  FIELD_NAME (*field) = "offset_to_top";
+  field->set_name ("offset_to_top");
   field->set_type (ptrdiff_type);
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
   /* void *type_info; */
-  FIELD_NAME (*field) = "type_info";
+  field->set_name ("type_info");
   field->set_type (void_ptr_type);
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
   /* void (*virtual_functions[0]) (); */
-  FIELD_NAME (*field) = "virtual_functions";
+  field->set_name ("virtual_functions");
   field->set_type (lookup_array_range_type (ptr_to_void_fn_type, 0, -1));
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
@@ -195,7 +195,7 @@ vtable_address_point_offset (struct gdbarch *gdbarch)
   struct type *vtable_type
     = (struct type *) gdbarch_data (gdbarch, vtable_type_gdbarch_data);
 
-  return (TYPE_FIELD_BITPOS (vtable_type, vtable_field_virtual_functions)
+  return (vtable_type->field (vtable_field_virtual_functions).loc_bitpos ()
 	  / TARGET_CHAR_BIT);
 }
 
@@ -464,12 +464,12 @@ gnuv3_baseclass_offset (struct type *type, int index,
     return TYPE_BASECLASS_BITPOS (type, index) / 8;
 
   /* If we have a DWARF expression for the offset, evaluate it.  */
-  if (TYPE_FIELD_LOC_KIND (type, index) == FIELD_LOC_KIND_DWARF_BLOCK)
+  if (type->field (index).loc_kind () == FIELD_LOC_KIND_DWARF_BLOCK)
     {
       struct dwarf2_property_baton baton;
       baton.property_type
 	= lookup_pointer_type (type->field (index).type ());
-      baton.locexpr = *TYPE_FIELD_DWARF_BLOCK (type, index);
+      baton.locexpr = *type->field (index).loc_dwarf_block ();
 
       struct dynamic_prop prop;
       prop.set_locexpr (&baton);
@@ -483,7 +483,7 @@ gnuv3_baseclass_offset (struct type *type, int index,
 
       CORE_ADDR result;
       if (dwarf2_evaluate_property (&prop, nullptr, &addr_stack, &result,
-				    true))
+				    {addr_stack.addr}))
 	return (int) (result - addr_stack.addr);
     }
 
@@ -623,7 +623,7 @@ gnuv3_print_method_ptr (const gdb_byte *contents,
   /* Check for NULL.  */
   if (ptr_value == 0 && vbit == 0)
     {
-      fprintf_filtered (stream, "NULL");
+      gdb_printf (stream, "NULL");
       return;
     }
 
@@ -644,32 +644,29 @@ gnuv3_print_method_ptr (const gdb_byte *contents,
 	 possible paths to the method based on the adjustment.  */
       if (physname)
 	{
-	  char *demangled_name = gdb_demangle (physname,
-					       DMGL_ANSI | DMGL_PARAMS);
+	  gdb::unique_xmalloc_ptr<char> demangled_name
+	    = gdb_demangle (physname, DMGL_ANSI | DMGL_PARAMS);
 
-	  fprintf_filtered (stream, "&virtual ");
+	  gdb_printf (stream, "&virtual ");
 	  if (demangled_name == NULL)
-	    fputs_filtered (physname, stream);
+	    gdb_puts (physname, stream);
 	  else
-	    {
-	      fputs_filtered (demangled_name, stream);
-	      xfree (demangled_name);
-	    }
+	    gdb_puts (demangled_name.get (), stream);
 	  return;
 	}
     }
   else if (ptr_value != 0)
     {
       /* Found a non-virtual function: print out the type.  */
-      fputs_filtered ("(", stream);
+      gdb_puts ("(", stream);
       c_print_type (type, "", stream, -1, 0, &type_print_raw_options);
-      fputs_filtered (") ", stream);
+      gdb_puts (") ", stream);
     }
 
   /* We didn't find it; print the raw data.  */
   if (vbit)
     {
-      fprintf_filtered (stream, "&virtual table offset ");
+      gdb_printf (stream, "&virtual table offset ");
       print_longest (stream, 'd', 1, ptr_value);
     }
   else
@@ -682,7 +679,7 @@ gnuv3_print_method_ptr (const gdb_byte *contents,
 
   if (adjustment)
     {
-      fprintf_filtered (stream, ", this adjustment ");
+      gdb_printf (stream, ", this adjustment ");
       print_longest (stream, 'd', 1, adjustment);
     }
 }
@@ -732,7 +729,7 @@ static struct value *
 gnuv3_method_ptr_to_value (struct value **this_p, struct value *method_ptr)
 {
   struct gdbarch *gdbarch;
-  const gdb_byte *contents = value_contents (method_ptr);
+  const gdb_byte *contents = value_contents (method_ptr).data ();
   CORE_ADDR ptr_value;
   struct type *self_type, *final_type, *method_type;
   LONGEST adjustment;
@@ -910,11 +907,11 @@ print_one_vtable (struct gdbarch *gdbarch, struct value *value,
   vt_addr = value_address (value_field (vtable,
 					vtable_field_virtual_functions));
 
-  printf_filtered (_("vtable for '%s' @ %s (subobject @ %s):\n"),
-		   TYPE_SAFE_NAME (type),
-		   paddress (gdbarch, vt_addr),
-		   paddress (gdbarch, (value_address (value)
-				       + value_embedded_offset (value))));
+  gdb_printf (_("vtable for '%s' @ %s (subobject @ %s):\n"),
+	      TYPE_SAFE_NAME (type),
+	      paddress (gdbarch, vt_addr),
+	      paddress (gdbarch, (value_address (value)
+				  + value_embedded_offset (value))));
 
   for (i = 0; i <= max_voffset; ++i)
     {
@@ -923,7 +920,7 @@ print_one_vtable (struct gdbarch *gdbarch, struct value *value,
       int got_error = 0;
       struct value *vfn;
 
-      printf_filtered ("[%d]: ", i);
+      gdb_printf ("[%d]: ", i);
 
       vfn = value_subscript (value_field (vtable,
 					  vtable_field_virtual_functions),
@@ -945,7 +942,7 @@ print_one_vtable (struct gdbarch *gdbarch, struct value *value,
 
       if (!got_error)
 	print_function_pointer_address (opts, gdbarch, addr, gdb_stdout);
-      printf_filtered ("\n");
+      gdb_printf ("\n");
     }
 }
 
@@ -986,7 +983,7 @@ gnuv3_print_vtable (struct value *value)
 
   if (!vtable)
     {
-      printf_filtered (_("This object does not have a virtual function table\n"));
+      gdb_printf (_("This object does not have a virtual function table\n"));
       return;
     }
 
@@ -1005,7 +1002,7 @@ gnuv3_print_vtable (struct value *value)
       if (iter->max_voffset >= 0)
 	{
 	  if (count > 0)
-	    printf_filtered ("\n");
+	    gdb_printf ("\n");
 	  print_one_vtable (gdbarch, iter->value, iter->max_voffset, &opts);
 	  ++count;
 	}
@@ -1036,16 +1033,16 @@ build_std_type_info_type (struct gdbarch *arch)
   offset = 0;
 
   /* The vtable.  */
-  FIELD_NAME (*field) = "_vptr.type_info";
+  field->set_name ("_vptr.type_info");
   field->set_type (void_ptr_type);
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
   /* The name.  */
-  FIELD_NAME (*field) = "__name";
+  field->set_name ("__name");
   field->set_type (char_ptr_type);
-  SET_FIELD_BITPOS (*field, offset * TARGET_CHAR_BIT);
+  field->set_loc_bitpos (offset * TARGET_CHAR_BIT);
   offset += TYPE_LENGTH (field->type ());
   field++;
 
@@ -1074,7 +1071,7 @@ gnuv3_get_typeid_type (struct gdbarch *gdbarch)
     typeinfo_type
       = (struct type *) gdbarch_data (gdbarch, std_type_info_gdbarch_data);
   else
-    typeinfo_type = SYMBOL_TYPE (typeinfo);
+    typeinfo_type = typeinfo->type ();
 
   return typeinfo_type;
 }
@@ -1149,7 +1146,7 @@ gnuv3_get_typeid (struct value *value)
       if (minsym.minsym == NULL)
 	error (_("could not find typeinfo symbol for '%s'"), name);
 
-      result = value_at_lazy (typeinfo_type, BMSYMBOL_VALUE_ADDRESS (minsym));
+      result = value_at_lazy (typeinfo_type, minsym.value_address ());
     }
 
   return result;
@@ -1238,7 +1235,7 @@ gnuv3_skip_trampoline (struct frame_info *frame, CORE_ADDR stop_pc)
   if (fn_sym.minsym == NULL)
     return 0;
 
-  method_stop_pc = BMSYMBOL_VALUE_ADDRESS (fn_sym);
+  method_stop_pc = fn_sym.value_address ();
 
   /* Some targets have minimal symbols pointing to function descriptors
      (powerpc 64 for example).  Make sure to retrieve the address
