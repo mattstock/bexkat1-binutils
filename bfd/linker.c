@@ -1,5 +1,5 @@
 /* linker.c -- BFD linker routines
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
    Written by Steve Chamberlain and Ian Lance Taylor, Cygnus Support
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -599,6 +599,8 @@ bfd_wrapped_link_hash_lookup (bfd *abfd,
 	  n[1] = '\0';
 	  strcat (n, l + sizeof REAL - 1);
 	  h = bfd_link_hash_lookup (info->hash, n, create, true, follow);
+	  if (h != NULL)
+	    h->ref_real = 1;
 	  free (n);
 	  return h;
 	}
@@ -2549,9 +2551,8 @@ default_indirect_link_order (bfd *output_bfd,
 {
   asection *input_section;
   bfd *input_bfd;
-  bfd_byte *contents = NULL;
+  bfd_byte *alloced = NULL;
   bfd_byte *new_contents;
-  bfd_size_type sec_size;
   file_ptr loc;
 
   BFD_ASSERT ((output_section->flags & SEC_HAS_CONTENTS) != 0);
@@ -2652,16 +2653,11 @@ default_indirect_link_order (bfd *output_bfd,
   else
     {
       /* Get and relocate the section contents.  */
-      sec_size = (input_section->rawsize > input_section->size
-		  ? input_section->rawsize
-		  : input_section->size);
-      contents = (bfd_byte *) bfd_malloc (sec_size);
-      if (contents == NULL && sec_size != 0)
-	goto error_return;
       new_contents = (bfd_get_relocated_section_contents
-		      (output_bfd, info, link_order, contents,
+		      (output_bfd, info, link_order, NULL,
 		       bfd_link_relocatable (info),
 		       _bfd_generic_link_get_symbols (input_bfd)));
+      alloced = new_contents;
       if (!new_contents)
 	goto error_return;
     }
@@ -2673,11 +2669,11 @@ default_indirect_link_order (bfd *output_bfd,
 				  new_contents, loc, input_section->size))
     goto error_return;
 
-  free (contents);
+  free (alloced);
   return true;
 
  error_return:
-  free (contents);
+  free (alloced);
   return false;
 }
 
@@ -2884,27 +2880,38 @@ _bfd_handle_already_linked (asection *sec,
 	   sec->owner, sec);
       else if (sec->size != 0)
 	{
-	  bfd_byte *sec_contents, *l_sec_contents = NULL;
+	  bfd_byte *sec_contents, *l_sec_contents;
 
-	  if (!bfd_malloc_and_get_section (sec->owner, sec, &sec_contents))
+	  if ((sec->flags & SEC_HAS_CONTENTS) == 0
+	      && (l->sec->flags & SEC_HAS_CONTENTS) == 0)
+	    ;
+	  else if ((sec->flags & SEC_HAS_CONTENTS) == 0
+		   || !bfd_malloc_and_get_section (sec->owner, sec,
+						   &sec_contents))
 	    info->callbacks->einfo
 	      /* xgettext:c-format */
 	      (_("%pB: could not read contents of section `%pA'\n"),
 	       sec->owner, sec);
-	  else if (!bfd_malloc_and_get_section (l->sec->owner, l->sec,
-						&l_sec_contents))
-	    info->callbacks->einfo
-	      /* xgettext:c-format */
-	      (_("%pB: could not read contents of section `%pA'\n"),
-	       l->sec->owner, l->sec);
-	  else if (memcmp (sec_contents, l_sec_contents, sec->size) != 0)
-	    info->callbacks->einfo
-	      /* xgettext:c-format */
-	      (_("%pB: duplicate section `%pA' has different contents\n"),
-	       sec->owner, sec);
-
-	  free (sec_contents);
-	  free (l_sec_contents);
+	  else if ((l->sec->flags & SEC_HAS_CONTENTS) == 0
+		   || !bfd_malloc_and_get_section (l->sec->owner, l->sec,
+						   &l_sec_contents))
+	    {
+	      info->callbacks->einfo
+		/* xgettext:c-format */
+		(_("%pB: could not read contents of section `%pA'\n"),
+		 l->sec->owner, l->sec);
+	      free (sec_contents);
+	    }
+	  else
+	    {
+	      if (memcmp (sec_contents, l_sec_contents, sec->size) != 0)
+		info->callbacks->einfo
+		  /* xgettext:c-format */
+		  (_("%pB: duplicate section `%pA' has different contents\n"),
+		   sec->owner, sec);
+	      free (l_sec_contents);
+	      free (sec_contents);
+	    }
 	}
       break;
     }

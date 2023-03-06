@@ -1,5 +1,5 @@
 /* Generic ECOFF (Extended-COFF) routines.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Original version by Per Bothner.
    Full support added by Ian Lance Taylor, ian@cygnus.com.
 
@@ -107,6 +107,21 @@ _bfd_ecoff_mkobject_hook (bfd *abfd, void * filehdr, void * aouthdr)
      information is written out.  */
 
   return (void *) ecoff;
+}
+
+bool
+_bfd_ecoff_close_and_cleanup (bfd *abfd)
+{
+  struct ecoff_tdata *tdata = ecoff_data (abfd);
+
+  if (tdata != NULL && bfd_get_format (abfd) == bfd_object)
+    while (tdata->mips_refhi_list != NULL)
+      {
+	struct mips_hi *ref = tdata->mips_refhi_list;
+	tdata->mips_refhi_list = ref->next;
+	free (ref);
+      }
+  return _bfd_generic_close_and_cleanup (abfd);
 }
 
 /* Initialize a new section.  */
@@ -512,12 +527,24 @@ _bfd_ecoff_slurp_symbolic_info (bfd *abfd,
      documented section. And the ordering of the sections varies between
      statically and dynamically linked executables.
      If bfd supports SEEK_END someday, this code could be simplified.  */
-  raw_end = 0;
+  raw_end = raw_base;
 
 #define UPDATE_RAW_END(start, count, size) \
-  cb_end = internal_symhdr->start + internal_symhdr->count * (size); \
-  if (cb_end > raw_end) \
-    raw_end = cb_end
+  do									\
+    if (internal_symhdr->count != 0)					\
+      {									\
+	if (internal_symhdr->start < raw_base)				\
+	  goto err;							\
+	if (_bfd_mul_overflow ((unsigned long) internal_symhdr->count,	\
+			       (size), &amt))				\
+	  goto err;							\
+	cb_end = internal_symhdr->start + amt;				\
+	if (cb_end < internal_symhdr->start)				\
+	  goto err;							\
+	if (cb_end > raw_end)						\
+	  raw_end = cb_end;						\
+      }									\
+  while (0)
 
   UPDATE_RAW_END (cbLineOffset, cbLine, sizeof (unsigned char));
   UPDATE_RAW_END (cbDnOffset, idnMax, backend->debug_swap.external_dnr_size);
@@ -552,25 +579,24 @@ _bfd_ecoff_slurp_symbolic_info (bfd *abfd,
   ecoff_data (abfd)->raw_syments = raw;
 
   /* Get pointers for the numeric offsets in the HDRR structure.  */
-#define FIX(off1, off2, type)				\
-  if (internal_symhdr->off1 == 0)			\
-    debug->off2 = NULL;					\
-  else							\
-    debug->off2 = (type) ((char *) raw			\
-			  + (internal_symhdr->off1	\
-			     - raw_base))
+#define FIX(start, count, ptr, type) \
+  if (internal_symhdr->start == 0 || internal_symhdr->count == 0)	\
+    debug->ptr = NULL;							\
+  else									\
+    debug->ptr = (type) ((char *) raw					\
+			 + (internal_symhdr->start - raw_base))
 
-  FIX (cbLineOffset, line, unsigned char *);
-  FIX (cbDnOffset, external_dnr, void *);
-  FIX (cbPdOffset, external_pdr, void *);
-  FIX (cbSymOffset, external_sym, void *);
-  FIX (cbOptOffset, external_opt, void *);
-  FIX (cbAuxOffset, external_aux, union aux_ext *);
-  FIX (cbSsOffset, ss, char *);
-  FIX (cbSsExtOffset, ssext, char *);
-  FIX (cbFdOffset, external_fdr, void *);
-  FIX (cbRfdOffset, external_rfd, void *);
-  FIX (cbExtOffset, external_ext, void *);
+  FIX (cbLineOffset, cbLine, line, unsigned char *);
+  FIX (cbDnOffset, idnMax, external_dnr, void *);
+  FIX (cbPdOffset, ipdMax, external_pdr, void *);
+  FIX (cbSymOffset, isymMax, external_sym, void *);
+  FIX (cbOptOffset, ioptMax, external_opt, void *);
+  FIX (cbAuxOffset, iauxMax, external_aux, union aux_ext *);
+  FIX (cbSsOffset, issMax, ss, char *);
+  FIX (cbSsExtOffset, issExtMax, ssext, char *);
+  FIX (cbFdOffset, ifdMax, external_fdr, void *);
+  FIX (cbRfdOffset, crfd, external_rfd, void *);
+  FIX (cbExtOffset, iextMax, external_ext, void *);
 #undef FIX
 
   /* I don't want to always swap all the data, because it will just
@@ -584,6 +610,7 @@ _bfd_ecoff_slurp_symbolic_info (bfd *abfd,
   if (_bfd_mul_overflow ((unsigned long) internal_symhdr->ifdMax,
 			 sizeof (struct fdr), &amt))
     {
+    err:
       bfd_set_error (bfd_error_file_too_big);
       return false;
     }
@@ -868,9 +895,13 @@ _bfd_ecoff_slurp_symbol_table (bfd *abfd)
       (*swap_ext_in) (abfd, (void *) eraw_src, &internal_esym);
 
       /* PR 17512: file: 3372-1000-0.004.  */
-      if (internal_esym.asym.iss >= ecoff_data (abfd)->debug_info.symbolic_header.issExtMax
+      HDRR *symhdr = &ecoff_data (abfd)->debug_info.symbolic_header;
+      if (internal_esym.asym.iss >= symhdr->issExtMax
 	  || internal_esym.asym.iss < 0)
-	return false;
+	{
+	  bfd_set_error (bfd_error_bad_value);
+	  return false;
+	}
 
       internal_ptr->symbol.name = (ecoff_data (abfd)->debug_info.ssext
 				   + internal_esym.asym.iss);
@@ -881,17 +912,13 @@ _bfd_ecoff_slurp_symbol_table (bfd *abfd)
 	return false;
 
       /* The alpha uses a negative ifd field for section symbols.  */
-      if (internal_esym.ifd >= 0)
-	{
-	  /* PR 17512: file: 3372-1983-0.004.  */
-	  if (internal_esym.ifd >= ecoff_data (abfd)->debug_info.symbolic_header.ifdMax)
-	    internal_ptr->fdr = NULL;
-	  else
-	    internal_ptr->fdr = (ecoff_data (abfd)->debug_info.fdr
-				 + internal_esym.ifd);
-	}
-      else
+      /* PR 17512: file: 3372-1983-0.004.  */
+      if (internal_esym.ifd >= symhdr->ifdMax
+	  || internal_esym.ifd < 0)
 	internal_ptr->fdr = NULL;
+      else
+	internal_ptr->fdr = (ecoff_data (abfd)->debug_info.fdr
+			     + internal_esym.ifd);
       internal_ptr->local = false;
       internal_ptr->native = (void *) eraw_src;
     }
@@ -904,7 +931,13 @@ _bfd_ecoff_slurp_symbol_table (bfd *abfd)
     {
       char *lraw_src;
       char *lraw_end;
+      HDRR *symhdr = &ecoff_data (abfd)->debug_info.symbolic_header;
 
+      if (fdr_ptr->isymBase < 0
+	  || fdr_ptr->isymBase > symhdr->isymMax
+	  || fdr_ptr->csym <= 0
+	  || fdr_ptr->csym > symhdr->isymMax - fdr_ptr->isymBase)
+	continue;
       lraw_src = ((char *) ecoff_data (abfd)->debug_info.external_sym
 		  + fdr_ptr->isymBase * external_sym_size);
       lraw_end = lraw_src + fdr_ptr->csym * external_sym_size;
@@ -915,6 +948,13 @@ _bfd_ecoff_slurp_symbol_table (bfd *abfd)
 	  SYMR internal_sym;
 
 	  (*swap_sym_in) (abfd, (void *) lraw_src, &internal_sym);
+
+	  if (internal_sym.iss >= symhdr->issMax
+	      || internal_sym.iss < 0)
+	    {
+	      bfd_set_error (bfd_error_bad_value);
+	      return false;
+	    }
 	  internal_ptr->symbol.name = (ecoff_data (abfd)->debug_info.ss
 				       + fdr_ptr->issBase
 				       + internal_sym.iss);
@@ -1389,7 +1429,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 	  (*debug_swap->swap_sym_in) (abfd, ecoffsymbol (symbol)->native,
 				      &ecoff_sym);
 	  fprintf (file, "ecoff local ");
-	  fprintf_vma (file, (bfd_vma) ecoff_sym.value);
+	  bfd_fprintf_vma (abfd, file, ecoff_sym.value);
 	  fprintf (file, " %x %x", (unsigned) ecoff_sym.st,
 		   (unsigned) ecoff_sym.sc);
 	}
@@ -1400,7 +1440,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 	  (*debug_swap->swap_ext_in) (abfd, ecoffsymbol (symbol)->native,
 				      &ecoff_ext);
 	  fprintf (file, "ecoff extern ");
-	  fprintf_vma (file, (bfd_vma) ecoff_ext.asym.value);
+	  bfd_fprintf_vma (abfd, file, ecoff_ext.asym.value);
 	  fprintf (file, " %x %x", (unsigned) ecoff_ext.asym.st,
 		   (unsigned) ecoff_ext.asym.sc);
 	}
@@ -1443,7 +1483,7 @@ _bfd_ecoff_print_symbol (bfd *abfd,
 
 	fprintf (file, "[%3d] %c ",
 		 pos, type);
-	fprintf_vma (file, (bfd_vma) ecoff_ext.asym.value);
+	bfd_fprintf_vma (abfd, file, ecoff_ext.asym.value);
 	fprintf (file, " st %x sc %x indx %x %c%c%c %s",
 		 (unsigned) ecoff_ext.asym.st,
 		 (unsigned) ecoff_ext.asym.sc,
@@ -1612,7 +1652,8 @@ ecoff_slurp_reloc_table (bfd *abfd,
       if (intern.r_extern)
 	{
 	  /* r_symndx is an index into the external symbols.  */
-	  if (intern.r_symndx >= 0
+	  if (symbols != NULL
+	      && intern.r_symndx >= 0
 	      && (intern.r_symndx
 		  < (ecoff_data (abfd)->debug_info.symbolic_header.iextMax)))
 	    rptr->sym_ptr_ptr = symbols + intern.r_symndx;
@@ -2632,7 +2673,7 @@ _bfd_ecoff_write_object_contents (bfd *abfd)
 	    continue;
 
 	  amt = current->reloc_count * external_reloc_size;
-	  reloc_buff = bfd_alloc (abfd, amt);
+	  reloc_buff = bfd_zalloc (abfd, amt);
 	  if (reloc_buff == NULL)
 	    goto error_return;
 

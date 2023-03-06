@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -59,12 +59,11 @@ extern int __collector_xml_snprintf (char *s, size_t n, const char *format, ...)
 extern int __collector_xml_vsnprintf (char *s, size_t n, const char *format, va_list args);
 
 /* -------  collector_thread ----------------- */
-pid_t __collector_gettid ();
+extern pid_t __collector_gettid ();
 extern void __collector_ext_gettid_tsd_create_key ();
-#define collector_thread_t pthread_t            // not using pid_t, since tid is defined as pthread_t in package structures, and other codes assume this type
-#define statvfs_t  struct statvfs
-#define __collector_lwp_self() (collector_thread_t)__collector_gettid() // not using pthread_self()
-#define __collector_thr_self() (collector_thread_t)__collector_gettid() // not using pthread_self()
+typedef pthread_t collector_thread_t;
+#define __collector_lwp_self() ((collector_thread_t) ((unsigned long) __collector_gettid()))
+#define __collector_thr_self() ((collector_thread_t) ((unsigned long) __collector_gettid()))
 
 /* -------  collector_mutex ----------------- */
 /*
@@ -133,6 +132,7 @@ __collector_dec_32 (volatile uint32_t *ptr)
 		       : // "=m" (*ptr)    // output
 		       : "m" (*ptr)); // input
 }
+
 /**
  * This function subtrackts the value "off" of the value stored in target
  * to occur in an atomic manner, and returns new value stored in target.
@@ -148,6 +148,7 @@ __collector_subget_32 (uint32_t *ptr, uint32_t off)
 		       );
   return (r - offset);
 }
+
 /**
  * This function returns the value of the stack pointer register
  */
@@ -155,14 +156,15 @@ static __attribute__ ((always_inline)) inline void *
 __collector_getsp ()
 {
   void *r;
-#if WSIZE(64)
-  __asm__ __volatile__("movq %%rsp, %0"
-#else
+#if WSIZE(32) || defined(__ILP32__)
   __asm__ __volatile__("movl %%esp, %0"
-#endif
+#else
+  __asm__ __volatile__("movq %%rsp, %0"
+#endif 
 	  : "=r" (r)); // output
   return r;
 }
+
 /**
  * This function returns the value of the frame pointer register
  */
@@ -170,14 +172,15 @@ static __attribute__ ((always_inline)) inline void *
 __collector_getfp ()
 {
   void *r;
-#if WSIZE(64)
-  __asm__ __volatile__("movq %%rbp, %0"
-#else
+#if WSIZE(32) || defined(__ILP32__)
   __asm__ __volatile__("movl %%ebp, %0"
+#else
+  __asm__ __volatile__("movq %%rbp, %0"
 #endif
 	  : "=r" (r)); // output
   return r;
 }
+
 /**
  * This function returns the value of the processor counter register
  */
@@ -185,15 +188,12 @@ static __attribute__ ((always_inline)) inline void *
 __collector_getpc ()
 {
   void *r;
-  __asm__ __volatile__(
-#if WSIZE(32)
-	  "	call  1f \n"
-		       "1: popl  %0 \n"
+#if defined(__x86_64)
+  __asm__ __volatile__("lea (%%rip), %0" : "=r" (r));
 #else
-	  "	call  1f \n"
-		       "1: popq  %0 \n"
+  __asm__ __volatile__("call  1f \n"
+		       "1: popl  %0" : "=r" (r));
 #endif
-	  : "=r" (r)); // output
   return r;
 }
 
@@ -258,7 +258,7 @@ static __attribute__ ((always_inline)) inline void *
 __collector_cas_ptr (void *mem, void *cmp, void *new)
 {
   void *r;
-#if WSIZE(32)
+#if WSIZE(32) || defined(__ILP32__)
   r = (void *) __collector_cas_32 ((volatile uint32_t *)mem, (uint32_t) cmp, (uint32_t)new);
 #else
   __asm__ __volatile__("lock; cmpxchgq %2, (%1)"

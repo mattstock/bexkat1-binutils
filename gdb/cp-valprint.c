@@ -1,6 +1,6 @@
 /* Support for printing C++ values for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -78,10 +78,10 @@ cp_is_vtbl_member (struct type *type)
      structures.  Nowadays it points directly to the structure.  */
   if (type->code () == TYPE_CODE_PTR)
     {
-      type = TYPE_TARGET_TYPE (type);
+      type = type->target_type ();
       if (type->code () == TYPE_CODE_ARRAY)
 	{
-	  type = TYPE_TARGET_TYPE (type);
+	  type = type->target_type ();
 	  if (type->code () == TYPE_CODE_STRUCT    /* if not using thunks */
 	      || type->code () == TYPE_CODE_PTR)   /* if using thunks */
 	    {
@@ -129,7 +129,7 @@ cp_print_value_fields (struct value *val, struct ui_file *stream,
   int fields_seen = 0;
   static int last_set_recurse = -1;
 
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
 
   if (recurse == 0)
     {
@@ -189,7 +189,7 @@ cp_print_value_fields (struct value *val, struct ui_file *stream,
       vptr_fieldno = get_vptr_fieldno (type, &vptr_basetype);
       for (i = n_baseclasses; i < len; i++)
 	{
-	  const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+	  const gdb_byte *valaddr = val->contents_for_printing ().data ();
 
 	  /* If requested, skip printing of static fields.  */
 	  if (!options->static_field_print
@@ -270,19 +270,19 @@ cp_print_value_fields (struct value *val, struct ui_file *stream,
 		  fputs_styled ("<optimized out or zero length>",
 				metadata_style.style (), stream);
 		}
-	      else if (value_bits_synthetic_pointer
-			 (val, type->field (i).loc_bitpos (),
-			  TYPE_FIELD_BITSIZE (type, i)))
+	      else if (val->bits_synthetic_pointer
+		       (type->field (i).loc_bitpos (),
+			TYPE_FIELD_BITSIZE (type, i)))
 		{
 		  fputs_styled (_("<synthetic pointer>"),
 				metadata_style.style (), stream);
 		}
 	      else
 		{
-		  opts->deref_ref = 0;
+		  opts->deref_ref = false;
 
 		  v = value_field_bitfield (type, i, valaddr,
-					    value_embedded_offset (val), val);
+					    val->embedded_offset (), val);
 
 		  common_val_print (v, stream, recurse + 1,
 				    opts, current_language);
@@ -321,7 +321,7 @@ cp_print_value_fields (struct value *val, struct ui_file *stream,
 		    {
 		      CORE_ADDR addr;
 
-		      i_offset += value_embedded_offset (val);
+		      i_offset += val->embedded_offset ();
 		      addr = extract_typed_address (valaddr + i_offset, i_type);
 		      print_function_pointer_address (opts,
 						      type->arch (),
@@ -330,8 +330,8 @@ cp_print_value_fields (struct value *val, struct ui_file *stream,
 		}
 	      else
 		{
-		  struct value *v = value_primitive_field (val, 0, i, type);
-		  opts->deref_ref = 0;
+		  struct value *v = val->primitive_field (0, i, type);
+		  opts->deref_ref = false;
 		  common_val_print (v, stream, recurse + 1, opts,
 				    current_language);
 		}
@@ -389,13 +389,13 @@ cp_print_value (struct value *val, struct ui_file *stream,
 		int recurse, const struct value_print_options *options,
 		struct type **dont_print_vb)
 {
-  struct type *type = check_typedef (value_type (val));
-  CORE_ADDR address = value_address (val);
+  struct type *type = check_typedef (val->type ());
+  CORE_ADDR address = val->address ();
   struct type **last_dont_print
     = (struct type **) obstack_next_free (&dont_print_vb_obstack);
   struct obstack tmp_obstack = dont_print_vb_obstack;
   int i, n_baseclasses = TYPE_N_BASECLASSES (type);
-  const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+  const gdb_byte *valaddr = val->contents_for_printing ().data ();
 
   if (dont_print_vb == 0)
     {
@@ -432,7 +432,7 @@ cp_print_value (struct value *val, struct ui_file *stream,
       try
 	{
 	  boffset = baseclass_offset (type, i, valaddr,
-				      value_embedded_offset (val),
+				      val->embedded_offset (),
 				      address, val);
 	}
       catch (const gdb_exception_error &ex)
@@ -451,17 +451,17 @@ cp_print_value (struct value *val, struct ui_file *stream,
 		 clobbered by the user program. Make sure that it
 		 still points to a valid memory location.  */
 
-	      if (boffset < 0 || boffset >= TYPE_LENGTH (type))
+	      if (boffset < 0 || boffset >= type->length ())
 		{
-		  gdb::byte_vector buf (TYPE_LENGTH (baseclass));
+		  gdb::byte_vector buf (baseclass->length ());
 
 		  if (target_read_memory (address + boffset, buf.data (),
-					  TYPE_LENGTH (baseclass)) != 0)
+					  baseclass->length ()) != 0)
 		    skip = 1;
 		  base_val = value_from_contents_and_address (baseclass,
 							      buf.data (),
 							      address + boffset);
-		  baseclass = value_type (base_val);
+		  baseclass = base_val->type ();
 		  boffset = 0;
 		}
 	      else
@@ -498,8 +498,8 @@ cp_print_value (struct value *val, struct ui_file *stream,
 	  if (!val_print_check_max_depth (stream, recurse, options,
 					  current_language))
 	    {
-	      struct value *baseclass_val = value_primitive_field (val, 0,
-								   i, type);
+	      struct value *baseclass_val = val->primitive_field (0,
+								  i, type);
 
 	      /* Attempt to run an extension language pretty-printer on the
 		 baseclass if possible.  */
@@ -550,7 +550,7 @@ cp_print_static_field (struct type *type,
 {
   struct value_print_options opts;
 
-  if (value_entirely_optimized_out (val))
+  if (val->entirely_optimized_out ())
     {
       val_print_optimized_out (val, stream);
       return;
@@ -560,7 +560,7 @@ cp_print_static_field (struct type *type,
   if (real_type->code () == TYPE_CODE_STRUCT)
     {
       CORE_ADDR *first_dont_print;
-      CORE_ADDR addr = value_address (val);
+      CORE_ADDR addr = val->address ();
       int i;
 
       first_dont_print
@@ -589,7 +589,7 @@ cp_print_static_field (struct type *type,
     {
       struct type **first_dont_print;
       int i;
-      struct type *target_type = TYPE_TARGET_TYPE (type);
+      struct type *target_type = type->target_type ();
 
       first_dont_print
 	= (struct type **) obstack_base (&dont_print_stat_array_obstack);
@@ -613,7 +613,7 @@ cp_print_static_field (struct type *type,
     }
 
   opts = *options;
-  opts.deref_ref = 0;
+  opts.deref_ref = false;
   common_val_print (val, stream, recurse, &opts, current_language);
 }
 
@@ -636,7 +636,10 @@ cp_find_class_member (struct type **self_p, int *fieldno,
 
   for (i = TYPE_N_BASECLASSES (self); i < len; i++)
     {
-      LONGEST bitpos = self->field (i).loc_bitpos ();
+      field &f = self->field (i);
+      if (field_is_static (&f))
+	continue;
+      LONGEST bitpos = f.loc_bitpos ();
 
       QUIT;
       if (offset == bitpos)
@@ -649,7 +652,7 @@ cp_find_class_member (struct type **self_p, int *fieldno,
   for (i = 0; i < TYPE_N_BASECLASSES (self); i++)
     {
       LONGEST bitpos = self->field (i).loc_bitpos ();
-      LONGEST bitsize = 8 * TYPE_LENGTH (self->field (i).type ());
+      LONGEST bitsize = 8 * self->field (i).type ()->length ();
 
       if (offset >= bitpos && offset < bitpos + bitsize)
 	{
@@ -676,7 +679,7 @@ cp_print_class_member (const gdb_byte *valaddr, struct type *type,
   int fieldno;
 
   val = extract_signed_integer (valaddr,
-				TYPE_LENGTH (type),
+				type->length (),
 				byte_order);
 
   /* Pointers to data members are usually byte offsets into an object.
@@ -726,7 +729,7 @@ test_print_fields (gdbarch *arch)
   type *uint8_type = builtin_type (arch)->builtin_uint8;
   type *bool_type = builtin_type (arch)->builtin_bool;
   type *the_struct = arch_composite_type (arch, NULL, TYPE_CODE_STRUCT);
-  TYPE_LENGTH (the_struct) = 4;
+  the_struct->set_length (4);
 
   /* Value:  1110 1001
      Fields: C-BB B-A- */
@@ -758,9 +761,9 @@ test_print_fields (gdbarch *arch)
       FIELD_BITSIZE (*f) = 1;
     }
 
-  value *val = allocate_value (the_struct);
-  gdb_byte *contents = value_contents_writeable (val).data ();
-  store_unsigned_integer (contents, TYPE_LENGTH (value_enclosing_type (val)),
+  value *val = value::allocate (the_struct);
+  gdb_byte *contents = val->contents_writeable ().data ();
+  store_unsigned_integer (contents, val->enclosing_type ()->length (),
 			  gdbarch_byte_order (arch), 0xe9);
 
   string_file out;

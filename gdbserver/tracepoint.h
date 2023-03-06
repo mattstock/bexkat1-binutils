@@ -1,5 +1,5 @@
 /* Tracepoint code for remote server for GDB.
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -95,7 +95,7 @@ int traceframe_read_sdata (int tfnum, ULONGEST offset,
 			   unsigned char *buf, ULONGEST length,
 			   ULONGEST *nbytes);
 
-int traceframe_read_info (int tfnum, struct buffer *buffer);
+int traceframe_read_info (int tfnum, std::string *buffer);
 
 /* If a thread is determined to be collecting a fast tracepoint, this
    structure holds the collect status.  */

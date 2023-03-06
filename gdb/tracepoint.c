@@ -1,6 +1,6 @@
 /* Tracing functionality for remote targets in custom GDB protocol
 
-   Copyright (C) 1997-2022 Free Software Foundation, Inc.
+   Copyright (C) 1997-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -206,7 +206,7 @@ set_tracepoint_num (int num)
    the traceframe context (line, function, file).  */
 
 static void
-set_traceframe_context (struct frame_info *trace_frame)
+set_traceframe_context (frame_info_ptr trace_frame)
 {
   CORE_ADDR trace_pc;
   struct symbol *traceframe_fun;
@@ -541,9 +541,9 @@ decode_agent_options (const char *exp, int *trace_string)
       if (target_supports_string_tracing ())
 	{
 	  /* Allow an optional decimal number giving an explicit maximum
-	     string length, defaulting it to the "print elements" value;
+	     string length, defaulting it to the "print characters" value;
 	     so "collect/s80 mystr" gets at most 80 bytes of string.  */
-	  *trace_string = opts.print_max;
+	  *trace_string = get_print_max_chars (&opts);
 	  exp++;
 	  if (*exp >= '0' && *exp <= '9')
 	    *trace_string = atoi (exp);
@@ -594,13 +594,12 @@ report_agent_reqs_errors (struct agent_expr *aexpr)
   /* All of the "flaws" are serious bytecode generation issues that
      should never occur.  */
   if (aexpr->flaw != agent_flaw_none)
-    internal_error (__FILE__, __LINE__, _("expression is malformed"));
+    internal_error (_("expression is malformed"));
 
   /* If analysis shows a stack underflow, GDB must have done something
      badly wrong in its bytecode generation.  */
   if (aexpr->min_height < 0)
-    internal_error (__FILE__, __LINE__,
-		    _("expression has min height < 0"));
+    internal_error (_("expression has min height < 0"));
 
   /* Issue this error if the stack is predicted to get too deep.  The
      limit is rather arbitrary; a better scheme might be for the
@@ -687,7 +686,7 @@ validate_actionline (const char *line, struct breakpoint *b)
 		{
 		  symbol *sym;
 		  expr::var_value_operation *vvop
-		    = (dynamic_cast<expr::var_value_operation *>
+		    = (gdb::checked_static_cast<expr::var_value_operation *>
 		       (exp->op.get ()));
 		  sym = vvop->get_symbol ();
 
@@ -922,7 +921,7 @@ collection_list::collect_symbol (struct symbol *sym,
   bfd_signed_vma offset;
   int treat_as_expr = 0;
 
-  len = TYPE_LENGTH (check_typedef (sym->type ()));
+  len = check_typedef (sym->type ())->length ();
   switch (sym->aclass ())
     {
     default:
@@ -1357,15 +1356,14 @@ encode_actions_1 (struct command_line *action,
 		    case OP_REGISTER:
 		      {
 			expr::register_operation *regop
-			  = (dynamic_cast<expr::register_operation *>
+			  = (gdb::checked_static_cast<expr::register_operation *>
 			     (exp->op.get ()));
 			const char *name = regop->get_name ();
 
 			i = user_reg_map_name_to_regnum (target_gdbarch (),
 							 name, strlen (name));
 			if (i == -1)
-			  internal_error (__FILE__, __LINE__,
-					  _("Register $%s not available"),
+			  internal_error (_("Register $%s not available"),
 					  name);
 			if (info_verbose)
 			  gdb_printf ("OP_REGISTER: ");
@@ -1378,16 +1376,16 @@ encode_actions_1 (struct command_line *action,
 		      {
 			/* Safe because we know it's a simple expression.  */
 			tempval = evaluate_expression (exp.get ());
-			addr = value_address (tempval);
+			addr = tempval->address ();
 			expr::unop_memval_operation *memop
-			  = (dynamic_cast<expr::unop_memval_operation *>
+			  = (gdb::checked_static_cast<expr::unop_memval_operation *>
 			     (exp->op.get ()));
 			struct type *type = memop->get_type ();
 			/* Initialize the TYPE_LENGTH if it is a typedef.  */
 			check_typedef (type);
 			collect->add_memrange (target_gdbarch (),
 					       memrange_absolute, addr,
-					       TYPE_LENGTH (type),
+					       type->length (),
 					       tloc->address);
 			collect->append_exp (std::string (exp_start,
 							  action_exp));
@@ -1397,7 +1395,7 @@ encode_actions_1 (struct command_line *action,
 		    case OP_VAR_VALUE:
 		      {
 			expr::var_value_operation *vvo
-			  = (dynamic_cast<expr::var_value_operation *>
+			  = (gdb::checked_static_cast<expr::var_value_operation *>
 			     (exp->op.get ()));
 			struct symbol *sym = vvo->get_symbol ();
 			const char *name = sym->natural_name ();
@@ -2190,8 +2188,7 @@ tfind_1 (enum trace_find_type type, int num,
 	 function and it's arguments) -- otherwise we'll just show the
 	 new source line.  */
 
-      if (frame_id_eq (old_frame_id,
-		       get_frame_id (get_current_frame ())))
+      if (old_frame_id == get_frame_id (get_current_frame ()))
 	print_what = SRC_LINE;
       else
 	print_what = SRC_AND_LOC;
@@ -2462,12 +2459,10 @@ tfind_outside_command (const char *args, int from_tty)
 static void
 info_scope_command (const char *args_in, int from_tty)
 {
-  struct symbol *sym;
   struct bound_minimal_symbol msym;
   const struct block *block;
   const char *symname;
   const char *save_args = args_in;
-  struct block_iterator iter;
   int j, count = 0;
   struct gdbarch *gdbarch;
   int regno;
@@ -2477,10 +2472,10 @@ info_scope_command (const char *args_in, int from_tty)
     error (_("requires an argument (function, "
 	     "line or *addr) to define a scope"));
 
-  event_location_up location = string_to_event_location (&args,
-							 current_language);
+  location_spec_up locspec = string_to_location_spec (&args,
+						      current_language);
   std::vector<symtab_and_line> sals
-    = decode_line_1 (location.get (), DECODE_LINE_FUNFIRSTLINE,
+    = decode_line_1 (locspec.get (), DECODE_LINE_FUNFIRSTLINE,
 		     NULL, NULL, 0);
   if (sals.empty ())
     {
@@ -2495,7 +2490,7 @@ info_scope_command (const char *args_in, int from_tty)
   while (block != 0)
     {
       QUIT;			/* Allow user to bail out with ^C.  */
-      ALL_BLOCK_SYMBOLS (block, iter, sym)
+      for (struct symbol *sym : block_iterator_range (block))
 	{
 	  QUIT;			/* Allow user to bail out with ^C.  */
 	  if (count == 0)
@@ -2506,13 +2501,13 @@ info_scope_command (const char *args_in, int from_tty)
 	  if (symname == NULL || *symname == '\0')
 	    continue;		/* Probably botched, certainly useless.  */
 
-	  gdbarch = symbol_arch (sym);
+	  gdbarch = sym->arch ();
 
 	  gdb_printf ("Symbol %s is ", symname);
 
 	  if (SYMBOL_COMPUTED_OPS (sym) != NULL)
 	    SYMBOL_COMPUTED_OPS (sym)->describe_location (sym,
-							  BLOCK_ENTRY_PC (block),
+							  block->entry_pc (),
 							  gdb_stdout);
 	  else
 	    {
@@ -2532,7 +2527,7 @@ info_scope_command (const char *args_in, int from_tty)
 		case LOC_CONST_BYTES:
 		  gdb_printf ("constant bytes: ");
 		  if (sym->type ())
-		    for (j = 0; j < TYPE_LENGTH (sym->type ()); j++)
+		    for (j = 0; j < sym->type ()->length (); j++)
 		      gdb_printf (" %02x", (unsigned) sym->value_bytes ()[j]);
 		  break;
 		case LOC_STATIC:
@@ -2587,7 +2582,7 @@ info_scope_command (const char *args_in, int from_tty)
 		  gdb_printf ("a function at address ");
 		  gdb_printf ("%s",
 			      paddress (gdbarch,
-					BLOCK_ENTRY_PC (sym->value_block ())));
+					sym->value_block ()->entry_pc ()));
 		  break;
 		case LOC_UNRESOLVED:
 		  msym = lookup_minimal_symbol (sym->linkage_name (),
@@ -2612,13 +2607,13 @@ info_scope_command (const char *args_in, int from_tty)
 	    {
 	      struct type *t = check_typedef (sym->type ());
 
-	      gdb_printf (", length %s.\n", pulongest (TYPE_LENGTH (t)));
+	      gdb_printf (", length %s.\n", pulongest (t->length ()));
 	    }
 	}
-      if (BLOCK_FUNCTION (block))
+      if (block->function ())
 	break;
       else
-	block = BLOCK_SUPERBLOCK (block);
+	block = block->superblock ();
     }
   if (count <= 0)
     gdb_printf ("Scope for %s contains no locals or arguments.\n",
@@ -3780,12 +3775,12 @@ sdata_make_value (struct gdbarch *gdbarch, struct internalvar *var,
 
       type = init_vector_type (builtin_type (gdbarch)->builtin_true_char,
 			       buf->size ());
-      v = allocate_value (type);
-      memcpy (value_contents_raw (v).data (), buf->data (), buf->size ());
+      v = value::allocate (type);
+      memcpy (v->contents_raw ().data (), buf->data (), buf->size ());
       return v;
     }
   else
-    return allocate_value (builtin_type (gdbarch)->builtin_void);
+    return value::allocate (builtin_type (gdbarch)->builtin_void);
 }
 
 #if !defined(HAVE_LIBEXPAT)

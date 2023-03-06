@@ -1,6 +1,6 @@
 /* Target-dependent code for FreeBSD/mips.
 
-   Copyright (C) 2017-2022 Free Software Foundation, Inc.
+   Copyright (C) 2017-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -275,7 +275,7 @@ mips_fbsd_iterate_over_regset_sections (struct gdbarch *gdbarch,
 
 static void
 mips_fbsd_sigframe_init (const struct tramp_frame *self,
-			 struct frame_info *this_frame,
+			 frame_info_ptr this_frame,
 			 struct trad_frame_cache *cache,
 			 CORE_ADDR func)
 {
@@ -367,7 +367,7 @@ static const struct tramp_frame mips_fbsd_sigframe =
 
 static void
 mips64_fbsd_sigframe_init (const struct tramp_frame *self,
-			   struct frame_info *this_frame,
+			   frame_info_ptr this_frame,
 			   struct trad_frame_cache *cache,
 			   CORE_ADDR func)
 {
@@ -495,6 +495,7 @@ mips_fbsd_ilp32_fetch_link_map_offsets (void)
       lmo.r_map_offset = 4;
       lmo.r_brk_offset = 8;
       lmo.r_ldsomap_offset = -1;
+      lmo.r_next_offset = -1;
 
       lmo.link_map_size = 24;
       lmo.l_addr_offset = 0;
@@ -522,6 +523,7 @@ mips_fbsd_lp64_fetch_link_map_offsets (void)
       lmo.r_map_offset = 8;
       lmo.r_brk_offset = 16;
       lmo.r_ldsomap_offset = -1;
+      lmo.r_next_offset = -1;
 
       lmo.link_map_size = 48;
       lmo.l_addr_offset = 0;

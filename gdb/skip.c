@@ -1,6 +1,6 @@
 /* Skipping uninteresting files and functions while stepping.
 
-   Copyright (C) 2011-2022 Free Software Foundation, Inc.
+   Copyright (C) 2011-2023 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -204,7 +204,7 @@ skip_function_command (const char *arg, int from_tty)
   /* Default to the current function if no argument is given.  */
   if (arg == NULL)
     {
-      frame_info *fi = get_selected_frame (_("No default function now."));
+      frame_info_ptr fi = get_selected_frame (_("No default function now."));
       struct symbol *sym = get_frame_function (fi);
       const char *name = NULL;
 

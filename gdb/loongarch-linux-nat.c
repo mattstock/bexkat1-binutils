@@ -1,6 +1,6 @@
 /* Native-dependent code for GNU/Linux on LoongArch processors.
 
-   Copyright (C) 2022 Free Software Foundation, Inc.
+   Copyright (C) 2022-2023 Free Software Foundation, Inc.
    Contributed by Loongson Ltd.
 
    This file is part of GDB.
@@ -40,23 +40,22 @@ public:
 
 protected:
   /* Override linux_nat_trad_target methods.  */
-  CORE_ADDR register_u_offset (struct gdbarch *gdbarch, int regno,
-                               int store_p) override;
+  CORE_ADDR register_u_offset (struct gdbarch *gdbarch, int regnum,
+			       int store_p) override;
 };
 
-/* Fill GDB's register array with the general-purpose, pc and badv
+/* Fill GDB's register array with the general-purpose, orig_a0, pc and badv
    register values from the current thread.  */
 
 static void
-fetch_gregs_from_thread (struct regcache *regcache, int regno, pid_t tid)
+fetch_gregs_from_thread (struct regcache *regcache, int regnum, pid_t tid)
 {
-  loongarch_gdbarch_tdep *tdep
-    = (loongarch_gdbarch_tdep *) gdbarch_tdep (regcache->arch ());
-  auto regs = tdep->regs;
   elf_gregset_t regset;
 
-  if (regno == -1 || (regs.r <= regno && regno < regs.r + 32)
-      || regs.pc == regno || regs.badv == regno)
+  if (regnum == -1 || (regnum >= 0 && regnum < 32)
+      || regnum == LOONGARCH_ORIG_A0_REGNUM
+      || regnum == LOONGARCH_PC_REGNUM
+      || regnum == LOONGARCH_BADV_REGNUM)
   {
     struct iovec iov;
 
@@ -66,24 +65,23 @@ fetch_gregs_from_thread (struct regcache *regcache, int regno, pid_t tid)
     if (ptrace (PTRACE_GETREGSET, tid, NT_PRSTATUS, (long) &iov) < 0)
       perror_with_name (_("Couldn't get NT_PRSTATUS registers"));
     else
-      loongarch_gregset.supply_regset (nullptr, regcache, regno,
+      loongarch_gregset.supply_regset (nullptr, regcache, regnum,
 				       &regset, sizeof (regset));
   }
 }
 
-/* Store to the current thread the valid general-purpose, pc and badv
+/* Store to the current thread the valid general-purpose, orig_a0, pc and badv
    register values in the GDB's register array.  */
 
 static void
-store_gregs_to_thread (struct regcache *regcache, int regno, pid_t tid)
+store_gregs_to_thread (struct regcache *regcache, int regnum, pid_t tid)
 {
-  loongarch_gdbarch_tdep *tdep
-    = (loongarch_gdbarch_tdep *) gdbarch_tdep (regcache->arch ());
-  auto regs = tdep->regs;
   elf_gregset_t regset;
 
-  if (regno == -1 || (regs.r <= regno && regno < regs.r + 32)
-      || regs.pc == regno || regs.badv == regno)
+  if (regnum == -1 || (regnum >= 0 && regnum < 32)
+      || regnum == LOONGARCH_ORIG_A0_REGNUM
+      || regnum == LOONGARCH_PC_REGNUM
+      || regnum == LOONGARCH_BADV_REGNUM)
   {
     struct iovec iov;
 
@@ -94,7 +92,7 @@ store_gregs_to_thread (struct regcache *regcache, int regno, pid_t tid)
       perror_with_name (_("Couldn't get NT_PRSTATUS registers"));
     else
       {
-	loongarch_gregset.collect_regset (nullptr, regcache, regno,
+	loongarch_gregset.collect_regset (nullptr, regcache, regnum,
 					  &regset, sizeof (regset));
 	if (ptrace (PTRACE_SETREGSET, tid, NT_PRSTATUS, (long) &iov) < 0)
 	  perror_with_name (_("Couldn't set NT_PRSTATUS registers"));
@@ -102,43 +100,86 @@ store_gregs_to_thread (struct regcache *regcache, int regno, pid_t tid)
   }
 }
 
+/* Fill GDB's register array with the fp, fcc and fcsr
+   register values from the current thread.  */
+
+static void
+fetch_fpregs_from_thread (struct regcache *regcache, int regnum, pid_t tid)
+{
+  elf_fpregset_t regset;
+
+  if ((regnum == -1)
+      || (regnum >= LOONGARCH_FIRST_FP_REGNUM && regnum <= LOONGARCH_FCSR_REGNUM))
+    {
+      struct iovec iovec = { .iov_base = &regset, .iov_len = sizeof (regset) };
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_FPREGSET, (long) &iovec) < 0)
+	perror_with_name (_("Couldn't get NT_FPREGSET registers"));
+      else
+	loongarch_fpregset.supply_regset (nullptr, regcache, regnum,
+					  &regset, sizeof (regset));
+    }
+}
+
+/* Store to the current thread the valid fp, fcc and fcsr
+   register values in the GDB's register array.  */
+
+static void
+store_fpregs_to_thread (struct regcache *regcache, int regnum, pid_t tid)
+{
+  elf_fpregset_t regset;
+
+  if ((regnum == -1)
+      || (regnum >= LOONGARCH_FIRST_FP_REGNUM && regnum <= LOONGARCH_FCSR_REGNUM))
+    {
+      struct iovec iovec = { .iov_base = &regset, .iov_len = sizeof (regset) };
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_FPREGSET, (long) &iovec) < 0)
+	perror_with_name (_("Couldn't get NT_FPREGSET registers"));
+      else
+	{
+	  loongarch_fpregset.collect_regset (nullptr, regcache, regnum,
+					     &regset, sizeof (regset));
+	  if (ptrace (PTRACE_SETREGSET, tid, NT_FPREGSET, (long) &iovec) < 0)
+	    perror_with_name (_("Couldn't set NT_FPREGSET registers"));
+	}
+    }
+}
+
 /* Implement the "fetch_registers" target_ops method.  */
 
 void
 loongarch_linux_nat_target::fetch_registers (struct regcache *regcache,
-					     int regno)
+					     int regnum)
 {
   pid_t tid = get_ptrace_pid (regcache->ptid ());
 
-  fetch_gregs_from_thread(regcache, regno, tid);
+  fetch_gregs_from_thread(regcache, regnum, tid);
+  fetch_fpregs_from_thread(regcache, regnum, tid);
 }
 
 /* Implement the "store_registers" target_ops method.  */
 
 void
 loongarch_linux_nat_target::store_registers (struct regcache *regcache,
-					     int regno)
+					     int regnum)
 {
   pid_t tid = get_ptrace_pid (regcache->ptid ());
 
-  store_gregs_to_thread (regcache, regno, tid);
+  store_gregs_to_thread (regcache, regnum, tid);
+  store_fpregs_to_thread(regcache, regnum, tid);
 }
 
 /* Return the address in the core dump or inferior of register REGNO.  */
 
 CORE_ADDR
 loongarch_linux_nat_target::register_u_offset (struct gdbarch *gdbarch,
-					       int regno, int store_p)
+					       int regnum, int store_p)
 {
-  loongarch_gdbarch_tdep *tdep
-    = (loongarch_gdbarch_tdep *) gdbarch_tdep (gdbarch);
-  auto regs = tdep->regs;
-
-  /* According to <asm/ptrace.h> */
-  if (0 <= regs.r && regs.r <= regno && regno < regs.r + GPR_NUM)
-    return GPR_BASE + regno - regs.r;
-  else if (regs.pc == regno)
-    return PC;
+  if (regnum >= 0 && regnum < 32)
+    return regnum;
+  else if (regnum == LOONGARCH_PC_REGNUM)
+    return LOONGARCH_PC_REGNUM;
   else
     return -1;
 }
@@ -156,21 +197,25 @@ supply_gregset (struct regcache *regcache, const gdb_gregset_t *gregset)
 
 void
 fill_gregset (const struct regcache *regcache, gdb_gregset_t *gregset,
-	      int regno)
+	      int regnum)
 {
-  loongarch_gregset.collect_regset (nullptr, regcache, regno, gregset,
+  loongarch_gregset.collect_regset (nullptr, regcache, regnum, gregset,
 				    sizeof (gdb_gregset_t));
 }
 
 void
 supply_fpregset (struct regcache *regcache, const gdb_fpregset_t *fpregset)
 {
+  loongarch_fpregset.supply_regset (nullptr, regcache, -1, fpregset,
+				    sizeof (gdb_fpregset_t));
 }
 
 void
 fill_fpregset (const struct regcache *regcache, gdb_fpregset_t *fpregset,
-	       int regno)
+	       int regnum)
 {
+  loongarch_fpregset.collect_regset (nullptr, regcache, regnum, fpregset,
+				     sizeof (gdb_fpregset_t));
 }
 
 /* Initialize LoongArch Linux native support.  */

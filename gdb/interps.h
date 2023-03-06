@@ -1,6 +1,6 @@
 /* Manages interpreters for GDB, the GNU debugger.
 
-   Copyright (C) 2000-2022 Free Software Foundation, Inc.
+   Copyright (C) 2000-2023 Free Software Foundation, Inc.
 
    Written by Jim Ingham <jingham@apple.com> of Apple Computer, Inc.
 
@@ -36,8 +36,7 @@ typedef struct interp *(*interp_factory_func) (const char *name);
 extern void interp_factory_register (const char *name,
 				     interp_factory_func func);
 
-extern struct gdb_exception interp_exec (struct interp *interp,
-					 const char *command);
+extern void interp_exec (struct interp *interp, const char *command);
 
 class interp
 {
@@ -51,7 +50,7 @@ public:
   virtual void resume () = 0;
   virtual void suspend () = 0;
 
-  virtual gdb_exception exec (const char *command) = 0;
+  virtual void exec (const char *command) = 0;
 
   /* Returns the ui_out currently used to collect results for this
      interpreter.  It can be a formatter for stdout, as is the case
@@ -78,20 +77,20 @@ public:
 
   const char *name () const
   {
-    return m_name;
+    return m_name.get ();
   }
 
-  /* This is the name in "-i=" and "set interpreter".  */
 private:
-  char *m_name;
+  /* This is the name in "-i=" and "set interpreter".  */
+  gdb::unique_xmalloc_ptr<char> m_name;
 
+public:
   /* Interpreters are stored in a linked list, this is the next
      one...  */
-public:
   struct interp *next;
 
   /* Has the init method been run?  */
-  bool inited;
+  bool inited = false;
 };
 
 /* Look up the interpreter for NAME, creating one if none exists yet.
@@ -175,9 +174,9 @@ extern void interpreter_completer (struct cmd_list_element *ignore,
 
 /* well-known interpreters */
 #define INTERP_CONSOLE		"console"
-#define INTERP_MI1             "mi1"
 #define INTERP_MI2             "mi2"
 #define INTERP_MI3             "mi3"
+#define INTERP_MI4             "mi4"
 #define INTERP_MI		"mi"
 #define INTERP_TUI		"tui"
 #define INTERP_INSIGHT		"insight"

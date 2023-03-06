@@ -1,6 +1,6 @@
 /* BFD library -- caching of file descriptors.
 
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    Hacked by Steve Chamberlain of Cygnus Support (steve@cygnus.com).
 
@@ -177,6 +177,7 @@ bfd_cache_delete (bfd *abfd)
 
   abfd->iostream = NULL;
   --open_files;
+  abfd->flags |= BFD_CLOSED_BY_CACHE;
 
   return ret;
 }
@@ -265,10 +266,13 @@ bfd_cache_lookup_worker (bfd *abfd, enum cache_flag flag)
 	   && !(flag & CACHE_NO_SEEK_ERROR))
     bfd_set_error (bfd_error_system_call);
   else
-    return (FILE *) abfd->iostream;
+    {
+      abfd->flags &= ~BFD_CLOSED_BY_CACHE;
+      return (FILE *) abfd->iostream;
+    }
 
   /* xgettext:c-format */
-  _bfd_error_handler (_("reopening %pB: %s\n"),
+  _bfd_error_handler (_("reopening %pB: %s"),
 		      abfd, bfd_errmsg (bfd_get_error ()));
   return NULL;
 }
@@ -517,7 +521,6 @@ DESCRIPTION
 	Remove the BFD @var{abfd} from the cache. If the attached file is open,
 	then close it too.
 
-RETURNS
 	<<FALSE>> is returned if closing the file fails, <<TRUE>> is
 	returned if all is well.
 */
@@ -546,7 +549,6 @@ DESCRIPTION
 	Remove all BFDs from the cache. If the attached file is open,
 	then close it too.
 
-RETURNS
 	<<FALSE>> is returned if closing one of the file fails, <<TRUE>> is
 	returned if all is well.
 */

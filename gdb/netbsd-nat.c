@@ -1,6 +1,6 @@
 /* Native-dependent code for NetBSD.
 
-   Copyright (C) 2006-2022 Free Software Foundation, Inc.
+   Copyright (C) 2006-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -25,6 +25,7 @@
 #include "netbsd-tdep.h"
 #include "inferior.h"
 #include "gdbarch.h"
+#include "gdbsupport/buildargv.h"
 
 #include <sys/types.h>
 #include <sys/ptrace.h>
@@ -34,10 +35,10 @@
 /* Return the name of a file that can be opened to get the symbols for
    the child process identified by PID.  */
 
-char *
+const char *
 nbsd_nat_target::pid_to_exec_file (int pid)
 {
-  return const_cast<char *> (netbsd_nat::pid_to_exec_file (pid));
+  return netbsd_nat::pid_to_exec_file (pid);
 }
 
 /* Return the current directory for the process identified by PID.  */
@@ -221,7 +222,7 @@ nbsd_nat_target::find_memory_regions (find_memory_region_ftype func,
   gdb::unique_xmalloc_ptr<struct kinfo_vmentry[]> vmentl
     = nbsd_kinfo_get_vmmap (pid, &nitems);
   if (vmentl == NULL)
-    perror_with_name (_("Couldn't fetch VM map entries."));
+    perror_with_name (_("Couldn't fetch VM map entries"));
 
   for (size_t i = 0; i < nitems; i++)
     {
@@ -259,7 +260,7 @@ nbsd_nat_target::find_memory_regions (find_memory_region_ftype func,
 	 Pass MODIFIED as true, we do not know the real modification state.  */
       func (kve->kve_start, size, kve->kve_protection & KVME_PROT_READ,
 	    kve->kve_protection & KVME_PROT_WRITE,
-	    kve->kve_protection & KVME_PROT_EXEC, 1, data);
+	    kve->kve_protection & KVME_PROT_EXEC, 1, false, data);
     }
   return 0;
 }

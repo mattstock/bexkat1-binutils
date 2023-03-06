@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,7 +20,6 @@
 #ifndef TOP_H
 #define TOP_H
 
-#include "gdbsupport/buffer.h"
 #include "gdbsupport/event-loop.h"
 #include "gdbsupport/next-iterator.h"
 #include "value.h"
@@ -61,14 +60,14 @@ struct ui
   DISABLE_COPY_AND_ASSIGN (ui);
 
   /* Pointer to next in singly-linked list.  */
-  struct ui *next;
+  struct ui *next = nullptr;
 
   /* Convenient handle (UI number).  Unique across all UIs.  */
   int num;
 
   /* The UI's command line buffer.  This is to used to accumulate
      input until we have a whole command line.  */
-  struct buffer line_buffer;
+  std::string line_buffer;
 
   /* The callback used by the event loop whenever an event is detected
      on the UI's input file descriptor.  This function incrementally
@@ -76,19 +75,19 @@ struct ui
      point of invocation.  In the special case in which the character
      read is newline, the function invokes the INPUT_HANDLER callback
      (see below).  */
-  void (*call_readline) (gdb_client_data);
+  void (*call_readline) (gdb_client_data) = nullptr;
 
   /* The function to invoke when a complete line of input is ready for
      processing.  */
-  void (*input_handler) (gdb::unique_xmalloc_ptr<char> &&);
+  void (*input_handler) (gdb::unique_xmalloc_ptr<char> &&) = nullptr;
 
   /* True if this UI is using the readline library for command
      editing; false if using GDB's own simple readline emulation, with
      no editing support.  */
-  int command_editing;
+  int command_editing = 0;
 
   /* Each UI has its own independent set of interpreters.  */
-  struct ui_interp_info *interp_info;
+  struct ui_interp_info *interp_info = nullptr;
 
   /* True if the UI is in async mode, false if in sync mode.  If in
      sync mode, a synchronous execution command (e.g, "next") does not
@@ -98,11 +97,11 @@ struct ui
      the top event loop.  For the main UI, this starts out disabled,
      until all the explicit command line arguments (e.g., `gdb -ex
      "start" -ex "next"') are processed.  */
-  int async;
+  int async = 0;
 
   /* The number of nested readline secondary prompts that are
      currently active.  */
-  int secondary_prompt_depth;
+  int secondary_prompt_depth = 0;
 
   /* The UI's stdin.  Set to stdin for the main UI.  */
   FILE *stdin_stream;
@@ -118,16 +117,17 @@ struct ui
   FILE *errstream;
 
   /* The file descriptor for the input stream, so that we can register
-     it with the event loop.  */
+     it with the event loop.  This can be set to -1 to prevent this
+     registration.  */
   int input_fd;
 
   /* Whether ISATTY returns true on input_fd.  Cached here because
      quit_force needs to know this _after_ input_fd might be
      closed.  */
-  int input_interactive_p;
+  bool m_input_interactive_p;
 
   /* See enum prompt_state's description.  */
-  enum prompt_state prompt_state;
+  enum prompt_state prompt_state = PROMPT_NEEDED;
 
   /* The fields below that start with "m_" are "private".  They're
      meant to be accessed through wrapper macros that make them look
@@ -141,13 +141,20 @@ struct ui
   /* Serious error notifications */
   struct ui_file *m_gdb_stderr;
   /* Log/debug/trace messages that should bypass normal stdout/stderr
-     filtering.  For moment, always call this stream using
-     *_unfiltered.  In the very near future that restriction shall be
-     removed - either call shall be unfiltered.  (cagney 1999-06-13).  */
+     filtering.  */
   struct ui_file *m_gdb_stdlog;
 
   /* The current ui_out.  */
-  struct ui_out *m_current_uiout;
+  struct ui_out *m_current_uiout = nullptr;
+
+  /* Register the UI's input file descriptor in the event loop.  */
+  void register_file_handler ();
+
+  /* Unregister the UI's input file descriptor from the event loop.  */
+  void unregister_file_handler ();
+
+  /* Return true if this UI's input fd is a tty.  */
+  bool input_interactive_p () const;
 };
 
 /* The main UI.  This is the UI that is bound to stdin/stdout/stderr.
@@ -211,12 +218,6 @@ ui_range all_uis ()
   return ui_range (ui_list);
 }
 
-/* Register the UI's input file descriptor in the event loop.  */
-extern void ui_register_input_event_handler (struct ui *ui);
-
-/* Unregister the UI's input file descriptor from the event loop.  */
-extern void ui_unregister_input_event_handler (struct ui *ui);
-
 /* From top.c.  */
 extern bool confirm;
 extern int inhibit_gdbinit;
@@ -234,7 +235,7 @@ extern void read_command_file (FILE *);
 extern void init_history (void);
 extern void command_loop (void);
 extern int quit_confirm (void);
-extern void quit_force (int *, int);
+extern void quit_force (int *, int) ATTRIBUTE_NORETURN;
 extern void quit_command (const char *, int);
 extern void quit_cover (void);
 extern void execute_command (const char *, int);
@@ -287,9 +288,9 @@ extern void show_commands (const char *args, int from_tty);
 
 extern void set_verbose (const char *, int, struct cmd_list_element *);
 
-extern char *handle_line_of_input (struct buffer *cmd_line_buffer,
-				   const char *rl, int repeat,
-				   const char *annotation_suffix);
+extern const char *handle_line_of_input (std::string &cmd_line_buffer,
+					 const char *rl, int repeat,
+					 const char *annotation_suffix);
 
 /* Call at startup to see if the user has requested that gdb start up
    quietly.  */

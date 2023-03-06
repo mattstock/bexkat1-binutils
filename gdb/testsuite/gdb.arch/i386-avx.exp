@@ -1,4 +1,4 @@
-# Copyright 2010-2022 Free Software Foundation, Inc.
+# Copyright 2010-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,21 +19,11 @@
 # This file is part of the gdb testsuite.
 
 
-if { ![istarget i?86-*-*] && ![istarget x86_64-*-* ] } {
-    verbose "Skipping x86 AVX tests."
-    return
-}
+require {is_any_target i?86-*-* x86_64-*-*}
 
-if { ![have_avx] } {
-    verbose "Skipping x86 AVX tests."
-    return
-}
+require have_avx
 
 standard_testfile .c
-
-if [get_compiler_info] {
-    return -1
-}
 
 set flags { debug }
 
@@ -52,7 +42,7 @@ if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable \
 
 clean_restart ${binfile}
 
-if ![runto_main] then {
+if {![runto_main]} {
     return 0
 }
 
@@ -104,7 +94,7 @@ with_test_prefix "force-disable xml descriptions" {
 	    clean_restart ${binfile}
 	}
 
-	if ![runto_main] then {
+	if {![runto_main]} {
 	    return
 	}
 

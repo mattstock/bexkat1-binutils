@@ -1,4 +1,4 @@
-# Copyright (C) 2009-2022 Free Software Foundation, Inc.
+# Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,10 +20,6 @@ load_lib gdb-python.exp
 
 standard_testfile
 
-if [get_compiler_info c++] {
-    return -1
-}
-
 # Build inferior to language specification.
 proc build_inferior {exefile lang} {
   global srcdir subdir srcfile testfile hex
@@ -38,15 +34,9 @@ proc build_inferior {exefile lang} {
 
 # Restart GDB.
 proc restart_gdb {exefile} { 
-  global srcdir subdir srcfile testfile hex
+  clean_restart $exefile
 
-  gdb_exit
-  gdb_start
-  gdb_reinitialize_dir $srcdir/$subdir
-  gdb_load ${exefile}
-
-  if ![runto_main ] then {
-      perror "couldn't run to breakpoint"
+  if {![runto_main]} {
       return
   }
 }
@@ -356,7 +346,7 @@ if { [build_inferior "${binfile}" "c"] == 0 } {
   restart_gdb "${binfile}"
 
   # Skip all tests if Python scripting is not enabled.
-  if { [skip_python_tests] } { continue }
+  if { ![allow_python_tests] } { continue }
 
   gdb_test "python print (gdb.lookup_type ('char').objfile)" "None"
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2011-2022 Free Software Foundation, Inc.
+/* Copyright (C) 2011-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -17,8 +17,6 @@
 
 #ifndef NAT_LINUX_PTRACE_H
 #define NAT_LINUX_PTRACE_H
-
-struct buffer;
 
 #include "nat/gdb_ptrace.h"
 #include "gdbsupport/gdb_wait.h"

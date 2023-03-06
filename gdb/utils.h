@@ -1,7 +1,5 @@
-/* *INDENT-OFF* */ /* ATTRIBUTE_PRINTF confuses indent, avoid running it
-		      for now.  */
 /* I/O, string, cleanup, and other random utilities for GDB.
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -25,10 +23,6 @@
 #include "gdbsupport/array-view.h"
 #include "gdbsupport/scoped_restore.h"
 #include <chrono>
-
-#ifdef HAVE_LIBXXHASH
-#include <xxhash.h>
-#endif
 
 struct completion_match_for_lcd;
 class compiled_regex;
@@ -97,20 +91,6 @@ extern int strncmp_iw (const char *string1, const char *string2,
 extern int strcmp_iw (const char *string1, const char *string2);
 
 extern int strcmp_iw_ordered (const char *, const char *);
-
-/* Return true if the strings are equal.  */
-
-extern bool streq (const char *, const char *);
-
-extern int subset_compare (const char *, const char *);
-
-/* Compare C strings for std::sort.  */
-
-static inline bool
-compare_cstrings (const char *str1, const char *str2)
-{
-  return strcmp (str1, str2) < 0;
-}
 
 /* Reset the prompt_for_continue clock.  */
 void reset_prompt_for_continue_wait_time (void);
@@ -278,9 +258,6 @@ extern void fputs_styled (const char *linebuffer,
 extern void fputs_highlighted (const char *str, const compiled_regex &highlight,
 			       struct ui_file *stream);
 
-/* Return the address only having significant bits.  */
-extern CORE_ADDR address_significant (gdbarch *gdbarch, CORE_ADDR addr);
-
 /* Convert CORE_ADDR to string in platform-specific manner.
    This is usually formatted similar to 0x%lx.  */
 extern const char *paddress (struct gdbarch *gdbarch, CORE_ADDR addr);
@@ -295,9 +272,6 @@ extern CORE_ADDR string_to_core_addr (const char *my_string);
 
 extern void fprintf_symbol (struct ui_file *, const char *,
 			    enum language, int);
-
-extern void throw_perror_with_name (enum errors errcode, const char *string)
-  ATTRIBUTE_NORETURN;
 
 extern void perror_warning_with_name (const char *string);
 
@@ -367,20 +341,5 @@ extern void dump_core (void);
 extern void copy_bitwise (gdb_byte *dest, ULONGEST dest_offset,
 			  const gdb_byte *source, ULONGEST source_offset,
 			  ULONGEST nbits, int bits_big_endian);
-
-/* A fast hashing function.  This can be used to hash data in a fast way
-   when the length is known.  If no fast hashing library is available, falls
-   back to iterative_hash from libiberty.  START_VALUE can be set to
-   continue hashing from a previous value.  */
-
-static inline unsigned int
-fast_hash (const void *ptr, size_t len, unsigned int start_value = 0)
-{
-#ifdef HAVE_LIBXXHASH
-  return XXH64 (ptr, len, start_value);
-#else
-  return iterative_hash (ptr, len, start_value);
-#endif
-}
 
 #endif /* UTILS_H */

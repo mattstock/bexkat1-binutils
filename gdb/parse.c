@@ -1,6 +1,6 @@
 /* Parse expressions for GDB.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    Modified from expread.y by the Department of Computer Science at the
    State University of New York at Buffalo, 1991.
@@ -86,7 +86,7 @@ innermost_block_tracker::update (const struct block *b,
 {
   if ((m_types & t) != 0
       && (m_innermost_block == NULL
-	  || contained_in (b, m_innermost_block)))
+	  || m_innermost_block->contains (b)))
     m_innermost_block = b;
 }
 
@@ -454,7 +454,7 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
   if (!expression_context_block)
     expression_context_block = get_selected_block (&expression_context_pc);
   else if (pc == 0)
-    expression_context_pc = BLOCK_ENTRY_PC (expression_context_block);
+    expression_context_pc = expression_context_block->entry_pc ();
   else
     expression_context_pc = pc;
 
@@ -463,12 +463,13 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
   if (!expression_context_block)
     {
       struct symtab_and_line cursal = get_current_source_symtab_and_line ();
+
       if (cursal.symtab)
 	expression_context_block
-	  = BLOCKVECTOR_BLOCK (cursal.symtab->compunit ()->blockvector (),
-			       STATIC_BLOCK);
+	  = cursal.symtab->compunit ()->blockvector ()->static_block ();
+
       if (expression_context_block)
-	expression_context_pc = BLOCK_ENTRY_PC (expression_context_block);
+	expression_context_pc = expression_context_block->entry_pc ();
     }
 
   if (language_mode == language_mode_auto && block != NULL)
@@ -487,7 +488,7 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
 	 the current frame language to parse the expression.  That's why
 	 we do the following language detection only if the context block
 	 has been specifically provided.  */
-      struct symbol *func = block_linkage_function (block);
+      struct symbol *func = block->linkage_function ();
 
       if (func != NULL)
 	lang = language_def (func->language ());
@@ -513,7 +514,7 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
     {
       lang->parser (&ps);
     }
-  catch (const gdb_exception &except)
+  catch (const gdb_exception_error &except)
     {
       /* If parsing for completion, allow this to succeed; but if no
 	 expression elements have been written, then there's nothing
@@ -526,7 +527,7 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
   result->op->set_outermost ();
 
   if (expressiondebug)
-    dump_prefix_expression (result.get (), gdb_stdlog);
+    result->dump (gdb_stdlog);
 
   if (completer != nullptr)
     *completer = std::move (ps.m_completion_state);
@@ -610,6 +611,43 @@ parse_float (const char *p, int len,
 {
   return target_float_from_string (data, type, std::string (p, len));
 }
+
+/* Return true if the number N_SIGN * N fits in a type with TYPE_BITS and
+   TYPE_SIGNED_P.  N_SIGNED is either 1 or -1.  */
+
+bool
+fits_in_type (int n_sign, ULONGEST n, int type_bits, bool type_signed_p)
+{
+  /* Normalize -0.  */
+  if (n == 0 && n_sign == -1)
+    n_sign = 1;
+
+  if (n_sign == -1 && !type_signed_p)
+    /* Can't fit a negative number in an unsigned type.  */
+    return false;
+
+  if (type_bits > sizeof (ULONGEST) * 8)
+    return true;
+
+  ULONGEST smax = (ULONGEST)1 << (type_bits - 1);
+  if (n_sign == -1)
+    {
+      /* Negative number, signed type.  */
+      return (n <= smax);
+    }
+  else if (n_sign == 1 && type_signed_p)
+    {
+      /* Positive number, signed type.  */
+      return (n < smax);
+    }
+  else if (n_sign == 1 && !type_signed_p)
+    {
+      /* Positive number, unsigned type.  */
+      return ((n >> 1) >> (type_bits - 1)) == 0;
+    }
+  else
+    gdb_assert_not_reached ("");
+}
 
 /* This function avoids direct calls to fprintf 
    in the parser generated debug code.  */
@@ -627,18 +665,6 @@ parser_fprintf (FILE *x, const char *y, ...)
       gdb_vprintf (gdb_stderr, y, args);
     }
   va_end (args);
-}
-
-/* Return rue if EXP uses OBJFILE (and will become dangling when
-   OBJFILE is unloaded), otherwise return false.  OBJFILE must not be
-   a separate debug info file.  */
-
-bool
-exp_uses_objfile (struct expression *exp, struct objfile *objfile)
-{
-  gdb_assert (objfile->separate_debug_objfile_backlink == NULL);
-
-  return exp->op->uses_objfile (objfile);
 }
 
 void _initialize_parse ();

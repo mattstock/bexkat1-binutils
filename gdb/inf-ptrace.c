@@ -1,6 +1,6 @@
 /* Low-level child interface to ptrace.
 
-   Copyright (C) 1988-2022 Free Software Foundation, Inc.
+   Copyright (C) 1988-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -163,7 +163,7 @@ inf_ptrace_target::attach (const char *args, int from_tty)
 #endif
 
   inferior_appeared (inf, pid);
-  inf->attach_flag = 1;
+  inf->attach_flag = true;
 
   /* Always add a main thread.  If some target extends the ptrace
      target, it should decorate the ptid later with more info.  */
@@ -522,7 +522,7 @@ inf_ptrace_target::files_info ()
 
   gdb_printf (_("\tUsing the running image of %s %s.\n"),
 	      inf->attach_flag ? "attached" : "child",
-	      target_pid_to_str (inferior_ptid).c_str ());
+	      target_pid_to_str (ptid_t (inf->pid)).c_str ());
 }
 
 std::string
@@ -538,7 +538,7 @@ inf_ptrace_target::close ()
 {
   /* Unregister from the event loop.  */
   if (is_async_p ())
-    async (0);
+    async (false);
 
   inf_child_target::close ();
 }

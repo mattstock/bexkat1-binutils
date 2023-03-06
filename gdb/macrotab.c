@@ -1,5 +1,5 @@
 /* C preprocessor macro tables for GDB.
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of GDB.
@@ -19,6 +19,7 @@
 
 #include "defs.h"
 #include "gdbsupport/gdb_obstack.h"
+#include "gdbsupport/pathstuff.h"
 #include "splay-tree.h"
 #include "filenames.h"
 #include "symtab.h"
@@ -1071,5 +1072,5 @@ macro_source_fullname (struct macro_source_file *file)
   if (comp_dir == NULL || IS_ABSOLUTE_PATH (file->filename))
     return file->filename;
 
-  return std::string (comp_dir) + SLASH_STRING + file->filename;
+  return path_join (comp_dir, file->filename);
 }

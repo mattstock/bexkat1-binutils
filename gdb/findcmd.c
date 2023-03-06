@@ -1,6 +1,6 @@
 /* The find command.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,7 +30,7 @@
 /* Copied from bfd_put_bits.  */
 
 static void
-put_bits (bfd_uint64_t data, gdb::byte_vector &buf, int bits, bfd_boolean big_p)
+put_bits (uint64_t data, gdb::byte_vector &buf, int bits, bfd_boolean big_p)
 {
   int i;
   int bytes;
@@ -162,7 +162,7 @@ parse_find_args (const char *args, ULONGEST *max_countp,
       s = skip_spaces (s);
 
       v = parse_to_comma_and_eval (&s);
-      t = value_type (v);
+      t = v->type ();
 
       if (size != '\0')
 	{
@@ -185,9 +185,9 @@ parse_find_args (const char *args, ULONGEST *max_countp,
 	}
       else
 	{
-	  const gdb_byte *contents = value_contents (v).data ();
+	  const gdb_byte *contents = v->contents ().data ();
 	  pattern_buf.insert (pattern_buf.end (), contents,
-			      contents + TYPE_LENGTH (t));
+			      contents + t->length ());
 	}
 
       if (*s == ',')

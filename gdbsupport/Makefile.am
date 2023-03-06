@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2020-2022 Free Software Foundation, Inc.
+#   Copyright (C) 2020-2023 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -42,7 +42,6 @@ endif
 libgdbsupport_a_SOURCES = \
     agent.cc \
     btrace-common.cc \
-    buffer.cc \
     cleanups.cc \
     common-debug.cc \
     common-exceptions.cc \

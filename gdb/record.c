@@ -1,6 +1,6 @@
 /* Process record and replay target for GDB, the GNU debugger.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -493,6 +493,9 @@ get_insn_history_modifiers (const char **arg)
 	      break;
 	    case 'r':
 	      modifiers |= DISASSEMBLY_RAW_INSN;
+	      break;
+	    case 'b':
+	      modifiers |= DISASSEMBLY_RAW_BYTES;
 	      break;
 	    case 'f':
 	      modifiers |= DISASSEMBLY_OMIT_FNAME;

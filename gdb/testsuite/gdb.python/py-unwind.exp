@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2022 Free Software Foundation, Inc.
+# Copyright (C) 2015-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 
 load_lib gdb-python.exp
 
+require allow_python_tests
+
 standard_testfile
 
 # Stack protection can make the stack look a bit different, breaking the
@@ -29,15 +31,12 @@ if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile} "debug $fla
     return -1
 }
 
-# Skip all tests if Python scripting is not enabled.
-if { [skip_python_tests] } { continue }
-
 # This test runs on a specific platform.
-if { ![istarget x86_64-*-* ] || ![is_lp64_target] } { continue }
+require is_x86_64_m64_target
 
 # The following tests require execution.
 
-if ![runto_main] then {
+if {![runto_main]} {
     return 0
 }
 
@@ -57,3 +56,9 @@ gdb_test_sequence "where"  "Backtrace restored by unwinder" {
 
 # Check that the Python unwinder frames can be flushed / released.
 gdb_test "maint flush register-cache" "Register cache flushed\\." "flush frames"
+
+# Check that invalid register names cause errors.
+gdb_test "python print(add_saved_register_error)" "True" \
+    "add_saved_register error"
+gdb_test "python print(read_register_error)" "True" \
+    "read_register error"

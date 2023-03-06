@@ -1,6 +1,6 @@
 /* Objective-C language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    Contributed by Apple Computer, Inc.
    Written by Michael Snyder.
@@ -76,7 +76,7 @@ struct objc_method {
   CORE_ADDR imp;
 };
 
-static const struct objfile_key<unsigned int> objc_objfile_data;
+static const registry<objfile>::key<unsigned int> objc_objfile_data;
 
 /* Lookup a structure type named "struct NAME", visible in lexical
    block BLOCK.  If NOERR is nonzero, return zero if NAME is not
@@ -212,7 +212,7 @@ value_nsstring (struct gdbarch *gdbarch, const char *ptr, int len)
   else
     type = lookup_pointer_type(sym->type ());
 
-  deprecated_set_value_type (nsstringValue, type);
+  nsstringValue->deprecated_set_type (type);
   return nsstringValue;
 }
 
@@ -266,16 +266,23 @@ public:
 
   /* See language.h.  */
 
-  void print_type (struct type *type, const char *varstring,
-		   struct ui_file *stream, int show, int level,
-		   const struct type_print_options *flags) const override
+  bool can_print_type_offsets () const override
   {
-    c_print_type (type, varstring, stream, show, level, flags);
+    return true;
   }
 
   /* See language.h.  */
 
-  CORE_ADDR skip_trampoline (struct frame_info *frame,
+  void print_type (struct type *type, const char *varstring,
+		   struct ui_file *stream, int show, int level,
+		   const struct type_print_options *flags) const override
+  {
+    c_print_type (type, varstring, stream, show, level, la_language, flags);
+  }
+
+  /* See language.h.  */
+
+  CORE_ADDR skip_trampoline (frame_info_ptr frame,
 			     CORE_ADDR stop_pc) const override
   {
     struct gdbarch *gdbarch = get_frame_arch (frame);
@@ -1279,7 +1286,7 @@ find_objc_msgcall_submethod (int (*f) (CORE_ADDR, CORE_ADDR *),
       if (f (pc, new_pc) == 0)
 	return 1;
     }
-  catch (const gdb_exception &ex)
+  catch (const gdb_exception_error &ex)
     {
       exception_fprintf (gdb_stderr, ex,
 			 "Unable to determine target of "
@@ -1458,7 +1465,7 @@ find_implementation (struct gdbarch *gdbarch,
 static int
 resolve_msgsend (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
-  struct frame_info *frame = get_current_frame ();
+  frame_info_ptr frame = get_current_frame ();
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *ptr_type = builtin_type (gdbarch)->builtin_func_ptr;
 
@@ -1480,7 +1487,7 @@ resolve_msgsend (CORE_ADDR pc, CORE_ADDR *new_pc)
 static int
 resolve_msgsend_stret (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
-  struct frame_info *frame = get_current_frame ();
+  frame_info_ptr frame = get_current_frame ();
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *ptr_type = builtin_type (gdbarch)->builtin_func_ptr;
 
@@ -1502,7 +1509,7 @@ resolve_msgsend_stret (CORE_ADDR pc, CORE_ADDR *new_pc)
 static int
 resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
-  struct frame_info *frame = get_current_frame ();
+  frame_info_ptr frame = get_current_frame ();
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *ptr_type = builtin_type (gdbarch)->builtin_func_ptr;
 
@@ -1530,7 +1537,7 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 static int
 resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
-  struct frame_info *frame = get_current_frame ();
+  frame_info_ptr frame = get_current_frame ();
   struct gdbarch *gdbarch = get_frame_arch (frame);
   struct type *ptr_type = builtin_type (gdbarch)->builtin_func_ptr;
 

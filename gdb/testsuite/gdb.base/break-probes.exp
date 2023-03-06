@@ -1,4 +1,4 @@
-# Copyright 2012-2022 Free Software Foundation, Inc.
+# Copyright 2012-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,9 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-if { [skip_shlib_tests] } {
-    return 0
-}
+require allow_shlib_tests
 
 standard_testfile
 
@@ -38,7 +36,8 @@ gdb_test_no_output "set stop-on-solib-events 1"
 
 # Start the inferior and run to the first stop
 gdb_run_cmd
-gdb_test "" ".*Stopped due to shared library event.*"
+gdb_test "" ".*Stopped due to shared library event.*" \
+    "run to shared library event"
 
 # Check if we're using probes.
 set using_probes 0

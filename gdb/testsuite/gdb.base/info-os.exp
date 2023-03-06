@@ -1,4 +1,4 @@
-# Copyright 2011-2022 Free Software Foundation, Inc.
+# Copyright 2011-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,30 +16,27 @@
 standard_testfile .c
 
 # This test is Linux-only.
-if ![istarget *-*-linux*] then {
+if {![istarget *-*-linux*]} {
     unsupported "info-os.exp"
     return -1
 }
 
 # Support for XML-output is needed to run this test.
-if [gdb_skip_xml_test] then {
-    unsupported "info-os.exp"
-    return -1
-}
+require allow_xml_test
 
 # Compile test program.
 if { [prepare_for_testing "failed to prepare" $testfile $srcfile {debug pthreads}] } {
     return -1
 }
 
-if ![runto_main] then {
+if {![runto_main]} {
     return -1
 }
 
 # Get PID of test program.
 set inferior_pid ""
 set test "get inferior process ID"
-gdb_test_multiple "call (int) getpid()" $test {
+gdb_test_multiple "call ((int (*) (void)) getpid) ()" $test {
     -re ".* = ($decimal).*$gdb_prompt $" {
 	set inferior_pid $expect_out(1,string)
 	pass $test

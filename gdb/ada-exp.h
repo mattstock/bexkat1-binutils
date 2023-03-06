@@ -1,6 +1,6 @@
 /* Definitions for Ada expressions
 
-   Copyright (C) 2020-2022 Free Software Foundation, Inc.
+   Copyright (C) 2020-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -130,6 +130,14 @@ public:
 
   enum exp_opcode opcode () const override
   { return std::get<0> (m_storage)->opcode (); }
+
+protected:
+
+  void do_generate_ax (struct expression *exp,
+		       struct agent_expr *ax,
+		       struct axs_value *value,
+		       struct type *cast_type)
+    override;
 };
 
 /* An Ada string constant.  */
@@ -249,10 +257,22 @@ public:
 		   enum noside noside) override
   {
     value *arg1 = std::get<1> (m_storage)->evaluate (nullptr, exp, noside);
-    value *arg2 = std::get<2> (m_storage)->evaluate (value_type (arg1),
+    value *arg2 = std::get<2> (m_storage)->evaluate (arg1->type (),
 						     exp, noside);
     return ada_equal_binop (expect_type, exp, noside, std::get<0> (m_storage),
 			    arg1, arg2);
+  }
+
+  void do_generate_ax (struct expression *exp,
+		       struct agent_expr *ax,
+		       struct axs_value *value,
+		       struct type *cast_type)
+    override
+  {
+    gen_expr_binop (exp, opcode (),
+		    std::get<1> (this->m_storage).get (),
+		    std::get<2> (this->m_storage).get (),
+		    ax, value);
   }
 
   enum exp_opcode opcode () const override
@@ -275,7 +295,7 @@ public:
     value *lhs = std::get<0> (m_storage)->evaluate (nullptr, exp, noside);
     value *rhs = std::get<1> (m_storage)->evaluate (nullptr, exp, noside);
     value *result = eval_op_binary (expect_type, exp, noside, OP, lhs, rhs);
-    return value_cast (value_type (lhs), result);
+    return value_cast (lhs->type (), result);
   }
 
   enum exp_opcode opcode () const override
@@ -380,7 +400,11 @@ public:
 
 protected:
 
-  using operation::do_generate_ax;
+  void do_generate_ax (struct expression *exp,
+		       struct agent_expr *ax,
+		       struct axs_value *value,
+		       struct type *cast_type)
+    override;
 };
 
 /* Variant of var_msym_value_operation for Ada.  */

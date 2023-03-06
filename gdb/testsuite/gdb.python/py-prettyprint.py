@@ -1,4 +1,4 @@
-# Copyright (C) 2008-2022 Free Software Foundation, Inc.
+# Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -88,6 +88,7 @@ class ArrayPrinter(object):
 
 # Flag to make NoStringContainerPrinter throw an exception.
 exception_flag = False
+
 
 # Test a printer where to_string is None
 class NoStringContainerPrinter(object):

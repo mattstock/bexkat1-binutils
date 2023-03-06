@@ -1,5 +1,5 @@
 /* tc-z80.c -- Assemble code for the Zilog Z80, Z180, EZ80 and ASCII R800
-   Copyright (C) 2005-2022 Free Software Foundation, Inc.
+   Copyright (C) 2005-2023 Free Software Foundation, Inc.
    Contributed by Arnold Metselaar <arnold_m@operamail.com>
 
    This file is part of GAS, the GNU Assembler.
@@ -538,7 +538,7 @@ md_begin (void)
 }
 
 void
-z80_md_end (void)
+z80_md_finish (void)
 {
   int mach_type;
 
@@ -3910,11 +3910,11 @@ z80_tc_label_is_local (const char *name)
 #define EXP_MIN -0x10000
 #define EXP_MAX 0x10000
 static int
-str_to_broken_float (bool *signP, bfd_uint64_t *mantissaP, int *expP)
+str_to_broken_float (bool *signP, uint64_t *mantissaP, int *expP)
 {
   char *p;
   bool sign;
-  bfd_uint64_t mantissa = 0;
+  uint64_t mantissa = 0;
   int exponent = 0;
   int i;
 
@@ -4029,7 +4029,7 @@ str_to_broken_float (bool *signP, bfd_uint64_t *mantissaP, int *expP)
 static const char *
 str_to_zeda32(char *litP, int *sizeP)
 {
-  bfd_uint64_t mantissa;
+  uint64_t mantissa;
   bool sign;
   int exponent;
   unsigned i;
@@ -4088,7 +4088,7 @@ str_to_zeda32(char *litP, int *sizeP)
 static const char *
 str_to_float48(char *litP, int *sizeP)
 {
-  bfd_uint64_t mantissa;
+  uint64_t mantissa;
   bool sign;
   int exponent;
   unsigned i;

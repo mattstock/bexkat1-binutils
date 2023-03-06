@@ -1,5 +1,5 @@
 # Expect script for ld-version tests
-#   Copyright (C) 1997-2022 Free Software Foundation, Inc.
+#   Copyright (C) 1997-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -27,13 +27,16 @@ if { ![check_compiler_available] } {
     return
 }
 
+# Skip targets where -shared is not supported
+if { ![check_shared_lib_support] } {
+    return
+}
+
 # This test can only be run on a couple of ELF platforms.
 # Square bracket expressions seem to confuse istarget.
 # This is similar to the test that is used in ld-shared, BTW.
 if { ![istarget hppa*64*-*-hpux*]
      && ![istarget hppa*-*-linux*]
-     && ![istarget i?86-*-sysv4*]
-     && ![istarget i?86-*-unixware]
      && ![istarget i?86-*-elf*]
      && ![istarget i?86-*-linux*]
      && ![istarget i?86-*-gnu*]
@@ -109,7 +112,7 @@ proc test_ar { test lib object expect } {
 	return
     }
 
-    set cmd "$nm --print-armap $tmpdir/$lib | grep \\\ in\\\  | egrep VERS\\\|bar\\\|foo | grep -v ^\\\\. | sort > $tmpdir/nm.out"
+    set cmd "$nm --print-armap $tmpdir/$lib | sed -n -e /^\\\\./d -e \"/^VERS.* in /p\" -e \"/bar.* in /p\" -e \"/foo.* in /p\" | sort > $tmpdir/nm.out"
     verbose -log $cmd
     catch "exec $cmd" exec_output
     if [string match "" $exec_output] then {
@@ -798,13 +801,13 @@ build_exec "vers3" vers3.c vers3 "-Wl,--no-as-needed" vers1.so vers3.ver vers3.d
 
 # This test fails on MIPS.  On the MIPS we must put foo in the dynamic
 # symbol table, which the test does not expect.
-setup_xfail "mips*-*-*"
+setup_xfail "mips*-*-irix*"
 build_exec "vers4" vers4.c vers4 "" "" "" "" vers4.sym
 
 build_exec "vers4a" vers4.c vers4a "-Wl,-export-dynamic" "" vers4a.ver vers4a.dsym vers4a.sym
 
 # Verify that --no-export-dynamic undoes the effect of --export-dynamic.
-setup_xfail "mips*-*-*"
+setup_xfail "mips*-*-irix*"
 build_exec "vers4b" vers4.c vers4b "-Wl,-export-dynamic -Wl,--no-export-dynamic" "" "" "" vers4.sym
 
 

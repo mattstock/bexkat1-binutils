@@ -1,4 +1,4 @@
-# Copyright (C) 1993-2022 Free Software Foundation, Inc.
+# Copyright (C) 1993-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -50,7 +50,6 @@ proc is_elf_format {} {
 	 && ![istarget *-*-rtems*]
 	 && ![istarget *-*-solaris2*]
 	 && ![istarget *-*-sysv4*]
-	 && ![istarget *-*-unixware*]
 	 && ![istarget *-*-wasm32*]
 	 && ![istarget avr-*-*]
 	 && ![istarget hppa*64*-*-hpux*]
@@ -63,8 +62,7 @@ proc is_elf_format {} {
 	return 0
     }
 
-    if { [istarget *-*-linux*ecoff*]
-	 || [istarget *-*-rtemscoff*] } {
+    if { [istarget *-*-linux*ecoff*] } {
 	return 0
     }
 
@@ -109,6 +107,21 @@ proc is_pecoff_format args {
 	 || [istarget $m_os-mingw*]
 	 || [istarget $m_os-pe*]
 	 || [istarget $m_os-winnt*] } {
+	return 1
+    }
+    return 0
+}
+
+# True if the object format is known to COFF or PE (but not ECOFF or XCOFF)
+#
+proc is_coff_format {} {
+    if { [is_pecoff_format]
+	 || [istarget *-*-coff*]
+	 || [istarget *-*-go32*]
+	 || [istarget *-*-msdosdjgpp*]
+	 || [istarget tic4x-*-*]
+	 || [istarget tic54x-*-*]
+	 || [istarget z8k-*-*] } {
 	return 1
     }
     return 0
@@ -401,7 +414,7 @@ proc supports_noinit_section {} {
     #
     # arc-*-* is not included here, since it only supports .noinit with the
     # non-default arcv2elf emulation.
-    if {[istarget "arm-*-*"]
+    if { ([istarget "arm-*-*"] && ![istarget "arm*-linux-*"])
 	  || [istarget "avr-*-*"]
 	  || [istarget "msp430-*-*"]
 	  || [istarget "pru-*-*"] } {
@@ -420,7 +433,7 @@ proc supports_persistent_section {} {
 
     # Targets that set HAVE_PERSISTENT=yes in their emulparams script utilizing
     # elf.sc, or explicitly define a .persistent section in their linker script.
-    if { [istarget "arm-*-*"]
+    if { ([istarget "arm-*-*"] && ![istarget "arm*-linux-*"])
 	  || [istarget "msp430-*-*"] } {
 	return 1;
     }
@@ -637,6 +650,10 @@ proc prune_warnings_extra { text } {
     }
     # PR binutils/23898: It is OK to have gaps in build notes.
     regsub -all "(^|\n)(\[^\n\]*: Warning: Gap in build notes detected from\[^\n\]*\n?)+" $text "\\1" text
+    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*missing \\.note\\.GNU-stack section\[^\n\]*\n?)+" $text "\\1" text
+    regsub -all "(^|\n)(\[^\n\]*: NOTE: This behaviour is deprecated\[^\n\]*\n?)+" $text "\\1" text
+    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*has a LOAD segment with RWX permissions\[^\n\]*\n?)+" $text "\\1" text
+    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*has a TLS segment with execute permission\[^\n\]*\n?)+" $text "\\1" text
     return $text
 }
 
@@ -668,6 +685,22 @@ if ![string length [info proc prune_warnings]] {
 	set text [prune_warnings_extra $text]
 	return $text
     }
+}
+
+# prune_dump_output OUTPUT
+#
+# Clean up the output from system specific or unwanted characters.
+# This allows to simplify the regexp inside dump tests.
+proc prune_dump_output { output } {
+    if [ishost "*-*-mingw*"] {
+	# Prune DOS drive letter from an absolute path if it appears
+	# at the beginning of a line.
+	regsub -all {(^|\n)[[:alpha:]]:(/|\\)} $output "\\1\\2" output
+    }
+
+    # Prune last end of line.
+    regsub "\n$" $output "" output
+    return $output
 }
 
 # run_dump_test FILE (optional:) EXTRA_OPTIONS
@@ -1326,7 +1359,7 @@ proc run_dump_test { name {extra_options {}} } {
 	    send_log "$cmd\n"
 	    set cmdret [remote_exec host [concat sh -c [list "$cmd 2>&1"]] "" "/dev/null" "dump.tmp"]
 	    remote_upload host "dump.tmp"
-	    append comp_output [file_contents "dump.tmp"]
+	    append comp_output [prune_warnings [file_contents "dump.tmp"]]
 	    remote_file host delete "dump.tmp"
 	    remote_file build delete "dump.tmp"
 	    set cmdret [lindex $cmdret 0]
@@ -1343,7 +1376,7 @@ proc run_dump_test { name {extra_options {}} } {
 		send_log "$cmd\n"
 		set cmdret [remote_exec host [concat sh -c [list "$cmd 2>&1"]] "" "/dev/null" "dump.tmp"]
 		remote_upload host "dump.tmp"
-		append comp_output [file_contents "dump.tmp"]
+		append comp_output [prune_warnings [file_contents "dump.tmp"]]
 		remote_file host delete "dump.tmp"
 		remote_file build delete "dump.tmp"
 		set cmdret [lindex $cmdret 0]
@@ -1433,7 +1466,7 @@ proc run_dump_test { name {extra_options {}} } {
 	    }
 	}
 
-	regsub "\n$" $comp_output "" comp_output
+	set comp_output [prune_dump_output $comp_output]
 	if { $cmdret != 0 || $comp_output != "" || $want_out(source) != "" } {
 	    set exitstat "succeeded"
 	    if { $cmdret != 0 } { set exitstat "failed" }

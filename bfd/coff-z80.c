@@ -1,5 +1,5 @@
 /* BFD back-end for Zilog Z80 COFF binaries.
-   Copyright (C) 2005-2022 Free Software Foundation, Inc.
+   Copyright (C) 2005-2023 Free Software Foundation, Inc.
    Contributed by Arnold Metselaar <arnold_m@operamail.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -45,7 +45,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_32,
      R_IMM32,		/* type */
      0,			/* rightshift */
-     2,			/* size (0 = byte, 1 = short, 2 = long) */
+     4,			/* size */
      32,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -60,7 +60,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_24,
      R_IMM24,		/* type */
      0,			/* rightshift */
-     1,			/* size (0 = byte, 1 = short, 2 = long) */
+     3,			/* size */
      24,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -75,7 +75,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_16,
      R_IMM16,		/* type */
      0,			/* rightshift */
-     1,			/* size (0 = byte, 1 = short, 2 = long) */
+     2,			/* size */
      16,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -90,7 +90,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_8,
      R_IMM8,		/* type */
      0,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -105,7 +105,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_8_PCREL,
      R_JR,		/* type */
      0,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      true,		/* pc_relative */
      0,			/* bitpos */
@@ -120,7 +120,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_DISP8,
      R_OFF8,		/* type */
      0,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -135,7 +135,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_BYTE0,
      R_BYTE0,		/* type */
      0,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -150,7 +150,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_BYTE1,
      R_BYTE1,		/* type */
      8,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -165,7 +165,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_BYTE2,
      R_BYTE2,		/* type */
      16,		/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -180,7 +180,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_BYTE3,
      R_BYTE3,		/* type */
      24,		/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     1,			/* size */
      8,			/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -195,7 +195,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_WORD0,
      R_WORD0,		/* type */
      0,			/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     2,			/* size */
      16,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -210,7 +210,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_WORD1,
      R_WORD1,		/* type */
      16,		/* rightshift */
-     0,			/* size (0 = byte, 1 = short, 2 = long) */
+     2,			/* size */
      16,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -225,7 +225,7 @@ static bfd_howto_type howto_table[] =
   BFD_HOWTO (BFD_RELOC_Z80_16_BE,
      R_IMM16BE,		/* type */
      0,			/* rightshift */
-     1,			/* size (0 = byte, 1 = short, 2 = long) */
+     2,			/* size */
      16,		/* bitsize */
      false,		/* pc_relative */
      0,			/* bitpos */
@@ -314,7 +314,7 @@ reloc_processing (arelent *relent,
   relent->address = reloc->r_vaddr;
   rtype2howto (relent, reloc);
 
-  if (reloc->r_symndx == -1)
+  if (reloc->r_symndx == -1 || symbols == NULL)
     relent->sym_ptr_ptr = bfd_abs_section_ptr->symbol_ptr_ptr;
   else if (reloc->r_symndx >= 0 && reloc->r_symndx < obj_conv_table_size (abfd))
     relent->sym_ptr_ptr = symbols + obj_convert (abfd)[reloc->r_symndx];
@@ -405,11 +405,9 @@ extra_case (bfd *in_abfd,
 
     case R_IMM24:
       if (reloc->howto->partial_inplace)
-        val += (bfd_get_16 ( in_abfd, data+*src_ptr)
-            + (bfd_get_8 ( in_abfd, data+*src_ptr+2) << 16))
-            & reloc->howto->src_mask;
-      bfd_put_16 (in_abfd, val, data + *dst_ptr);
-      bfd_put_8 (in_abfd, val >> 16, data + *dst_ptr+2);
+	val += (bfd_get_24 (in_abfd, data + *src_ptr)
+		& reloc->howto->src_mask);
+      bfd_put_24 (in_abfd, val, data + *dst_ptr);
       (*dst_ptr) += 3;
       (*src_ptr) += 3;
       break;

@@ -1,6 +1,6 @@
 /* Native-dependent code for FreeBSD/aarch64.
 
-   Copyright (C) 2017-2022 Free Software Foundation, Inc.
+   Copyright (C) 2017-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,12 +24,15 @@
 #include "target.h"
 #include "nat/aarch64-hw-point.h"
 
+#include "elf/common.h"
+
 #include <sys/param.h>
 #include <sys/ptrace.h>
 #include <machine/armreg.h>
 #include <machine/reg.h>
 
 #include "fbsd-nat.h"
+#include "aarch64-tdep.h"
 #include "aarch64-fbsd-tdep.h"
 #include "aarch64-nat.h"
 #include "inf-ptrace.h"
@@ -49,6 +52,8 @@ struct aarch64_fbsd_nat_target final : public fbsd_nat_target
 {
   void fetch_registers (struct regcache *, int) override;
   void store_registers (struct regcache *, int) override;
+
+  const struct target_desc *read_description () override;
 
 #ifdef HAVE_DBREG
   /* Hardware breakpoints and watchpoints.  */
@@ -71,7 +76,6 @@ private:
 };
 
 static aarch64_fbsd_nat_target the_aarch64_fbsd_nat_target;
-bool aarch64_fbsd_nat_target::debug_regs_probed;
 
 /* Fetch register REGNUM from the inferior.  If REGNUM is -1, do this
    for all registers.  */
@@ -84,6 +88,12 @@ aarch64_fbsd_nat_target::fetch_registers (struct regcache *regcache,
 				  &aarch64_fbsd_gregset);
   fetch_register_set<struct fpreg> (regcache, regnum, PT_GETFPREGS,
 				    &aarch64_fbsd_fpregset);
+
+  gdbarch *gdbarch = regcache->arch ();
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
+  if (tdep->has_tls ())
+    fetch_regset<uint64_t> (regcache, regnum, NT_ARM_TLS,
+			    &aarch64_fbsd_tls_regset, tdep->tls_regnum_base);
 }
 
 /* Store register REGNUM back into the inferior.  If REGNUM is -1, do
@@ -97,9 +107,27 @@ aarch64_fbsd_nat_target::store_registers (struct regcache *regcache,
 				  &aarch64_fbsd_gregset);
   store_register_set<struct fpreg> (regcache, regnum, PT_GETFPREGS,
 				    PT_SETFPREGS, &aarch64_fbsd_fpregset);
+
+  gdbarch *gdbarch = regcache->arch ();
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
+  if (tdep->has_tls ())
+    store_regset<uint64_t> (regcache, regnum, NT_ARM_TLS,
+			    &aarch64_fbsd_tls_regset, tdep->tls_regnum_base);
+}
+
+/* Implement the target read_description method.  */
+
+const struct target_desc *
+aarch64_fbsd_nat_target::read_description ()
+{
+  aarch64_features features;
+  features.tls = have_regset (inferior_ptid, NT_ARM_TLS)? 1 : 0;
+  return aarch64_read_description (features);
 }
 
 #ifdef HAVE_DBREG
+bool aarch64_fbsd_nat_target::debug_regs_probed;
+
 /* Set of threads which need to update debug registers on next resume.  */
 
 static std::unordered_set<lwpid_t> aarch64_debug_pending_threads;

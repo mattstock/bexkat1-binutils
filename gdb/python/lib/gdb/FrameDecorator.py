@@ -1,4 +1,4 @@
-# Copyright (C) 2013-2022 Free Software Foundation, Inc.
+# Copyright (C) 2013-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -64,7 +64,6 @@ class FrameDecorator(object):
             or frame.type() == gdb.DUMMY_FRAME
             or frame.type() == gdb.SIGTRAMP_FRAME
         ):
-
             return True
 
         return False

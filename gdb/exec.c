@@ -1,6 +1,6 @@
 /* Work with executable files, for GDB. 
 
-   Copyright (C) 1988-2022 Free Software Foundation, Inc.
+   Copyright (C) 1988-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -123,8 +123,7 @@ set_exec_file_mismatch_command (const char *ignore,
 	  return;
 	}
       if (mode == exec_file_mismatch_off)
-	internal_error (__FILE__, __LINE__,
-			_("Unrecognized exec-file-mismatch setting: \"%s\""),
+	internal_error (_("Unrecognized exec-file-mismatch setting: \"%s\""),
 			exec_file_mismatch);
     }
 }
@@ -314,7 +313,7 @@ validate_exec_file (int from_tty)
 void
 exec_file_locate_attach (int pid, int defer_bp_reset, int from_tty)
 {
-  char *exec_file_target;
+  const char *exec_file_target;
   symfile_add_flags add_flags = 0;
 
   /* Do nothing if we already have an executable filename.  */
@@ -467,7 +466,8 @@ exec_file_attach (const char *filename, int from_tty)
 	     (bfd_get_filename (current_program_space->exec_bfd ())));
       else
 	current_program_space->exec_filename
-	  = gdb_realpath_keepfile (scratch_pathname);
+	  = make_unique_xstrdup (gdb_realpath_keepfile
+				   (scratch_pathname).c_str ());
 
       if (!bfd_check_format_matches (current_program_space->exec_bfd (),
 				     bfd_object, &matching))

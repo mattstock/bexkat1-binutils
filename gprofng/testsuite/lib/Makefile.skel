@@ -1,5 +1,5 @@
 # Skeleton makefile for display tests
-#   Copyright (C) 2021 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -39,8 +39,10 @@ DISPLAY	    = $(GPROFNG) display text
 EXPERIMENT  = test.er
 DISPLAY_LOG = display.log
 
+export LD_LIBRARY_PATH := $(BUILDDIR)/src
 
-export LD_LIBRARY_PATH := $(shell dirname $$(find ../root -name libgprofng.so.0 | head -1))
+# Set GPROFNG_SYSCONFDIR to find out gprofng.rc:
+export GPROFNG_SYSCONFDIR := $(srcdir)/../../../src
 
 .PHONY: all collect compare clobber clean
 

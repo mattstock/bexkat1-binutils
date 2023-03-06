@@ -1,6 +1,6 @@
 /* pe.h  -  PE COFF header information
 
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -163,6 +163,7 @@
 #define IMAGE_FILE_MACHINE_TRICORE           0x0520
 #define IMAGE_FILE_MACHINE_WCEMIPSV2         0x0169
 #define IMAGE_FILE_MACHINE_AMD64             0x8664
+#define IMAGE_FILE_MACHINE_LOONGARCH64       0x6264
 
 #define IMAGE_SUBSYSTEM_UNKNOWN			 0
 #define IMAGE_SUBSYSTEM_NATIVE			 1

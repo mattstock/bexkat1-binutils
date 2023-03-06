@@ -1,5 +1,5 @@
 /* tc-mmix.c -- Assembler for Don Knuth's MMIX.
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -3368,7 +3368,7 @@ mmix_md_relax_frag (segT seg, fragS *fragP, long stretch)
 {
   switch (fragP->fr_subtype)
     {
-      /* Growth for this type has been handled by mmix_md_end and
+      /* Growth for this type has been handled by mmix_md_finish and
 	 correctly estimated, so there's nothing more to do here.  */
     case STATE_GREG_DEF:
       return 0;
@@ -3490,7 +3490,7 @@ mmix_md_relax_frag (segT seg, fragS *fragP, long stretch)
 /* Various things we punt until all input is seen.  */
 
 void
-mmix_md_end (void)
+mmix_md_finish (void)
 {
   fragS *fragP;
   symbolS *mainsym;

@@ -1,6 +1,6 @@
 /* Core dump and executable file functions above target vector, for GDB.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -173,8 +173,7 @@ memory_error_message (enum target_xfer_status err,
       return string_printf (_("Memory at address %s unavailable."),
 			    paddress (gdbarch, memaddr));
     default:
-      internal_error (__FILE__, __LINE__,
-		      "unhandled target_xfer_status: %s (%s)",
+      internal_error ("unhandled target_xfer_status: %s (%s)",
 		      target_xfer_status_to_string (err),
 		      plongest (err));
     }
@@ -335,9 +334,9 @@ read_code_unsigned_integer (CORE_ADDR memaddr, int len,
 CORE_ADDR
 read_memory_typed_address (CORE_ADDR addr, struct type *type)
 {
-  gdb_byte *buf = (gdb_byte *) alloca (TYPE_LENGTH (type));
+  gdb_byte *buf = (gdb_byte *) alloca (type->length ());
 
-  read_memory (addr, buf, TYPE_LENGTH (type));
+  read_memory (addr, buf, type->length ());
   return extract_typed_address (buf, type);
 }
 

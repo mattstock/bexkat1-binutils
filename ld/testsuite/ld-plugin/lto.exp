@@ -1,5 +1,5 @@
 # Expect script for ld-plugin LTO tests
-#   Copyright (C) 2011-2022 Free Software Foundation, Inc.
+#   Copyright (C) 2011-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -521,6 +521,14 @@ set lto_link_elf_tests [list \
    {pr28849b.c} \
    {{"nm" {-D} "pr28849.d"}} \
    "pr28849" \
+  ] \
+  [list \
+   "PR ld/pr29086" \
+   "-Wl,--wrap=foo" \
+   "-O0 -flto" \
+   {pr29086.c} \
+   {} \
+   "pr29086" \
   ] \
 ]
 

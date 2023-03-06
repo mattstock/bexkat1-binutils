@@ -1,6 +1,6 @@
 /* Python frame unwinder interface.
 
-   Copyright (C) 2015-2022 Free Software Foundation, Inc.
+   Copyright (C) 2015-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -57,7 +57,7 @@ struct pending_frame_object
   PyObject_HEAD
 
   /* Frame we are unwinding.  */
-  struct frame_info *frame_info;
+  frame_info_ptr frame_info;
 
   /* Its architecture, passed by the sniffer caller.  */
   struct gdbarch *gdbarch;
@@ -117,8 +117,6 @@ extern PyTypeObject pending_frame_object_type
 extern PyTypeObject unwind_info_object_type
     CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("unwind_info_object");
 
-static struct gdbarch_data *pyuw_gdbarch_data;
-
 /* Convert gdb.Value instance to inferior's pointer.  Return 1 on success,
    0 on failure.  */
 
@@ -132,8 +130,8 @@ pyuw_value_obj_to_pointer (PyObject *pyo_value, CORE_ADDR *addr)
     {
       if ((value = value_object_to_value (pyo_value)) != NULL)
 	{
-	  *addr = unpack_pointer (value_type (value),
-				  value_contents (value).data ());
+	  *addr = unpack_pointer (value->type (),
+				  value->contents ().data ());
 	  rc = 1;
 	}
     }
@@ -262,10 +260,7 @@ unwind_infopy_add_saved_register (PyObject *self, PyObject *args)
 			  &pyo_reg_id, &pyo_reg_value))
     return NULL;
   if (!gdbpy_parse_register_id (pending_frame->gdbarch, pyo_reg_id, &regnum))
-    {
-      PyErr_SetString (PyExc_ValueError, "Bad register");
-      return NULL;
-    }
+    return nullptr;
 
   /* If REGNUM identifies a user register then *maybe* we can convert this
      to a real (i.e. non-user) register.  The maybe qualifier is because we
@@ -277,7 +272,7 @@ unwind_infopy_add_saved_register (PyObject *self, PyObject *args)
     {
       struct value *user_reg_value
 	= value_of_user_reg (regnum, pending_frame->frame_info);
-      if (VALUE_LVAL (user_reg_value) == lval_register)
+      if (user_reg_value->lval () == lval_register)
 	regnum = VALUE_REGNUM (user_reg_value);
       if (regnum >= gdbarch_num_cooked_regs (pending_frame->gdbarch))
 	{
@@ -297,13 +292,13 @@ unwind_infopy_add_saved_register (PyObject *self, PyObject *args)
 	return NULL;
       }
     data_size = register_size (pending_frame->gdbarch, regnum);
-    if (data_size != TYPE_LENGTH (value_type (value)))
+    if (data_size != value->type ()->length ())
       {
 	PyErr_Format (
 	    PyExc_ValueError,
 	    "The value of the register returned by the Python "
 	    "sniffer has unexpected size: %u instead of %u.",
-	    (unsigned) TYPE_LENGTH (value_type (value)),
+	    (unsigned) value->type ()->length (),
 	    (unsigned) data_size);
 	return NULL;
       }
@@ -344,7 +339,7 @@ unwind_infopy_dealloc (PyObject *self)
 static PyObject *
 pending_framepy_str (PyObject *self)
 {
-  struct frame_info *frame = ((pending_frame_object *) self)->frame_info;
+  frame_info_ptr frame = ((pending_frame_object *) self)->frame_info;
   const char *sp_str = NULL;
   const char *pc_str = NULL;
 
@@ -370,7 +365,6 @@ static PyObject *
 pending_framepy_read_register (PyObject *self, PyObject *args)
 {
   pending_frame_object *pending_frame = (pending_frame_object *) self;
-  struct value *val = NULL;
   int regnum;
   PyObject *pyo_reg_id;
 
@@ -383,30 +377,33 @@ pending_framepy_read_register (PyObject *self, PyObject *args)
   if (!PyArg_UnpackTuple (args, "read_register", 1, 1, &pyo_reg_id))
     return NULL;
   if (!gdbpy_parse_register_id (pending_frame->gdbarch, pyo_reg_id, &regnum))
-    {
-      PyErr_SetString (PyExc_ValueError, "Bad register");
-      return NULL;
-    }
+    return nullptr;
 
+  PyObject *result = nullptr;
   try
     {
+      scoped_value_mark free_values;
+
       /* Fetch the value associated with a register, whether it's
 	 a real register or a so called "user" register, like "pc",
 	 which maps to a real register.  In the past,
 	 get_frame_register_value() was used here, which did not
 	 handle the user register case.  */
-      val = value_of_register (regnum, pending_frame->frame_info);
+      struct value *val = value_of_register (regnum,
+					     pending_frame->frame_info);
       if (val == NULL)
 	PyErr_Format (PyExc_ValueError,
 		      "Cannot read register %d from frame.",
 		      regnum);
+      else
+	result = value_to_value_object (val);
     }
   catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  return val == NULL ? NULL : value_to_value_object (val);
+  return result;
 }
 
 /* Implementation of
@@ -483,7 +480,7 @@ pending_framepy_level (PyObject *self, PyObject *args)
 /* frame_unwind.this_id method.  */
 
 static void
-pyuw_this_id (struct frame_info *this_frame, void **cache_ptr,
+pyuw_this_id (frame_info_ptr this_frame, void **cache_ptr,
 	      struct frame_id *this_id)
 {
   *this_id = ((cached_frame_info *) *cache_ptr)->frame_id;
@@ -493,7 +490,7 @@ pyuw_this_id (struct frame_info *this_frame, void **cache_ptr,
 /* frame_unwind.prev_register.  */
 
 static struct value *
-pyuw_prev_register (struct frame_info *this_frame, void **cache_ptr,
+pyuw_prev_register (frame_info_ptr this_frame, void **cache_ptr,
 		    int regnum)
 {
   PYUW_SCOPED_DEBUG_ENTER_EXIT;
@@ -516,7 +513,7 @@ pyuw_prev_register (struct frame_info *this_frame, void **cache_ptr,
 /* Frame sniffer dispatch.  */
 
 static int
-pyuw_sniffer (const struct frame_unwind *self, struct frame_info *this_frame,
+pyuw_sniffer (const struct frame_unwind *self, frame_info_ptr this_frame,
 	      void **cache_ptr)
 {
   PYUW_SCOPED_DEBUG_ENTER_EXIT;
@@ -628,11 +625,11 @@ pyuw_sniffer (const struct frame_unwind *self, struct frame_info *this_frame,
 
 	/* `value' validation was done before, just assert.  */
 	gdb_assert (value != NULL);
-	gdb_assert (data_size == TYPE_LENGTH (value_type (value)));
+	gdb_assert (data_size == value->type ()->length ());
 
 	cached_frame->reg[i].data = (gdb_byte *) xmalloc (data_size);
 	memcpy (cached_frame->reg[i].data,
-		value_contents (value).data (), data_size);
+		value->contents ().data (), data_size);
       }
   }
 
@@ -643,7 +640,7 @@ pyuw_sniffer (const struct frame_unwind *self, struct frame_info *this_frame,
 /* Frame cache release shim.  */
 
 static void
-pyuw_dealloc_cache (struct frame_info *this_frame, void *cache)
+pyuw_dealloc_cache (frame_info *this_frame, void *cache)
 {
   PYUW_SCOPED_DEBUG_ENTER_EXIT;
   cached_frame_info *cached_frame = (cached_frame_info *) cache;
@@ -657,14 +654,10 @@ pyuw_dealloc_cache (struct frame_info *this_frame, void *cache)
 struct pyuw_gdbarch_data_type
 {
   /* Has the unwinder shim been prepended? */
-  int unwinder_registered;
+  int unwinder_registered = 0;
 };
 
-static void *
-pyuw_gdbarch_data_init (struct gdbarch *gdbarch)
-{
-  return GDBARCH_OBSTACK_ZALLOC (gdbarch, struct pyuw_gdbarch_data_type);
-}
+static const registry<gdbarch>::key<pyuw_gdbarch_data_type> pyuw_gdbarch_data;
 
 /* New inferior architecture callback: register the Python unwinders
    intermediary.  */
@@ -672,9 +665,9 @@ pyuw_gdbarch_data_init (struct gdbarch *gdbarch)
 static void
 pyuw_on_new_gdbarch (struct gdbarch *newarch)
 {
-  struct pyuw_gdbarch_data_type *data
-    = (struct pyuw_gdbarch_data_type *) gdbarch_data (newarch,
-						      pyuw_gdbarch_data);
+  struct pyuw_gdbarch_data_type *data = pyuw_gdbarch_data.get (newarch);
+  if (data == nullptr)
+    data= pyuw_gdbarch_data.emplace (newarch);
 
   if (!data->unwinder_registered)
     {
@@ -706,8 +699,6 @@ _initialize_py_unwind ()
 	NULL,
 	show_pyuw_debug,
 	&setdebuglist, &showdebuglist);
-  pyuw_gdbarch_data
-    = gdbarch_data_register_post_init (pyuw_gdbarch_data_init);
 }
 
 /* Initialize unwind machinery.  */

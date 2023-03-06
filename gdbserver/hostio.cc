@@ -1,5 +1,5 @@
 /* Host file transfer support for gdbserver.
-   Copyright (C) 2007-2022 Free Software Foundation, Inc.
+   Copyright (C) 2007-2023 Free Software Foundation, Inc.
 
    Contributed by CodeSourcery.
 
@@ -19,7 +19,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "server.h"
-#include "gdb/fileio.h"
+#include "gdbsupport/fileio.h"
 #include "hostio.h"
 
 #include <fcntl.h>

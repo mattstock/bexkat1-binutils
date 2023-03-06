@@ -1,6 +1,6 @@
 /* Convert a DWARF location expression to C
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -633,7 +633,7 @@ do_compile_dwarf_expr_to_c (int indent, string_file *stream,
      offset by hand seemed too hackish.  */
   if (is_tls)
     {
-      struct frame_info *frame = get_selected_frame (NULL);
+      frame_info_ptr frame = get_selected_frame (NULL);
       struct value *val;
 
       if (frame == NULL)
@@ -642,7 +642,7 @@ do_compile_dwarf_expr_to_c (int indent, string_file *stream,
 	       sym->print_name ());
 
       val = read_var_value (sym, NULL, frame);
-      if (VALUE_LVAL (val) != lval_memory)
+      if (val->lval () != lval_memory)
 	error (_("Symbol \"%s\" cannot be used for compilation evaluation "
 		 "as its address has not been found."),
 	       sym->print_name ());
@@ -654,7 +654,7 @@ do_compile_dwarf_expr_to_c (int indent, string_file *stream,
 
       gdb_printf (stream, "%*s%s = %s;\n",
 		  indent, "", result_name,
-		  core_addr_to_string (value_address (val)));
+		  core_addr_to_string (val->address ()));
       gdb_printf (stream, "%*s}\n", indent - 2, "");
       return;
     }
@@ -892,7 +892,7 @@ do_compile_dwarf_expr_to_c (int indent, string_file *stream,
 	    if (!b)
 	      error (_("No block found for address"));
 
-	    framefunc = block_linkage_function (b);
+	    framefunc = b->linkage_function ();
 
 	    if (!framefunc)
 	      error (_("No function found for block"));

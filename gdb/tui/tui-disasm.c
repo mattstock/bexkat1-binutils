@@ -1,6 +1,6 @@
 /* Disassembly display.
 
-   Copyright (C) 1998-2022 Free Software Foundation, Inc.
+   Copyright (C) 1998-2023 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -484,7 +484,7 @@ tui_disasm_window::addr_is_displayed (CORE_ADDR addr) const
 }
 
 void
-tui_disasm_window::maybe_update (struct frame_info *fi, symtab_and_line sal)
+tui_disasm_window::maybe_update (frame_info_ptr fi, symtab_and_line sal)
 {
   CORE_ADDR low;
 

@@ -1,6 +1,6 @@
 /* Convert symbols from GDB to GCC
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -48,7 +48,7 @@ convert_one_symbol (compile_cplus_instance *instance,
 {
   /* Squash compiler warning.  */
   gcc_type sym_type = 0;
-  const char *filename = symbol_symtab (sym.symbol)->filename;
+  const char *filename = sym.symbol->symtab ()->filename;
   unsigned short line = sym.symbol->line ();
 
   instance->error_symbol_once (sym.symbol);
@@ -87,7 +87,7 @@ convert_one_symbol (compile_cplus_instance *instance,
 	case LOC_BLOCK:
 	  {
 	    kind = GCC_CP_SYMBOL_FUNCTION;
-	    addr = BLOCK_START (sym.symbol->value_block ());
+	    addr = sym.symbol->value_block()->start ();
 	    if (is_global && sym.symbol->type ()->is_gnu_ifunc ())
 	      addr = gnu_ifunc_resolve_addr (target_gdbarch (), addr);
 	  }
@@ -109,7 +109,7 @@ convert_one_symbol (compile_cplus_instance *instance,
 		 sym.symbol->print_name ());
 
 	case LOC_UNDEF:
-	  internal_error (__FILE__, __LINE__, _("LOC_UNDEF found for \"%s\"."),
+	  internal_error (_("LOC_UNDEF found for \"%s\"."),
 			  sym.symbol->print_name ());
 
 	case LOC_COMMON_BLOCK:
@@ -138,7 +138,7 @@ convert_one_symbol (compile_cplus_instance *instance,
 	     by their name.  */
 	  {
 	    struct value *val;
-	    struct frame_info *frame = nullptr;
+	    frame_info_ptr frame = nullptr;
 
 	    if (symbol_read_needs_frame (sym.symbol))
 	      {
@@ -150,13 +150,13 @@ convert_one_symbol (compile_cplus_instance *instance,
 	      }
 
 	    val = read_var_value (sym.symbol, sym.block, frame);
-	    if (VALUE_LVAL (val) != lval_memory)
+	    if (val->lval () != lval_memory)
 	      error (_("Symbol \"%s\" cannot be used for compilation "
 		       "evaluation as its address has not been found."),
 		     sym.symbol->print_name ());
 
 	    kind = GCC_CP_SYMBOL_VARIABLE;
-	    addr = value_address (val);
+	    addr = val->address ();
 	  }
 	  break;
 
@@ -239,7 +239,9 @@ convert_symbol_sym (compile_cplus_instance *instance,
      }
   */
 
-  const struct block *static_block = block_static_block (sym.block);
+  const struct block *static_block = nullptr;
+  if (sym.block != nullptr)
+    static_block = sym.block->static_block ();
   /* STATIC_BLOCK is NULL if FOUND_BLOCK is the global block.  */
   bool is_local_symbol = (sym.block != static_block && static_block != nullptr);
   if (is_local_symbol)
@@ -250,7 +252,7 @@ convert_symbol_sym (compile_cplus_instance *instance,
       /* If the outer symbol is in the static block, we ignore it, as
 	 it cannot be referenced.  */
       if (global_sym.symbol != nullptr
-	  && global_sym.block != block_static_block (global_sym.block))
+	  && global_sym.block != global_sym.block->static_block ())
 	{
 	  if (compile_debug)
 	    gdb_printf (gdb_stdlog,
@@ -441,7 +443,7 @@ gcc_cplus_symbol_address (void *datum, struct gcc_cp_context *gcc_context,
 	    gdb_printf (gdb_stdlog,
 			"gcc_symbol_address \"%s\": full symbol\n",
 			identifier);
-	  result = BLOCK_START (sym->value_block ());
+	  result = sym->value_block ()->start ();
 	  if (sym->type ()->is_gnu_ifunc ())
 	    result = gnu_ifunc_resolve_addr (target_gdbarch (), result);
 	  found = 1;

@@ -1,4 +1,4 @@
-#   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+#   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -188,12 +188,13 @@ proc readelf_wi_test {} {
 	".*DW_TAG_compile_unit.*"
 	".*DW_TAG_subprogram.*"
 	".*DW_TAG_base_type.*"
-	".*DW_AT_producer.*(GNU C|indirect string).*"
+	".*DW_AT_producer.*(GNU C|indirect string|indexed string).*"
 	".*DW_AT_language.*(ANSI C|C11).*"
-	".*DW_AT_name.*(testprog.c|indirect string).*"
+	".*DW_AT_name.*(testprog.c|indirect string|indexed string).*"
 	".*DW_AT_name.*fn.*"
+	".*DW_AT_name.*(main|indirect string|indexed string).*"
+	".*(DW_OP_addr: 0|DW_OP_addrx <0>).*"
 	".*DW_AT_name.*(main|indirect string).*"
-	".*\(DW_OP_addr: 0\).*"
     }
 
     # The MSP430 in LARGE mode does not generate a DW_OP_addr.
@@ -488,11 +489,12 @@ if {![binutils_assemble $srcdir/$subdir/z.s tmpdir/z.o]} then {
     readelf_test {--decompress --hex-dump .debug_loc} $tempfile readelf.z
 }
 
+set hpux ""
+
 # Skip the next test for the RISCV architectures because they
 # do not support .ULEB128 pseudo-ops with non-constant values.
 if ![istarget "riscv*-*-*"] then {
 
-    set hpux ""
     if [istarget "hppa*64*-*-hpux*"] {
 	set hpux "--defsym HPUX=1"
     }
@@ -595,4 +597,35 @@ if ![is_remote host] {
     } else {
 	readelf_test {--debug-dump=macro -wN} $tempfile pr26112.r
     }
+
+    set test $srcdir/$subdir/pr26160.dwp.bz2
+    # We need to strip the ".bz2", but can leave the dirname.
+    set t $subdir/[file tail $test]
+    set testname [file rootname $t]
+    verbose $testname
+    set tempfile tmpdir/pr26160.dwp
+    if {[catch "system \"bzip2 -dc $test > $tempfile\""] != 0} {
+	untested "bzip2 -dc ($testname)"
+    } else {
+	readelf_test {-wi} $tempfile pr26160.r
+    }
+}
+
+# Check dwarf-5 support for DW_OP_addrx.
+if {![binutils_assemble_flags $srcdir/$subdir/dw5-op.S tmpdir/dw5-op.o $hpux]} then {
+    unsupported "readelf -wi dw5-op (failed to assemble)"
+} else {
+
+# Download it.
+if ![is_remote host] {
+    set tempfile tmpdir/dw5-op.o
+} else {
+    set tempfile [remote_download host tmpdir/dw5-op.o]
+}
+
+# First, determine the size, so specific output matchers can be used.
+readelf_find_size $tempfile 2
+
+# Make sure that readelf can decode the contents.
+readelf_test -wi $tempfile dw5-op.W
 }

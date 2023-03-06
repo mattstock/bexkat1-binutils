@@ -1,6 +1,6 @@
 /* Rust language support definitions for GDB, the GNU debugger.
 
-   Copyright (C) 2016-2022 Free Software Foundation, Inc.
+   Copyright (C) 2016-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -71,6 +71,11 @@ public:
 
   /* See language.h.  */
 
+  const char *get_digit_separator () const override
+  { return "_"; }
+
+  /* See language.h.  */
+
   const std::vector<const char *> &filename_extensions () const override
   {
     static const std::vector<const char *> extensions = { ".rs" };
@@ -102,6 +107,13 @@ public:
 
   /* See language.h.  */
 
+  bool can_print_type_offsets () const override
+  {
+    return true;
+  }
+
+  /* See language.h.  */
+
   void print_type (struct type *type, const char *varstring,
 		   struct ui_file *stream, int show, int level,
 		   const struct type_print_options *flags) const override;
@@ -111,7 +123,7 @@ public:
   gdb::unique_xmalloc_ptr<char> watch_location_expression
 	(struct type *type, CORE_ADDR addr) const override
   {
-    type = check_typedef (TYPE_TARGET_TYPE (check_typedef (type)));
+    type = check_typedef (check_typedef (type)->target_type ());
     std::string name = type_to_string (type);
     return xstrprintf ("*(%s as *mut %s)", core_addr_to_string (addr),
 		       name.c_str ());
@@ -136,21 +148,16 @@ public:
   {
     struct block_symbol result = {};
 
-    if (symbol_lookup_debug)
-      {
-	gdb_printf (gdb_stdlog,
-		    "rust_lookup_symbol_non_local"
-		    " (%s, %s (scope %s), %s)\n",
-		    name, host_address_to_string (block),
-		    block_scope (block), domain_name (domain));
-      }
+    const char *scope = block == nullptr ? "" : block->scope ();
+    symbol_lookup_debug_printf
+      ("rust_lookup_symbol_non_local (%s, %s (scope %s), %s)",
+       name, host_address_to_string (block), scope,
+       domain_name (domain));
 
     /* Look up bare names in the block's scope.  */
     std::string scopedname;
     if (name[cp_find_first_component (name)] == '\0')
       {
-	const char *scope = block_scope (block);
-
 	if (scope[0] != '\0')
 	  {
 	    scopedname = std::string (scope) + "::" + name;

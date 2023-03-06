@@ -1,6 +1,6 @@
 /* Support for printing Go types for GDB, the GNU debugger.
 
-   Copyright (C) 2012-2022 Free Software Foundation, Inc.
+   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -52,12 +52,12 @@ go_language::print_type (struct type *type, const char *varstring,
 
   /* Print the type of "abc" as "string", not char[4].  */
   if (type->code () == TYPE_CODE_ARRAY
-      && TYPE_TARGET_TYPE (type)->code () == TYPE_CODE_CHAR)
+      && type->target_type ()->code () == TYPE_CODE_CHAR)
     {
       gdb_puts ("string", stream);
       return;
     }
 
   /* Punt the rest to C for now.  */
-  c_print_type (type, varstring, stream, show, level, flags);
+  c_print_type (type, varstring, stream, show, level, la_language, flags);
 }

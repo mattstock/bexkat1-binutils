@@ -1,3 +1,25 @@
+2023-01-03  Luis Machado  <luis.machado@arm.com>
+
+	* elf/common.h (NT_ARM_SSVE): Define.
+	(NT_ARM_ZA): Define.
+
+2022-12-31  Nick Clifton  <nickc@redhat.com>
+
+	* 2.40 branch created.
+
+2022-10-03  Jan-Benedict Glaw  <jbglaw@lug-owl.de>
+
+	* diagnostics.h (DIAGNOSTIC_IGNORE_SELF_MOVE): Define for GCC 13+.
+
+2022-07-08  Nick Clifton  <nickc@redhat.com>
+
+	* 2.39 branch created.
+
+2022-04-20  Clément Chigot  <clement.chigot@atos.net>
+
+	* coff/xcoff.h (struct xcoff_loader_info): Add ldrel_count and
+	libpath fields.
+
 2022-04-07  Mark Harmstone  <mark@harmstone.com>
 
 	* coff/i386.h: Define R_SECTION.
@@ -452,7 +474,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021-2022 Free Software Foundation, Inc.
+Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

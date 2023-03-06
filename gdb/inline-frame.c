@@ -1,6 +1,6 @@
 /* Inline frame unwinder for GDB.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -150,7 +150,7 @@ clear_inline_frame_state (thread_info *thread)
 }
 
 static void
-inline_frame_this_id (struct frame_info *this_frame,
+inline_frame_this_id (frame_info_ptr this_frame,
 		      void **this_cache,
 		      struct frame_id *this_id)
 {
@@ -163,7 +163,7 @@ inline_frame_this_id (struct frame_info *this_frame,
      function, there must be previous frames, so this is safe - as
      long as we're careful not to create any cycles.  See related
      comments in get_prev_frame_always_1.  */
-  frame_info *prev_frame = get_prev_frame_always (this_frame);
+  frame_info_ptr prev_frame = get_prev_frame_always (this_frame);
   if (prev_frame == nullptr)
     error (_("failed to find previous frame when computing inline frame id"));
   *this_id = get_frame_id (prev_frame);
@@ -181,12 +181,12 @@ inline_frame_this_id (struct frame_info *this_frame,
      in the frame ID (and eventually, to set breakpoints).  */
   func = get_frame_function (this_frame);
   gdb_assert (func != NULL);
-  (*this_id).code_addr = BLOCK_ENTRY_PC (func->value_block ());
+  (*this_id).code_addr = func->value_block ()->entry_pc ();
   (*this_id).artificial_depth++;
 }
 
 static struct value *
-inline_frame_prev_register (struct frame_info *this_frame, void **this_cache,
+inline_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
 			    int regnum)
 {
   /* Use get_frame_register_value instead of
@@ -208,13 +208,13 @@ inline_frame_prev_register (struct frame_info *this_frame, void **this_cache,
 
 static int
 inline_frame_sniffer (const struct frame_unwind *self,
-		      struct frame_info *this_frame,
+		      frame_info_ptr this_frame,
 		      void **this_cache)
 {
   CORE_ADDR this_pc;
   const struct block *frame_block, *cur_block;
   int depth;
-  struct frame_info *next_frame;
+  frame_info_ptr next_frame;
   struct inline_state *state = find_inline_frame_state (inferior_thread ());
 
   this_pc = get_frame_address_in_block (this_frame);
@@ -226,14 +226,14 @@ inline_frame_sniffer (const struct frame_unwind *self,
      location.  */
   depth = 0;
   cur_block = frame_block;
-  while (BLOCK_SUPERBLOCK (cur_block))
+  while (cur_block->superblock ())
     {
-      if (block_inlined_p (cur_block))
+      if (cur_block->inlined_p ())
 	depth++;
-      else if (BLOCK_FUNCTION (cur_block) != NULL)
+      else if (cur_block->function () != NULL)
 	break;
 
-      cur_block = BLOCK_SUPERBLOCK (cur_block);
+      cur_block = cur_block->superblock ();
     }
 
   /* Check how many inlined functions already have frames.  */
@@ -286,15 +286,14 @@ block_starting_point_at (CORE_ADDR pc, const struct block *block)
   const struct block *new_block;
 
   bv = blockvector_for_pc (pc, NULL);
-  if (BLOCKVECTOR_MAP (bv) == NULL)
+  if (bv->map () == nullptr)
     return 0;
 
-  new_block = (const struct block *) addrmap_find (BLOCKVECTOR_MAP (bv),
-						   pc - 1);
+  new_block = (const struct block *) bv->map ()->find (pc - 1);
   if (new_block == NULL)
     return 1;
 
-  if (new_block == block || contained_in (new_block, block))
+  if (new_block == block || block->contains (new_block))
     return 0;
 
   /* The immediately preceding address belongs to a different block,
@@ -356,13 +355,13 @@ skip_inline_frames (thread_info *thread, bpstat *stop_chain)
   if (frame_block != NULL)
     {
       cur_block = frame_block;
-      while (BLOCK_SUPERBLOCK (cur_block))
+      while (cur_block->superblock ())
 	{
-	  if (block_inlined_p (cur_block))
+	  if (cur_block->inlined_p ())
 	    {
 	      /* See comments in inline_frame_this_id about this use
 		 of BLOCK_ENTRY_PC.  */
-	      if (BLOCK_ENTRY_PC (cur_block) == this_pc
+	      if (cur_block->entry_pc () == this_pc
 		  || block_starting_point_at (this_pc, cur_block))
 		{
 		  /* Do not skip the inlined frame if execution
@@ -372,15 +371,15 @@ skip_inline_frames (thread_info *thread, bpstat *stop_chain)
 		    break;
 
 		  skip_count++;
-		  skipped_syms.push_back (BLOCK_FUNCTION (cur_block));
+		  skipped_syms.push_back (cur_block->function ());
 		}
 	      else
 		break;
 	    }
-	  else if (BLOCK_FUNCTION (cur_block) != NULL)
+	  else if (cur_block->function () != NULL)
 	    break;
 
-	  cur_block = BLOCK_SUPERBLOCK (cur_block);
+	  cur_block = cur_block->superblock ();
 	}
     }
 
@@ -442,9 +441,9 @@ inline_skipped_symbol (thread_info *thread)
    skip_inline_frames).  */
 
 int
-frame_inlined_callees (struct frame_info *this_frame)
+frame_inlined_callees (frame_info_ptr this_frame)
 {
-  struct frame_info *next_frame;
+  frame_info_ptr next_frame;
   int inline_count = 0;
 
   /* First count how many inlined functions at this PC have frames

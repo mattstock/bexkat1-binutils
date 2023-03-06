@@ -3,7 +3,7 @@ dnl
 dnl And be careful when changing it!  If you must add tests with square
 dnl brackets, be sure changequote invocations surround it.
 dnl
-dnl   Copyright (C) 2012-2022 Free Software Foundation, Inc.
+dnl   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -74,6 +74,15 @@ AC_ARG_ENABLE(compressed_debug_sections,
   ,yes, | ,all, | *,gas,*) ac_default_compressed_debug_sections=yes ;;
   ,no, | ,none,)  ac_default_compressed_debug_sections=no ;;
   *)   ac_default_compressed_debug_sections=unset ;;
+esac])dnl
+
+# Select default compression algorithm.
+ac_default_compressed_debug_sections_algorithm=COMPRESS_DEBUG_GABI_ZLIB
+AC_ARG_ENABLE(default_compressed_debug_sections_algorithm,
+	      AS_HELP_STRING([--enable-default-compressed-debug-sections-algorithm={zlib,zstd}],
+	      [Default compression algorithm for --enable-compressed-debug-sections.]),
+[case "${enableval}" in
+   zstd) ac_default_compressed_debug_sections_algorithm=COMPRESS_DEBUG_ZSTD ;;
 esac])dnl
 
 # PR gas/19520
@@ -237,8 +246,7 @@ for this_target in $target $canon_targets ; do
     generic_target=${cpu_type}-${target_vendor}-${target_os}
     case ${generic_target} in
       i386-*-msdosdjgpp* \
-      | i386-*-go32* \
-      | i386-go32-rtems*)
+      | i386-*-go32*)
 	AC_DEFINE(STRICTCOFF, 1, [Using strict COFF?])
 	;;
 
@@ -411,7 +419,7 @@ changequote([,])dnl
 
     # Do we need the opcodes library?
     case ${cpu_type} in
-      vax | tic30)
+      vax | tic30 | i386 | arm)
 	;;
 
       *)
@@ -646,10 +654,6 @@ changequote([,])dnl
 	using_cgen=yes
 	;;
 
-      xc16x)
-	using_cgen=yes
-	;;
-
       xtensa)
 	f=config/xtensa-relax.o
 	case " $extra_objects " in
@@ -758,6 +762,9 @@ AC_DEFINE_UNQUOTED(DEFAULT_MIPS_FIX_LOONGSON3_LLSC,
 if test x$ac_default_compressed_debug_sections = xyes ; then
   AC_DEFINE(DEFAULT_FLAG_COMPRESS_DEBUG, 1, [Define if you want compressed debug sections by default.])
 fi
+
+AC_DEFINE_UNQUOTED(DEFAULT_COMPRESSED_DEBUG_ALGORITHM, $ac_default_compressed_debug_sections_algorithm,
+		   [Default compression algorithm for --enable-compressed-debug-sections.])
 
 # Turn on all targets if possible
 if test ${all_targets} = "yes"; then
@@ -1008,8 +1015,9 @@ AC_CHECK_DECLS([asprintf, mempcpy, stpcpy])
 
 BFD_BINARY_FOPEN
 
-# Link in zlib if we can.  This allows us to write compressed debug sections.
+# Link in zlib/zstd if we can.  This allows us to write compressed debug sections.
 AM_ZLIB
+AC_ZSTD
 
 # Support for VMS timestamps via cross compile
 

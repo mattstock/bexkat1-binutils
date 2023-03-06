@@ -1,4 +1,4 @@
-##Copyright (C) 1991-2022 Free Software Foundation, Inc.
+##Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
 # Makefile for GDB documentation.
 # This file is part of GDB.
@@ -121,6 +121,11 @@ PDFTEX = pdftex
 # Program to generate Postscript files from DVI files.
 DVIPS = dvips
 
+# Readline includes.
+READLINE_SYSTEM_DOC_INCLUDES =
+READLINE_INTREE_DOC_INCLUDES = $(READLINE_DIR)/rluser.texi $(READLINE_DIR)/hsuser.texi
+READLINE_DOC_SOURCE_INCLUDES = @READLINE_DOC_SOURCE_INCLUDES@
+
 # Main GDB manual
 # Note that this unconditionally includes the readline texi files,
 # even when --with-system-readline is used.  This is harmless because
@@ -129,8 +134,7 @@ GDB_DOC_SOURCE_INCLUDES = \
 	$(srcdir)/fdl.texi \
 	$(srcdir)/gpl.texi \
 	$(srcdir)/agentexpr.texi \
-	$(READLINE_DIR)/rluser.texi \
-	$(READLINE_DIR)/hsuser.texi
+	$(READLINE_DOC_SOURCE_INCLUDES)
 GDB_DOC_BUILD_INCLUDES = \
 	gdb-cfg.texi \
 	GDBvn.texi
@@ -564,7 +568,10 @@ gdb.mm: $(GDB_DOC_FILES) links2roff
 # GDB MANUAL: HTML file
 
 gdb/index.html: ${GDB_DOC_FILES}
-	$(MAKEHTML) $(MAKEHTMLFLAGS) $(READLINE_TEXI_INCFLAG) -I ${GDBMI_DIR} -I $(srcdir) $(srcdir)/gdb.texinfo
+	$(MAKEHTML) $(MAKEHTMLFLAGS) \
+		-o gdb \
+		$(READLINE_TEXI_INCFLAG) -I ${GDBMI_DIR} -I $(srcdir) \
+		$(srcdir)/gdb.texinfo
 
 stabs.info: $(STABS_DOC_FILES)
 	$(MAKEINFO_CMD) -I $(srcdir) -o stabs.info $(srcdir)/stabs.texinfo
@@ -572,7 +579,10 @@ stabs.info: $(STABS_DOC_FILES)
 # STABS DOCUMENTATION: HTML file
 
 stabs/index.html: $(STABS_DOC_FILES)
-	$(MAKEHTML) $(MAKEHTMLFLAGS) -I $(srcdir) $(srcdir)/stabs.texinfo
+	$(MAKEHTML) $(MAKEHTMLFLAGS) \
+		-o stabs \
+		-I $(srcdir) \
+		$(srcdir)/stabs.texinfo
 
 # Clean these up before each run.  Avoids a catch 22 with not being
 # able to re-generate these files (to fix a corruption) because these
@@ -614,7 +624,10 @@ annotate.info: $(ANNOTATE_DOC_FILES)
 	$(MAKEINFO_CMD) -I $(srcdir) -o annotate.info $(srcdir)/annotate.texinfo
 
 annotate/index.html: $(ANNOTATE_DOC_FILES)
-	$(MAKEHTML) $(MAKEHTMLFLAGS) -I $(srcdir) $(srcdir)/annotate.texinfo
+	$(MAKEHTML) $(MAKEHTMLFLAGS) \
+		-o annotate \
+		-I $(srcdir) \
+		$(srcdir)/annotate.texinfo
 
 # Man pages
 gdb.1: $(GDB_DOC_FILES)

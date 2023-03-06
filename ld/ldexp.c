@@ -1,5 +1,5 @@
 /* This module handles expression trees.
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support <sac@cygnus.com>.
 
    This file is part of the GNU Binutils.
@@ -864,9 +864,17 @@ fold_name (etree_type *tree)
 	      bfd_vma val;
 
 	      if (tree->type.node_code == SIZEOF)
-		val = (os->bfd_section->size
-		       / bfd_octets_per_byte (link_info.output_bfd,
-					      os->bfd_section));
+		{
+		  if (os->processed_vma)
+		    val = os->bfd_section->size;
+		  else
+		    /* If we've just called lang_reset_memory_regions,
+		       size will be zero and a previous estimate of
+		       size will be in rawsize.  */
+		    val = os->bfd_section->rawsize;
+		  val /= bfd_octets_per_byte (link_info.output_bfd,
+					      os->bfd_section);
+		}
 	      else
 		val = (bfd_vma)1 << os->bfd_section->alignment_power;
 

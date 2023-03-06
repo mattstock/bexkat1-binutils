@@ -1,5 +1,5 @@
 /* ldlang.h - linker command language support
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -76,6 +76,7 @@ enum statement_enum
   lang_fill_statement_enum,
   lang_group_statement_enum,
   lang_input_section_enum,
+  lang_input_matcher_enum,
   lang_input_statement_enum,
   lang_insert_statement_enum,
   lang_output_section_statement_enum,
@@ -305,6 +306,8 @@ typedef struct lang_input_statement_struct
      Usually the same as filename, but for a file spec'd with
      -l this is the -l switch itself rather than the filename.  */
   const char *local_sym_name;
+  /* Name to use when sorting.  */
+  const char *sort_key;
   /* Extra search path. Used to find a file relative to the
      directory of the current linker script.  */
   const char *extra_search_path;
@@ -332,6 +335,14 @@ typedef struct
   asection *section;
   void *pattern;
 } lang_input_section_type;
+
+typedef struct
+{
+  lang_statement_header_type header;
+  asection *section;
+  void *pattern;
+  lang_input_statement_type *input_stmt;
+} lang_input_matcher_type;
 
 struct map_symbol_def {
   struct bfd_link_hash_entry *entry;
@@ -382,14 +393,14 @@ struct lang_wild_statement_struct
   lang_statement_header_type header;
   const char *filename;
   bool filenames_sorted;
+  bool any_specs_sorted;
   struct wildcard_list *section_list;
   bool keep_sections;
   lang_statement_list_type children;
   struct name_list *exclude_name_list;
+  lang_statement_list_type matching_sections;
 
-  walk_wild_section_handler_t walk_wild_section_handler;
-  struct wildcard_list *handler_data[4];
-  lang_section_bst_type *tree;
+  lang_section_bst_type *tree, **rightmost;
   struct flag_info *section_flag_list;
 };
 
@@ -437,6 +448,7 @@ typedef union lang_statement_union
   lang_fill_statement_type fill_statement;
   lang_group_statement_type group_statement;
   lang_input_section_type input_section;
+  lang_input_matcher_type input_matcher;
   lang_input_statement_type input_statement;
   lang_insert_statement_type insert_statement;
   lang_output_section_statement_type output_section_statement;
@@ -633,7 +645,10 @@ extern void push_stat_ptr
 extern void pop_stat_ptr
   (void);
 extern void lang_add_data
-  (int type, union etree_union *);
+  (int, union etree_union *);
+extern bfd_vma charcount(const char *s);
+extern void lang_add_string
+  (size_t, const char *s);
 extern void lang_add_reloc
   (bfd_reloc_code_real_type, reloc_howto_type *, asection *, const char *,
    union etree_union *);

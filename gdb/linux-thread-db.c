@@ -1,6 +1,6 @@
 /* libthread_db assisted debugging support, generic parts.
 
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -317,7 +317,7 @@ struct thread_db_thread_info : public private_thread_info
 static thread_db_thread_info *
 get_thread_db_thread_info (thread_info *thread)
 {
-  return static_cast<thread_db_thread_info *> (thread->priv.get ());
+  return gdb::checked_static_cast<thread_db_thread_info *> (thread->priv.get ());
 }
 
 static const char *
@@ -1617,8 +1617,6 @@ void
 thread_db_target::update_thread_list ()
 {
   struct thread_db_info *info;
-
-  prune_threads ();
 
   for (inferior *inf : all_inferiors ())
     {

@@ -1,12 +1,13 @@
 /* DO NOT EDIT!  -*- buffer-read-only: t -*-  This file is automatically
-   generated from "libbfd-in.h", "libbfd.c", "bfdio.c", "bfdwin.c",
-   "cache.c", "reloc.c", "archures.c" and "linker.c".
+   generated from "libbfd-in.h", "libbfd.c", "bfd.c", "bfdio.c",
+   "bfdwin.c", "cache.c", "reloc.c", "section.c", "targets.c", "archures.c"
+   and "linker.c".
    Run "make headers" in your build bfd/ to regenerate.  */
 
 /* libbfd.h -- Declarations used by bfd library *implementation*.
    (This include file is not for users of the library.)
 
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    Written by Cygnus Support.
 
@@ -456,6 +457,10 @@ extern bool _bfd_nosymbols_find_nearest_line
   (bfd *, asymbol **, asection *, bfd_vma,
    const char **, const char **, unsigned int *, unsigned int *)
   ATTRIBUTE_HIDDEN;
+extern bool _bfd_nosymbols_find_nearest_line_with_alt
+  (bfd *, const char *, asymbol **, asection *, bfd_vma,
+   const char **, const char **, unsigned int *, unsigned int *)
+  ATTRIBUTE_HIDDEN;
 extern bool _bfd_nosymbols_find_line
   (bfd *, asymbol **, asymbol *, const char **, unsigned int *)
   ATTRIBUTE_HIDDEN;
@@ -591,6 +596,13 @@ extern int _bfd_dwarf2_find_nearest_line
    const char **, const char **, unsigned int *, unsigned int *,
    const struct dwarf_debug_section *, void **) ATTRIBUTE_HIDDEN;
 
+/* Find the nearest line using DWARF 2 debugging information, with
+   the option of specifying a .gnu_debugaltlink file.  */
+extern int _bfd_dwarf2_find_nearest_line_with_alt
+  (bfd *, const char *, asymbol **, asymbol *, asection *, bfd_vma,
+   const char **, const char **, unsigned int *, unsigned int *,
+   const struct dwarf_debug_section *, void **) ATTRIBUTE_HIDDEN;
+
 /* Find the bias between DWARF addresses and real addresses.  */
 extern bfd_signed_vma _bfd_dwarf2_find_symbol_bias
   (asymbol **, void **) ATTRIBUTE_HIDDEN;
@@ -607,6 +619,9 @@ extern bool _bfd_dwarf2_slurp_debug_info
 
 /* Clean up the data used to handle DWARF 2 debugging information. */
 extern void _bfd_dwarf2_cleanup_debug_info
+  (bfd *, void **) ATTRIBUTE_HIDDEN;
+
+extern void _bfd_stab_cleanup
   (bfd *, void **) ATTRIBUTE_HIDDEN;
 
 /* Create a new section entry.  */
@@ -974,6 +989,11 @@ bool bfd_write_bigendian_4byte_int (bfd *, unsigned int);
 
 unsigned int bfd_log2 (bfd_vma x);
 
+/* Extracted from bfd.c.  */
+bfd_error_handler_type _bfd_set_error_handler_caching (bfd *);
+
+const char *_bfd_get_error_program_name (void);
+
 /* Extracted from bfdio.c.  */
 struct bfd_iovec
 {
@@ -1285,7 +1305,7 @@ static const char *const bfd_reloc_code_real_names[] = { "@@uninitialized@@",
   "BFD_RELOC_MICROMIPS_HIGHER",
   "BFD_RELOC_MIPS_SCN_DISP",
   "BFD_RELOC_MICROMIPS_SCN_DISP",
-  "BFD_RELOC_MIPS_REL16",
+  "BFD_RELOC_MIPS_16",
   "BFD_RELOC_MIPS_RELGOT",
   "BFD_RELOC_MIPS_JALR",
   "BFD_RELOC_MICROMIPS_JALR",
@@ -2794,10 +2814,6 @@ static const char *const bfd_reloc_code_real_names[] = { "@@uninitialized@@",
   "BFD_RELOC_XSTORMY16_FPTR16",
   "BFD_RELOC_RELC",
 
-  "BFD_RELOC_XC16X_PAG",
-  "BFD_RELOC_XC16X_POF",
-  "BFD_RELOC_XC16X_SEG",
-  "BFD_RELOC_XC16X_SOF",
   "BFD_RELOC_VAX_GLOB_DAT",
   "BFD_RELOC_VAX_JMP_SLOT",
   "BFD_RELOC_VAX_RELATIVE",
@@ -3464,6 +3480,43 @@ static const char *const bfd_reloc_code_real_names[] = { "@@uninitialized@@",
   "BFD_RELOC_LARCH_SUB24",
   "BFD_RELOC_LARCH_SUB32",
   "BFD_RELOC_LARCH_SUB64",
+  "BFD_RELOC_LARCH_B16",
+  "BFD_RELOC_LARCH_B21",
+  "BFD_RELOC_LARCH_B26",
+  "BFD_RELOC_LARCH_ABS_HI20",
+  "BFD_RELOC_LARCH_ABS_LO12",
+  "BFD_RELOC_LARCH_ABS64_LO20",
+  "BFD_RELOC_LARCH_ABS64_HI12",
+  "BFD_RELOC_LARCH_PCALA_HI20",
+  "BFD_RELOC_LARCH_PCALA_LO12",
+  "BFD_RELOC_LARCH_PCALA64_LO20",
+  "BFD_RELOC_LARCH_PCALA64_HI12",
+  "BFD_RELOC_LARCH_GOT_PC_HI20",
+  "BFD_RELOC_LARCH_GOT_PC_LO12",
+  "BFD_RELOC_LARCH_GOT64_PC_LO20",
+  "BFD_RELOC_LARCH_GOT64_PC_HI12",
+  "BFD_RELOC_LARCH_GOT_HI20",
+  "BFD_RELOC_LARCH_GOT_LO12",
+  "BFD_RELOC_LARCH_GOT64_LO20",
+  "BFD_RELOC_LARCH_GOT64_HI12",
+  "BFD_RELOC_LARCH_TLS_LE_HI20",
+  "BFD_RELOC_LARCH_TLS_LE_LO12",
+  "BFD_RELOC_LARCH_TLS_LE64_LO20",
+  "BFD_RELOC_LARCH_TLS_LE64_HI12",
+  "BFD_RELOC_LARCH_TLS_IE_PC_HI20",
+  "BFD_RELOC_LARCH_TLS_IE_PC_LO12",
+  "BFD_RELOC_LARCH_TLS_IE64_PC_LO20",
+  "BFD_RELOC_LARCH_TLS_IE64_PC_HI12",
+  "BFD_RELOC_LARCH_TLS_IE_HI20",
+  "BFD_RELOC_LARCH_TLS_IE_LO12",
+  "BFD_RELOC_LARCH_TLS_IE64_LO20",
+  "BFD_RELOC_LARCH_TLS_IE64_HI12",
+  "BFD_RELOC_LARCH_TLS_LD_PC_HI20",
+  "BFD_RELOC_LARCH_TLS_LD_HI20",
+  "BFD_RELOC_LARCH_TLS_GD_PC_HI20",
+  "BFD_RELOC_LARCH_TLS_GD_HI20",
+  "BFD_RELOC_LARCH_32_PCREL",
+  "BFD_RELOC_LARCH_RELAX",
  "@@overflow: BFD_RELOC_UNUSED@@",
 };
 #endif
@@ -3504,6 +3557,12 @@ bool _bfd_unrecognized_reloc
    (bfd * abfd,
     sec_ptr section,
     unsigned int r_type);
+
+/* Extracted from section.c.  */
+bool _bfd_section_size_insane (bfd *abfd, asection *sec);
+
+/* Extracted from targets.c.  */
+struct per_xvec_message **_bfd_per_xvec_warn (const bfd_target *, size_t);
 
 /* Extracted from archures.c.  */
 extern const bfd_arch_info_type bfd_default_arch_struct;

@@ -1,6 +1,6 @@
 /* Target-dependent code for the FT32.
 
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 
 #include "gdbarch.h"
 
-struct ft32_gdbarch_tdep : gdbarch_tdep
+struct ft32_gdbarch_tdep : gdbarch_tdep_base
 {
   /* Type for a pointer to a function.  Used for the type of PC.  */
   struct type *pc_type = nullptr;

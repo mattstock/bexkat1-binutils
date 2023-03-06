@@ -1,6 +1,6 @@
 /* Definitions for symbol file management in GDB.
 
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -137,20 +137,17 @@ struct entry_info
 
 #define SECT_OFF_DATA(objfile) \
      ((objfile->sect_index_data == -1) \
-      ? (internal_error (__FILE__, __LINE__, \
-			 _("sect_index_data not initialized")), -1)	\
+      ? (internal_error (_("sect_index_data not initialized")), -1)	\
       : objfile->sect_index_data)
 
 #define SECT_OFF_RODATA(objfile) \
      ((objfile->sect_index_rodata == -1) \
-      ? (internal_error (__FILE__, __LINE__, \
-			 _("sect_index_rodata not initialized")), -1)	\
+      ? (internal_error (_("sect_index_rodata not initialized")), -1)	\
       : objfile->sect_index_rodata)
 
 #define SECT_OFF_TEXT(objfile) \
      ((objfile->sect_index_text == -1) \
-      ? (internal_error (__FILE__, __LINE__, \
-			 _("sect_index_text not initialized")), -1)	\
+      ? (internal_error (_("sect_index_text not initialized")), -1)	\
       : objfile->sect_index_text)
 
 /* Sometimes the .bss section is missing from the objfile, so we don't
@@ -401,7 +398,7 @@ struct objfile
 private:
 
   /* The only way to create an objfile is to call objfile::make.  */
-  objfile (bfd *, const char *, objfile_flags);
+  objfile (gdb_bfd_ref_ptr, const char *, objfile_flags);
 
 public:
 
@@ -409,13 +406,13 @@ public:
      remove it from the program space's list.  In some cases, you may
      need to hold a reference to an objfile that is independent of its
      existence on the program space's list; for this case, the
-     destructor must be public so that shared_ptr can reference
+     destructor must be public so that unique_ptr can reference
      it.  */
   ~objfile ();
 
   /* Create an objfile.  */
-  static objfile *make (bfd *bfd_, const char *name_, objfile_flags flags_,
-			objfile *parent = nullptr);
+  static objfile *make (gdb_bfd_ref_ptr bfd_, const char *name_,
+			objfile_flags flags_, objfile *parent = nullptr);
 
   /* Remove an objfile from the current program space, and free
      it.  */
@@ -597,7 +594,7 @@ public:
        section.  */
     gdb_assert (section->owner == nullptr || section->owner == this->obfd);
 
-    int idx = gdb_bfd_section_index (this->obfd, section);
+    int idx = gdb_bfd_section_index (this->obfd.get (), section);
     return this->section_offsets[idx];
   }
 
@@ -608,9 +605,22 @@ public:
        section.  */
     gdb_assert (section->owner == nullptr || section->owner == this->obfd);
 
-    int idx = gdb_bfd_section_index (this->obfd, section);
+    int idx = gdb_bfd_section_index (this->obfd.get (), section);
     this->section_offsets[idx] = offset;
   }
+
+private:
+
+  /* Ensure that partial symbols have been read and return the "quick" (aka
+     partial) symbol functions for this symbol reader.  */
+  const std::forward_list<quick_symbol_functions_up> &
+  qf_require_partial_symbols ()
+  {
+    this->require_partial_symbols (true);
+    return qf;
+  }
+
+public:
 
   /* The object file's original name as specified by the user,
      made absolute, and tilde-expanded.  However, it is not canonicalized
@@ -636,14 +646,21 @@ public:
   struct compunit_symtab *compunit_symtabs = nullptr;
 
   /* The object file's BFD.  Can be null if the objfile contains only
-     minimal symbols, e.g. the run time common symbols for SunOS4.  */
+     minimal symbols (e.g. the run time common symbols for SunOS4) or
+     if the objfile is a dynamic objfile (e.g. created by JIT reader
+     API).  */
 
-  bfd *obfd;
+  gdb_bfd_ref_ptr obfd;
 
-  /* The per-BFD data.  Note that this is treated specially if OBFD
-     is NULL.  */
+  /* The per-BFD data.  */
 
   struct objfile_per_bfd_storage *per_bfd = nullptr;
+
+  /* In some cases, the per_bfd object is owned by this objfile and
+     not by the BFD itself.  In this situation, this holds the owning
+     pointer.  */
+
+  std::unique_ptr<objfile_per_bfd_storage> per_bfd_storage;
 
   /* The modification timestamp of the object file, as of the last time
      we read its symbols.  */
@@ -653,7 +670,7 @@ public:
   /* Obstack to hold objects that should be freed when we load a new symbol
      table from this object file.  */
 
-  struct obstack objfile_obstack {};
+  auto_obstack objfile_obstack;
 
   /* Structure which keeps track of functions that manipulate objfile's
      of the same type as this objfile.  I.e. the function to read partial
@@ -669,7 +686,7 @@ public:
 
   /* Per objfile data-pointers required by other GDB modules.  */
 
-  REGISTRY_FIELDS {};
+  registry<objfile> registry_fields;
 
   /* Set of relocation offsets to apply to each section.
      The table is indexed by the_bfd_section->index, thus it is generally
@@ -874,8 +891,8 @@ extern int have_minimal_symbols (void);
 
 extern struct obj_section *find_pc_section (CORE_ADDR pc);
 
-/* Return non-zero if PC is in a section called NAME.  */
-extern int pc_in_section (CORE_ADDR, const char *);
+/* Return true if PC is in a section called NAME.  */
+extern bool pc_in_section (CORE_ADDR, const char *);
 
 /* Return non-zero if PC is in a SVR4-style procedure linkage table
    section.  */
@@ -886,10 +903,6 @@ in_plt_section (CORE_ADDR pc)
   return (pc_in_section (pc, ".plt")
 	  || pc_in_section (pc, ".plt.sec"));
 }
-
-/* Keep a registry of per-objfile data-pointers required by other GDB
-   modules.  */
-DECLARE_REGISTRY(objfile);
 
 /* In normal use, the section map will be rebuilt by find_pc_section
    if objfiles have been added, removed or relocated since it was last
@@ -903,9 +916,8 @@ extern scoped_restore_tmpl<int> inhibit_section_map_updates
     (struct program_space *pspace);
 
 extern void default_iterate_over_objfiles_in_search_order
-  (struct gdbarch *gdbarch,
-   iterate_over_objfiles_in_search_order_cb_ftype *cb,
-   void *cb_data, struct objfile *current_objfile);
+  (gdbarch *gdbarch, iterate_over_objfiles_in_search_order_cb_ftype cb,
+   objfile *current_objfile);
 
 /* Reset the per-BFD storage area on OBJ.  */
 

@@ -72,10 +72,8 @@ int getrusage();
 # endif
 #endif
 
-#ifdef HAVE_UNISTD_H
 #undef MAXPATHLEN		/* sys/param.h might define this also */
 #include <unistd.h>
-#endif
 
 #include <stdlib.h>
 
@@ -879,7 +877,7 @@ do_fstat(os_emul_data *emul,
 {
   int fd = cpu_registers(processor)->gpr[arg0];
   unsigned_word stat_buf_addr = cpu_registers(processor)->gpr[arg0+1];
-  struct stat buf;
+  struct stat buf = {};
   int status;
 #ifdef SYS_fstat
   SYS(fstat);

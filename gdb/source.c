@@ -1,5 +1,5 @@
 /* List lines of source files for GDB, the GNU debugger.
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -115,7 +115,8 @@ private:
   int m_line = 0;
 };
 
-static program_space_key<current_source_location> current_source_key;
+static const registry<program_space>::key<current_source_location>
+     current_source_key;
 
 /* Default number of lines to print with commands like "list".
    This is based on guessing how many long (i.e. more than chars_per_line
@@ -329,7 +330,7 @@ select_source_symtab (struct symtab *s)
       if (sal.symtab == NULL)
 	/* We couldn't find the location of `main', possibly due to missing
 	   line number info, fall back to line 1 in the corresponding file.  */
-	loc->set (symbol_symtab (bsym.symbol), 1);
+	loc->set (bsym.symbol->symtab (), 1);
       else
 	loc->set (sal.symtab, std::max (sal.line - (lines_to_list - 1), 1));
       return;
@@ -537,15 +538,15 @@ add_path (const char *dirname, char **which_path, int parse_separators)
 
   for (const gdb::unique_xmalloc_ptr<char> &name_up : dir_vec)
     {
-      char *name = name_up.get ();
+      const char *name = name_up.get ();
       char *p;
       struct stat st;
-      gdb::unique_xmalloc_ptr<char> new_name_holder;
+      std::string new_name_holder;
 
       /* Spaces and tabs will have been removed by buildargv().
 	 NAME is the start of the directory.
 	 P is the '\0' following the end.  */
-      p = name + strlen (name);
+      p = name_up.get () + strlen (name);
 
       while (!(IS_DIR_SEPARATOR (*name) && p <= name + 1)	/* "/" */
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
@@ -589,16 +590,18 @@ add_path (const char *dirname, char **which_path, int parse_separators)
       if (name[0] == '\0')
         goto skip_dup;
       if (name[0] == '~')
-	new_name_holder.reset (tilde_expand (name));
+	new_name_holder
+	  = gdb::unique_xmalloc_ptr<char[]> (tilde_expand (name)).get ();
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
       else if (IS_ABSOLUTE_PATH (name) && p == name + 2) /* "d:" => "d:." */
-	new_name_holder.reset (concat (name, ".", (char *) NULL));
+	new_name_holder = std::string (name) + ".";
 #endif
       else if (!IS_ABSOLUTE_PATH (name) && name[0] != '$')
 	new_name_holder = gdb_abspath (name);
       else
-	new_name_holder.reset (savestring (name, p - name));
-      name = new_name_holder.get ();
+	new_name_holder = std::string (name, p - name);
+
+      name = new_name_holder.c_str ();
 
       /* Unless it's a variable, check existence.  */
       if (name[0] != '$')
@@ -950,7 +953,8 @@ done:
       else if ((opts & OPF_RETURN_REALPATH) != 0)
 	*filename_opened = gdb_realpath (filename);
       else
-	*filename_opened = gdb_abspath (filename);
+	*filename_opened
+	  = make_unique_xstrdup (gdb_abspath (filename).c_str ());
     }
 
   errno = last_errno;
@@ -1065,7 +1069,7 @@ find_and_open_source (const char *filename,
      the attempt to read this source file failed.  GDB will then display
      the filename and line number instead.  */
   if (!source_open)
-    return scoped_fd (-1);
+    return scoped_fd (-ECANCELED);
 
   /* Quick way out if we already know its full name.  */
   if (*fullname)
@@ -1142,15 +1146,7 @@ find_and_open_source (const char *filename,
 	 helpful if part of the compilation directory was removed,
 	 e.g. using gcc's -fdebug-prefix-map, and we have added the missing
 	 prefix to source_path.  */
-      std::string cdir_filename (dirname);
-
-      /* Remove any trailing directory separators.  */
-      while (IS_DIR_SEPARATOR (cdir_filename.back ()))
-	cdir_filename.pop_back ();
-
-      /* Add our own directory separator.  */
-      cdir_filename.append (SLASH_STRING);
-      cdir_filename.append (filename_start);
+      std::string cdir_filename = path_join (dirname, filename_start);
 
       result = openp (path, OPF_SEARCH_IN_PATH | OPF_RETURN_REALPATH,
 		      cdir_filename.c_str (), OPEN_MODE, fullname);
@@ -1164,11 +1160,15 @@ find_and_open_source (const char *filename,
 			OPEN_MODE, fullname);
     }
 
+  /* If the file wasn't found, then openp will have set errno accordingly.  */
+  if (result < 0)
+    result = -errno;
+
   return scoped_fd (result);
 }
 
 /* Open a source file given a symtab S.  Returns a file descriptor or
-   negative number for error.  
+   negative errno for error.
    
    This function is a convenience function to find_and_open_source.  */
 
@@ -1176,7 +1176,7 @@ scoped_fd
 open_source_file (struct symtab *s)
 {
   if (!s)
-    return scoped_fd (-1);
+    return scoped_fd (-EINVAL);
 
   gdb::unique_xmalloc_ptr<char> fullname (s->fullname);
   s->fullname = NULL;
@@ -1199,14 +1199,26 @@ open_source_file (struct symtab *s)
 	      srcpath += s->filename;
 	    }
 
-	  const struct bfd_build_id *build_id = build_id_bfd_get (ofp->obfd);
+	  const struct bfd_build_id *build_id
+	    = build_id_bfd_get (ofp->obfd.get ());
 
 	  /* Query debuginfod for the source file.  */
 	  if (build_id != nullptr && !srcpath.empty ())
-	    fd = debuginfod_source_query (build_id->data,
-					  build_id->size,
-					  srcpath.c_str (),
-					  &fullname);
+	    {
+	      scoped_fd query_fd
+		= debuginfod_source_query (build_id->data,
+					   build_id->size,
+					   srcpath.c_str (),
+					   &fullname);
+
+	      /* Don't return a negative errno from debuginfod_source_query.
+		 It handles the reporting of its own errors.  */
+	      if (query_fd.get () >= 0)
+		{
+		  s->fullname = fullname.release ();
+		  return query_fd;
+		}
+	    }
 	}
     }
 
@@ -1296,7 +1308,7 @@ symtab_to_filename_for_display (struct symtab *symtab)
   else if (filename_display_string == filename_display_relative)
     return symtab->filename;
   else
-    internal_error (__FILE__, __LINE__, _("invalid filename_display_string"));
+    internal_error (_("invalid filename_display_string"));
 }
 
 
@@ -1309,6 +1321,7 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
 			 print_source_lines_flags flags)
 {
   bool noprint = false;
+  int errcode = ENOENT;
   int nlines = stopline - line;
   struct ui_out *uiout = current_uiout;
 
@@ -1339,7 +1352,10 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
 	  scoped_fd desc = open_source_file (s);
 	  last_source_error = desc.get () < 0;
 	  if (last_source_error)
-	    noprint = true;
+	    {
+	      noprint = true;
+	      errcode = -desc.get ();
+	    }
 	}
     }
   else
@@ -1357,7 +1373,7 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
 	  char *name = (char *) alloca (len);
 
 	  xsnprintf (name, len, "%d\t%s", line, filename);
-	  print_sys_errmsg (name, errno);
+	  print_sys_errmsg (name, errcode);
 	}
       else
 	{
@@ -1630,7 +1646,8 @@ search_command_helper (const char *regex, int from_tty, bool forward)
 
   scoped_fd desc (open_source_file (loc->symtab ()));
   if (desc.get () < 0)
-    perror_with_name (symtab_to_filename_for_display (loc->symtab ()));
+    perror_with_name (symtab_to_filename_for_display (loc->symtab ()),
+		      -desc.get ());
 
   int line = (forward
 	      ? last_line_listed + 1

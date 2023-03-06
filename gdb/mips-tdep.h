@@ -1,6 +1,6 @@
 /* Target-dependent header for the MIPS architecture, for GDB, the GNU Debugger.
 
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -93,7 +93,7 @@ enum mips_fpu_type
 };
 
 /* MIPS specific per-architecture information.  */
-struct mips_gdbarch_tdep : gdbarch_tdep
+struct mips_gdbarch_tdep : gdbarch_tdep_base
 {
   /* from the elf header */
   int elf_flags = 0;
@@ -125,7 +125,7 @@ struct mips_gdbarch_tdep : gdbarch_tdep
 
   /* Return the expected next PC if FRAME is stopped at a syscall
      instruction.  */
-  CORE_ADDR (*syscall_next_pc) (struct frame_info *frame) = nullptr;
+  CORE_ADDR (*syscall_next_pc) (frame_info_ptr frame) = nullptr;
 };
 
 /* Register numbers of various important registers.  */

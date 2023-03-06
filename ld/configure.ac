@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script
 dnl
-dnl   Copyright (C) 2012-2022 Free Software Foundation, Inc.
+dnl   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ AC_PROG_GREP
 AC_GNU_SOURCE
 AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_INSTALL
+PKG_PROG_PKG_CONFIG
 
 LT_INIT
 ACX_LARGEFILE
@@ -162,6 +163,15 @@ AC_ARG_ENABLE(compressed_debug_sections,
   ,no, | ,none,)  ac_default_compressed_debug_sections=no ;;
 esac])dnl
 
+# Select default compression algorithm.
+ac_default_compressed_debug_sections_algorithm=COMPRESS_DEBUG_GABI_ZLIB
+AC_ARG_ENABLE(default_compressed_debug_sections_algorithm,
+	      AS_HELP_STRING([--enable-default-compressed-debug-sections-algorithm={zlib,zstd}],
+	      [Default compression algorithm for --enable-compressed-debug-sections.]),
+[case "${enableval}" in
+   zstd) ac_default_compressed_debug_sections_algorithm=COMPRESS_DEBUG_ZSTD ;;
+esac])dnl
+
 # Decide setting DT_RUNPATH instead of DT_RPATH by default
 ac_default_new_dtags=unset
 # Provide a configure time option to override our default.
@@ -202,6 +212,37 @@ AC_ARG_ENABLE(separate-code,
   yes) ac_default_ld_z_separate_code=1 ;;
   no) ac_default_ld_z_separate_code=0 ;;
 esac])
+
+
+# By default warn when an executable stack is created due to object files
+# requesting such, not when the user specifies -z execstack.
+ac_default_ld_warn_execstack=2
+AC_ARG_ENABLE(warn-execstack,
+	      AS_HELP_STRING([--enable-warn-execstack],
+	      [enable warnings when creating an executable stack]),
+[case "${enableval}" in
+  yes) ac_default_ld_warn_execstack=1 ;;
+  no)  ac_default_ld_warn_execstack=0 ;;
+esac])
+
+ac_default_ld_warn_rwx_segments=unset
+AC_ARG_ENABLE(warn-rwx-segments,
+	      AS_HELP_STRING([--enable-warn-rwx-segments],
+	      [enable warnings when creating segements with RWX permissions]),
+[case "${enableval}" in
+  yes) ac_default_ld_warn_rwx_segments=1 ;;
+  no)  ac_default_ld_warn_rwx_segments=0 ;;
+esac])
+
+ac_default_ld_default_execstack=unset
+AC_ARG_ENABLE(default-execstack,
+	      AS_HELP_STRING([--enable-default-execstack],
+	      [create an executable stack if an input file is missing a .note.GNU-stack section]),
+[case "${enableval}" in
+  yes) ac_default_ld_default_execstack=1 ;;
+  no)  ac_default_ld_default_execstack=0 ;;
+esac])
+
 
 # Decide if --error-handling-script should be supported.
 ac_support_error_handling_script=unset
@@ -258,6 +299,23 @@ fi
 AM_CONDITIONAL(ENABLE_LIBCTF, test "${enable_libctf}" = yes)
 AC_SUBST(enable_libctf)
 
+# Used to validate --package-metadata= input. Disabled by default.
+AC_ARG_ENABLE([jansson],
+  [AS_HELP_STRING([--enable-jansson],
+    [enable jansson [default=no]])],
+  [enable_jansson=$enableval],
+  [enable_jansson="no"])
+
+AS_IF([test "x$enable_jansson" != "xno"],
+  [PKG_CHECK_MODULES(JANSSON, [jansson],
+    [
+      AC_DEFINE(HAVE_JANSSON, 1, [The jansson library is to be used])
+      AC_SUBST([JANSSON_CFLAGS])
+      AC_SUBST([JANSSON_LIBS])
+    ],
+    [AC_MSG_ERROR([Cannot find jansson library])])
+  ])
+
 AM_BINUTILS_WARNINGS
 
 AM_LC_MESSAGES
@@ -309,11 +367,11 @@ AC_SUBST(NATIVE_LIB_DIRS)
 AC_CHECK_HEADERS(fcntl.h elf-hints.h limits.h inttypes.h stdint.h \
 		 sys/file.h sys/mman.h sys/param.h sys/stat.h sys/time.h \
 		 sys/types.h unistd.h)
-AC_CHECK_FUNCS(close glob lseek mkstemp open realpath sbrk waitpid)
+AC_CHECK_FUNCS(close glob lseek mkstemp open realpath waitpid)
 
 BFD_BINARY_FOPEN
 
-AC_CHECK_DECLS([asprintf, environ, sbrk])
+AC_CHECK_DECLS([asprintf, environ])
 
 AC_FUNC_MMAP
 
@@ -329,9 +387,10 @@ if test $ld_cv_decl_getopt_unistd_h = yes; then
 	    [Is the prototype for getopt in <unistd.h> in the expected format?])
 fi
 
-# Link in zlib if we can.  This allows us to read and write
-# compressed CTF sections.
+# Link in zlib/zstd if we can.  This allows us to read and write
+# compressed debug sections.
 AM_ZLIB
+AC_ZSTD
 
 # When converting linker scripts into strings for use in emulation
 # files, use astring.sed if the compiler supports ANSI string
@@ -460,6 +519,9 @@ if test x$ac_default_compressed_debug_sections = xyes ; then
   AC_DEFINE(DEFAULT_FLAG_COMPRESS_DEBUG, 1, [Define if you want compressed debug sections by default.])
 fi
 
+AC_DEFINE_UNQUOTED(DEFAULT_COMPRESSED_DEBUG_ALGORITHM, $ac_default_compressed_debug_sections_algorithm,
+		   [Default compression algorithm for --enable-compressed-debug-sections.])
+
 if test "${ac_default_new_dtags}" = unset; then
   ac_default_new_dtags=0
 fi
@@ -500,6 +562,26 @@ fi
 AC_DEFINE_UNQUOTED(DEFAULT_LD_Z_SEPARATE_CODE,
   $ac_default_ld_z_separate_code,
   [Define to 1 if you want to enable -z separate-code in ELF linker by default.])
+
+
+AC_DEFINE_UNQUOTED(DEFAULT_LD_WARN_EXECSTACK,
+  $ac_default_ld_warn_execstack,
+  [Define to 1 if you want to enable --warn-execstack in ELF linker by default.])
+
+if test "${ac_default_ld_warn_rwx_segments}" = unset; then
+  ac_default_ld_warn_rwx_segments=1
+fi
+AC_DEFINE_UNQUOTED(DEFAULT_LD_WARN_RWX_SEGMENTS,
+  $ac_default_ld_warn_rwx_segments,
+  [Define to 0 if you want to disable --warn-rwx-segments in ELF linker by default.])
+
+if test "${ac_default_ld_default_execstack}" = unset; then
+  ac_default_ld_default_execstack=1
+fi
+AC_DEFINE_UNQUOTED(DEFAULT_LD_EXECSTACK,
+  $ac_default_ld_default_execstack,
+  [Define to 0 if you want to disable the generation of an executable stack when a .note-GNU-stack section is missing.])
+
 
 if test "${ac_support_error_handling_script}" = unset; then
   ac_support_error_handling_script=1
@@ -546,15 +628,18 @@ AC_SUBST(EMULATION_LIBPATH)
 if test x${enable_static} = xno; then
   TESTBFDLIB="-Wl,--rpath,../bfd/.libs ../bfd/.libs/libbfd.so"
   TESTCTFLIB="-Wl,--rpath,../libctf/.libs ../libctf/.libs/libctf.so"
+  TESTSFRAMELIB="-Wl,--rpath,../libsframe/.libs ../libsframe/.libs/libsframe.so"
 else
   TESTBFDLIB="../bfd/.libs/libbfd.a"
   TESTCTFLIB="../libctf/.libs/libctf.a"
+  TESTSFRAMELIB="../libsframe/.libs/libsframe.a"
 fi
 if test "${enable_libctf}" = no; then
     TESTCTFLIB=
 fi
 AC_SUBST(TESTBFDLIB)
 AC_SUBST(TESTCTFLIB)
+AC_SUBST(TESTSFRAMELIB)
 
 target_vendor=${target_vendor=$host_vendor}
 case "$target_vendor" in

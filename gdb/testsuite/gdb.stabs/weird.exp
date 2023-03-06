@@ -1,4 +1,4 @@
-# Copyright 1997-2022 Free Software Foundation, Inc.
+# Copyright 1997-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,10 +20,6 @@
 set testfile weird
 set srcfile [standard_output_file weird.s]
 set binfile [standard_output_file weirdx.o]
-
-if { [ get_compiler_info ] } {
-    return -1
-}
 
 proc do_tests {} {
 	global binfile
@@ -277,10 +273,7 @@ if  { [gdb_compile "${srcfile}" "${binfile}" object ""] != "" } {
 
 remote_file build delete ${srcfile}
 
-# Start with a fresh gdb
-gdb_exit
-gdb_start
-gdb_reinitialize_dir $srcdir/$subdir
+clean_restart
 
 set binfile [gdb_remote_download host ${binfile} \
 		 [standard_output_file object.o]]
@@ -315,5 +308,3 @@ gdb_expect 60 {
 }
 
 do_tests
-
-return 0

@@ -1,5 +1,5 @@
 /* Header file for GDB CLI command implementation library.
-   Copyright (C) 2000-2022 Free Software Foundation, Inc.
+   Copyright (C) 2000-2023 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -150,8 +150,6 @@ extern struct cmd_list_element *showsourcelist;
 extern unsigned int max_user_call_depth;
 
 /* Exported to gdb/top.c */
-
-void init_cmd_lists (void);
 
 int is_complete_command (struct cmd_list_element *cmd);
 

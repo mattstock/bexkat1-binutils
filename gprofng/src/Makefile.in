@@ -15,7 +15,7 @@
 @SET_MAKE@
 
 #
-#   Copyright (C) 2021 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -155,13 +155,12 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(pkglibdir)" "$(DESTDIR)$(bindir)" \
+am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(man1dir)" "$(DESTDIR)$(dbedir)"
-LTLIBRARIES = $(pkglib_LTLIBRARIES)
+LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 libgprofng_la_DEPENDENCIES = $(top_builddir)/../opcodes/libopcodes.la \
-	$(top_builddir)/../bfd/libbfd.la $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_1)
+	$(top_builddir)/../bfd/libbfd.la $(am__DEPENDENCIES_1)
 am__objects_1 = Application.lo BaseMetric.lo BaseMetricTreeNode.lo \
 	CallStack.lo CatchOutOfMemory.lo ClassFile.lo Command.lo \
 	CompCom.lo DataObject.lo DataSpace.lo Data_window.lo \
@@ -534,34 +533,34 @@ LIBGPROFNG = libgprofng.la
 # case both are empty.
 ZLIB = @zlibdir@ -lz
 ZLIBINC = @zlibinc@
-AM_CPPFLAGS = $(GPROFNG_CPPFLAGS) -DLOCALEDIR=\"@localedir@\" -I.. -I$(srcdir) \
+LOCALEDIR = @localedir@
+SYSCONFDIR = @sysconfdir@
+AM_CPPFLAGS = $(GPROFNG_CPPFLAGS) -DLOCALEDIR=\"$(LOCALEDIR)\" \
+	-DSYSCONFDIR=\"$(SYSCONFDIR)\" -DLIBDIR=\"$(libdir)\" \
+	-I.. -I$(srcdir) \
 	-I$(srcdir)/../common \
 	-I$(srcdir)/../../include -I$(srcdir)/../../opcodes \
 	-I../../bfd -I$(srcdir)/../../bfd $(ZLIBINC)
 
 AM_CFLAGS = $(GPROFNG_CFLAGS) $(PTHREAD_CFLAGS) \
-	$(GPROFNG_NO_FORMAT_TRUNCATION_CFLAGS) \
 	$(GPROFNG_NO_SWITCH_CFLAGS)
 
 AM_CXXFLAGS = $(AM_CFLAGS)
-man_MANS = gprofng.1 \
-	gp-archive.1 \
-	gp-collect-app.1 \
-	gp-display-src.1 \
-	gp-display-text.1
-
-MAINTAINERCLEANFILES = $(man_MANS)
 BUILT_SOURCES = QLParser.tab.hh
 EXTRA_DIST = QLParser.yy $(man_MANS)
-pkglib_LTLIBRARIES = $(LIBGPROFNG)
+lib_LTLIBRARIES = $(LIBGPROFNG)
 libgprofng_la_SOURCES = $(CCSOURCES) $(CSOURCES)
 libgprofng_la_LDFLAGS = -version-info 0:0:0
+
+# Pass -lpthread instead of $(PTHREAD_LIBS) due to $(PTHREAD_LIBS) being empty
+# when -nostdlib is passed to libtool.
+# See bug 29364 - libgprofng.so: needs to link against -pthread
 libgprofng_la_LIBADD = $(top_builddir)/../opcodes/libopcodes.la \
 	$(top_builddir)/../bfd/libbfd.la \
 	$(GPROFNG_LIBADD) \
-	$(PTHREAD_LIBS) -ldl
+	-lpthread -ldl
 
-dbedir = $(prefix)/etc
+dbedir = $(SYSCONFDIR)
 dbe_DATA = $(srcdir)/gprofng.rc
 gp_archive_SOURCES = gp-archive.cc ArchiveExp.cc
 gp_archive_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
@@ -573,6 +572,13 @@ gp_display_src_SOURCES = gp-display-src.cc
 gp_display_src_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 gp_display_text_SOURCES = gp-display-text.cc ipc.cc ipcio.cc
 gp_display_text_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
+@BUILD_MAN_TRUE@man_MANS = \
+@BUILD_MAN_TRUE@	gp-archive.1 \
+@BUILD_MAN_TRUE@	gp-collect-app.1 \
+@BUILD_MAN_TRUE@	gp-display-src.1 \
+@BUILD_MAN_TRUE@	gp-display-text.1
+
+@BUILD_MAN_TRUE@MAINTAINERCLEANFILES = $(man_MANS)
 
 # The man pages depend on the version number and on a help2man include file.
 @BUILD_MAN_TRUE@common_mandeps = $(top_srcdir)/../bfd/version.m4
@@ -630,33 +636,33 @@ $(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
 
-install-pkglibLTLIBRARIES: $(pkglib_LTLIBRARIES)
+install-libLTLIBRARIES: $(lib_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
-	@list='$(pkglib_LTLIBRARIES)'; test -n "$(pkglibdir)" || list=; \
+	@list='$(lib_LTLIBRARIES)'; test -n "$(libdir)" || list=; \
 	list2=; for p in $$list; do \
 	  if test -f $$p; then \
 	    list2="$$list2 $$p"; \
 	  else :; fi; \
 	done; \
 	test -z "$$list2" || { \
-	  echo " $(MKDIR_P) '$(DESTDIR)$(pkglibdir)'"; \
-	  $(MKDIR_P) "$(DESTDIR)$(pkglibdir)" || exit 1; \
-	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 '$(DESTDIR)$(pkglibdir)'"; \
-	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 "$(DESTDIR)$(pkglibdir)"; \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(libdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(libdir)" || exit 1; \
+	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 '$(DESTDIR)$(libdir)'"; \
+	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 "$(DESTDIR)$(libdir)"; \
 	}
 
-uninstall-pkglibLTLIBRARIES:
+uninstall-libLTLIBRARIES:
 	@$(NORMAL_UNINSTALL)
-	@list='$(pkglib_LTLIBRARIES)'; test -n "$(pkglibdir)" || list=; \
+	@list='$(lib_LTLIBRARIES)'; test -n "$(libdir)" || list=; \
 	for p in $$list; do \
 	  $(am__strip_dir) \
-	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f '$(DESTDIR)$(pkglibdir)/$$f'"; \
-	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f "$(DESTDIR)$(pkglibdir)/$$f"; \
+	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f '$(DESTDIR)$(libdir)/$$f'"; \
+	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f "$(DESTDIR)$(libdir)/$$f"; \
 	done
 
-clean-pkglibLTLIBRARIES:
-	-test -z "$(pkglib_LTLIBRARIES)" || rm -f $(pkglib_LTLIBRARIES)
-	@list='$(pkglib_LTLIBRARIES)'; \
+clean-libLTLIBRARIES:
+	-test -z "$(lib_LTLIBRARIES)" || rm -f $(lib_LTLIBRARIES)
+	@list='$(lib_LTLIBRARIES)'; \
 	locs=`for p in $$list; do echo $$p; done | \
 	      sed 's|^[^/]*$$|.|; s|/[^/]*$$||; s|$$|/so_locations|' | \
 	      sort -u`; \
@@ -666,7 +672,7 @@ clean-pkglibLTLIBRARIES:
 	}
 
 libgprofng.la: $(libgprofng_la_OBJECTS) $(libgprofng_la_DEPENDENCIES) $(EXTRA_libgprofng_la_DEPENDENCIES) 
-	$(AM_V_CXXLD)$(libgprofng_la_LINK) -rpath $(pkglibdir) $(libgprofng_la_OBJECTS) $(libgprofng_la_LIBADD) $(LIBS)
+	$(AM_V_CXXLD)$(libgprofng_la_LINK) -rpath $(libdir) $(libgprofng_la_OBJECTS) $(libgprofng_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
@@ -1033,8 +1039,10 @@ check-am: all-am
 check: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) check-am
 all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(MANS) $(DATA)
+install-binPROGRAMS: install-libLTLIBRARIES
+
 installdirs:
-	for dir in "$(DESTDIR)$(pkglibdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(dbedir)"; do \
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(dbedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: $(BUILT_SOURCES)
@@ -1072,8 +1080,8 @@ maintainer-clean-generic:
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libtool \
-	clean-pkglibLTLIBRARIES mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
+	clean-libtool mostlyclean-am
 
 distclean: distclean-am
 	-rm -rf ./$(DEPDIR)
@@ -1093,13 +1101,13 @@ info: info-am
 
 info-am:
 
-install-data-am: install-data-local install-dbeDATA install-man
+install-data-am: install-dbeDATA install-man
 
 install-dvi: install-dvi-am
 
 install-dvi-am:
 
-install-exec-am: install-binPROGRAMS install-pkglibLTLIBRARIES
+install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
 
 install-html: install-html-am
 
@@ -1139,40 +1147,35 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS uninstall-dbeDATA uninstall-man \
-	uninstall-pkglibLTLIBRARIES
+uninstall-am: uninstall-binPROGRAMS uninstall-dbeDATA \
+	uninstall-libLTLIBRARIES uninstall-man
 
 uninstall-man: uninstall-man1
 
 .MAKE: all check install install-am install-strip
 
 .PHONY: CTAGS GTAGS TAGS all all-am check check-am clean \
-	clean-binPROGRAMS clean-generic clean-libtool \
-	clean-pkglibLTLIBRARIES cscopelist-am ctags ctags-am dist-hook \
-	distclean distclean-compile distclean-generic \
-	distclean-libtool distclean-tags distdir dvi dvi-am html \
-	html-am info info-am install install-am install-binPROGRAMS \
-	install-data install-data-am install-data-local \
-	install-dbeDATA install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-man1 install-pdf \
-	install-pdf-am install-pkglibLTLIBRARIES install-ps \
+	clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
+	clean-libtool cscopelist-am ctags ctags-am dist-hook distclean \
+	distclean-compile distclean-generic distclean-libtool \
+	distclean-tags distdir dvi dvi-am html html-am info info-am \
+	install install-am install-binPROGRAMS install-data \
+	install-data-am install-dbeDATA install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
+	install-info install-info-am install-libLTLIBRARIES \
+	install-man install-man1 install-pdf install-pdf-am install-ps \
 	install-ps-am install-strip installcheck installcheck-am \
 	installdirs maintainer-clean maintainer-clean-generic \
 	mostlyclean mostlyclean-compile mostlyclean-generic \
 	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
 	uninstall-am uninstall-binPROGRAMS uninstall-dbeDATA \
-	uninstall-man uninstall-man1 uninstall-pkglibLTLIBRARIES
+	uninstall-libLTLIBRARIES uninstall-man uninstall-man1
 
 .PRECIOUS: Makefile
 
 
 QLParser.tab.cc QLParser.tab.hh: QLParser.yy
 	$(BISON) $^
-
-@BUILD_MAN_TRUE@gprofng.1: $(srcdir)/gprofng.cc $(common_mandeps) | ./gprofng$(EXEEXT)
-@BUILD_MAN_TRUE@	$(AM_V_GEN)_BUILDING_MANPAGE=1 $(HELP2MAN) $(HELP2MAN_OPT) \
-@BUILD_MAN_TRUE@	  --name=$(TEXT_GPROFNG) ./gprofng$(EXEEXT) $(H2M_FILTER) > $@
 
 @BUILD_MAN_TRUE@gp-archive.1: $(srcdir)/gp-archive.cc $(common_mandeps) | ./gp-archive$(EXEEXT)
 @BUILD_MAN_TRUE@	$(AM_V_GEN)_BUILDING_MANPAGE=1 $(HELP2MAN) $(HELP2MAN_OPT) \
@@ -1196,10 +1199,7 @@ QLParser.tab.cc QLParser.tab.hh: QLParser.yy
 # so ensure that the necessary libraries are built at dist time.
 dist-hook: $(LIBGPROFNG)
 
-.PHONY: install-data-local
-
-install-data-local: install-pkglibLTLIBRARIES
-	rm -f $(DESTDIR)/$(pkglibdir)/*.la $(DESTDIR)/$(pkglibdir)/*.a
+$(srcdir)/DbeSession.cc: QLParser.tab.hh
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

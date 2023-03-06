@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Free Software Foundation, Inc.
+# Copyright 2019-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,14 +22,15 @@ tuiterm_env
 
 standard_testfile tui-layout.c
 
-set core "${testfile}.core"
+set core [standard_output_file "${testfile}.core"]
 
 if { [prepare_for_testing "failed to prepare" $testfile $srcfile debug] } {
     return -1
 }
 
 # Only run on native boards.
-if { [use_gdb_stub] || [target_info gdb_protocol] == "extended-remote" } {
+require !use_gdb_stub
+if { [target_info gdb_protocol] == "extended-remote" } {
     untested "not supported"
     return
 }

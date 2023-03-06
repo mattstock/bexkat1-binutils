@@ -1,5 +1,5 @@
 /* Register support routines for the remote server for GDB.
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -199,6 +199,9 @@ regcache_cpy (struct regcache *dst, struct regcache *src)
 static const struct gdb::reg &
 find_register_by_number (const struct target_desc *tdesc, int n)
 {
+  gdb_assert (n >= 0);
+  gdb_assert (n < tdesc->reg_defs.size ());
+
   return tdesc->reg_defs[n];
 }
 
@@ -244,16 +247,28 @@ registers_from_string (struct regcache *regcache, char *buf)
   hex2bin (buf, registers, len / 2);
 }
 
-int
-find_regno (const struct target_desc *tdesc, const char *name)
+/* See regcache.h */
+
+gdb::optional<int>
+find_regno_no_throw (const struct target_desc *tdesc, const char *name)
 {
   for (int i = 0; i < tdesc->reg_defs.size (); ++i)
     {
       if (strcmp (name, find_register_by_number (tdesc, i).name) == 0)
 	return i;
     }
-  internal_error (__FILE__, __LINE__, "Unknown register %s requested",
-		  name);
+  return {};
+}
+
+int
+find_regno (const struct target_desc *tdesc, const char *name)
+{
+  gdb::optional<int> regnum = find_regno_no_throw (tdesc, name);
+
+  if (regnum.has_value ())
+    return *regnum;
+
+  internal_error ("Unknown register %s requested", name);
 }
 
 static void
@@ -428,8 +443,6 @@ regcache_raw_read_unsigned (struct regcache *regcache, int regnum,
   int size;
 
   gdb_assert (regcache != NULL);
-  gdb_assert (regnum >= 0
-	      && regnum < regcache->tdesc->reg_defs.size ());
 
   size = register_size (regcache->tdesc, regnum);
 

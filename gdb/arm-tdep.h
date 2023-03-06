@@ -1,5 +1,5 @@
 /* Common target dependent code for GDB on ARM systems.
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -87,7 +87,7 @@ enum struct_return
 };
 
 /* Target-dependent structure in gdbarch.  */
-struct arm_gdbarch_tdep : gdbarch_tdep
+struct arm_gdbarch_tdep : gdbarch_tdep_base
 {
   /* The ABI for this architecture.  It should never be set to
      ARM_ABI_AUTO.  */
@@ -125,7 +125,19 @@ struct arm_gdbarch_tdep : gdbarch_tdep
 				   register.  */
   int pacbti_pseudo_count = 0;	/* Total number of PACBTI pseudo registers.  */
 
+  int m_profile_msp_regnum = ARM_SP_REGNUM;	/* M-profile MSP register number.  */
+  int m_profile_psp_regnum = ARM_SP_REGNUM;	/* M-profile PSP register number.  */
+
+  /* Secure and Non-secure stack pointers with security extension.  */
+  int m_profile_msp_ns_regnum = ARM_SP_REGNUM;	/* M-profile MSP_NS register number.  */
+  int m_profile_psp_ns_regnum = ARM_SP_REGNUM;	/* M-profile PSP_NS register number.  */
+  int m_profile_msp_s_regnum = ARM_SP_REGNUM;	/* M-profile MSP_S register number.  */
+  int m_profile_psp_s_regnum = ARM_SP_REGNUM;	/* M-profile PSP_S register number.  */
+
+  int tls_regnum = 0;		/* Number of the tpidruro register.  */
+
   bool is_m = false;		/* Does the target follow the "M" profile.  */
+  bool have_sec_ext = false;	/* Do we have security extensions?  */
   CORE_ADDR lowest_pc = 0;	/* Lowest address at which instructions
 				   will appear.  */
 
@@ -267,7 +279,7 @@ extern void
 		       arm_displaced_step_copy_insn_closure *dsc, int regno,
 		       ULONGEST val, enum pc_write_style write_pc);
 
-CORE_ADDR arm_skip_stub (struct frame_info *, CORE_ADDR);
+CORE_ADDR arm_skip_stub (frame_info_ptr, CORE_ADDR);
 
 ULONGEST arm_get_next_pcs_read_memory_unsigned_integer (CORE_ADDR memaddr,
 							int len,
@@ -280,7 +292,7 @@ int arm_get_next_pcs_is_thumb (struct arm_get_next_pcs *self);
 
 std::vector<CORE_ADDR> arm_software_single_step (struct regcache *);
 int arm_is_thumb (struct regcache *regcache);
-int arm_frame_is_thumb (struct frame_info *frame);
+int arm_frame_is_thumb (frame_info_ptr frame);
 
 extern void arm_displaced_step_fixup (struct gdbarch *,
 				      displaced_step_copy_insn_closure *,
@@ -307,7 +319,7 @@ extern void
 				       const struct regcache *regcache);
 
 /* Get the correct Arm target description with given FP hardware type.  */
-const target_desc *arm_read_description (arm_fp_type fp_type);
+const target_desc *arm_read_description (arm_fp_type fp_type, bool tls);
 
 /* Get the correct Arm M-Profile target description with given hardware
    type.  */

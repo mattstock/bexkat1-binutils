@@ -1,6 +1,6 @@
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998-2022 Free Software Foundation, Inc.
+   Copyright (C) 1998-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 
 #include "gdbarch.h"
 
-struct frame_info;
+class frame_info_ptr;
 struct minimal_symbol;
 struct type;
 struct gdbarch_info;
@@ -132,6 +132,10 @@ extern const struct floatformat **
   default_floatformat_for_type (struct gdbarch *gdbarch,
 				const char *name, int len);
 
+/* Default implementation of gdbarch_remove_non_address_bits.  */
+CORE_ADDR default_remove_non_address_bits (struct gdbarch *gdbarch,
+					   CORE_ADDR pointer);
+
 /* Default implementation of gdbarch_memtag_to_string.  */
 extern std::string default_memtag_to_string (struct gdbarch *gdbarch,
 					     struct value *tag);
@@ -154,7 +158,7 @@ struct value *default_get_memtag (struct gdbarch *gdbarch,
 				  struct value *address,
 				  memtag_type tag_type);
 
-extern CORE_ADDR generic_skip_trampoline_code (struct frame_info *frame,
+extern CORE_ADDR generic_skip_trampoline_code (frame_info_ptr frame,
 					       CORE_ADDR pc);
 
 extern CORE_ADDR generic_skip_solib_resolver (struct gdbarch *gdbarch,
@@ -167,7 +171,7 @@ extern int generic_stack_frame_destroyed_p (struct gdbarch *gdbarch,
 					    CORE_ADDR pc);
 
 extern int default_code_of_frame_writable (struct gdbarch *gdbarch,
-					   struct frame_info *frame);
+					   frame_info_ptr frame);
 
 /* By default, registers are not convertible.  */
 extern int generic_convert_register_p (struct gdbarch *gdbarch, int regnum,
@@ -291,7 +295,7 @@ extern ULONGEST default_type_align (struct gdbarch *gdbarch,
 				    struct type *type);
 
 /* Default implementation of gdbarch get_pc_address_flags method.  */
-extern std::string default_get_pc_address_flags (frame_info *frame,
+extern std::string default_get_pc_address_flags (frame_info_ptr frame,
 						 CORE_ADDR pc);
 
 /* Default implementation of gdbarch read_core_file_mappings method.  */
@@ -300,4 +304,14 @@ extern void default_read_core_file_mappings
    struct bfd *cbfd,
    read_core_file_mappings_pre_loop_ftype pre_loop_cb,
    read_core_file_mappings_loop_ftype loop_cb);
+
+/* Default implementation of gdbarch default_get_return_buf_addr method.  */
+extern CORE_ADDR default_get_return_buf_addr (struct type *val_typegdbarch,
+					      frame_info_ptr cur_frame);
+
+extern enum return_value_convention default_gdbarch_return_value
+     (struct gdbarch *gdbarch, struct value *function, struct type *valtype,
+      struct regcache *regcache, struct value **read_value,
+      const gdb_byte *writebuf);
+
 #endif /* ARCH_UTILS_H */

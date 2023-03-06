@@ -1,5 +1,5 @@
 /* A YACC grammar to parse a superset of the AT&T linker scripting language.
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support (steve@cygnus.com).
 
    This file is part of the GNU Binutils.
@@ -125,7 +125,7 @@ static int error_index;
 %right UNARY
 %token END
 %left <token> '('
-%token <token> ALIGN_K BLOCK BIND QUAD SQUAD LONG SHORT BYTE
+%token <token> ALIGN_K BLOCK BIND QUAD SQUAD LONG SHORT BYTE ASCII ASCIZ
 %token SECTIONS PHDRS INSERT_K AFTER BEFORE
 %token DATA_SEGMENT_ALIGN DATA_SEGMENT_RELRO_END DATA_SEGMENT_END
 %token SORT_BY_NAME SORT_BY_ALIGNMENT SORT_NONE
@@ -668,7 +668,19 @@ statement:
 		{
 		  lang_add_data ((int) $1, $3);
 		}
-
+        | ASCII '(' mustbe_exp ')' NAME
+		{
+		  /* 'value' is a memory leak, do we care?  */
+		  etree_type *value = $3;
+		  if (value->type.node_code == INT)
+		    lang_add_string (value->value.value, $5);
+		  else
+		    einfo (_("%X%P:%pS: ASCII expression must be an integer\n"), NULL);
+		}
+	| ASCIZ NAME
+		{
+		  lang_add_string (0, $2);
+		}
 	| FILL '(' fill_exp ')'
 		{
 		  lang_add_fill ($3);

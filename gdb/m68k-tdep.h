@@ -1,6 +1,6 @@
 /* Target-dependent code for the Motorola 68000 series.
 
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 
 #include "gdbarch.h"
 
-struct frame_info;
+class frame_info_ptr;
 
 /* Register numbers of various important registers.  */
 
@@ -69,7 +69,7 @@ enum m68k_flavour
 
 /* Target-dependent structure in gdbarch.  */
 
-struct m68k_gdbarch_tdep : gdbarch_tdep
+struct m68k_gdbarch_tdep : gdbarch_tdep_base
 {
   /* Offset to PC value in the jump buffer.  If this is negative,
      longjmp support will be disabled.  */

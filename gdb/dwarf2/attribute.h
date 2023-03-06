@@ -1,6 +1,6 @@
 /* DWARF attributes
 
-   Copyright (C) 1994-2022 Free Software Foundation, Inc.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
    Adapted by Gary Funck (gary@intrepid.com), Intrepid Technology,
    Inc.  with support from Florida State University (under contract
@@ -28,7 +28,7 @@
 #define GDB_DWARF2_ATTRIBUTE_H
 
 #include "dwarf2.h"
-#include "gdbtypes.h"
+#include "dwarf2/types.h"
 #include "gdbsupport/gdb_optional.h"
 
 /* Blocks are a bunch of untyped bytes.  */

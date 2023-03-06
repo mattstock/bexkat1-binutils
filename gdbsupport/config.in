@@ -11,6 +11,9 @@
 /* Define to 1 if using `alloca.c'. */
 #undef C_ALLOCA
 
+/* Define if development-mode features are enabled. */
+#undef DEVELOPMENT
+
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
 #undef ENABLE_NLS
@@ -120,6 +123,9 @@
 
 /* Define if you have the ipt library. */
 #undef HAVE_LIBIPT
+
+/* Define if you have the xxhash library. */
+#undef HAVE_LIBXXHASH
 
 /* Define to 1 if you have the <linux/elf.h> header file. */
 #undef HAVE_LINUX_ELF_H

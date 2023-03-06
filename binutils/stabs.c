@@ -1,5 +1,5 @@
 /* stabs.c -- Parse stabs debugging information
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>.
 
    This file is part of GNU Binutils.
@@ -121,6 +121,8 @@ struct stab_types
 {
   /* Next set of slots for this file.  */
   struct stab_types *next;
+  /* Where the TYPES array starts.  */
+  unsigned int base_index;
   /* Types indexed by type number.  */
 #define STAB_TYPES_SLOTS (16)
   debug_type types[STAB_TYPES_SLOTS];
@@ -2367,7 +2369,10 @@ parse_stab_struct_fields (void *dhandle,
 
       if (! parse_stab_one_struct_field (dhandle, info, pp, p, fields + c,
 					 staticsp, p_end))
-	return false;
+	{
+	  free (fields);
+	  return false;
+	}
 
       ++c;
     }
@@ -3410,40 +3415,32 @@ stab_emit_pending_vars (void *dhandle, struct stab_handle *info)
 static debug_type *
 stab_find_slot (struct stab_handle *info, const int *typenums)
 {
-  int filenum;
-  int tindex;
+  unsigned int filenum;
+  unsigned int tindex;
+  unsigned int base_index;
   struct stab_types **ps;
 
   filenum = typenums[0];
   tindex = typenums[1];
 
-  if (filenum < 0 || (unsigned int) filenum >= info->files)
+  if (filenum >= info->files)
     {
       fprintf (stderr, _("Type file number %d out of range\n"), filenum);
       return NULL;
     }
-  if (tindex < 0)
-    {
-      fprintf (stderr, _("Type index number %d out of range\n"), tindex);
-      return NULL;
-    }
 
   ps = info->file_types + filenum;
+  base_index = tindex / STAB_TYPES_SLOTS * STAB_TYPES_SLOTS;
+  tindex -= base_index;
+  while (*ps && (*ps)->base_index < base_index)
+    ps = &(*ps)->next;
 
-  while (tindex >= STAB_TYPES_SLOTS)
+  if (*ps == NULL || (*ps)->base_index != base_index)
     {
-      if (*ps == NULL)
-	{
-	  *ps = (struct stab_types *) xmalloc (sizeof **ps);
-	  memset (*ps, 0, sizeof **ps);
-	}
-      ps = &(*ps)->next;
-      tindex -= STAB_TYPES_SLOTS;
-    }
-  if (*ps == NULL)
-    {
-      *ps = (struct stab_types *) xmalloc (sizeof **ps);
-      memset (*ps, 0, sizeof **ps);
+      struct stab_types *n = xcalloc (1, sizeof (*n));
+      n->next = *ps;
+      n->base_index = base_index;
+      *ps = n;
     }
 
   return (*ps)->types + tindex;
@@ -5467,7 +5464,10 @@ stab_demangle_v3_arg (void *dhandle, struct stab_handle *info,
 					  dc->u.s_binary.right,
 					  &varargs);
 	if (pargs == NULL)
-	  return NULL;
+	  {
+	    free (dt);
+	    return NULL;
+	  }
 
 	return debug_make_function_type (dhandle, dt, pargs, varargs);
       }

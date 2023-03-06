@@ -1,5 +1,5 @@
 /* ELF linking support for BFD.
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -4386,7 +4386,7 @@ elf_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 		       | DYN_NO_NEEDED)) == 0;
 
       s = bfd_get_section_by_name (abfd, ".dynamic");
-      if (s != NULL && s->size != 0)
+      if (s != NULL && s->size != 0 && (s->flags & SEC_HAS_CONTENTS) != 0)
 	{
 	  bfd_byte *dynbuf;
 	  bfd_byte *extdyn;
@@ -4406,7 +4406,7 @@ elf_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 	  shlink = elf_elfsections (abfd)[elfsec]->sh_link;
 
 	  for (extdyn = dynbuf;
-	       extdyn <= dynbuf + s->size - bed->s->sizeof_dyn;
+	       (size_t) (dynbuf + s->size - extdyn) >= bed->s->sizeof_dyn;
 	       extdyn += bed->s->sizeof_dyn)
 	    {
 	      Elf_Internal_Dyn dyn;
@@ -6354,15 +6354,11 @@ compute_bucket_count (struct bfd_link_info *info ATTRIBUTE_UNUSED,
   size_t best_size = 0;
   unsigned long int i;
 
-  /* We have a problem here.  The following code to optimize the table
-     size requires an integer type with more the 32 bits.  If
-     BFD_HOST_U_64_BIT is set we know about such a type.  */
-#ifdef BFD_HOST_U_64_BIT
   if (info->optimize)
     {
       size_t minsize;
       size_t maxsize;
-      BFD_HOST_U_64_BIT best_chlen = ~((BFD_HOST_U_64_BIT) 0);
+      uint64_t best_chlen = ~((uint64_t) 0);
       bfd *dynobj = elf_hash_table (info)->dynobj;
       size_t dynsymcount = elf_hash_table (info)->dynsymcount;
       const struct elf_backend_data *bed = get_elf_backend_data (dynobj);
@@ -6399,7 +6395,7 @@ compute_bucket_count (struct bfd_link_info *info ATTRIBUTE_UNUSED,
       for (i = minsize; i < maxsize; ++i)
 	{
 	  /* Walk through the array of hashcodes and count the collisions.  */
-	  BFD_HOST_U_64_BIT max;
+	  uint64_t max;
 	  unsigned long int j;
 	  unsigned long int fact;
 
@@ -6464,11 +6460,7 @@ compute_bucket_count (struct bfd_link_info *info ATTRIBUTE_UNUSED,
       free (counts);
     }
   else
-#endif /* defined (BFD_HOST_U_64_BIT) */
     {
-      /* This is the fallback solution if no 64bit type is available or if we
-	 are not supposed to spend much time on optimizations.  We select the
-	 bucket count using a fixed set of numbers.  */
       for (i = 0; elf_buckets[i] != 0; i++)
 	{
 	  best_size = elf_buckets[i];
@@ -7124,13 +7116,23 @@ bfd_elf_size_dynamic_sections (bfd *output_bfd,
   /* Determine any GNU_STACK segment requirements, after the backend
      has had a chance to set a default segment size.  */
   if (info->execstack)
-    elf_stack_flags (output_bfd) = PF_R | PF_W | PF_X;
+    {
+      /* If the user has explicitly requested warnings, then generate one even
+	 though the choice is the result of another command line option.  */
+      if (info->warn_execstack == 1)
+	_bfd_error_handler
+	  (_("\
+warning: enabling an executable stack because of -z execstack command line option"));
+      elf_stack_flags (output_bfd) = PF_R | PF_W | PF_X;
+    }
   else if (info->noexecstack)
     elf_stack_flags (output_bfd) = PF_R | PF_W;
   else
     {
       bfd *inputobj;
       asection *notesec = NULL;
+      bfd *noteobj = NULL;
+      bfd *emptyobj = NULL;
       int exec = 0;
 
       for (inputobj = info->input_bfds;
@@ -7149,15 +7151,49 @@ bfd_elf_size_dynamic_sections (bfd *output_bfd,
 	  s = bfd_get_section_by_name (inputobj, ".note.GNU-stack");
 	  if (s)
 	    {
-	      if (s->flags & SEC_CODE)
-		exec = PF_X;
 	      notesec = s;
+	      if (s->flags & SEC_CODE)
+		{
+		  noteobj = inputobj;
+		  exec = PF_X;
+		  /* There is no point in scanning the remaining bfds.  */
+		  break;
+		}
 	    }
-	  else if (bed->default_execstack)
-	    exec = PF_X;
+	  else if (bed->default_execstack && info->default_execstack)
+	    {
+	      exec = PF_X;
+	      emptyobj = inputobj;
+	    }
 	}
+
       if (notesec || info->stacksize > 0)
-	elf_stack_flags (output_bfd) = PF_R | PF_W | exec;
+	{
+	  if (exec)
+	    {
+	      if (info->warn_execstack != 0)
+		{
+		  /* PR 29072: Because an executable stack is a serious
+		     security risk, make sure that the user knows that it is
+		     being enabled despite the fact that it was not requested
+		     on the command line.  */
+		  if (noteobj)
+		    _bfd_error_handler (_("\
+warning: %s: requires executable stack (because the .note.GNU-stack section is executable)"),
+		       bfd_get_filename (noteobj));
+		  else if (emptyobj)
+		    {
+		      _bfd_error_handler (_("\
+warning: %s: missing .note.GNU-stack section implies executable stack"),
+					  bfd_get_filename (emptyobj));
+		      _bfd_error_handler (_("\
+NOTE: This behaviour is deprecated and will be removed in a future version of the linker"));
+		    }
+		}
+	    }
+	  elf_stack_flags (output_bfd) = PF_R | PF_W | exec;
+	}
+
       if (notesec && exec && bfd_link_relocatable (info)
 	  && notesec->output_section != bfd_abs_section_ptr)
 	notesec->output_section->flags |= SEC_CODE;
@@ -8168,7 +8204,7 @@ bfd_elf_get_bfd_needed_list (bfd *abfd,
     return true;
 
   s = bfd_get_section_by_name (abfd, ".dynamic");
-  if (s == NULL || s->size == 0)
+  if (s == NULL || s->size == 0 || (s->flags & SEC_HAS_CONTENTS) == 0)
     return true;
 
   if (!bfd_malloc_and_get_section (abfd, s, &dynbuf))
@@ -8183,9 +8219,9 @@ bfd_elf_get_bfd_needed_list (bfd *abfd,
   extdynsize = get_elf_backend_data (abfd)->s->sizeof_dyn;
   swap_dyn_in = get_elf_backend_data (abfd)->s->swap_dyn_in;
 
-  extdyn = dynbuf;
-  extdynend = extdyn + s->size;
-  for (; extdyn < extdynend; extdyn += extdynsize)
+  for (extdyn = dynbuf, extdynend = dynbuf + s->size;
+       (size_t) (extdynend - extdyn) >= extdynsize;
+       extdyn += extdynsize)
     {
       Elf_Internal_Dyn dyn;
 
@@ -8336,8 +8372,7 @@ elf_create_symbuf (size_t symcount, Elf_Internal_Sym *isymbuf)
       ssymhead->count++;
     }
   BFD_ASSERT ((size_t) (ssymhead - ssymbuf) == shndx_count
-	      && (((bfd_hostptr_t) ssym - (bfd_hostptr_t) ssymbuf)
-		  == total_size));
+	      && (uintptr_t) ssym - (uintptr_t) ssymbuf == total_size);
 
   free (indbuf);
   return ssymbuf;
@@ -9310,7 +9345,6 @@ ext32b_r_offset (const void *p)
   return aval;
 }
 
-#ifdef BFD_HOST_64_BIT
 static bfd_vma
 ext64l_r_offset (const void *p)
 {
@@ -9354,7 +9388,6 @@ ext64b_r_offset (const void *p)
 		   | (uint64_t) a->c[7]);
   return aval;
 }
-#endif
 
 /* When performing a relocatable link, the input relocations are
    preserved.  But, if they reference global symbols, the indices
@@ -9458,13 +9491,11 @@ elf_link_adjust_relocs (bfd *abfd,
 	}
       else
 	{
-#ifdef BFD_HOST_64_BIT
 	  if (abfd->xvec->header_byteorder == BFD_ENDIAN_LITTLE)
 	    ext_r_off = ext64l_r_offset;
 	  else if (abfd->xvec->header_byteorder == BFD_ENDIAN_BIG)
 	    ext_r_off = ext64b_r_offset;
 	  else
-#endif
 	    abort ();
 	}
 
@@ -9517,12 +9548,20 @@ elf_link_adjust_relocs (bfd *abfd,
 	      size_t sortlen = p - loc;
 	      bfd_vma r_off2 = (*ext_r_off) (loc);
 	      size_t runlen = elt_size;
+	      bfd_vma r_off_runend = r_off;
+	      bfd_vma r_off_runend_next;
 	      size_t buf_size = 96 * 1024;
 	      while (p + runlen < end
 		     && (sortlen <= buf_size
 			 || runlen + elt_size <= buf_size)
-		     && r_off2 > (*ext_r_off) (p + runlen))
-		runlen += elt_size;
+		     /* run must not break the ordering of base..loc+1 */
+		     && r_off2 > (r_off_runend_next = (*ext_r_off) (p + runlen))
+		     /* run must be already sorted */
+		     && r_off_runend_next >= r_off_runend)
+		{
+		  runlen += elt_size;
+		  r_off_runend = r_off_runend_next;
+		}
 	      if (buf == NULL)
 		{
 		  buf = bfd_malloc (buf_size);
@@ -9956,9 +9995,7 @@ elf_link_output_symstrtab (void *finf,
   if (ELF_ST_BIND (elfsym->st_info) == STB_GNU_UNIQUE)
     elf_tdata (flinfo->output_bfd)->has_gnu_osabi |= elf_gnu_osabi_unique;
 
-  if (name == NULL
-      || *name == '\0'
-      || (input_sec->flags & SEC_EXCLUDE))
+  if (name == NULL || *name == '\0')
     elfsym->st_name = (unsigned long) -1;
   else
     {
@@ -10860,6 +10897,7 @@ elf_section_ignore_discarded_relocs (asection *sec)
     case SEC_INFO_TYPE_STABS:
     case SEC_INFO_TYPE_EH_FRAME:
     case SEC_INFO_TYPE_EH_FRAME_ENTRY:
+    case SEC_INFO_TYPE_SFRAME:
       return true;
     default:
       break;
@@ -10885,10 +10923,20 @@ elf_section_ignore_discarded_relocs (asection *sec)
 unsigned int
 _bfd_elf_default_action_discarded (asection *sec)
 {
+  const struct elf_backend_data *bed;
+  bed = get_elf_backend_data (sec->owner);
+
   if (sec->flags & SEC_DEBUGGING)
     return PRETEND;
 
   if (strcmp (".eh_frame", sec->name) == 0)
+    return 0;
+
+  if (bed->elf_backend_can_make_multiple_eh_frame
+      && strncmp (sec->name, ".eh_frame.", 10) == 0)
+    return 0;
+
+  if (strcmp (".sframe", sec->name) == 0)
     return 0;
 
   if (strcmp (".gcc_except_table", sec->name) == 0)
@@ -11103,22 +11151,10 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
 
       /* If this symbol is defined in a section which we are
 	 discarding, we don't need to keep it.  */
-      if (isym->st_shndx != SHN_UNDEF
-	  && isym->st_shndx < SHN_LORESERVE
-	  && isec->output_section == NULL
-	  && flinfo->info->non_contiguous_regions
-	  && flinfo->info->non_contiguous_regions_warnings)
-	{
-	  _bfd_error_handler (_("warning: --enable-non-contiguous-regions "
-				"discards section `%s' from '%s'\n"),
-			      isec->name, bfd_get_filename (isec->owner));
-	  continue;
-	}
-
-      if (isym->st_shndx != SHN_UNDEF
-	  && isym->st_shndx < SHN_LORESERVE
-	  && bfd_section_removed_from_list (output_bfd,
-					    isec->output_section))
+      if (isym->st_shndx < SHN_LORESERVE
+	  && (isec->output_section == NULL
+	      || bfd_section_removed_from_list (output_bfd,
+						isec->output_section)))
 	continue;
 
       /* Get the name of the symbol.  */
@@ -11325,6 +11361,13 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
 	      contents = flinfo->contents;
 	    }
 	}
+      else if (!(o->flags & SEC_RELOC)
+	       && !bed->elf_backend_write_section
+	       && o->sec_info_type == SEC_INFO_TYPE_MERGE)
+	/* A MERGE section that has no relocations doesn't need the
+	   contents anymore, they have been recorded earlier.  Except
+	   if the backend has special provisions for writing sections.  */
+	contents = NULL;
       else
 	{
 	  contents = flinfo->contents;
@@ -11824,6 +11867,16 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
 	      return false;
 	  }
 	  break;
+	case SEC_INFO_TYPE_SFRAME:
+	    {
+	      /* Merge .sframe sections into the ctf frame encoder
+		 context of the output_bfd's section.  The final .sframe
+		 output section will be written out later.  */
+	      if (!_bfd_elf_merge_section_sframe (output_bfd, flinfo->info,
+						  o, contents))
+		return false;
+	    }
+	    break;
 	default:
 	  {
 	    if (! (o->flags & SEC_EXCLUDE))
@@ -12374,8 +12427,10 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
 		      && elf_symtab_shndx_list (sec->owner) != NULL)
 		    max_sym_shndx_count = sym_count;
 
-		  if (esdo->this_hdr.sh_type == SHT_REL
-		      || esdo->this_hdr.sh_type == SHT_RELA)
+		  esdi = elf_section_data (sec);
+
+		  if (esdi->this_hdr.sh_type == SHT_REL
+		      || esdi->this_hdr.sh_type == SHT_RELA)
 		    /* Some backends use reloc_count in relocation sections
 		       to count particular types of relocs.  Of course,
 		       reloc sections themselves can't have relocations.  */
@@ -12392,8 +12447,6 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
 		    }
 		  else if (bed->elf_backend_count_relocs)
 		    reloc_count = (*bed->elf_backend_count_relocs) (info, sec);
-
-		  esdi = elf_section_data (sec);
 
 		  if ((sec->flags & SEC_RELOC) != 0)
 		    {
@@ -12501,7 +12554,7 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
 	     later.  Use bfd_malloc since it will be freed by
 	     bfd_compress_section_contents.  */
 	  unsigned char *contents = esdo->this_hdr.contents;
-	  if ((o->flags & SEC_ELF_COMPRESS) == 0 || contents != NULL)
+	  if (contents != NULL)
 	    abort ();
 	  contents
 	    = (unsigned char *) bfd_malloc (esdo->this_hdr.sh_size);
@@ -12816,8 +12869,7 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
 
   /* If backend needs to output some local symbols not present in the hash
      table, do it now.  */
-  if (bed->elf_backend_output_arch_local_syms
-      && (info->strip != strip_all || emit_relocs))
+  if (bed->elf_backend_output_arch_local_syms)
     {
       if (! ((*bed->elf_backend_output_arch_local_syms)
 	     (abfd, info, &flinfo, elf_link_output_symstrtab)))
@@ -13405,6 +13457,9 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
     }
 
   if (! _bfd_elf_write_section_eh_frame_hdr (abfd, info))
+    goto error_return;
+
+  if (! _bfd_elf_write_section_sframe (abfd, info))
     goto error_return;
 
   if (info->callbacks->emit_ctf)
@@ -14860,6 +14915,41 @@ bfd_elf_discard_info (bfd *output_bfd, struct bfd_link_info *info)
       if (eh_changed)
 	elf_link_hash_traverse (elf_hash_table (info),
 				_bfd_elf_adjust_eh_frame_global_symbol, NULL);
+    }
+
+  o = bfd_get_section_by_name (output_bfd, ".sframe");
+  if (o != NULL)
+    {
+      asection *i;
+
+      for (i = o->map_head.s; i != NULL; i = i->map_head.s)
+	{
+	  if (i->size == 0)
+	    continue;
+
+	  abfd = i->owner;
+	  if (bfd_get_flavour (abfd) != bfd_target_elf_flavour)
+	    continue;
+
+	  if (!init_reloc_cookie_for_section (&cookie, info, i))
+	    return -1;
+
+	  if (_bfd_elf_parse_sframe (abfd, info, i, &cookie))
+	    {
+	      if (_bfd_elf_discard_section_sframe (i,
+						   bfd_elf_reloc_symbol_deleted_p,
+						   &cookie))
+		{
+		  if (i->size != i->rawsize)
+		    changed = 1;
+		}
+	    }
+	  fini_reloc_cookie_for_section (&cookie, i);
+	}
+      /* Update the reference to the output .sframe section.  Used to
+	 determine later if PT_GNU_SFRAME segment is to be generated.  */
+      if (!_bfd_elf_set_section_sframe (output_bfd, info))
+	return -1;
     }
 
   for (abfd = info->input_bfds; abfd != NULL; abfd = abfd->link.next)

@@ -1,6 +1,6 @@
 /* Definitions for reading symbol files into GDB.
 
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,7 +37,7 @@ struct obj_section;
 struct obstack;
 struct block;
 struct value;
-struct frame_info;
+class frame_info_ptr;
 struct agent_expr;
 struct axs_value;
 class probe;
@@ -201,8 +201,17 @@ extern symfile_segment_data_up default_symfile_segments (bfd *abfd);
 extern bfd_byte *default_symfile_relocate (struct objfile *objfile,
 					   asection *sectp, bfd_byte *buf);
 
-extern struct symtab *allocate_symtab (struct compunit_symtab *, const char *)
+extern struct symtab *allocate_symtab
+  (struct compunit_symtab *cust, const char *filename, const char *id)
   ATTRIBUTE_NONNULL (1);
+
+/* Same as the above, but passes FILENAME for ID.  */
+
+static inline struct symtab *
+allocate_symtab (struct compunit_symtab *cust, const char *filename)
+{
+  return allocate_symtab (cust, filename, filename);
+}
 
 extern struct compunit_symtab *allocate_compunit_symtab (struct objfile *,
 							 const char *)
@@ -224,14 +233,22 @@ extern void add_filename_language (const char *ext, enum language lang);
 extern struct objfile *symbol_file_add (const char *, symfile_add_flags,
 					section_addr_info *, objfile_flags);
 
-extern struct objfile *symbol_file_add_from_bfd (bfd *, const char *, symfile_add_flags,
+extern struct objfile *symbol_file_add_from_bfd (const gdb_bfd_ref_ptr &,
+						 const char *, symfile_add_flags,
 						 section_addr_info *,
 						 objfile_flags, struct objfile *parent);
 
-extern void symbol_file_add_separate (bfd *, const char *, symfile_add_flags,
-				      struct objfile *);
+extern void symbol_file_add_separate (const gdb_bfd_ref_ptr &, const char *,
+				      symfile_add_flags, struct objfile *);
 
-extern std::string find_separate_debug_file_by_debuglink (struct objfile *);
+/* Find separate debuginfo for OBJFILE (using .gnu_debuglink section).
+   Returns pathname, or an empty string.
+
+   Any warnings generated as part of this lookup are added to
+   WARNINGS_VECTOR, one std::string per warning.  */
+
+extern std::string find_separate_debug_file_by_debuglink
+  (struct objfile *objfile, std::vector<std::string> *warnings_vector);
 
 /* Build (allocate and populate) a section_addr_info struct from an
    existing section table.  */
@@ -286,10 +303,10 @@ extern int section_is_overlay (struct obj_section *);
 extern int section_is_mapped (struct obj_section *);
 
 /* Return true if pc belongs to section's VMA.  */
-extern CORE_ADDR pc_in_mapped_range (CORE_ADDR, struct obj_section *);
+extern bool pc_in_mapped_range (CORE_ADDR, struct obj_section *);
 
 /* Return true if pc belongs to section's LMA.  */
-extern CORE_ADDR pc_in_unmapped_range (CORE_ADDR, struct obj_section *);
+extern bool pc_in_unmapped_range (CORE_ADDR, struct obj_section *);
 
 /* Map an address from a section's LMA to its VMA.  */
 extern CORE_ADDR overlay_mapped_address (CORE_ADDR, struct obj_section *);

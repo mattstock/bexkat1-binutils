@@ -1,5 +1,5 @@
 /* coff object file format
-   Copyright (C) 1989-2022 Free Software Foundation, Inc.
+   Copyright (C) 1989-2023 Free Software Foundation, Inc.
 
    This file is part of GAS.
 
@@ -38,6 +38,10 @@
 #ifndef TARGET_FORMAT
 #define TARGET_FORMAT "coff-arm"
 #endif
+#endif
+
+#ifdef TC_AARCH64
+#include "coff/aarch64.h"
 #endif
 
 #ifdef TC_PPC
@@ -129,10 +133,8 @@
 
 #define OUTPUT_FLAVOR bfd_target_coff_flavour
 
-/* Alter the field names, for now, until we've fixed up the other
-   references to use the new name.  */
+/* COFF symbol flags.  See SF_* macros.  */
 #define OBJ_SYMFIELD_TYPE	unsigned long
-#define sy_obj			sy_obj_flags
 
 /* We can't use the predefined section symbols in bfd/section.c, as
    COFF symbols have extra fields.  See bfd/libcoff.h:coff_symbol_type.  */
@@ -187,9 +189,8 @@
 #define SA_SET_SECT_NRELOC(s,v)	(SYM_AUXENT (s)->x_sect.x_nreloc = (v))
 #endif
 
-/* Internal use only definitions. SF_ stands for symbol flags.
-
-   These values can be assigned to sy_symbol.ost_flags field of a symbolS.  */
+/* Internal use only definitions.  SF_ stands for symbol flags.  These
+   values can be assigned to OBJ_SYMFIELD_TYPE obj field of a symbolS.  */
 
 #define SF_NORMAL_MASK	0x0000ffff	/* bits 12-15 are general purpose.  */
 

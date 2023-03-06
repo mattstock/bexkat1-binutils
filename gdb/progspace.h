@@ -1,6 +1,6 @@
 /* Program and address space management, for GDB, the GNU debugger.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,13 +37,12 @@ struct objfile;
 struct inferior;
 struct exec;
 struct address_space;
-struct program_space_data;
-struct address_space_data;
+struct program_space;
 struct so_list;
 
-typedef std::list<std::shared_ptr<objfile>> objfile_list;
+typedef std::list<std::unique_ptr<objfile>> objfile_list;
 
-/* An iterator that wraps an iterator over std::shared_ptr<objfile>,
+/* An iterator that wraps an iterator over std::unique_ptr<objfile>,
    and dereferences the returned object.  This is useful for iterating
    over a list of shared pointers and returning raw pointers -- which
    helped avoid touching a lot of code when changing how objfiles are
@@ -234,7 +233,7 @@ struct program_space
   /* Add OBJFILE to the list of objfiles, putting it just before
      BEFORE.  If BEFORE is nullptr, it will go at the end of the
      list.  */
-  void add_objfile (std::shared_ptr<objfile> &&objfile,
+  void add_objfile (std::unique_ptr<objfile> &&objfile,
 		    struct objfile *before);
 
   /* Remove OBJFILE from the list of objfiles.  */
@@ -354,7 +353,7 @@ struct program_space
   struct objfile *symfile_object_file = NULL;
 
   /* All known objfiles are kept in a linked list.  */
-  std::list<std::shared_ptr<objfile>> objfiles_list;
+  std::list<std::unique_ptr<objfile>> objfiles_list;
 
   /* List of shared objects mapped into this space.  Managed by
      solib.c.  */
@@ -372,7 +371,7 @@ struct program_space
   std::vector<std::string> deleted_solibs;
 
   /* Per pspace data-pointers required by other GDB modules.  */
-  REGISTRY_FIELDS {};
+  registry<program_space> registry_fields;
 
 private:
   /* The set of target sections matching the sections mapped into
@@ -385,10 +384,21 @@ private:
    associating caches to each address space.  */
 struct address_space
 {
-  int num;
+  /* Create a new address space object, and add it to the list.  */
+  address_space ();
+  DISABLE_COPY_AND_ASSIGN (address_space);
+
+  /* Returns the integer address space id of this address space.  */
+  int num () const
+  {
+    return m_num;
+  }
 
   /* Per aspace data-pointers required by other GDB modules.  */
-  REGISTRY_FIELDS;
+  registry<address_space> registry_fields;
+
+private:
+  int m_num;
 };
 
 /* The list of all program spaces.  There's always at least one.  */
@@ -430,16 +440,10 @@ private:
   program_space *m_saved_pspace;
 };
 
-/* Create a new address space object, and add it to the list.  */
-extern struct address_space *new_address_space (void);
-
 /* Maybe create a new address space object, and add it to the list, or
    return a pointer to an existing address space, in case inferiors
    share an address space.  */
 extern struct address_space *maybe_new_address_space (void);
-
-/* Returns the integer address space id of ASPACE.  */
-extern int address_space_num (struct address_space *aspace);
 
 /* Update all program spaces matching to address spaces.  The user may
    have created several program spaces, and loaded executables into
@@ -450,15 +454,5 @@ extern int address_space_num (struct address_space *aspace);
    target description, to fixup the program/address spaces
    mappings.  */
 extern void update_address_spaces (void);
-
-/* Keep a registry of per-pspace data-pointers required by other GDB
-   modules.  */
-
-DECLARE_REGISTRY (program_space);
-
-/* Keep a registry of per-aspace data-pointers required by other GDB
-   modules.  */
-
-DECLARE_REGISTRY (address_space);
 
 #endif

@@ -1,6 +1,6 @@
 /* D language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 2005-2022 Free Software Foundation, Inc.
+   Copyright (C) 2005-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -144,11 +144,18 @@ public:
 
   /* See language.h.  */
 
+  bool can_print_type_offsets () const override
+  {
+    return true;
+  }
+
+  /* See language.h.  */
+
   void print_type (struct type *type, const char *varstring,
 		   struct ui_file *stream, int show, int level,
 		   const struct type_print_options *flags) const override
   {
-    c_print_type (type, varstring, stream, show, level, flags);
+    c_print_type (type, varstring, stream, show, level, la_language, flags);
   }
 
   /* See language.h.  */
@@ -188,11 +195,10 @@ static d_language d_language_defn;
 
 /* Build all D language types for the specified architecture.  */
 
-static void *
+static struct builtin_d_type *
 build_d_types (struct gdbarch *gdbarch)
 {
-  struct builtin_d_type *builtin_d_type
-    = GDBARCH_OBSTACK_ZALLOC (gdbarch, struct builtin_d_type);
+  struct builtin_d_type *builtin_d_type = new struct builtin_d_type;
 
   /* Basic types.  */
   builtin_d_type->builtin_void
@@ -265,19 +271,19 @@ build_d_types (struct gdbarch *gdbarch)
   return builtin_d_type;
 }
 
-static struct gdbarch_data *d_type_data;
+static const registry<gdbarch>::key<struct builtin_d_type> d_type_data;
 
 /* Return the D type table for the specified architecture.  */
 
 const struct builtin_d_type *
 builtin_d_type (struct gdbarch *gdbarch)
 {
-  return (const struct builtin_d_type *) gdbarch_data (gdbarch, d_type_data);
-}
+  struct builtin_d_type *result = d_type_data.get (gdbarch);
+  if (result == nullptr)
+    {
+      result = build_d_types (gdbarch);
+      d_type_data.set (gdbarch, result);
+    }
 
-void _initialize_d_language ();
-void
-_initialize_d_language ()
-{
-  d_type_data = gdbarch_data_register_post_init (build_d_types);
+  return result;
 }

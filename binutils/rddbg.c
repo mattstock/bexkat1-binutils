@@ -1,5 +1,5 @@
 /* rddbg.c -- Read debugging information into a generic form.
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>.
 
    This file is part of GNU Binutils.
@@ -410,7 +410,7 @@ stab_context (void)
 	  else
 	    fprintf (stderr, "%-6d", stabp->type);
 	  fprintf (stderr, " %-6d ", stabp->desc);
-	  fprintf_vma (stderr, stabp->value);
+	  fprintf (stderr, "%08" PRIx64, (uint64_t) stabp->value);
 	  if (stabp->type != 0)
 	    fprintf (stderr, " %s", stabp->string);
 	  fprintf (stderr, "\n");

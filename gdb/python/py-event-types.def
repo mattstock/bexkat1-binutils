@@ -1,6 +1,6 @@
 /* Python event definitions -*- c++ -*-
 
-   Copyright (C) 2017-2022 Free Software Foundation, Inc.
+   Copyright (C) 2017-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -84,6 +84,11 @@ GDB_PY_DEFINE_EVENT_TYPE (memory_changed,
 GDB_PY_DEFINE_EVENT_TYPE (new_objfile,
 			  "NewObjFileEvent",
 			  "GDB new object file event object",
+			  event_object_type);
+
+GDB_PY_DEFINE_EVENT_TYPE (free_objfile,
+			  "FreeObjFileEvent",
+			  "GDB free object file event object",
 			  event_object_type);
 
 GDB_PY_DEFINE_EVENT_TYPE (clear_objfiles,

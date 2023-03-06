@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -32,10 +32,9 @@
 #include <pthread.h>
 
 #include "gp-defs.h"
-#include "collector_module.h"
+#include "collector.h"
 #include "gp-experiment.h"
 #include "data_pckts.h"
-#include "i18n.h"
 #include "tsd.h"
 #include "cc_libcollector.h"
 
@@ -707,11 +706,11 @@ __collector_jsync_end (hrtime_t reqt, void *object)
   if (grnt - reqt >= sync_threshold)
     {
       Sync_packet spacket;
-      collector_memset (&spacket, 0, sizeof ( Sync_packet));
-      spacket.comm.tsize = sizeof ( Sync_packet);
+      collector_memset (&spacket, 0, sizeof (Sync_packet));
+      spacket.comm.tsize = sizeof (Sync_packet);
       spacket.comm.tstamp = grnt;
       spacket.requested = reqt;
-      spacket.objp = (Vaddr_type) object;
+      spacket.objp = (intptr_t) object;
       spacket.comm.frinfo = collector_interface->getFrameInfo (sync_hndl, spacket.comm.tstamp, FRINFO_FROM_STACK_ARG, &spacket);
       collector_interface->writeDataRecord (sync_hndl, (Common_packet*) & spacket);
     }
@@ -740,11 +739,11 @@ pthread_mutex_lock (pthread_mutex_t *mp)
   if (grnt - reqt >= sync_threshold)
     {
       Sync_packet spacket;
-      collector_memset (&spacket, 0, sizeof ( Sync_packet));
-      spacket.comm.tsize = sizeof ( Sync_packet);
+      collector_memset (&spacket, 0, sizeof (Sync_packet));
+      spacket.comm.tsize = sizeof (Sync_packet);
       spacket.comm.tstamp = grnt;
       spacket.requested = reqt;
-      spacket.objp = (Vaddr_type) mp;
+      spacket.objp = (intptr_t) mp;
       spacket.comm.frinfo = collector_interface->getFrameInfo (sync_hndl, spacket.comm.tstamp, FRINFO_FROM_STACK, &spacket);
       collector_interface->writeDataRecord (sync_hndl, (Common_packet*) & spacket);
     }
@@ -760,7 +759,7 @@ __collector_pthread_cond_wait_symver (int(real_pthread_cond_wait) (), pthread_co
 
 #if ARCH(Intel) || ARCH(SPARC)
 SYMVER_ATTRIBUTE (__collector_pthread_cond_wait_2_3_2,
-		  pthread_cond_wait@@GLIBC_2.3.2)
+		  pthread_cond_wait@GLIBC_2.3.2)
 #endif
 int
 __collector_pthread_cond_wait_2_3_2 (pthread_cond_t *cond, pthread_mutex_t *mutex)
@@ -831,11 +830,11 @@ __collector_pthread_cond_wait_symver (int(real_pthread_cond_wait) (), pthread_co
   if (grnt - reqt >= sync_threshold)
     {
       Sync_packet spacket;
-      collector_memset (&spacket, 0, sizeof ( Sync_packet));
-      spacket.comm.tsize = sizeof ( Sync_packet);
+      collector_memset (&spacket, 0, sizeof (Sync_packet));
+      spacket.comm.tsize = sizeof (Sync_packet);
       spacket.comm.tstamp = grnt;
       spacket.requested = reqt;
-      spacket.objp = (Vaddr_type) mutex;
+      spacket.objp = (intptr_t) mutex;
       spacket.comm.frinfo = collector_interface->getFrameInfo (sync_hndl, spacket.comm.tstamp, FRINFO_FROM_STACK_ARG, &spacket);
       collector_interface->writeDataRecord (sync_hndl, (Common_packet*) & spacket);
     }
@@ -853,7 +852,7 @@ __collector_pthread_cond_timedwait_symver (int(real_pthread_cond_timedwait) (),
 
 #if ARCH(Intel) || ARCH(SPARC)
 SYMVER_ATTRIBUTE (__collector_pthread_cond_timedwait_2_3_2,
-		  pthread_cond_timedwait@@GLIBC_2.3.2)
+		  pthread_cond_timedwait@GLIBC_2.3.2)
 #endif  // ARCH()
 int
 __collector_pthread_cond_timedwait_2_3_2 (pthread_cond_t *cond,
@@ -938,7 +937,7 @@ __collector_pthread_cond_timedwait_symver (int(real_pthread_cond_timedwait) (),
       spacket.comm.tsize = sizeof ( Sync_packet);
       spacket.comm.tstamp = grnt;
       spacket.requested = reqt;
-      spacket.objp = (Vaddr_type) mutex;
+      spacket.objp = (intptr_t) mutex;
       spacket.comm.frinfo = collector_interface->getFrameInfo (sync_hndl, spacket.comm.tstamp, FRINFO_FROM_STACK_ARG, &spacket);
       collector_interface->writeDataRecord (sync_hndl, (Common_packet*) & spacket);
     }
@@ -985,7 +984,7 @@ pthread_join (pthread_t target_thread, void **status)
 static int
 __collector_sem_wait_symver (int(real_sem_wait) (), sem_t *sp);
 
-SYMVER_ATTRIBUTE (__collector_sem_wait_2_1, sem_wait@@GLIBC_2.1)
+SYMVER_ATTRIBUTE (__collector_sem_wait_2_1, sem_wait@GLIBC_2.1)
 int
 __collector_sem_wait_2_1 (sem_t *sp)
 {
@@ -1047,7 +1046,7 @@ sem_wait (sem_t *sp)
       spacket.comm.tsize = sizeof ( Sync_packet);
       spacket.comm.tstamp = grnt;
       spacket.requested = reqt;
-      spacket.objp = (Vaddr_type) sp;
+      spacket.objp = (intptr_t) sp;
 
 #if ARCH(Intel) && WSIZE(32)
       spacket.comm.frinfo = collector_interface->getFrameInfo (sync_hndl, spacket.comm.tstamp, FRINFO_FROM_STACK_ARG, &spacket);

@@ -1,4 +1,4 @@
-# Copyright 2021-2022 Free Software Foundation, Inc.
+# Copyright 2021-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,9 +21,7 @@ load_lib dwarf.exp
 
 # This test can only be run on targets which support DWARF-2 and use
 # gas.
-if {![dwarf2_support]} {
-    return 0
-}
+require dwarf2_support
 
 standard_testfile .c -dw.S
 
@@ -54,7 +52,7 @@ clean_restart
 set pattern1 \
     [multi_line \
 	 "Reading symbols from \[^\r\n\]+" \
-	 "Dwarf Error: unexpected tag 'DW_TAG_subprogram' at offset $hex \\\[\[^\r\n\]+\\\]"]
+	 "Dwarf Error: unexpected tag 'DW_TAG_subprogram' at offset $hex"]
 
 # This pattern is hit when GDB does use -readnow (e.g. running with
 # --target_board=readnow).
@@ -62,7 +60,7 @@ set pattern2 \
     [multi_line \
 	 "Reading symbols from \[^\r\n\]+" \
 	 "Expanding full symbols from \[^\r\n\]+" \
-	 "Dwarf Error: unexpected tag 'DW_TAG_subprogram' at offset $hex \\\[\[^\r\n\]+\\\]"]
+	 "Dwarf Error: unexpected tag 'DW_TAG_subprogram' at offset $hex"]
 
 # Load the executable, we expect an error from the DWARF parser.
 gdb_test_multiple "file $binfile" "file $testfile" {

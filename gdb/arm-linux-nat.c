@@ -1,5 +1,5 @@
 /* GNU/Linux on ARM native support.
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -135,7 +135,7 @@ fetch_fpregs (struct regcache *regcache)
     ret = ptrace (PT_GETFPREGS, tid, 0, fp);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch the floating point registers."));
+    perror_with_name (_("Unable to fetch the floating point registers"));
 
   /* Fetch fpsr.  */
   regcache->raw_supply (ARM_FPS_REGNUM, fp + NWFPE_FPSR_OFFSET);
@@ -172,7 +172,7 @@ store_fpregs (const struct regcache *regcache)
     ret = ptrace (PT_GETFPREGS, tid, 0, fp);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch the floating point registers."));
+    perror_with_name (_("Unable to fetch the floating point registers"));
 
   /* Store fpsr.  */
   if (REG_VALID == regcache->get_register_status (ARM_FPS_REGNUM))
@@ -196,7 +196,7 @@ store_fpregs (const struct regcache *regcache)
     ret = ptrace (PTRACE_SETFPREGS, tid, 0, fp);
 
   if (ret < 0)
-    perror_with_name (_("Unable to store floating point registers."));
+    perror_with_name (_("Unable to store floating point registers"));
 }
 
 /* Fetch all general registers of the process and store into
@@ -224,7 +224,7 @@ fetch_regs (struct regcache *regcache)
     ret = ptrace (PTRACE_GETREGS, tid, 0, &regs);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch general registers."));
+    perror_with_name (_("Unable to fetch general registers"));
 
   aarch32_gp_regcache_supply (regcache, (uint32_t *) regs, arm_apcs_32);
 }
@@ -252,7 +252,7 @@ store_regs (const struct regcache *regcache)
     ret = ptrace (PTRACE_GETREGS, tid, 0, &regs);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch general registers."));
+    perror_with_name (_("Unable to fetch general registers"));
 
   aarch32_gp_regcache_collect (regcache, (uint32_t *) regs, arm_apcs_32);
 
@@ -269,7 +269,7 @@ store_regs (const struct regcache *regcache)
     ret = ptrace (PTRACE_SETREGS, tid, 0, &regs);
 
   if (ret < 0)
-    perror_with_name (_("Unable to store general registers."));
+    perror_with_name (_("Unable to store general registers"));
 }
 
 /* Fetch all WMMX registers of the process and store into
@@ -286,7 +286,7 @@ fetch_wmmx_regs (struct regcache *regcache)
 
   ret = ptrace (PTRACE_GETWMMXREGS, tid, 0, regbuf);
   if (ret < 0)
-    perror_with_name (_("Unable to fetch WMMX registers."));
+    perror_with_name (_("Unable to fetch WMMX registers"));
 
   for (regno = 0; regno < 16; regno++)
     regcache->raw_supply (regno + ARM_WR0_REGNUM, &regbuf[regno * 8]);
@@ -311,7 +311,7 @@ store_wmmx_regs (const struct regcache *regcache)
 
   ret = ptrace (PTRACE_GETWMMXREGS, tid, 0, regbuf);
   if (ret < 0)
-    perror_with_name (_("Unable to fetch WMMX registers."));
+    perror_with_name (_("Unable to fetch WMMX registers"));
 
   for (regno = 0; regno < 16; regno++)
     if (REG_VALID == regcache->get_register_status (regno + ARM_WR0_REGNUM))
@@ -330,7 +330,7 @@ store_wmmx_regs (const struct regcache *regcache)
   ret = ptrace (PTRACE_SETWMMXREGS, tid, 0, regbuf);
 
   if (ret < 0)
-    perror_with_name (_("Unable to store WMMX registers."));
+    perror_with_name (_("Unable to store WMMX registers"));
 }
 
 static void
@@ -339,7 +339,7 @@ fetch_vfp_regs (struct regcache *regcache)
   gdb_byte regbuf[ARM_VFP3_REGS_SIZE];
   int ret, tid;
   struct gdbarch *gdbarch = regcache->arch ();
-  arm_gdbarch_tdep *tdep = (arm_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  arm_gdbarch_tdep *tdep = gdbarch_tdep<arm_gdbarch_tdep> (gdbarch);
 
   /* Get the thread id for the ptrace call.  */
   tid = regcache->ptid ().lwp ();
@@ -356,7 +356,7 @@ fetch_vfp_regs (struct regcache *regcache)
     ret = ptrace (PTRACE_GETVFPREGS, tid, 0, regbuf);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch VFP registers."));
+    perror_with_name (_("Unable to fetch VFP registers"));
 
   aarch32_vfp_regcache_supply (regcache, regbuf,
 			       tdep->vfp_register_count);
@@ -368,7 +368,7 @@ store_vfp_regs (const struct regcache *regcache)
   gdb_byte regbuf[ARM_VFP3_REGS_SIZE];
   int ret, tid;
   struct gdbarch *gdbarch = regcache->arch ();
-  arm_gdbarch_tdep *tdep = (arm_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  arm_gdbarch_tdep *tdep = gdbarch_tdep<arm_gdbarch_tdep> (gdbarch);
 
   /* Get the thread id for the ptrace call.  */
   tid = regcache->ptid ().lwp ();
@@ -385,7 +385,7 @@ store_vfp_regs (const struct regcache *regcache)
     ret = ptrace (PTRACE_GETVFPREGS, tid, 0, regbuf);
 
   if (ret < 0)
-    perror_with_name (_("Unable to fetch VFP registers (for update)."));
+    perror_with_name (_("Unable to fetch VFP registers (for update)"));
 
   aarch32_vfp_regcache_collect (regcache, regbuf,
 				tdep->vfp_register_count);
@@ -402,7 +402,7 @@ store_vfp_regs (const struct regcache *regcache)
     ret = ptrace (PTRACE_SETVFPREGS, tid, 0, regbuf);
 
   if (ret < 0)
-    perror_with_name (_("Unable to store VFP registers."));
+    perror_with_name (_("Unable to store VFP registers"));
 }
 
 /* Fetch registers from the child process.  Fetch all registers if
@@ -413,7 +413,7 @@ void
 arm_linux_nat_target::fetch_registers (struct regcache *regcache, int regno)
 {
   struct gdbarch *gdbarch = regcache->arch ();
-  arm_gdbarch_tdep *tdep = (arm_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  arm_gdbarch_tdep *tdep = gdbarch_tdep<arm_gdbarch_tdep> (gdbarch);
 
   if (-1 == regno)
     {
@@ -450,7 +450,7 @@ void
 arm_linux_nat_target::store_registers (struct regcache *regcache, int regno)
 {
   struct gdbarch *gdbarch = regcache->arch ();
-  arm_gdbarch_tdep *tdep = (arm_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  arm_gdbarch_tdep *tdep = gdbarch_tdep<arm_gdbarch_tdep> (gdbarch);
 
   if (-1 == regno)
     {
@@ -531,7 +531,7 @@ ps_get_thread_area (struct ps_prochandle *ph,
 const struct target_desc *
 arm_linux_nat_target::read_description ()
 {
-  CORE_ADDR arm_hwcap = linux_get_hwcap (this);
+  CORE_ADDR arm_hwcap = linux_get_hwcap ();
 
   if (have_ptrace_getregset == TRIBOOL_UNKNOWN)
     {
@@ -550,7 +550,7 @@ arm_linux_nat_target::read_description ()
     }
 
   if (arm_hwcap & HWCAP_IWMMXT)
-    return arm_read_description (ARM_FP_TYPE_IWMMXT);
+    return arm_read_description (ARM_FP_TYPE_IWMMXT, false);
 
   if (arm_hwcap & HWCAP_VFP)
     {
@@ -567,9 +567,9 @@ arm_linux_nat_target::read_description ()
       if (arm_hwcap & HWCAP_NEON)
 	return aarch32_read_description ();
       else if ((arm_hwcap & (HWCAP_VFPv3 | HWCAP_VFPv3D16)) == HWCAP_VFPv3)
-	return arm_read_description (ARM_FP_TYPE_VFPV3);
+	return arm_read_description (ARM_FP_TYPE_VFPV3, false);
 
-      return arm_read_description (ARM_FP_TYPE_VFPV2);
+      return arm_read_description (ARM_FP_TYPE_VFPV2, false);
     }
 
   return this->beneath ()->read_description ();

@@ -1,6 +1,6 @@
 /* Internal header for GDB/Scheme code.
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,6 +28,8 @@
 #include "extension-priv.h"
 #include "symtab.h"
 #include "libguile.h"
+#include "objfiles.h"
+#include "top.h"		/* For quit_force().  */
 
 struct block;
 struct frame_info;
@@ -272,7 +274,6 @@ struct eqable_gdb_smob
 #undef GDB_SMOB_HEAD
 
 struct objfile;
-struct objfile_data;
 
 /* A predicate that returns non-zero if an object is a particular kind
    of gsmob.  */
@@ -286,14 +287,6 @@ extern void gdbscm_init_chained_gsmob (chained_gdb_smob *base);
 
 extern void gdbscm_init_eqable_gsmob (eqable_gdb_smob *base,
 				      SCM containing_scm);
-
-extern void gdbscm_add_objfile_ref (struct objfile *objfile,
-				    const struct objfile_data *data_key,
-				    chained_gdb_smob *g_smob);
-
-extern void gdbscm_remove_objfile_ref (struct objfile *objfile,
-				       const struct objfile_data *data_key,
-				       chained_gdb_smob *g_smob);
 
 extern htab_t gdbscm_create_eqable_gsmob_ptr_map (htab_hash hash_fn,
 						  htab_eq eq_fn);
@@ -455,7 +448,7 @@ extern int frscm_is_frame (SCM scm);
 extern frame_smob *frscm_get_frame_smob_arg_unsafe (SCM frame_scm, int arg_pos,
 						    const char *func_name);
 
-extern struct frame_info *frscm_frame_smob_to_frame (frame_smob *);
+extern struct frame_info_ptr frscm_frame_smob_to_frame (frame_smob *);
 
 /* scm-iterator.c */
 
@@ -711,6 +704,10 @@ gdbscm_wrap (Function &&func, Args &&... args)
   try
     {
       result = func (std::forward<Args> (args)...);
+    }
+  catch (const gdb_exception_forced_quit &e)
+    {
+      quit_force (NULL, 0);
     }
   catch (const gdb_exception &except)
     {

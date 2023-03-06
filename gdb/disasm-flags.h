@@ -1,6 +1,6 @@
 /* Disassemble flags for GDB.
 
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,7 +24,7 @@
 
 /* Flags used to control how GDB's disassembler behaves.  */
 
-enum gdb_disassembly_flag
+enum gdb_disassembly_flag : unsigned
   {
     DISASSEMBLY_SOURCE_DEPRECATED = (0x1 << 0),
     DISASSEMBLY_RAW_INSN = (0x1 << 1),
@@ -33,6 +33,7 @@ enum gdb_disassembly_flag
     DISASSEMBLY_OMIT_PC = (0x1 << 4),
     DISASSEMBLY_SOURCE = (0x1 << 5),
     DISASSEMBLY_SPECULATIVE = (0x1 << 6),
+    DISASSEMBLY_RAW_BYTES = (0x1 << 7),
   };
 DEF_ENUM_FLAGS_TYPE (enum gdb_disassembly_flag, gdb_disassembly_flags);
 

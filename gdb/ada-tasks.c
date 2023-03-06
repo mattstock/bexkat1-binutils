@@ -1,4 +1,4 @@
-/* Copyright (C) 1992-2022 Free Software Foundation, Inc.
+/* Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -85,6 +85,20 @@ static const char * const task_states[] = {
   N_("Selective Wait")
 };
 
+/* Return a string representing the task state.  */
+static const char *
+get_state (unsigned value)
+{
+  if (value >= 0
+      && value <= ARRAY_SIZE (task_states)
+      && task_states[value][0] != '\0')
+    return _(task_states[value]);
+
+  static char buffer[100];
+  xsnprintf (buffer, sizeof (buffer), _("Unknown task state: %d"), value);
+  return buffer;
+}
+
 /* A longer description corresponding to each possible task state.  */
 static const char * const long_task_states[] = {
   N_("Unactivated"),
@@ -106,6 +120,21 @@ static const char * const long_task_states[] = {
   N_("Activating"),
   N_("Blocked in selective wait statement")
 };
+
+/* Return a string representing the task state.  This uses the long
+   descriptions.  */
+static const char *
+get_long_state (unsigned value)
+{
+  if (value >= 0
+      && value <= ARRAY_SIZE (long_task_states)
+      && long_task_states[value][0] != '\0')
+    return _(long_task_states[value]);
+
+  static char buffer[100];
+  xsnprintf (buffer, sizeof (buffer), _("Unknown task state: %d"), value);
+  return buffer;
+}
 
 /* The index of certain important fields in the Ada Task Control Block
    record and sub-records.  */
@@ -166,7 +195,7 @@ struct ada_tasks_pspace_data
 };
 
 /* Key to our per-program-space data.  */
-static const struct program_space_key<ada_tasks_pspace_data>
+static const registry<program_space>::key<ada_tasks_pspace_data>
   ada_tasks_pspace_data_handle;
 
 /* The kind of data structure used by the runtime to store the list
@@ -242,7 +271,7 @@ struct ada_tasks_inferior_data
 };
 
 /* Key to our per-inferior data.  */
-static const struct inferior_key<ada_tasks_inferior_data>
+static const registry<inferior>::key<ada_tasks_inferior_data>
   ada_tasks_inferior_data_handle;
 
 /* Return a string with TASKNO followed by the task name if TASK_INFO
@@ -401,7 +430,7 @@ iterate_over_live_ada_tasks (ada_task_list_iterator_ftype iterator)
 static void
 value_as_string (char *dest, struct value *val, int length)
 {
-  memcpy (dest, value_contents (val).data (), length);
+  memcpy (dest, val->contents ().data (), length);
   dest[length] = '\0';
 }
 
@@ -428,7 +457,7 @@ read_fat_string_value (char *dest, struct value *val, int max_len)
      to extract the string from the fat string.  */
   if (initialize_fieldnos)
     {
-      struct type *type = value_type (val);
+      struct type *type = val->type ();
       struct type *bounds_type;
 
       array_fieldno = ada_get_field_index (type, "P_ARRAY", 0);
@@ -436,7 +465,7 @@ read_fat_string_value (char *dest, struct value *val, int max_len)
 
       bounds_type = type->field (bounds_fieldno).type ();
       if (bounds_type->code () == TYPE_CODE_PTR)
-	bounds_type = TYPE_TARGET_TYPE (bounds_type);
+	bounds_type = bounds_type->target_type ();
       if (bounds_type->code () != TYPE_CODE_STRUCT)
 	error (_("Unknown task name format. Aborting"));
       upper_bound_fieldno = ada_get_field_index (bounds_type, "UB0", 0);
@@ -455,7 +484,7 @@ read_fat_string_value (char *dest, struct value *val, int max_len)
 
   /* Extract LEN characters from the fat string.  */
   array_val = value_ind (value_field (val, array_fieldno));
-  read_memory (value_address (array_val), (gdb_byte *) dest, len);
+  read_memory (array_val->address (), (gdb_byte *) dest, len);
 
   /* Add the NUL character to close the string.  */
   dest[len] = '\0';
@@ -755,7 +784,7 @@ read_atcb (CORE_ADDR task_id, struct ada_task_info *task_info)
 	value_subscript (entry_calls_value,
 			 value_as_long (atc_nesting_level_value));
       called_task_fieldno =
-	ada_get_field_index (value_type (entry_calls_value_element),
+	ada_get_field_index (entry_calls_value_element->type (),
 			     "called_task", 0);
       task_info->called_task =
 	value_as_address (value_field (entry_calls_value_element,
@@ -818,7 +847,7 @@ add_ada_task (CORE_ADDR task_id, struct inferior *inf)
 static bool
 read_known_tasks_array (struct ada_tasks_inferior_data *data)
 {
-  const int target_ptr_byte = TYPE_LENGTH (data->known_tasks_element);
+  const int target_ptr_byte = data->known_tasks_element->length ();
   const int known_tasks_size = target_ptr_byte * data->known_tasks_length;
   gdb_byte *known_tasks = (gdb_byte *) alloca (known_tasks_size);
   int i;
@@ -845,7 +874,7 @@ read_known_tasks_array (struct ada_tasks_inferior_data *data)
 static bool
 read_known_tasks_list (struct ada_tasks_inferior_data *data)
 {
-  const int target_ptr_byte = TYPE_LENGTH (data->known_tasks_element);
+  const int target_ptr_byte = data->known_tasks_element->length ();
   gdb_byte *known_tasks = (gdb_byte *) alloca (target_ptr_byte);
   CORE_ADDR task_id;
   const struct ada_tasks_pspace_data *pspace_data
@@ -909,7 +938,7 @@ ada_tasks_inferior_data_sniffer (struct ada_tasks_inferior_data *data)
 	  struct type *idxtype = NULL;
 
 	  if (type->code () == TYPE_CODE_ARRAY)
-	    eltype = check_typedef (TYPE_TARGET_TYPE (type));
+	    eltype = check_typedef (type->target_type ());
 	  if (eltype != NULL
 	      && eltype->code () == TYPE_CODE_PTR)
 	    idxtype = check_typedef (type->index_type ());
@@ -1182,7 +1211,7 @@ print_ada_task_info (struct ui_out *uiout,
 			  get_task_number_from_id (task_info->called_task,
 						   inf));
       else
-	uiout->field_string ("state", task_states[task_info->state]);
+	uiout->field_string ("state", get_state (task_info->state));
 
       /* Finally, print the task name, without quotes around it, as mi like
 	 is not expecting quotes, and in non mi-like no need for quotes
@@ -1276,7 +1305,7 @@ info_task (struct ui_out *uiout, const char *taskno_str, struct inferior *inf)
 		    target_taskno);
       }
     else
-      gdb_printf (_("State: %s"), _(long_task_states[task_info->state]));
+      gdb_printf (_("State: %s"), get_long_state (task_info->state));
 
     if (target_taskno)
       {

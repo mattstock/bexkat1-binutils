@@ -1,4 +1,4 @@
-# Copyright (C) 1989-2022 Free Software Foundation, Inc.
+# Copyright (C) 1989-2023 Free Software Foundation, Inc.
 
 # This file is part of GDB.
 
@@ -143,10 +143,12 @@ MAKEINFO_CMD = $(MAKEINFO) $(MAKEINFOFLAGS) $(MAKEINFO_EXTRA_FLAGS)
 MAKEHTML = $(MAKEINFO_CMD) --html
 MAKEHTMLFLAGS =
 
+LIBTOOL = @LIBTOOL@
+
 # Set this up with gcc if you have gnu ld and the loader will print out
 # line numbers for undefined references.
 #CC_LD = g++ -static
-CC_LD = $(CXX) $(CXX_DIALECT)
+CC_LD = $(LIBTOOL) $(SILENT_FLAG) --mode=link $(CXX) $(CXX_DIALECT)
 
 # Where is our "include" directory?  Typically $(srcdir)/../include.
 # This is essentially the header file directory for the library
@@ -163,7 +165,7 @@ CTF_DEPS = @CTF_DEPS@
 
 # Where is the BFD library?  Typically in ../bfd.
 BFD_DIR = ../bfd
-BFD = $(BFD_DIR)/libbfd.a
+BFD = $(BFD_DIR)/libbfd.la
 BFD_SRC = $(srcdir)/$(BFD_DIR)
 BFD_CFLAGS = -I$(BFD_DIR) -I$(BFD_SRC)
 
@@ -172,6 +174,9 @@ BFD_CFLAGS = -I$(BFD_DIR) -I$(BFD_SRC)
 # case both are empty.
 ZLIB = @zlibdir@ -lz
 ZLIBINC = @zlibinc@
+
+ZSTD_CFLAGS = @ZSTD_CFLAGS@
+ZSTD_LIBS = @ZSTD_LIBS@
 
 # Where is the decnumber library?  Typically in ../libdecnumber.
 LIBDECNUMBER_DIR = ../libdecnumber
@@ -203,11 +208,9 @@ LIBXXHASH = @LIBXXHASH@
 # Where is libipt?  This will be empty if libipt was not available.
 LIBIPT = @LIBIPT@
 
-# Where is libgmp?
-LIBGMP = @LIBGMP@
-
-# Where is libmpfr?  This will be empty if libmpfr was not available.
-LIBMPFR = @LIBMPFR@
+# How to find GMP and MPFR
+GMPLIBS = @GMPLIBS@
+GMPINC = @GMPINC@
 
 # GNU source highlight library.
 SRCHIGH_LIBS = @SRCHIGH_LIBS@
@@ -223,6 +226,9 @@ PTHREAD_LIBS = @PTHREAD_LIBS@
 
 DEBUGINFOD_CFLAGS = @DEBUGINFOD_CFLAGS@
 DEBUGINFOD_LIBS = @DEBUGINFOD_LIBS@
+
+AMD_DBGAPI_CFLAGS = @AMD_DBGAPI_CFLAGS@
+AMD_DBGAPI_LIBS = @AMD_DBGAPI_LIBS@
 
 RDYNAMIC = @RDYNAMIC@
 
@@ -287,6 +293,7 @@ SUBDIR_MI_SRCS = \
 	mi/mi-cmd-target.c \
 	mi/mi-cmd-var.c \
 	mi/mi-cmds.c \
+	mi/mi-common.c \
 	mi/mi-console.c \
 	mi/mi-getopt.c \
 	mi/mi-interp.c \
@@ -296,10 +303,6 @@ SUBDIR_MI_SRCS = \
 	mi/mi-symbol-cmds.c
 
 SUBDIR_MI_OBS = $(patsubst %.c,%.o,$(SUBDIR_MI_SRCS))
-
-SUBDIR_MI_DEPS =
-SUBDIR_MI_LDFLAGS =
-SUBDIR_MI_CFLAGS =
 
 #
 # TUI sub directory definitions
@@ -393,6 +396,8 @@ SUBDIR_PYTHON_SRCS = \
 	python/py-cmd.c \
 	python/py-connection.c \
 	python/py-continueevent.c \
+	python/py-dap.c \
+	python/py-disasm.c \
 	python/py-event.c \
 	python/py-evtregistry.c \
 	python/py-evts.c \
@@ -453,6 +458,7 @@ SELFTESTS_SRCS = \
 	unittests/environ-selftests.c \
 	unittests/filtered_iterator-selftests.c \
 	unittests/format_pieces-selftests.c \
+	unittests/frame_info_ptr-selftests.c \
 	unittests/function-view-selftests.c \
 	unittests/gdb_tilde_expand-selftests.c \
 	unittests/gmp-utils-selftests.c \
@@ -463,8 +469,10 @@ SELFTESTS_SRCS = \
 	unittests/offset-type-selftests.c \
 	unittests/observable-selftests.c \
 	unittests/optional-selftests.c \
+	unittests/packed-selftests.c \
 	unittests/parallel-for-selftests.c \
 	unittests/parse-connection-spec-selftests.c \
+	unittests/path-join-selftests.c \
 	unittests/ptid-selftests.c \
 	unittests/main-thread-selftests.c \
 	unittests/mkdir-recursive-selftests.c \
@@ -498,7 +506,7 @@ SUBDIR_TARGET_OBS = $(patsubst %.c,%.o,$(SUBDIR_TARGET_SRCS))
 # disassemblers?
 OPCODES_DIR = ../opcodes
 OPCODES_SRC = $(srcdir)/$(OPCODES_DIR)
-OPCODES = $(OPCODES_DIR)/libopcodes.a
+OPCODES = $(OPCODES_DIR)/libopcodes.la
 # Where are the other opcode tables which only have header file
 # versions?
 OP_INCLUDE = $(INCLUDE_DIR)/opcode
@@ -622,10 +630,11 @@ INTERNAL_CPPFLAGS = $(CPPFLAGS) @GUILE_CPPFLAGS@ @PYTHON_CPPFLAGS@ \
 INTERNAL_CFLAGS_BASE = \
 	$(GLOBAL_CFLAGS) $(PROFILE_CFLAGS) \
 	$(GDB_CFLAGS) $(OPCODES_CFLAGS) $(READLINE_CFLAGS) $(ZLIBINC) \
-	$(BFD_CFLAGS) $(INCLUDE_CFLAGS) $(LIBDECNUMBER_CFLAGS) \
+	$(ZSTD_CFLAGS) $(BFD_CFLAGS) $(INCLUDE_CFLAGS) $(LIBDECNUMBER_CFLAGS) \
 	$(INTL_CFLAGS) $(INCGNU) $(INCSUPPORT) $(LIBBACKTRACE_INC) \
 	$(ENABLE_CFLAGS) $(INTERNAL_CPPFLAGS) $(SRCHIGH_CFLAGS) \
-	$(TOP_CFLAGS) $(PTHREAD_CFLAGS) $(DEBUGINFOD_CFLAGS)
+	$(TOP_CFLAGS) $(PTHREAD_CFLAGS) $(DEBUGINFOD_CFLAGS) $(GMPINC) \
+	$(AMD_DBGAPI_CFLAGS)
 INTERNAL_WARN_CFLAGS = $(INTERNAL_CFLAGS_BASE) $(GDB_WARN_CFLAGS)
 INTERNAL_CFLAGS = $(INTERNAL_WARN_CFLAGS) $(GDB_WERROR_CFLAGS)
 
@@ -644,13 +653,13 @@ INTERNAL_LDFLAGS = \
 # Libraries and corresponding dependencies for compiling gdb.
 # XM_CLIBS, defined in *config files, have host-dependent libs.
 # LIBIBERTY appears twice on purpose.
-CLIBS = $(SIM) $(READLINE) $(OPCODES) $(LIBCTF) $(BFD) $(ZLIB) \
+CLIBS = $(SIM) $(READLINE) $(OPCODES) $(LIBCTF) $(BFD) $(ZLIB) $(ZSTD_LIBS) \
         $(LIBSUPPORT) $(INTL) $(LIBIBERTY) $(LIBDECNUMBER) \
 	$(XM_CLIBS) $(GDBTKLIBS)  $(LIBBACKTRACE_LIB) \
-	@LIBS@ @GUILE_LIBS@ @PYTHON_LIBS@ \
+	@LIBS@ @GUILE_LIBS@ @PYTHON_LIBS@ $(AMD_DBGAPI_LIBS) \
 	$(LIBEXPAT) $(LIBLZMA) $(LIBBABELTRACE) $(LIBIPT) \
 	$(WIN32LIBS) $(LIBGNU) $(LIBGNU_EXTRA_LIBS) $(LIBICONV) \
-	$(LIBMPFR) $(LIBGMP) $(SRCHIGH_LIBS) $(LIBXXHASH) $(PTHREAD_LIBS) \
+	$(GMPLIBS) $(SRCHIGH_LIBS) $(LIBXXHASH) $(PTHREAD_LIBS) \
 	$(DEBUGINFOD_LIBS) $(LIBBABELTRACE_LIB)
 CDEPS = $(NAT_CDEPS) $(SIM) $(BFD) $(READLINE_DEPS) $(CTF_DEPS) \
 	$(OPCODES) $(INTL_DEPS) $(LIBIBERTY) $(CONFIG_DEPS) $(LIBGNU) \
@@ -685,6 +694,12 @@ SIM_OBS = @SIM_OBS@
 # Target-dependent object files.
 TARGET_OBS = @TARGET_OBS@
 
+# All target-dependent object files that require the amd-dbgapi
+# target to be available (used with --enable-targets=all).
+ALL_AMD_DBGAPI_TARGET_OBS = \
+	amdgpu-tdep.o \
+	solib-rocm.o
+
 # All target-dependent objects files that require 64-bit CORE_ADDR
 # (used with --enable-targets=all --enable-64-bit-bfd).
 ALL_64_TARGET_OBS = \
@@ -714,9 +729,12 @@ ALL_64_TARGET_OBS = \
 	arch/aarch64-mte-linux.o \
 	arch/amd64.o \
 	arch/riscv.o \
+	bpf-tdep.o \
 	ia64-linux-tdep.o \
 	ia64-tdep.o \
 	ia64-vms-tdep.o \
+	loongarch-linux-tdep.o \
+	loongarch-tdep.o \
 	mips-fbsd-tdep.o \
 	mips-linux-tdep.o \
 	mips-netbsd-tdep.o \
@@ -733,7 +751,10 @@ ALL_64_TARGET_OBS = \
 	sparc64-netbsd-tdep.o \
 	sparc64-obsd-tdep.o \
 	sparc64-sol2-tdep.o \
-	sparc64-tdep.o
+	sparc64-tdep.o \
+	tilegx-linux-tdep.o \
+	tilegx-tdep.o
+
 
 # All other target-dependent objects files (used with --enable-targets=all).
 ALL_TARGET_OBS = \
@@ -761,7 +782,6 @@ ALL_TARGET_OBS = \
 	avr-tdep.o \
 	bfin-linux-tdep.o \
 	bfin-tdep.o \
-	bpf-tdep.o \
 	bsd-uthread.o \
 	cris-linux-tdep.o \
 	cris-tdep.o \
@@ -797,8 +817,6 @@ ALL_TARGET_OBS = \
 	linux-record.o \
 	linux-tdep.o \
 	lm32-tdep.o \
-	loongarch-linux-tdep.o \
-	loongarch-tdep.o \
 	m32c-tdep.o \
 	m32r-linux-tdep.o \
 	m32r-tdep.o \
@@ -855,8 +873,6 @@ ALL_TARGET_OBS = \
 	symfile-mem.o \
 	tic6x-linux-tdep.o \
 	tic6x-tdep.o \
-	tilegx-linux-tdep.o \
-	tilegx-tdep.o \
 	v850-tdep.o \
 	vax-netbsd-tdep.o \
 	vax-tdep.o \
@@ -1005,6 +1021,7 @@ COMMON_SFILES = \
 	blockframe.c \
 	break-catch-exec.c \
 	break-catch-fork.c \
+	break-catch-load.c \
 	break-catch-sig.c \
 	break-catch-syscall.c \
 	break-catch-throw.c \
@@ -1049,6 +1066,7 @@ COMMON_SFILES = \
 	dwarf2/comp-unit-head.c \
 	dwarf2/cooked-index.c \
 	dwarf2/cu.c \
+	dwarf2/die.c \
 	dwarf2/dwz.c \
 	dwarf2/expr.c \
 	dwarf2/frame-tailcall.c \
@@ -1061,6 +1079,8 @@ COMMON_SFILES = \
 	dwarf2/loc.c \
 	dwarf2/macro.c \
 	dwarf2/read.c \
+	dwarf2/read-debug-names.c \
+	dwarf2/read-gdb-index.c \
 	dwarf2/section.c \
 	dwarf2/stringify.c \
 	eval.c \
@@ -1118,6 +1138,7 @@ COMMON_SFILES = \
 	memattr.c \
 	memory-map.c \
 	memrange.c \
+	memtag.c \
 	minidebug.c \
 	minsyms.c \
 	mipsread.c \
@@ -1146,7 +1167,6 @@ COMMON_SFILES = \
 	regcache.c \
 	regcache-dump.c \
 	reggroups.c \
-	registry.c \
 	remote.c \
 	remote-fileio.c \
 	remote-notif.c \
@@ -1228,8 +1248,8 @@ SFILES = \
 	stub-termcap.c \
 	symfile-mem.c \
 	ui-file.h \
-	mi/mi-common.c \
 	$(SUBDIR_CLI_SRCS) \
+	$(SUBDIR_MI_SRCS) \
 	$(SUBDIR_TARGET_SRCS) \
 	$(COMMON_SFILES) \
 	$(SUBDIR_GCC_COMPILE_SRCS)
@@ -1248,11 +1268,13 @@ HFILES_NO_SRCDIR = \
 	addrmap.h \
 	alpha-bsd-tdep.h \
 	alpha-tdep.h \
+	amd-dbgapi-target.h \
 	amd64-darwin-tdep.h \
 	amd64-linux-tdep.h \
 	amd64-nat.h \
 	amd64-ravenscar-thread.h \
 	amd64-tdep.h \
+	amdgpu-tdep.h \
 	annotate.h \
 	arc-tdep.h \
 	arch-utils.h \
@@ -1304,6 +1326,8 @@ HFILES_NO_SRCDIR = \
 	dwarf2/index-common.h \
 	dwarf2/loc.h \
 	dwarf2/read.h \
+	dwarf2/read-debug-names.h \
+	dwarf2/read-gdb-index.h \
 	event-top.h \
 	exceptions.h \
 	exec.h \
@@ -1627,6 +1651,7 @@ ALLDEPFILES = \
 	alpha-netbsd-tdep.c \
 	alpha-obsd-tdep.c \
 	alpha-tdep.c \
+	amd-dbgapi-target.c \
 	amd64-bsd-nat.c \
 	amd64-darwin-tdep.c \
 	amd64-dicos-tdep.c \
@@ -1642,6 +1667,7 @@ ALLDEPFILES = \
 	amd64-ravenscar-thread.c \
 	amd64-sol2-tdep.c \
 	amd64-tdep.c \
+	amdgpu-tdep.c \
 	arc-linux-nat.c \
 	arc-tdep.c \
 	arm-bsd-tdep.c \
@@ -1783,6 +1809,7 @@ ALLDEPFILES = \
 	sh-tdep.c \
 	sol2-tdep.c \
 	solib-aix.c \
+	solib-rocm.c \
 	solib-svr4.c \
 	sparc-linux-nat.c \
 	sparc-linux-tdep.c \
@@ -1836,6 +1863,7 @@ COMMON_OBS = $(DEPFILES) $(CONFIG_OBS) $(YYOBJ) \
 	xml-builtin.o \
 	$(patsubst %.c,%.o,$(COMMON_SFILES)) \
 	$(SUBDIR_CLI_OBS) \
+	$(SUBDIR_MI_OBS) \
 	$(SUBDIR_TARGET_OBS) \
 	$(SUBDIR_GCC_COMPILE_OBS)
 
@@ -2009,7 +2037,8 @@ install-only: $(CONFIG_INSTALL)
 		  true ; \
 		fi ; \
 		$(SHELL) $(srcdir)/../mkinstalldirs $(DESTDIR)$(bindir) ; \
-		$(INSTALL_PROGRAM_ENV) $(INSTALL_PROGRAM) gdb$(EXEEXT) \
+		$(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) \
+			gdb$(EXEEXT) \
 			$(DESTDIR)$(bindir)/$$transformed_name$(EXEEXT) ; \
 		$(SHELL) $(srcdir)/../mkinstalldirs $(DESTDIR)$(includedir)/gdb ; \
 		$(INSTALL_DATA) jit-reader.h $(DESTDIR)$(includedir)/gdb/jit-reader.h
@@ -2195,6 +2224,7 @@ distclean: clean
 	rm -f gdb-gdb.py gdb-gdb.gdb
 	rm -f y.output yacc.acts yacc.tmp y.tab.h
 	rm -f config.log config.cache
+	rm -f config.lt libtool
 	rm -f Makefile
 	rm -rf $(DEPDIR)
 	for i in $(CONFIG_SRC_SUBDIR); do \
@@ -2293,6 +2323,7 @@ aclocal_m4_deps = \
 	../config/lcmessage.m4 \
 	../config/codeset.m4 \
 	../config/zlib.m4 \
+	../config/zstd.m4 \
 	../config/ax_pthread.m4
 
 $(srcdir)/aclocal.m4: @MAINTAINER_MODE_TRUE@ $(aclocal_m4_deps)
@@ -2520,7 +2551,8 @@ install-gdbtk:
 	  true ; \
 	fi ; \
 	$(SHELL) $(srcdir)/../mkinstalldirs $(DESTDIR)$(bindir); \
-	$(INSTALL_PROGRAM_ENV) $(INSTALL_PROGRAM) insight$(EXEEXT) \
+	$(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) \
+		insight$(EXEEXT) \
 		$(DESTDIR)$(bindir)/$$transformed_name$(EXEEXT) ; \
 	$(SHELL) $(srcdir)/../mkinstalldirs \
 		$(DESTDIR)$(GDBTK_LIBRARY) ; \

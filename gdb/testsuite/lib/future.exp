@@ -1,4 +1,4 @@
-# Copyright 2004-2022 Free Software Foundation, Inc.
+# Copyright 2004-2023 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -119,6 +119,22 @@ proc gdb_find_rustc {} {
 	append rustc " --color never"
     }
     return $rustc
+}
+
+proc gdb_find_hipcc {} {
+    global tool_root_dir
+    if {![is_remote host]} {
+	set hipcc [lookfor_file $tool_root_dir hipcc]
+	if {$hipcc eq "" && [info exists ::env(ROCM_PATH)]} {
+	    set hipcc [lookfor_file $::env(ROCM_PATH)/bin hipcc]
+	}
+	if {$hipcc eq ""} {
+	    set hipcc hipcc
+	}
+    } else {
+	set hipcc ""
+    }
+    return $hipcc
 }
 
 proc gdb_find_ldd {} {
@@ -246,18 +262,6 @@ proc gdb_default_target_compile_1 {source destfile type options} {
 	    }
 	}
 
-	if { $i == "f77" } {
-	    set compiler_type "f77"
-	    if {[board_info $dest exists f77flags]} {
-		append add_flags " [target_info f77flags]"
-	    }
-	    if {[board_info $dest exists f77compiler]} {
-		set compiler [target_info f77compiler]
-	    } else {
-		set compiler [find_g77]
-	    }
-	}
-
 	if { $i == "f90" } {
 	    set compiler_type "f90"
 	    if {[board_info $dest exists f90flags]} {
@@ -299,6 +303,18 @@ proc gdb_default_target_compile_1 {source destfile type options} {
 		set compiler [target_info rustflags]
 	    } else {
 		set compiler [find_rustc]
+	    }
+	}
+
+	if { $i == "hip" } {
+	    set compiler_type "hip"
+	    if {[board_info $dest exists hipflags]} {
+		append add_flags " [target_info hipflags]"
+	    }
+	    if {[board_info $dest exists hipcompiler]} {
+		set compiler [target_info hipcompiler]
+	    } else {
+		set compiler [find_hipcc]
 	    }
 	}
 
@@ -359,12 +375,12 @@ proc gdb_default_target_compile_1 {source destfile type options} {
     global CC_FOR_TARGET
     global CXX_FOR_TARGET
     global D_FOR_TARGET
-    global F77_FOR_TARGET
     global F90_FOR_TARGET
     global GNATMAKE_FOR_TARGET
     global GO_FOR_TARGET
     global GO_LD_FOR_TARGET
     global RUSTC_FOR_TARGET
+    global HIPCC_FOR_TARGET
 
     if {[info exists GNATMAKE_FOR_TARGET]} {
 	if { $compiler_type == "ada" } {
@@ -390,12 +406,6 @@ proc gdb_default_target_compile_1 {source destfile type options} {
 	}
     }
 
-    if {[info exists F77_FOR_TARGET]} {
-	if { $compiler_type == "f77" } {
-	    set compiler $F77_FOR_TARGET
-	}
-    }
-
     if {[info exists F90_FOR_TARGET]} {
 	if { $compiler_type == "f90" } {
 	    set compiler $F90_FOR_TARGET
@@ -417,12 +427,22 @@ proc gdb_default_target_compile_1 {source destfile type options} {
 	}
     }
 
+    if {[info exists HIPCC_FOR_TARGET]} {
+	if {$compiler_type == "hip"} {
+	    set compiler $HIPCC_FOR_TARGET
+	}
+    }
+
     if { $type == "executable" && $linker != "" } {
 	set compiler $linker
     }
 
     if { $compiler == "" } {
-	set compiler [board_info $dest compiler]
+	if { [board_info $dest exists compiler] } {
+	    set compiler [board_info $dest compiler]
+	} elseif { $compiler_type eq "c" } {
+	    set compiler [find_gcc]
+	}
 	if { $compiler == "" } {
 	    return "default_target_compile: No compiler to compile with"
 	}
@@ -646,7 +666,7 @@ proc gdb_default_target_compile {source destfile type options} {
 	    set need_local_lang 0
 	}
 
-	if { $i == "f77" || $i == "f90" } {
+	if { $i == "f90" } {
 	    set need_local_lang [info exists use_gdb_compile(fortran)]
 	}
 
@@ -700,6 +720,12 @@ if {[info procs find_rustc] == ""} {
     rename gdb_find_rustc find_rustc
     set use_gdb_compile(rust) 1
     gdb_note [join [list $note_prefix "Rust" $note_suffix] ""]
+}
+
+if {[info procs find_hipcc] == ""} {
+    rename gdb_find_hipcc find_hipcc
+    set use_gdb_compile(hip) 1
+    gdb_note [join [list $note_prefix "HIP" $note_suffix] ""]
 }
 
 # If dejagnu's default_target_compile is missing support for any language,

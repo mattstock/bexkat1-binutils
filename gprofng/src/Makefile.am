@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2021 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -104,39 +104,39 @@ LIBGPROFNG = libgprofng.la
 ZLIB = @zlibdir@ -lz
 ZLIBINC = @zlibinc@
 
-AM_CPPFLAGS = $(GPROFNG_CPPFLAGS) -DLOCALEDIR=\"@localedir@\" -I.. -I$(srcdir) \
+LOCALEDIR = @localedir@
+SYSCONFDIR = @sysconfdir@
+
+AM_CPPFLAGS = $(GPROFNG_CPPFLAGS) -DLOCALEDIR=\"$(LOCALEDIR)\" \
+	-DSYSCONFDIR=\"$(SYSCONFDIR)\" -DLIBDIR=\"$(libdir)\" \
+	-I.. -I$(srcdir) \
 	-I$(srcdir)/../common \
 	-I$(srcdir)/../../include -I$(srcdir)/../../opcodes \
 	-I../../bfd -I$(srcdir)/../../bfd $(ZLIBINC)
 AM_CFLAGS = $(GPROFNG_CFLAGS) $(PTHREAD_CFLAGS) \
-	$(GPROFNG_NO_FORMAT_TRUNCATION_CFLAGS) \
 	$(GPROFNG_NO_SWITCH_CFLAGS)
 AM_CXXFLAGS = $(AM_CFLAGS)
 
 QLParser.tab.cc QLParser.tab.hh: QLParser.yy
 	$(BISON) $^
 
-man_MANS = gprofng.1 \
-	gp-archive.1 \
-	gp-collect-app.1 \
-	gp-display-src.1 \
-	gp-display-text.1
-
-MAINTAINERCLEANFILES = $(man_MANS)
-
 BUILT_SOURCES = QLParser.tab.hh
 EXTRA_DIST = QLParser.yy $(man_MANS)
 
 
-pkglib_LTLIBRARIES = $(LIBGPROFNG)
+lib_LTLIBRARIES = $(LIBGPROFNG)
 libgprofng_la_SOURCES = $(CCSOURCES) $(CSOURCES)
 libgprofng_la_LDFLAGS = -version-info 0:0:0
+
+# Pass -lpthread instead of $(PTHREAD_LIBS) due to $(PTHREAD_LIBS) being empty
+# when -nostdlib is passed to libtool.
+# See bug 29364 - libgprofng.so: needs to link against -pthread
 libgprofng_la_LIBADD = $(top_builddir)/../opcodes/libopcodes.la \
 	$(top_builddir)/../bfd/libbfd.la \
 	$(GPROFNG_LIBADD) \
-	$(PTHREAD_LIBS) -ldl
+	-lpthread -ldl
 
-dbedir = $(prefix)/etc
+dbedir = $(SYSCONFDIR)
 dbe_DATA = $(srcdir)/gprofng.rc
 
 
@@ -160,6 +160,14 @@ gp_display_text_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
 if BUILD_MAN
 
+man_MANS = \
+	gp-archive.1 \
+	gp-collect-app.1 \
+	gp-display-src.1 \
+	gp-display-text.1
+
+MAINTAINERCLEANFILES = $(man_MANS)
+
 # The man pages depend on the version number and on a help2man include file.
 common_mandeps = $(top_srcdir)/../bfd/version.m4
 
@@ -182,10 +190,6 @@ HELP2MAN_OPT = --libtool --no-info --info-page=$(INFO_PAGE) --manual=$(MANUAL)
 H2M_FILTER = | sed 's/\.TP/\.TP\n.B/' | sed 's/Commands:/\.SH COMMANDS/' \
   | sed 's/See also:/\.SH SEE ALSO/' | sed 's/Documentation:/.SH DOCUMENTATION/' \
   | sed 's/Limitations:/.SH LIMITATIONS/'
-
-gprofng.1: $(srcdir)/gprofng.cc $(common_mandeps) | ./gprofng$(EXEEXT)
-	$(AM_V_GEN)_BUILDING_MANPAGE=1 $(HELP2MAN) $(HELP2MAN_OPT) \
-	  --name=$(TEXT_GPROFNG) ./gprofng$(EXEEXT) $(H2M_FILTER) > $@
 
 gp-archive.1: $(srcdir)/gp-archive.cc $(common_mandeps) | ./gp-archive$(EXEEXT)
 	$(AM_V_GEN)_BUILDING_MANPAGE=1 $(HELP2MAN) $(HELP2MAN_OPT) \
@@ -211,7 +215,4 @@ endif
 # so ensure that the necessary libraries are built at dist time.
 dist-hook: $(LIBGPROFNG)
 
-.PHONY: install-data-local
-
-install-data-local: install-pkglibLTLIBRARIES
-	rm -f $(DESTDIR)/$(pkglibdir)/*.la $(DESTDIR)/$(pkglibdir)/*.a
+$(srcdir)/DbeSession.cc: QLParser.tab.hh

@@ -1,6 +1,6 @@
 /* AArch64 assembler/disassembler support.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GNU Binutils.
@@ -26,6 +26,8 @@
 #include <stdint.h>
 #include <assert.h>
 #include <stdlib.h>
+
+#include "dis-asm.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,6 +99,7 @@ typedef uint32_t aarch64_insn;
 #define AARCH64_FEATURE_SME_F64	     (1ULL << 57) /* SME F64.  */
 #define AARCH64_FEATURE_SME_I64	     (1ULL << 58) /* SME I64.  */
 #define AARCH64_FEATURE_V8_8	     (1ULL << 59) /* Armv8.8 processors.  */
+#define AARCH64_FEATURE_CSSC	     (1ULL << 60) /* Common Short Sequence Compression instructions.  */
 
 /* Crypto instructions are the combination of AES and SHA2.  */
 #define AARCH64_FEATURE_CRYPTO	(AARCH64_FEATURE_SHA2 | AARCH64_FEATURE_AES)
@@ -140,6 +143,7 @@ typedef uint32_t aarch64_insn;
 					 | AARCH64_FEATURE_HBC)
 
 #define AARCH64_ARCH_V9_FEATURES	(AARCH64_FEATURE_V9		\
+					 | AARCH64_FEATURE_F16          \
 					 | AARCH64_FEATURE_SVE		\
 					 | AARCH64_FEATURE_SVE2)
 #define AARCH64_ARCH_V9_1_FEATURES	(AARCH64_ARCH_V8_6_FEATURES)
@@ -489,7 +493,9 @@ enum aarch64_opnd
   AARCH64_OPND_SM3_IMM2,	/* SM3 encodes lane in bits [13, 14].  */
   AARCH64_OPND_MOPS_ADDR_Rd,	/* [Rd]!, in bits [0, 4].  */
   AARCH64_OPND_MOPS_ADDR_Rs,	/* [Rs]!, in bits [16, 20].  */
-  AARCH64_OPND_MOPS_WB_Rn	/* Rn!, in bits [5, 9].  */
+  AARCH64_OPND_MOPS_WB_Rn,	/* Rn!, in bits [5, 9].  */
+  AARCH64_OPND_CSSC_SIMM8,	/* CSSC signed 8-bit immediate.  */
+  AARCH64_OPND_CSSC_UIMM8,	/* CSSC unsigned 8-bit immediate.  */
 };
 
 /* Qualifier constrains an operand.  It either specifies a variant of an
@@ -681,6 +687,7 @@ enum aarch64_insn_class
   cryptosm4,
   dotproduct,
   bfloat16,
+  cssc,
 };
 
 /* Opcode enumerators.  */
@@ -1366,12 +1373,36 @@ aarch64_replace_opcode (struct aarch64_inst *,
 extern const aarch64_opcode *
 aarch64_get_opcode (enum aarch64_op);
 
+/* An instance of this structure is passed to aarch64_print_operand, and
+   the callback within this structure is used to apply styling to the
+   disassembler output.  This structure encapsulates the callback and a
+   state pointer.  */
+
+struct aarch64_styler
+{
+  /* The callback used to apply styling.  Returns a string created from FMT
+     and ARGS with STYLE applied to the string.  STYLER is a pointer back
+     to this object so that the callback can access the state member.
+
+     The string returned from this callback must remain valid until the
+     call to aarch64_print_operand has completed.  */
+  const char *(*apply_style) (struct aarch64_styler *styler,
+			      enum disassembler_style style,
+			      const char *fmt,
+			      va_list args);
+
+  /* A pointer to a state object which can be used by the apply_style
+     callback function.  */
+  void *state;
+};
+
 /* Generate the string representation of an operand.  */
 extern void
 aarch64_print_operand (char *, size_t, bfd_vma, const aarch64_opcode *,
 		       const aarch64_opnd_info *, int, int *, bfd_vma *,
-		       char **,
-		       aarch64_feature_set features);
+		       char **, char *, size_t,
+		       aarch64_feature_set features,
+		       struct aarch64_styler *styler);
 
 /* Miscellaneous interface.  */
 

@@ -1,5 +1,5 @@
 /* Implementation header.
-   Copyright (C) 2019-2022 Free Software Foundation, Inc.
+   Copyright (C) 2019-2023 Free Software Foundation, Inc.
 
    This file is part of libctf.
 
@@ -448,6 +448,10 @@ struct ctf_dict
   ctf_list_t ctf_errs_warnings;	  /* CTF errors and warnings.  */
   ctf_dynhash_t *ctf_link_inputs; /* Inputs to this link.  */
   ctf_dynhash_t *ctf_link_outputs; /* Additional outputs from this link.  */
+
+  /* If a link input CU, points at the corresponding per-CU output (if any);
+     if an output, points at the input (if any).  */
+  ctf_dict_t *ctf_link_in_out;
 
   /* Map input types to output types for ctf_add_type.  Key is a
      ctf_link_type_key_t: value is a type ID.  */

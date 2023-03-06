@@ -1,5 +1,5 @@
 /* Internal interfaces for the GNU/Linux specific target code for gdbserver.
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -178,7 +178,7 @@ public:
 
   bool supports_read_auxv () override;
 
-  int read_auxv (CORE_ADDR offset, unsigned char *myaddr,
+  int read_auxv (int pid, CORE_ADDR offset, unsigned char *myaddr,
 		 unsigned int len) override;
 
   int insert_point (enum raw_bkpt_type type, CORE_ADDR addr,
@@ -275,16 +275,18 @@ public:
   bool supports_agent () override;
 
 #ifdef HAVE_LINUX_BTRACE
+  bool supports_btrace () override;
+
   btrace_target_info *enable_btrace (thread_info *tp,
 				     const btrace_config *conf) override;
 
   int disable_btrace (btrace_target_info *tinfo) override;
 
-  int read_btrace (btrace_target_info *tinfo, buffer *buf,
+  int read_btrace (btrace_target_info *tinfo, std::string *buf,
 		   enum btrace_read_type type) override;
 
   int read_btrace_conf (const btrace_target_info *tinfo,
-			buffer *buf) override;
+			std::string *buf) override;
 #endif
 
   bool supports_range_stepping () override;
@@ -546,6 +548,9 @@ private:
   /* Same as add_linux_process, but don't open the /proc/PID/mem file
      yet.  */
   process_info *add_linux_process_no_mem_file (int pid, int attached);
+
+  /* Free resources associated to PROC and remove it.  */
+  void remove_linux_process (process_info *proc); 
 
   /* Add a new thread.  */
   lwp_info *add_lwp (ptid_t ptid);
@@ -936,22 +941,21 @@ bool thread_db_thread_handle (ptid_t ptid, gdb_byte **handle, int *handle_len);
 
 extern int have_ptrace_getregset;
 
-/* Search for the value with type MATCH in the auxv vector with
-   entries of length WORDSIZE bytes.  If found, store the value in
-   *VALP and return 1.  If not found or if there is an error, return
-   0.  */
+/* Search for the value with type MATCH in the auxv vector, with entries of
+   length WORDSIZE bytes, of process with pid PID.  If found, store the
+   value in *VALP and return 1.  If not found or if there is an error,
+   return 0.  */
 
-int linux_get_auxv (int wordsize, CORE_ADDR match,
-		    CORE_ADDR *valp);
+int linux_get_auxv (int pid, int wordsize, CORE_ADDR match, CORE_ADDR *valp);
 
 /* Fetch the AT_HWCAP entry from the auxv vector, where entries are length
-   WORDSIZE.  If no entry was found, return zero.  */
+   WORDSIZE, of process with pid PID.  If no entry was found, return 0.  */
 
-CORE_ADDR linux_get_hwcap (int wordsize);
+CORE_ADDR linux_get_hwcap (int pid, int wordsize);
 
 /* Fetch the AT_HWCAP2 entry from the auxv vector, where entries are length
-   WORDSIZE.  If no entry was found, return zero.  */
+   WORDSIZE, of process with pid PID.  If no entry was found, return 0.  */
 
-CORE_ADDR linux_get_hwcap2 (int wordsize);
+CORE_ADDR linux_get_hwcap2 (int pid, int wordsize);
 
 #endif /* GDBSERVER_LINUX_LOW_H */

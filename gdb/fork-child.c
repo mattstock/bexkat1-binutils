@@ -1,6 +1,6 @@
 /* Fork a Unix child process, and set up to debug it, for GDB.
 
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.
 
@@ -125,6 +125,9 @@ gdb_startup_inferior (pid_t pid, int num_traps)
 {
   inferior *inf = current_inferior ();
   process_stratum_target *proc_target = inf->process_target ();
+
+  scoped_restore save_starting_up
+    = make_scoped_restore (&inf->starting_up, true);
 
   ptid_t ptid = startup_inferior (proc_target, pid, num_traps, NULL, NULL);
 

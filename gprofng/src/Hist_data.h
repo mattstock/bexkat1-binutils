@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -116,7 +116,8 @@ public:
   TValue *get_real_value (TValue *res, int met_index, int row);
   TValue *get_value (TValue *res, int met_index, int row);
   TValue *get_value (TValue *res, int met_index, HistItem *hi);
-  void print_row (StringBuilder *sb, int row, Metric::HistMetric *hist_metric, char *mark);
+  void print_row(StringBuilder *sb, int row, Metric::HistMetric *hist_metric,
+		 const char *mark);
   void print_content (FILE *out_file, Metric::HistMetric *hist_metric, int limit);
   int print_label (FILE *out_file, Metric::HistMetric *hist_metric, int space);
   void update_total (Hist_data::HistItem *new_total);

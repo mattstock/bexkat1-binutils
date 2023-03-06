@@ -1,5 +1,5 @@
 /* tc-mips.c -- assemble code for a MIPS chip.
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
    Contributed by the OSF and Ralph Campbell.
    Written by Keith Knowles and Ralph Campbell, working independently.
    Modified for ECOFF and R4000 support by Ian Lance Taylor of Cygnus
@@ -2038,7 +2038,7 @@ mips_mark_labels (void)
     mips_compressed_mark_labels ();
 }
 
-static char *expr_end;
+static char *expr_parse_end;
 
 /* An expression in a macro instruction.  This is set by mips_ip and
    mips16_ip and when populated is always an O_constant.  */
@@ -3303,7 +3303,7 @@ mips_parse_argument_token (char *s, char float_format)
 		  set_insn_error (0, _("vector element must be constant"));
 		  return 0;
 		}
-	      s = expr_end;
+	      s = expr_parse_end;
 	      token.u.index = element.X_add_number;
 	      mips_add_token (&token, OT_INTEGER_INDEX);
 	    }
@@ -3344,7 +3344,7 @@ mips_parse_argument_token (char *s, char float_format)
   token.u.integer.relocs[1] = BFD_RELOC_UNUSED;
   token.u.integer.relocs[2] = BFD_RELOC_UNUSED;
   my_getSmallExpression (&token.u.integer.value, token.u.integer.relocs, s);
-  s = expr_end;
+  s = expr_parse_end;
   mips_add_token (&token, OT_INTEGER);
   return s;
 }
@@ -7919,7 +7919,7 @@ append_insn (struct mips_cl_insn *ip, expressionS *address_expr,
 	      || reloc_type[0] == BFD_RELOC_MIPS_HIGHEST
 	      || reloc_type[0] == BFD_RELOC_MIPS_HIGHER
 	      || reloc_type[0] == BFD_RELOC_MIPS_SCN_DISP
-	      || reloc_type[0] == BFD_RELOC_MIPS_REL16
+	      || reloc_type[0] == BFD_RELOC_MIPS_16
 	      || reloc_type[0] == BFD_RELOC_MIPS_RELGOT
 	      || reloc_type[0] == BFD_RELOC_MIPS16_GPREL
 	      || hi16_reloc_p (reloc_type[0])
@@ -9083,7 +9083,7 @@ macro_build (expressionS *ep, const char *name, const char *fmt, ...)
 		      || *r == BFD_RELOC_LO16
 		      || *r == BFD_RELOC_MIPS_GOT_OFST
 		      || (mips_opts.micromips
-			  && (*r == BFD_RELOC_16
+			  && (*r == BFD_RELOC_MIPS_16
 			      || *r == BFD_RELOC_MIPS_GOT16
 			      || *r == BFD_RELOC_MIPS_CALL16
 			      || *r == BFD_RELOC_MIPS_GOT_HI16
@@ -9501,10 +9501,8 @@ load_register (int reg, expressionS *ep, int dbl)
 
   if (!dbl || GPR_SIZE == 32)
     {
-      char value[32];
-
-      sprintf_vma (value, ep->X_add_number);
-      as_bad (_("number (0x%s) larger than 32 bits"), value);
+      as_bad (_("number (0x%" PRIx64 ") larger than 32 bits"),
+	      ep->X_add_number);
       macro_build (ep, "addiu", "t,r,j", reg, 0, BFD_RELOC_LO16);
       return;
     }
@@ -12318,10 +12316,8 @@ macro (struct mips_cl_insn *ip, char *str)
       if (HAVE_32BIT_ADDRESSES
 	  && !IS_SEXT_32BIT_NUM (offset_expr.X_add_number))
 	{
-	  char value [32];
-
-	  sprintf_vma (value, offset_expr.X_add_number);
-	  as_bad (_("number (0x%s) larger than 32 bits"), value);
+	  as_bad (_("number (0x%" PRIx64 ") larger than 32 bits"),
+		  offset_expr.X_add_number);
 	}
 
       /* A constant expression in PIC code can be handled just as it
@@ -13001,10 +12997,8 @@ macro (struct mips_cl_insn *ip, char *str)
       if (HAVE_32BIT_ADDRESSES
 	  && !IS_SEXT_32BIT_NUM (offset_expr.X_add_number))
 	{
-	  char value [32];
-
-	  sprintf_vma (value, offset_expr.X_add_number);
-	  as_bad (_("number (0x%s) larger than 32 bits"), value);
+	  as_bad (_("number (0x%" PRIx64 ") larger than 32 bits"),
+		  offset_expr.X_add_number);
 	}
 
       if (mips_pic == NO_PIC || offset_expr.X_op == O_constant)
@@ -14577,7 +14571,7 @@ static const struct percent_op_match mips_percent_op[] =
   {"%got", BFD_RELOC_MIPS_GOT16},
   {"%gp_rel", BFD_RELOC_GPREL16},
   {"%gprel", BFD_RELOC_GPREL16},
-  {"%half", BFD_RELOC_16},
+  {"%half", BFD_RELOC_MIPS_16},
   {"%highest", BFD_RELOC_MIPS_HIGHEST},
   {"%higher", BFD_RELOC_MIPS_HIGHER},
   {"%neg", BFD_RELOC_MIPS_SUB},
@@ -14661,7 +14655,8 @@ parse_relocation (char **str, bfd_reloc_code_real_type *reloc)
    expression in *EP and the relocations in the array starting
    at RELOC.  Return the number of relocation operators used.
 
-   On exit, EXPR_END points to the first character after the expression.  */
+   On exit, EXPR_PARSE_END points to the first character after the
+   expression.  */
 
 static size_t
 my_getSmallExpression (expressionS *ep, bfd_reloc_code_real_type *reloc,
@@ -14695,7 +14690,7 @@ my_getSmallExpression (expressionS *ep, bfd_reloc_code_real_type *reloc,
 	 && parse_relocation (&str, &reversed_reloc[reloc_index]));
 
   my_getExpression (ep, crux);
-  str = expr_end;
+  str = expr_parse_end;
 
   /* Match every open bracket.  */
   while (crux_depth > 0 && (*str == ')' || *str == ' ' || *str == '\t'))
@@ -14705,7 +14700,7 @@ my_getSmallExpression (expressionS *ep, bfd_reloc_code_real_type *reloc,
   if (crux_depth > 0)
     as_bad (_("unclosed '('"));
 
-  expr_end = str;
+  expr_parse_end = str;
 
   for (i = 0; i < reloc_index; i++)
     reloc[i] = reversed_reloc[reloc_index - 1 - i];
@@ -14721,7 +14716,7 @@ my_getExpression (expressionS *ep, char *str)
   save_in = input_line_pointer;
   input_line_pointer = str;
   expression (ep);
-  expr_end = input_line_pointer;
+  expr_parse_end = input_line_pointer;
   input_line_pointer = save_in;
 }
 
@@ -15841,9 +15836,10 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	break;
       }
 
-  /* Handle BFD_RELOC_8, since it's easy.  Punt on other bfd relocations
-     that have no MIPS ELF equivalent.  */
-  if (fixP->fx_r_type != BFD_RELOC_8)
+  /* Handle BFD_RELOC_8 and BFD_RELOC_16.  Punt on other bfd
+     relocations that have no MIPS ELF equivalent.  */
+  if (fixP->fx_r_type != BFD_RELOC_8
+      && fixP->fx_r_type != BFD_RELOC_16)
     {
       howto = bfd_reloc_type_lookup (stdoutput, fixP->fx_r_type);
       if (!howto)
@@ -15853,7 +15849,6 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
   gas_assert (fixP->fx_size == 2
 	      || fixP->fx_size == 4
 	      || fixP->fx_r_type == BFD_RELOC_8
-	      || fixP->fx_r_type == BFD_RELOC_16
 	      || fixP->fx_r_type == BFD_RELOC_64
 	      || fixP->fx_r_type == BFD_RELOC_CTOR
 	      || fixP->fx_r_type == BFD_RELOC_MIPS_SUB
@@ -15958,7 +15953,6 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     case BFD_RELOC_MIPS_HIGHEST:
     case BFD_RELOC_MIPS_HIGHER:
     case BFD_RELOC_MIPS_SCN_DISP:
-    case BFD_RELOC_MIPS_REL16:
     case BFD_RELOC_MIPS_RELGOT:
     case BFD_RELOC_MIPS_JALR:
     case BFD_RELOC_HI16:
@@ -16044,6 +16038,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     case BFD_RELOC_RVA:
     case BFD_RELOC_32:
     case BFD_RELOC_32_PCREL:
+    case BFD_RELOC_MIPS_16:
     case BFD_RELOC_16:
     case BFD_RELOC_8:
       /* If we are deleting this reloc entry, we must fill in the
@@ -16268,6 +16263,8 @@ s_align (int x ATTRIBUTE_UNUSED)
   int temp, fill_value, *fill_ptr;
   long max_alignment = 28;
 
+  file_mips_check_options ();
+
   /* o Note that the assembler pulls down any immediately preceding label
        to the aligned address.
      o It's not documented but auto alignment is reinstated by
@@ -16292,6 +16289,9 @@ s_align (int x ATTRIBUTE_UNUSED)
     }
   else
     fill_ptr = 0;
+
+  mips_mark_labels ();
+
   if (temp)
     {
       segment_info_type *si = seg_info (now_seg);
@@ -20573,7 +20573,7 @@ mips_convert_symbolic_attribute (const char *name)
 }
 
 void
-md_mips_end (void)
+mips_md_finish (void)
 {
   int fpabi = Val_GNU_MIPS_ABI_FP_ANY;
 

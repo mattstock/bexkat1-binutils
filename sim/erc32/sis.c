@@ -1,6 +1,6 @@
 /* This file is part of SIS (SPARC instruction simulator)
 
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
    Contributed by Jiri Gaisler, European Space Agency
 
    This program is free software; you can redistribute it and/or modify
@@ -138,7 +138,7 @@ run_sim(struct pstate *sregs, uint64_t icount, int dis)
     return TIME_OUT;
 }
 
-int
+static int ATTRIBUTE_PRINTF (3, 4)
 fprintf_styled (void *stream, enum disassembler_style style,
 		const char *fmt, ...)
 {

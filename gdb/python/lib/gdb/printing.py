@@ -1,5 +1,5 @@
 # Pretty-printer utilities.
-# Copyright (C) 2010-2022 Free Software Foundation, Inc.
+# Copyright (C) 2010-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
 import gdb
 import gdb.types
 import re
-import sys
 
 
 class PrettyPrinter(object):
@@ -229,7 +228,7 @@ class _EnumInstance:
         flag_list = []
         v = int(self.val)
         any_found = False
-        for (e_name, e_value) in self.enumerators:
+        for e_name, e_value in self.enumerators:
             if v & e_value != 0:
                 flag_list.append(e_name)
                 v = v & ~e_value

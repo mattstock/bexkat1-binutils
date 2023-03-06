@@ -1,6 +1,6 @@
 /* trace.c --- tracing output for the RX simulator.
 
-Copyright (C) 2005-2022 Free Software Foundation, Inc.
+Copyright (C) 2005-2023 Free Software Foundation, Inc.
 Contributed by Red Hat, Inc.
 
 This file is part of the GNU simulators.
@@ -83,7 +83,7 @@ remove_useless_symbols (asymbol ** symbols, long count)
 }
 
 static int
-compare_symbols (const PTR ap, const PTR bp)
+compare_symbols (const void *ap, const void *bp)
 {
   const asymbol *a = *(const asymbol **) ap;
   const asymbol *b = *(const asymbol **) bp;

@@ -1,6 +1,6 @@
 /* RAII type to create a temporary mock context.
 
-   Copyright (C) 2020-2022 Free Software Foundation, Inc.
+   Copyright (C) 2020-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -38,7 +38,7 @@ struct scoped_mock_context
 
   Target mock_target;
   ptid_t mock_ptid {1, 1};
-  program_space mock_pspace {new_address_space ()};
+  program_space mock_pspace {new address_space ()};
   inferior mock_inferior {mock_ptid.pid ()};
   thread_info mock_thread {&mock_inferior, mock_ptid};
 
@@ -71,7 +71,7 @@ struct scoped_mock_context
   ~scoped_mock_context ()
   {
     inferior_list.erase (inferior_list.iterator_to (mock_inferior));
-    pop_all_targets_at_and_above (process_stratum);
+    mock_inferior.pop_all_targets_at_and_above (process_stratum);
   }
 };
 

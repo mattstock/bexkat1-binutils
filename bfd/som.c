@@ -1,5 +1,5 @@
 /* bfd back-end for HP PA-RISC SOM objects.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    Contributed by the Center for Software Science at the
    University of Utah.
@@ -635,267 +635,268 @@ static const int comp3_opcodes[] =
 #define R_SHORT_PCREL_MODE 0x3e
 #endif
 
-#define SOM_HOWTO(TYPE, NAME)	\
-  HOWTO(TYPE, 0, 0, 32, false, 0, 0, hppa_som_reloc, NAME, false, 0, 0, false)
+#define SOM_HOWTO(SIZE, TYPE)	\
+  HOWTO(TYPE, 0, SIZE, 32, false, 0, 0, hppa_som_reloc, \
+	#TYPE, false, 0, 0, false)
 
 static reloc_howto_type som_hppa_howto_table[] =
 {
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_NO_RELOCATION, "R_NO_RELOCATION"),
-  SOM_HOWTO (R_ZEROES, "R_ZEROES"),
-  SOM_HOWTO (R_ZEROES, "R_ZEROES"),
-  SOM_HOWTO (R_UNINIT, "R_UNINIT"),
-  SOM_HOWTO (R_UNINIT, "R_UNINIT"),
-  SOM_HOWTO (R_RELOCATION, "R_RELOCATION"),
-  SOM_HOWTO (R_DATA_ONE_SYMBOL, "R_DATA_ONE_SYMBOL"),
-  SOM_HOWTO (R_DATA_ONE_SYMBOL, "R_DATA_ONE_SYMBOL"),
-  SOM_HOWTO (R_DATA_PLABEL, "R_DATA_PLABEL"),
-  SOM_HOWTO (R_DATA_PLABEL, "R_DATA_PLABEL"),
-  SOM_HOWTO (R_SPACE_REF, "R_SPACE_REF"),
-  SOM_HOWTO (R_REPEATED_INIT, "REPEATED_INIT"),
-  SOM_HOWTO (R_REPEATED_INIT, "REPEATED_INIT"),
-  SOM_HOWTO (R_REPEATED_INIT, "REPEATED_INIT"),
-  SOM_HOWTO (R_REPEATED_INIT, "REPEATED_INIT"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_PCREL_CALL, "R_PCREL_CALL"),
-  SOM_HOWTO (R_SHORT_PCREL_MODE, "R_SHORT_PCREL_MODE"),
-  SOM_HOWTO (R_LONG_PCREL_MODE, "R_LONG_PCREL_MODE"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_ABS_CALL, "R_ABS_CALL"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DP_RELATIVE, "R_DP_RELATIVE"),
-  SOM_HOWTO (R_DATA_GPREL, "R_DATA_GPREL"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_DLT_REL, "R_DLT_REL"),
-  SOM_HOWTO (R_DLT_REL, "R_DLT_REL"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_CODE_ONE_SYMBOL, "R_CODE_ONE_SYMBOL"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_MILLI_REL, "R_MILLI_REL"),
-  SOM_HOWTO (R_MILLI_REL, "R_MILLI_REL"),
-  SOM_HOWTO (R_CODE_PLABEL, "R_CODE_PLABEL"),
-  SOM_HOWTO (R_CODE_PLABEL, "R_CODE_PLABEL"),
-  SOM_HOWTO (R_BREAKPOINT, "R_BREAKPOINT"),
-  SOM_HOWTO (R_ENTRY, "R_ENTRY"),
-  SOM_HOWTO (R_ENTRY, "R_ENTRY"),
-  SOM_HOWTO (R_ALT_ENTRY, "R_ALT_ENTRY"),
-  SOM_HOWTO (R_EXIT, "R_EXIT"),
-  SOM_HOWTO (R_BEGIN_TRY, "R_BEGIN_TRY"),
-  SOM_HOWTO (R_END_TRY, "R_END_TRY"),
-  SOM_HOWTO (R_END_TRY, "R_END_TRY"),
-  SOM_HOWTO (R_END_TRY, "R_END_TRY"),
-  SOM_HOWTO (R_BEGIN_BRTAB, "R_BEGIN_BRTAB"),
-  SOM_HOWTO (R_END_BRTAB, "R_END_BRTAB"),
-  SOM_HOWTO (R_STATEMENT, "R_STATEMENT"),
-  SOM_HOWTO (R_STATEMENT, "R_STATEMENT"),
-  SOM_HOWTO (R_STATEMENT, "R_STATEMENT"),
-  SOM_HOWTO (R_DATA_EXPR, "R_DATA_EXPR"),
-  SOM_HOWTO (R_CODE_EXPR, "R_CODE_EXPR"),
-  SOM_HOWTO (R_FSEL, "R_FSEL"),
-  SOM_HOWTO (R_LSEL, "R_LSEL"),
-  SOM_HOWTO (R_RSEL, "R_RSEL"),
-  SOM_HOWTO (R_N_MODE, "R_N_MODE"),
-  SOM_HOWTO (R_S_MODE, "R_S_MODE"),
-  SOM_HOWTO (R_D_MODE, "R_D_MODE"),
-  SOM_HOWTO (R_R_MODE, "R_R_MODE"),
-  SOM_HOWTO (R_DATA_OVERRIDE, "R_DATA_OVERRIDE"),
-  SOM_HOWTO (R_DATA_OVERRIDE, "R_DATA_OVERRIDE"),
-  SOM_HOWTO (R_DATA_OVERRIDE, "R_DATA_OVERRIDE"),
-  SOM_HOWTO (R_DATA_OVERRIDE, "R_DATA_OVERRIDE"),
-  SOM_HOWTO (R_DATA_OVERRIDE, "R_DATA_OVERRIDE"),
-  SOM_HOWTO (R_TRANSLATED, "R_TRANSLATED"),
-  SOM_HOWTO (R_AUX_UNWIND, "R_AUX_UNWIND"),
-  SOM_HOWTO (R_COMP1, "R_COMP1"),
-  SOM_HOWTO (R_COMP2, "R_COMP2"),
-  SOM_HOWTO (R_COMP3, "R_COMP3"),
-  SOM_HOWTO (R_PREV_FIXUP, "R_PREV_FIXUP"),
-  SOM_HOWTO (R_PREV_FIXUP, "R_PREV_FIXUP"),
-  SOM_HOWTO (R_PREV_FIXUP, "R_PREV_FIXUP"),
-  SOM_HOWTO (R_PREV_FIXUP, "R_PREV_FIXUP"),
-  SOM_HOWTO (R_SEC_STMT, "R_SEC_STMT"),
-  SOM_HOWTO (R_N0SEL, "R_N0SEL"),
-  SOM_HOWTO (R_N1SEL, "R_N1SEL"),
-  SOM_HOWTO (R_LINETAB, "R_LINETAB"),
-  SOM_HOWTO (R_LINETAB_ESC, "R_LINETAB_ESC"),
-  SOM_HOWTO (R_LTP_OVERRIDE, "R_LTP_OVERRIDE"),
-  SOM_HOWTO (R_COMMENT, "R_COMMENT"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED"),
-  SOM_HOWTO (R_RESERVED, "R_RESERVED")
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_NO_RELOCATION),
+  SOM_HOWTO (0, R_ZEROES),
+  SOM_HOWTO (0, R_ZEROES),
+  SOM_HOWTO (0, R_UNINIT),
+  SOM_HOWTO (0, R_UNINIT),
+  SOM_HOWTO (4, R_RELOCATION),
+  SOM_HOWTO (4, R_DATA_ONE_SYMBOL),
+  SOM_HOWTO (4, R_DATA_ONE_SYMBOL),
+  SOM_HOWTO (4, R_DATA_PLABEL),
+  SOM_HOWTO (4, R_DATA_PLABEL),
+  SOM_HOWTO (4, R_SPACE_REF),
+  SOM_HOWTO (0, R_REPEATED_INIT),
+  SOM_HOWTO (0, R_REPEATED_INIT),
+  SOM_HOWTO (0, R_REPEATED_INIT),
+  SOM_HOWTO (0, R_REPEATED_INIT),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (4, R_PCREL_CALL),
+  SOM_HOWTO (0, R_SHORT_PCREL_MODE),
+  SOM_HOWTO (0, R_LONG_PCREL_MODE),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (4, R_ABS_CALL),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DP_RELATIVE),
+  SOM_HOWTO (4, R_DATA_GPREL),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (4, R_DLT_REL),
+  SOM_HOWTO (4, R_DLT_REL),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (4, R_CODE_ONE_SYMBOL),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (4, R_MILLI_REL),
+  SOM_HOWTO (4, R_MILLI_REL),
+  SOM_HOWTO (4, R_CODE_PLABEL),
+  SOM_HOWTO (4, R_CODE_PLABEL),
+  SOM_HOWTO (4, R_BREAKPOINT),
+  SOM_HOWTO (0, R_ENTRY),
+  SOM_HOWTO (0, R_ENTRY),
+  SOM_HOWTO (0, R_ALT_ENTRY),
+  SOM_HOWTO (0, R_EXIT),
+  SOM_HOWTO (0, R_BEGIN_TRY),
+  SOM_HOWTO (0, R_END_TRY),
+  SOM_HOWTO (0, R_END_TRY),
+  SOM_HOWTO (0, R_END_TRY),
+  SOM_HOWTO (0, R_BEGIN_BRTAB),
+  SOM_HOWTO (0, R_END_BRTAB),
+  SOM_HOWTO (0, R_STATEMENT),
+  SOM_HOWTO (0, R_STATEMENT),
+  SOM_HOWTO (0, R_STATEMENT),
+  SOM_HOWTO (4, R_DATA_EXPR),
+  SOM_HOWTO (4, R_CODE_EXPR),
+  SOM_HOWTO (0, R_FSEL),
+  SOM_HOWTO (0, R_LSEL),
+  SOM_HOWTO (0, R_RSEL),
+  SOM_HOWTO (0, R_N_MODE),
+  SOM_HOWTO (0, R_S_MODE),
+  SOM_HOWTO (0, R_D_MODE),
+  SOM_HOWTO (0, R_R_MODE),
+  SOM_HOWTO (0, R_DATA_OVERRIDE),
+  SOM_HOWTO (0, R_DATA_OVERRIDE),
+  SOM_HOWTO (0, R_DATA_OVERRIDE),
+  SOM_HOWTO (0, R_DATA_OVERRIDE),
+  SOM_HOWTO (0, R_DATA_OVERRIDE),
+  SOM_HOWTO (0, R_TRANSLATED),
+  SOM_HOWTO (0, R_AUX_UNWIND),
+  SOM_HOWTO (0, R_COMP1),
+  SOM_HOWTO (0, R_COMP2),
+  SOM_HOWTO (0, R_COMP3),
+  SOM_HOWTO (0, R_PREV_FIXUP),
+  SOM_HOWTO (0, R_PREV_FIXUP),
+  SOM_HOWTO (0, R_PREV_FIXUP),
+  SOM_HOWTO (0, R_PREV_FIXUP),
+  SOM_HOWTO (0, R_SEC_STMT),
+  SOM_HOWTO (0, R_N0SEL),
+  SOM_HOWTO (0, R_N1SEL),
+  SOM_HOWTO (0, R_LINETAB),
+  SOM_HOWTO (0, R_LINETAB_ESC),
+  SOM_HOWTO (0, R_LTP_OVERRIDE),
+  SOM_HOWTO (0, R_COMMENT),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED),
+  SOM_HOWTO (0, R_RESERVED)
 };
 
 /* Initialize the SOM relocation queue.  By definition the queue holds
@@ -2933,15 +2934,17 @@ som_write_fixups (bfd *abfd,
       asection *subsection;
 
       /* Find a space.  */
-      while (!som_is_space (section))
+      while (section && !som_is_space (section))
 	section = section->next;
+      if (!section)
+	break;
 
       /* Now iterate through each of its subspaces.  */
       for (subsection = abfd->sections;
 	   subsection != NULL;
 	   subsection = subsection->next)
 	{
-	  int reloc_offset;
+	  unsigned int reloc_offset;
 	  unsigned int current_rounding_mode;
 #ifndef NO_PCREL_MODES
 	  unsigned int current_call_mode;
@@ -2992,6 +2995,31 @@ som_write_fixups (bfd *abfd,
 	      unsigned int skip;
 	      int sym_num;
 
+	      if (bfd_reloc->address < reloc_offset)
+		{
+		  _bfd_error_handler
+		    /* xgettext:c-format */
+		    (_("%pB(%pA+%#" PRIx64 "): "
+		       "%s relocation offset out of order"),
+		     abfd, subsection, (uint64_t) bfd_reloc->address,
+		     bfd_reloc->howto->name);
+		  bfd_set_error (bfd_error_bad_value);
+		  return false;
+		}
+	      if (!bfd_reloc_offset_in_range (bfd_reloc->howto,
+					      abfd, subsection,
+					      bfd_reloc->address))
+		{
+		  _bfd_error_handler
+		    /* xgettext:c-format */
+		    (_("%pB(%pA+%#" PRIx64 "): "
+		       "%s relocation offset out of range"),
+		     abfd, subsection, (uint64_t) bfd_reloc->address,
+		     bfd_reloc->howto->name);
+		  bfd_set_error (bfd_error_bad_value);
+		  return false;
+		}
+
 	      /* Get the symbol number.  Remember it's stored in a
 		 special place for section symbols.  */
 	      if ((*bfd_reloc->sym_ptr_ptr)->flags & BSF_SECTION_SYM)
@@ -3003,10 +3031,12 @@ som_write_fixups (bfd *abfd,
 		 then dump the current buffer contents now.  Also reinitialize
 		 the relocation queue.
 
-		 No single BFD relocation could ever translate into more
-		 than 100 bytes of SOM relocations (20bytes is probably the
-		 upper limit, but leave lots of space for growth).  */
-	      if (p - tmp_space + 100 > SOM_TMP_BUFSIZE)
+		 A single BFD relocation would probably only ever
+		 translate into at most 20 bytes of SOM relocations.
+		 However with fuzzed object files and resulting silly
+		 values for "skip" below, som_reloc_skip can emit 262
+		 bytes.  Leave lots of space for growth.  */
+	      if (p - tmp_space + 512 > SOM_TMP_BUFSIZE)
 		{
 		  amt = p - tmp_space;
 		  if (bfd_bwrite ((void *) tmp_space, amt, abfd) != amt)
@@ -3022,42 +3052,8 @@ som_write_fixups (bfd *abfd,
 	      p = som_reloc_skip (abfd, skip, p,
 				  &subspace_reloc_size, reloc_queue);
 
-	      /* Update reloc_offset for the next iteration.
-
-		 Many relocations do not consume input bytes.  They
-		 are markers, or set state necessary to perform some
-		 later relocation.  */
-	      switch (bfd_reloc->howto->type)
-		{
-		case R_ENTRY:
-		case R_ALT_ENTRY:
-		case R_EXIT:
-		case R_N_MODE:
-		case R_S_MODE:
-		case R_D_MODE:
-		case R_R_MODE:
-		case R_FSEL:
-		case R_LSEL:
-		case R_RSEL:
-		case R_COMP1:
-		case R_COMP2:
-		case R_BEGIN_BRTAB:
-		case R_END_BRTAB:
-		case R_BEGIN_TRY:
-		case R_END_TRY:
-		case R_N0SEL:
-		case R_N1SEL:
-#ifndef NO_PCREL_MODES
-		case R_SHORT_PCREL_MODE:
-		case R_LONG_PCREL_MODE:
-#endif
-		  reloc_offset = bfd_reloc->address;
-		  break;
-
-		default:
-		  reloc_offset = bfd_reloc->address + 4;
-		  break;
-		}
+	      /* Update reloc_offset for the next iteration.  */
+	      reloc_offset = bfd_reloc->address + bfd_reloc->howto->size;
 
 	      /* Now the actual relocation we care about.  */
 	      switch (bfd_reloc->howto->type)
@@ -4215,7 +4211,7 @@ som_finish_writing (bfd *abfd)
 
   /* Setting of the system_id has to happen very late now that copying of
      BFD private data happens *after* section contents are set.  */
-  if (abfd->flags & (EXEC_P | DYNAMIC))
+  if ((abfd->flags & (EXEC_P | DYNAMIC)) && obj_som_exec_data (abfd))
     obj_som_file_hdr (abfd)->system_id = obj_som_exec_data (abfd)->system_id;
   else if (bfd_get_mach (abfd) == pa20)
     obj_som_file_hdr (abfd)->system_id = CPU_PA_RISC2_0;
@@ -4246,7 +4242,8 @@ som_finish_writing (bfd *abfd)
 
       exec_header = obj_som_exec_hdr (abfd);
       exec_header->exec_entry = bfd_get_start_address (abfd);
-      exec_header->exec_flags = obj_som_exec_data (abfd)->exec_flags;
+      if (obj_som_exec_data (abfd))
+	exec_header->exec_flags = obj_som_exec_data (abfd)->exec_flags;
 
       /* Oh joys.  Ram some of the BSS data into the DATA section
 	 to be compatible with how the hp linker makes objects
@@ -4897,9 +4894,8 @@ som_print_symbol (bfd *abfd,
       fprintf (file, "%s", symbol->name);
       break;
     case bfd_print_symbol_more:
-      fprintf (file, "som ");
-      fprintf_vma (file, symbol->value);
-      fprintf (file, " %lx", (long) symbol->flags);
+      fprintf (file, "som %08" PRIx64 " %x",
+	       (uint64_t) symbol->value, symbol->flags);
       break;
     case bfd_print_symbol_all:
       {
@@ -4942,13 +4938,9 @@ som_set_reloc_info (unsigned char *fixup,
 		    unsigned int symcount,
 		    bool just_count)
 {
-  unsigned int op, varname, deallocate_contents = 0;
+  unsigned int deallocate_contents = 0;
   unsigned char *end_fixups = &fixup[end];
-  const struct fixup_format *fp;
-  const char *cp;
-  unsigned char *save_fixup;
-  int variables[26], stack[20], c, v, count, prev_fixup, *sp, saved_unwind_bits;
-  const int *subop;
+  int variables[26], stack[20], count, prev_fixup, *sp, saved_unwind_bits;
   arelent *rptr = internal_relocs;
   unsigned int offset = 0;
 
@@ -4967,10 +4959,14 @@ som_set_reloc_info (unsigned char *fixup,
 
   while (fixup < end_fixups)
     {
+      const char *cp;
+      unsigned int op;
+      const struct fixup_format *fp;
+
       /* Save pointer to the start of this fixup.  We'll use
 	 it later to determine if it is necessary to put this fixup
 	 on the queue.  */
-      save_fixup = fixup;
+      unsigned char *save_fixup = fixup;
 
       /* Get the fixup code and its associated format.  */
       op = *fixup++;
@@ -4979,6 +4975,11 @@ som_set_reloc_info (unsigned char *fixup,
       /* Handle a request for a previous fixup.  */
       if (*fp->format == 'P')
 	{
+	  if (!reloc_queue[fp->D].reloc)
+	    /* The back-reference doesn't exist.  This is a broken
+	       object file, likely fuzzed.  Just ignore the fixup.  */
+	    continue;
+
 	  /* Get pointer to the beginning of the prev fixup, move
 	     the repeated fixup to the head of the queue.  */
 	  fixup = reloc_queue[fp->D].reloc;
@@ -5016,11 +5017,15 @@ som_set_reloc_info (unsigned char *fixup,
       while (*cp)
 	{
 	  /* The variable this pass is going to compute a value for.  */
-	  varname = *cp++;
+	  unsigned int varname = *cp++;
+	  const int *subop;
+	  int c;
 
 	  /* Start processing RHS.  Continue until a NULL or '=' is found.  */
 	  do
 	    {
+	      unsigned v;
+
 	      c = *cp++;
 
 	      /* If this is a variable, push it on the stack.  */
@@ -5094,7 +5099,7 @@ som_set_reloc_info (unsigned char *fixup,
 	    /* A symbol to use in the relocation.  Make a note
 	       of this if we are not just counting.  */
 	    case 'S':
-	      if (! just_count && (unsigned int) c < symcount)
+	      if (!just_count && symbols != NULL && (unsigned int) c < symcount)
 		rptr->sym_ptr_ptr = &symbols[c];
 	      break;
 	    /* Argument relocation bits for a function call.  */
@@ -5241,7 +5246,9 @@ som_set_reloc_info (unsigned char *fixup,
 		      section->contents = contents;
 		      deallocate_contents = 1;
 		    }
-		  else if (rptr->addend == 0)
+		  if (rptr->addend == 0
+		      && offset - var ('L') <= section->size
+		      && section->size - (offset - var ('L')) >= 4)
 		    rptr->addend = bfd_get_32 (section->owner,
 					       (section->contents
 						+ offset - var ('L')));
@@ -5259,7 +5266,10 @@ som_set_reloc_info (unsigned char *fixup,
 	}
     }
   if (deallocate_contents)
-    free (section->contents);
+    {
+      free (section->contents);
+      section->contents = NULL;
+    }
 
   return count;
 

@@ -1,5 +1,5 @@
 /* Linker command language support.
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -59,6 +59,7 @@
 /* Local variables.  */
 static struct obstack stat_obstack;
 static struct obstack map_obstack;
+static struct obstack pt_obstack;
 
 #define obstack_chunk_alloc xmalloc
 #define obstack_chunk_free free
@@ -80,6 +81,9 @@ static void exp_init_os (etree_type *);
 static lang_input_statement_type *lookup_name (const char *);
 static void insert_undefined (const char *);
 static bool sort_def_symbol (struct bfd_link_hash_entry *, void *);
+static lang_statement_union_type *new_statement (enum statement_enum type,
+						size_t size,
+						lang_statement_list_type *list);
 static void print_statement (lang_statement_union_type *,
 			     lang_output_section_statement_type *);
 static void print_statement_list (lang_statement_union_type *,
@@ -169,12 +173,89 @@ stat_alloc (size_t size)
   return obstack_alloc (&stat_obstack, size);
 }
 
+/* Code for handling simple wildcards without going through fnmatch,
+   which can be expensive because of charset translations etc.  */
+
+/* A simple wild is a literal string followed by a single '*',
+   where the literal part is at least 4 characters long.  */
+
+static bool
+is_simple_wild (const char *name)
+{
+  size_t len = strcspn (name, "*?[");
+  return len >= 4 && name[len] == '*' && name[len + 1] == '\0';
+}
+
+static bool
+match_simple_wild (const char *pattern, const char *name)
+{
+  /* The first four characters of the pattern are guaranteed valid
+     non-wildcard characters.  So we can go faster.  */
+  if (pattern[0] != name[0] || pattern[1] != name[1]
+      || pattern[2] != name[2] || pattern[3] != name[3])
+    return false;
+
+  pattern += 4;
+  name += 4;
+  while (*pattern != '*')
+    if (*name++ != *pattern++)
+      return false;
+
+  return true;
+}
+
 static int
 name_match (const char *pattern, const char *name)
 {
+  if (is_simple_wild (pattern))
+    return !match_simple_wild (pattern, name);
   if (wildcardp (pattern))
     return fnmatch (pattern, name, 0);
   return strcmp (pattern, name);
+}
+
+/* Given an analyzed wildcard_spec SPEC, match it against NAME,
+   returns zero on a match, non-zero if there's no match.  */
+
+static int
+spec_match (const struct wildcard_spec *spec, const char *name)
+{
+  size_t nl = spec->namelen;
+  size_t pl = spec->prefixlen;
+  size_t sl = spec->suffixlen;
+  size_t inputlen = strlen (name);
+  int r;
+
+  if (pl)
+    {
+      if (inputlen < pl)
+	return 1;
+
+      r = memcmp (spec->name, name, pl);
+      if (r)
+	return r;
+    }
+
+  if (sl)
+    {
+      if (inputlen < sl)
+	return 1;
+
+      r = memcmp (spec->name + nl - sl, name + inputlen - sl, sl);
+      if (r)
+	return r;
+    }
+
+  if (nl == pl + sl + 1 && spec->name[pl] == '*')
+    return 0;
+
+  if (nl > pl)
+    return fnmatch (spec->name + pl, name + pl, 0);
+
+  if (inputlen >= nl)
+    return name[nl];
+
+  return 0;
 }
 
 static char *
@@ -303,129 +384,84 @@ walk_wild_file_in_exclude_list (struct name_list *exclude_list,
   return false;
 }
 
-/* Try processing a section against a wildcard.  This just calls
-   the callback unless the filename exclusion list is present
-   and excludes the file.  It's hardly ever present so this
-   function is very fast.  */
+/* Add SECTION (from input FILE) to the list of matching sections
+   within PTR (the matching wildcard is SEC).  */
 
 static void
-walk_wild_consider_section (lang_wild_statement_type *ptr,
-			    lang_input_statement_type *file,
-			    asection *s,
-			    struct wildcard_list *sec,
-			    callback_t callback,
-			    void *data)
+add_matching_section (lang_wild_statement_type *ptr,
+		      struct wildcard_list *sec,
+		      asection *section,
+		      lang_input_statement_type *file)
 {
-  /* Don't process sections from files which were excluded.  */
-  if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
+  lang_input_matcher_type *new_section;
+  /* Add a section reference to the list.  */
+  new_section = new_stat (lang_input_matcher, &ptr->matching_sections);
+  new_section->section = section;
+  new_section->pattern = sec;
+  new_section->input_stmt = file;
+}
+
+/* Process section S (from input file FILE) in relation to wildcard
+   statement PTR.  We already know that a prefix of the name of S matches
+   some wildcard in PTR's wildcard list.  Here we check if the filename
+   matches as well (if it's specified) and if any of the wildcards in fact
+   does match.  */
+
+static void
+walk_wild_section_match (lang_wild_statement_type *ptr,
+			 lang_input_statement_type *file,
+			 asection *s)
+{
+  struct wildcard_list *sec;
+  const char *file_spec = ptr->filename;
+  char *p;
+
+  /* Check if filenames match.  */
+  if (file_spec == NULL)
+    ;
+  else if ((p = archive_path (file_spec)) != NULL)
+    {
+      if (!input_statement_is_archive_path (file_spec, p, file))
+	return;
+    }
+  else if (wildcardp (file_spec))
+    {
+      if (fnmatch (file_spec, file->filename, 0) != 0)
+	return;
+    }
+  else
+    {
+      lang_input_statement_type *f;
+      /* Perform the iteration over a single file.  */
+      f = lookup_name (file_spec);
+      if (f != file)
+	return;
+    }
+
+  /* If filename is excluded we're done.  */
+  if (walk_wild_file_in_exclude_list (ptr->exclude_name_list, file))
     return;
 
-  (*callback) (ptr, sec, s, file, data);
-}
-
-/* Lowest common denominator routine that can handle everything correctly,
-   but slowly.  */
-
-static void
-walk_wild_section_general (lang_wild_statement_type *ptr,
-			   lang_input_statement_type *file,
-			   callback_t callback,
-			   void *data)
-{
-  asection *s;
-  struct wildcard_list *sec;
-
-  for (s = file->the_bfd->sections; s != NULL; s = s->next)
+  /* Check section name against each wildcard spec.  If there's no
+     wildcard all sections match.  */
+  sec = ptr->section_list;
+  if (sec == NULL)
+    add_matching_section (ptr, sec, s, file);
+  else
     {
-      sec = ptr->section_list;
-      if (sec == NULL)
-	(*callback) (ptr, sec, s, file, data);
-
-      while (sec != NULL)
+      const char *sname = bfd_section_name (s);
+      for (; sec != NULL; sec = sec->next)
 	{
-	  bool skip = false;
+	  if (sec->spec.name != NULL
+	      && spec_match (&sec->spec, sname) != 0)
+	    continue;
 
-	  if (sec->spec.name != NULL)
-	    {
-	      const char *sname = bfd_section_name (s);
-
-	      skip = name_match (sec->spec.name, sname) != 0;
-	    }
-
-	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, sec, callback, data);
-
-	  sec = sec->next;
+	  /* Don't process sections from files which were excluded.  */
+	  if (!walk_wild_file_in_exclude_list (sec->spec.exclude_name_list,
+					       file))
+	    add_matching_section (ptr, sec, s, file);
 	}
     }
-}
-
-/* Routines to find a single section given its name.  If there's more
-   than one section with that name, we report that.  */
-
-typedef struct
-{
-  asection *found_section;
-  bool multiple_sections_found;
-} section_iterator_callback_data;
-
-static bool
-section_iterator_callback (bfd *abfd ATTRIBUTE_UNUSED, asection *s, void *data)
-{
-  section_iterator_callback_data *d = (section_iterator_callback_data *) data;
-
-  if (d->found_section != NULL)
-    {
-      d->multiple_sections_found = true;
-      return true;
-    }
-
-  d->found_section = s;
-  return false;
-}
-
-static asection *
-find_section (lang_input_statement_type *file,
-	      struct wildcard_list *sec,
-	      bool *multiple_sections_found)
-{
-  section_iterator_callback_data cb_data = { NULL, false };
-
-  bfd_get_section_by_name_if (file->the_bfd, sec->spec.name,
-			      section_iterator_callback, &cb_data);
-  *multiple_sections_found = cb_data.multiple_sections_found;
-  return cb_data.found_section;
-}
-
-/* Code for handling simple wildcards without going through fnmatch,
-   which can be expensive because of charset translations etc.  */
-
-/* A simple wild is a literal string followed by a single '*',
-   where the literal part is at least 4 characters long.  */
-
-static bool
-is_simple_wild (const char *name)
-{
-  size_t len = strcspn (name, "*?[");
-  return len >= 4 && name[len] == '*' && name[len + 1] == '\0';
-}
-
-static bool
-match_simple_wild (const char *pattern, const char *name)
-{
-  /* The first four characters of the pattern are guaranteed valid
-     non-wildcard characters.  So we can go faster.  */
-  if (pattern[0] != name[0] || pattern[1] != name[1]
-      || pattern[2] != name[2] || pattern[3] != name[3])
-    return false;
-
-  pattern += 4;
-  name += 4;
-  while (*pattern != '*')
-    if (*name++ != *pattern++)
-      return false;
-
-  return true;
 }
 
 /* Return the numerical value of the init_priority attribute from
@@ -526,32 +562,95 @@ compare_section (sort_type sort, asection *asec, asection *bsec)
   return ret;
 }
 
-/* Build a Binary Search Tree to sort sections, unlike insertion sort
-   used in wild_sort(). BST is considerably faster if the number of
-   of sections are large.  */
+/* PE puts the sort key in the input statement.  */
+
+static const char *
+sort_filename (bfd *abfd)
+{
+  lang_input_statement_type *is = bfd_usrdata (abfd);
+  if (is->sort_key)
+    return is->sort_key;
+  return bfd_get_filename (abfd);
+}
+
+/* Handle wildcard sorting.  This returns the place in a binary search tree
+   where this FILE:SECTION should be inserted for wild statement WILD where
+   the spec SEC was the matching one.  The tree is later linearized.  */
 
 static lang_section_bst_type **
-wild_sort_fast (lang_wild_statement_type *wild,
-		struct wildcard_list *sec,
-		lang_input_statement_type *file ATTRIBUTE_UNUSED,
-		asection *section)
+wild_sort (lang_wild_statement_type *wild,
+	   struct wildcard_list *sec,
+	   lang_input_statement_type *file,
+	   asection *section)
 {
   lang_section_bst_type **tree;
 
-  tree = &wild->tree;
   if (!wild->filenames_sorted
-      && (sec == NULL || sec->spec.sorted == none))
+      && (sec == NULL || sec->spec.sorted == none
+	  || sec->spec.sorted == by_none))
     {
-      /* Append at the right end of tree.  */
-      while (*tree)
-	tree = &((*tree)->right);
-      return tree;
+      /* We might be called even if _this_ spec doesn't need sorting,
+         in which case we simply append at the right end of tree.  */
+      return wild->rightmost;
     }
 
+  tree = &wild->tree;
   while (*tree)
     {
+      /* Sorting by filename takes precedence over sorting by section
+	 name.  */
+
+      if (wild->filenames_sorted)
+	{
+	  const char *fn, *ln;
+	  bool fa, la;
+	  int i;
+	  asection *lsec = (*tree)->section;
+
+	  /* The PE support for the .idata section as generated by
+	     dlltool assumes that files will be sorted by the name of
+	     the archive and then the name of the file within the
+	     archive.  */
+
+	  fa = file->the_bfd->my_archive != NULL;
+	  if (fa)
+	    fn = sort_filename (file->the_bfd->my_archive);
+	  else
+	    fn = sort_filename (file->the_bfd);
+
+	  la = lsec->owner->my_archive != NULL;
+	  if (la)
+	    ln = sort_filename (lsec->owner->my_archive);
+	  else
+	    ln = sort_filename (lsec->owner);
+
+	  i = filename_cmp (fn, ln);
+	  if (i > 0)
+	    { tree = &((*tree)->right); continue; }
+	  else if (i < 0)
+	    { tree = &((*tree)->left); continue; }
+
+	  if (fa || la)
+	    {
+	      if (fa)
+		fn = sort_filename (file->the_bfd);
+	      if (la)
+		ln = sort_filename (lsec->owner);
+
+	      i = filename_cmp (fn, ln);
+	      if (i > 0)
+		{ tree = &((*tree)->right); continue; }
+	      else if (i < 0)
+		{ tree = &((*tree)->left); continue; }
+	    }
+	}
+
+      /* Here either the files are not sorted by name, or we are
+	 looking at the sections for this file.  */
+
       /* Find the correct node to append this section.  */
-      if (compare_section (sec->spec.sorted, section, (*tree)->section) < 0)
+      if (sec && sec->spec.sorted != none && sec->spec.sorted != by_none
+	  && compare_section (sec->spec.sorted, section, (*tree)->section) < 0)
 	tree = &((*tree)->left);
       else
 	tree = &((*tree)->right);
@@ -560,10 +659,10 @@ wild_sort_fast (lang_wild_statement_type *wild,
   return tree;
 }
 
-/* Use wild_sort_fast to build a BST to sort sections.  */
+/* Use wild_sort to build a BST to sort sections.  */
 
 static void
-output_section_callback_fast (lang_wild_statement_type *ptr,
+output_section_callback_sort (lang_wild_statement_type *ptr,
 			      struct wildcard_list *sec,
 			      asection *section,
 			      lang_input_statement_type *file,
@@ -584,9 +683,13 @@ output_section_callback_fast (lang_wild_statement_type *ptr,
   node->section = section;
   node->pattern = ptr->section_list;
 
-  tree = wild_sort_fast (ptr, sec, file, section);
+  tree = wild_sort (ptr, sec, file, section);
   if (tree != NULL)
-    *tree = node;
+    {
+      *tree = node;
+      if (tree == ptr->rightmost)
+	ptr->rightmost = &node->right;
+    }
 }
 
 /* Convert a sorted sections' BST back to list form.  */
@@ -599,7 +702,8 @@ output_section_callback_tree_to_list (lang_wild_statement_type *ptr,
   if (tree->left)
     output_section_callback_tree_to_list (ptr, tree->left, output);
 
-  lang_add_section (&ptr->children, tree->section, tree->pattern, NULL,
+  lang_add_section (&ptr->children, tree->section, tree->pattern,
+		    ptr->section_flag_list,
 		    (lang_output_section_statement_type *) output);
 
   if (tree->right)
@@ -608,384 +712,273 @@ output_section_callback_tree_to_list (lang_wild_statement_type *ptr,
   free (tree);
 }
 
-/* Specialized, optimized routines for handling different kinds of
-   wildcards */
+
+/* Sections are matched against wildcard statements via a prefix tree.
+   The prefix tree holds prefixes of all matching patterns (up to the first
+   wildcard character), and the wild statement from which those patterns
+   came.  When matching a section name against the tree we're walking through
+   the tree character by character.  Each statement we hit is one that
+   potentially matches.  This is checked by actually going through the
+   (glob) matching routines.
 
-static void
-walk_wild_section_specs1_wild0 (lang_wild_statement_type *ptr,
-				lang_input_statement_type *file,
-				callback_t callback,
-				void *data)
+   When the section name turns out to actually match we record that section
+   in the wild statements list of matching sections.  */
+
+/* A prefix can be matched by multiple statement, so we need a list of them.  */
+struct wild_stmt_list
 {
-  /* We can just do a hash lookup for the section with the right name.
-     But if that lookup discovers more than one section with the name
-     (should be rare), we fall back to the general algorithm because
-     we would otherwise have to sort the sections to make sure they
-     get processed in the bfd's order.  */
-  bool multiple_sections_found;
-  struct wildcard_list *sec0 = ptr->handler_data[0];
-  asection *s0 = find_section (file, sec0, &multiple_sections_found);
+  lang_wild_statement_type *stmt;
+  struct wild_stmt_list *next;
+};
 
-  if (multiple_sections_found)
-    walk_wild_section_general (ptr, file, callback, data);
-  else if (s0)
-    walk_wild_consider_section (ptr, file, s0, sec0, callback, data);
+/* The prefix tree itself.  */
+struct prefixtree
+{
+  /* The list of all children (linked via .next).  */
+  struct prefixtree *child;
+  struct prefixtree *next;
+  /* This tree node is responsible for the prefix of parent plus 'c'.  */
+  char c;
+  /* The statements that potentially can match this prefix.  */
+  struct wild_stmt_list *stmt;
+};
+
+/* We always have a root node in the prefix tree.  It corresponds to the
+   empty prefix.  E.g. a glob like "*" would sit in this root.  */
+static struct prefixtree the_root, *ptroot = &the_root;
+
+/* Given a prefix tree in *TREE, corresponding to prefix P, find or
+   INSERT the tree node corresponding to prefix P+C.  */
+
+static struct prefixtree *
+get_prefix_tree (struct prefixtree **tree, char c, bool insert)
+{
+  struct prefixtree *t;
+  for (t = *tree; t; t = t->next)
+    if (t->c == c)
+      return t;
+  if (!insert)
+    return NULL;
+  t = (struct prefixtree *) obstack_alloc (&pt_obstack, sizeof *t);
+  t->child = NULL;
+  t->next = *tree;
+  t->c = c;
+  t->stmt = NULL;
+  *tree = t;
+  return t;
 }
 
+/* Add STMT to the set of statements that can be matched by the prefix
+   corresponding to prefix tree T.  */
+
 static void
-walk_wild_section_specs1_wild1 (lang_wild_statement_type *ptr,
-				lang_input_statement_type *file,
-				callback_t callback,
-				void *data)
+pt_add_stmt (struct prefixtree *t, lang_wild_statement_type *stmt)
+{
+  struct wild_stmt_list *sl, **psl;
+  sl = (struct wild_stmt_list *) obstack_alloc (&pt_obstack, sizeof *sl);
+  sl->stmt = stmt;
+  sl->next = NULL;
+  psl = &t->stmt;
+  while (*psl)
+    psl = &(*psl)->next;
+  *psl = sl;
+}
+
+/* Insert STMT into the global prefix tree.  */
+
+static void
+insert_prefix_tree (lang_wild_statement_type *stmt)
+{
+  struct wildcard_list *sec;
+  struct prefixtree *t;
+
+  if (!stmt->section_list)
+    {
+      /* If we have no section_list (no wildcards in the wild STMT),
+	 then every section name will match, so add this to the root.  */
+      pt_add_stmt (ptroot, stmt);
+      return;
+    }
+
+  for (sec = stmt->section_list; sec; sec = sec->next)
+    {
+      const char *name = sec->spec.name ? sec->spec.name : "*";
+      char c;
+      t = ptroot;
+      for (; (c = *name); name++)
+	{
+	  if (c == '*' || c == '[' || c == '?')
+	    break;
+	  t = get_prefix_tree (&t->child, c, true);
+	}
+      /* If we hit a glob character, the matching prefix is what we saw
+	 until now.  If we hit the end of pattern (hence it's no glob) then
+	 we can do better: we only need to record a match when a section name
+	 completely matches, not merely a prefix, so record the trailing 0
+	 as well.  */
+      if (!c)
+	t = get_prefix_tree (&t->child, 0, true);
+      pt_add_stmt (t, stmt);
+    }
+}
+
+/* Dump T indented by INDENT spaces.  */
+
+static void
+debug_prefix_tree_rec (struct prefixtree *t, int indent)
+{
+  for (; t; t = t->next)
+    {
+      struct wild_stmt_list *sl;
+      printf ("%*s %c", indent, "", t->c);
+      for (sl = t->stmt; sl; sl = sl->next)
+	{
+	  struct wildcard_list *curr;
+	  printf (" %p ", sl->stmt);
+	  for (curr = sl->stmt->section_list; curr; curr = curr->next)
+	    printf ("%s ", curr->spec.name ? curr->spec.name : "*");
+	}
+      printf ("\n");
+      debug_prefix_tree_rec (t->child, indent + 2);
+    }
+}
+
+/* Dump the global prefix tree.  */
+
+static void
+debug_prefix_tree (void)
+{
+  debug_prefix_tree_rec (ptroot, 2);
+}
+
+/* Like strcspn() but start to look from the end to beginning of
+   S.  Returns the length of the suffix of S consisting entirely
+   of characters not in REJECT.  */
+
+static size_t
+rstrcspn (const char *s, const char *reject)
+{
+  size_t len = strlen (s), sufflen = 0;
+  while (len--)
+    {
+      char c = s[len];
+      if (strchr (reject, c) != 0)
+	break;
+      sufflen++;
+    }
+  return sufflen;
+}
+
+/* Analyze the wildcards in wild statement PTR to setup various
+   things for quick matching.  */
+
+static void
+analyze_walk_wild_section_handler (lang_wild_statement_type *ptr)
+{
+  struct wildcard_list *sec;
+
+  ptr->tree = NULL;
+  ptr->rightmost = &ptr->tree;
+
+  for (sec = ptr->section_list; sec != NULL; sec = sec->next)
+    {
+      if (sec->spec.name)
+	{
+	  sec->spec.namelen = strlen (sec->spec.name);
+	  sec->spec.prefixlen = strcspn (sec->spec.name, "?*[");
+	  sec->spec.suffixlen = rstrcspn (sec->spec.name + sec->spec.prefixlen,
+					  "?*]");
+	}
+      else
+	sec->spec.namelen = sec->spec.prefixlen = sec->spec.suffixlen = 0;
+    }
+
+  insert_prefix_tree (ptr);
+}
+
+/* Match all sections from FILE against the global prefix tree,
+   and record them into each wild statement that has a match.  */
+
+static void
+resolve_wild_sections (lang_input_statement_type *file)
 {
   asection *s;
-  struct wildcard_list *wildsec0 = ptr->handler_data[0];
+
+  if (file->flags.just_syms)
+    return;
 
   for (s = file->the_bfd->sections; s != NULL; s = s->next)
     {
       const char *sname = bfd_section_name (s);
-      bool skip = !match_simple_wild (wildsec0->spec.name, sname);
-
-      if (!skip)
-	walk_wild_consider_section (ptr, file, s, wildsec0, callback, data);
-    }
-}
-
-static void
-walk_wild_section_specs2_wild1 (lang_wild_statement_type *ptr,
-				lang_input_statement_type *file,
-				callback_t callback,
-				void *data)
-{
-  asection *s;
-  struct wildcard_list *sec0 = ptr->handler_data[0];
-  struct wildcard_list *wildsec1 = ptr->handler_data[1];
-  bool multiple_sections_found;
-  asection *s0 = find_section (file, sec0, &multiple_sections_found);
-
-  if (multiple_sections_found)
-    {
-      walk_wild_section_general (ptr, file, callback, data);
-      return;
-    }
-
-  /* Note that if the section was not found, s0 is NULL and
-     we'll simply never succeed the s == s0 test below.  */
-  for (s = file->the_bfd->sections; s != NULL; s = s->next)
-    {
-      /* Recall that in this code path, a section cannot satisfy more
-	 than one spec, so if s == s0 then it cannot match
-	 wildspec1.  */
-      if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
-      else
+      char c = 1;
+      struct prefixtree *t = ptroot;
+      //printf (" YYY consider %s of %s\n", sname, file->the_bfd->filename);
+      do
 	{
-	  const char *sname = bfd_section_name (s);
-	  bool skip = !match_simple_wild (wildsec1->spec.name, sname);
-
-	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, wildsec1, callback,
-					data);
-	}
-    }
-}
-
-static void
-walk_wild_section_specs3_wild2 (lang_wild_statement_type *ptr,
-				lang_input_statement_type *file,
-				callback_t callback,
-				void *data)
-{
-  asection *s;
-  struct wildcard_list *sec0 = ptr->handler_data[0];
-  struct wildcard_list *wildsec1 = ptr->handler_data[1];
-  struct wildcard_list *wildsec2 = ptr->handler_data[2];
-  bool multiple_sections_found;
-  asection *s0 = find_section (file, sec0, &multiple_sections_found);
-
-  if (multiple_sections_found)
-    {
-      walk_wild_section_general (ptr, file, callback, data);
-      return;
-    }
-
-  for (s = file->the_bfd->sections; s != NULL; s = s->next)
-    {
-      if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
-      else
-	{
-	  const char *sname = bfd_section_name (s);
-	  bool skip = !match_simple_wild (wildsec1->spec.name, sname);
-
-	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, wildsec1, callback, data);
-	  else
+	  if (t->stmt)
 	    {
-	      skip = !match_simple_wild (wildsec2->spec.name, sname);
-	      if (!skip)
-		walk_wild_consider_section (ptr, file, s, wildsec2, callback,
-					    data);
+	      struct wild_stmt_list *sl;
+	      for (sl = t->stmt; sl; sl = sl->next)
+		{
+		  walk_wild_section_match (sl->stmt, file, s);
+		  //printf ("   ZZZ maybe place into %p\n", sl->stmt);
+		}
+	    }
+	  if (!c)
+	    break;
+	  c = *sname++;
+	  t = get_prefix_tree (&t->child, c, false);
+	}
+      while (t);
+    }
+}
+
+/* Match all sections from all input files against the global prefix tree.  */
+
+static void
+resolve_wilds (void)
+{
+  LANG_FOR_EACH_INPUT_STATEMENT (f)
+    {
+      //printf("XXX   %s\n", f->filename);
+      if (f->the_bfd == NULL
+	  || !bfd_check_format (f->the_bfd, bfd_archive))
+	resolve_wild_sections (f);
+      else
+	{
+	  bfd *member;
+
+	  /* This is an archive file.  We must map each member of the
+	     archive separately.  */
+	  member = bfd_openr_next_archived_file (f->the_bfd, NULL);
+	  while (member != NULL)
+	    {
+	      /* When lookup_name is called, it will call the add_symbols
+		 entry point for the archive.  For each element of the
+		 archive which is included, BFD will call ldlang_add_file,
+		 which will set the usrdata field of the member to the
+		 lang_input_statement.  */
+	      if (bfd_usrdata (member) != NULL)
+		resolve_wild_sections (bfd_usrdata (member));
+
+	      member = bfd_openr_next_archived_file (f->the_bfd, member);
 	    }
 	}
     }
 }
 
-static void
-walk_wild_section_specs4_wild2 (lang_wild_statement_type *ptr,
-				lang_input_statement_type *file,
-				callback_t callback,
-				void *data)
-{
-  asection *s;
-  struct wildcard_list *sec0 = ptr->handler_data[0];
-  struct wildcard_list *sec1 = ptr->handler_data[1];
-  struct wildcard_list *wildsec2 = ptr->handler_data[2];
-  struct wildcard_list *wildsec3 = ptr->handler_data[3];
-  bool multiple_sections_found;
-  asection *s0 = find_section (file, sec0, &multiple_sections_found), *s1;
-
-  if (multiple_sections_found)
-    {
-      walk_wild_section_general (ptr, file, callback, data);
-      return;
-    }
-
-  s1 = find_section (file, sec1, &multiple_sections_found);
-  if (multiple_sections_found)
-    {
-      walk_wild_section_general (ptr, file, callback, data);
-      return;
-    }
-
-  for (s = file->the_bfd->sections; s != NULL; s = s->next)
-    {
-      if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
-      else
-	if (s == s1)
-	  walk_wild_consider_section (ptr, file, s, sec1, callback, data);
-	else
-	  {
-	    const char *sname = bfd_section_name (s);
-	    bool skip = !match_simple_wild (wildsec2->spec.name, sname);
-
-	    if (!skip)
-	      walk_wild_consider_section (ptr, file, s, wildsec2, callback,
-					  data);
-	    else
-	      {
-		skip = !match_simple_wild (wildsec3->spec.name, sname);
-		if (!skip)
-		  walk_wild_consider_section (ptr, file, s, wildsec3,
-					      callback, data);
-	      }
-	  }
-    }
-}
-
-static void
-walk_wild_section (lang_wild_statement_type *ptr,
-		   lang_input_statement_type *file,
-		   callback_t callback,
-		   void *data)
-{
-  if (file->flags.just_syms)
-    return;
-
-  (*ptr->walk_wild_section_handler) (ptr, file, callback, data);
-}
-
-/* Returns TRUE when name1 is a wildcard spec that might match
-   something name2 can match.  We're conservative: we return FALSE
-   only if the prefixes of name1 and name2 are different up to the
-   first wildcard character.  */
-
-static bool
-wild_spec_can_overlap (const char *name1, const char *name2)
-{
-  size_t prefix1_len = strcspn (name1, "?*[");
-  size_t prefix2_len = strcspn (name2, "?*[");
-  size_t min_prefix_len;
-
-  /* Note that if there is no wildcard character, then we treat the
-     terminating 0 as part of the prefix.  Thus ".text" won't match
-     ".text." or ".text.*", for example.  */
-  if (name1[prefix1_len] == '\0')
-    prefix1_len++;
-  if (name2[prefix2_len] == '\0')
-    prefix2_len++;
-
-  min_prefix_len = prefix1_len < prefix2_len ? prefix1_len : prefix2_len;
-
-  return memcmp (name1, name2, min_prefix_len) == 0;
-}
-
-/* Select specialized code to handle various kinds of wildcard
-   statements.  */
-
-static void
-analyze_walk_wild_section_handler (lang_wild_statement_type *ptr)
-{
-  int sec_count = 0;
-  int wild_name_count = 0;
-  struct wildcard_list *sec;
-  int signature;
-  int data_counter;
-
-  ptr->walk_wild_section_handler = walk_wild_section_general;
-  ptr->handler_data[0] = NULL;
-  ptr->handler_data[1] = NULL;
-  ptr->handler_data[2] = NULL;
-  ptr->handler_data[3] = NULL;
-  ptr->tree = NULL;
-
-  /* Count how many wildcard_specs there are, and how many of those
-     actually use wildcards in the name.  Also, bail out if any of the
-     wildcard names are NULL. (Can this actually happen?
-     walk_wild_section used to test for it.)  And bail out if any
-     of the wildcards are more complex than a simple string
-     ending in a single '*'.  */
-  for (sec = ptr->section_list; sec != NULL; sec = sec->next)
-    {
-      ++sec_count;
-      if (sec->spec.name == NULL)
-	return;
-      if (wildcardp (sec->spec.name))
-	{
-	  ++wild_name_count;
-	  if (!is_simple_wild (sec->spec.name))
-	    return;
-	}
-    }
-
-  /* The zero-spec case would be easy to optimize but it doesn't
-     happen in practice.  Likewise, more than 4 specs doesn't
-     happen in practice.  */
-  if (sec_count == 0 || sec_count > 4)
-    return;
-
-  /* Check that no two specs can match the same section.  */
-  for (sec = ptr->section_list; sec != NULL; sec = sec->next)
-    {
-      struct wildcard_list *sec2;
-      for (sec2 = sec->next; sec2 != NULL; sec2 = sec2->next)
-	{
-	  if (wild_spec_can_overlap (sec->spec.name, sec2->spec.name))
-	    return;
-	}
-    }
-
-  signature = (sec_count << 8) + wild_name_count;
-  switch (signature)
-    {
-    case 0x0100:
-      ptr->walk_wild_section_handler = walk_wild_section_specs1_wild0;
-      break;
-    case 0x0101:
-      ptr->walk_wild_section_handler = walk_wild_section_specs1_wild1;
-      break;
-    case 0x0201:
-      ptr->walk_wild_section_handler = walk_wild_section_specs2_wild1;
-      break;
-    case 0x0302:
-      ptr->walk_wild_section_handler = walk_wild_section_specs3_wild2;
-      break;
-    case 0x0402:
-      ptr->walk_wild_section_handler = walk_wild_section_specs4_wild2;
-      break;
-    default:
-      return;
-    }
-
-  /* Now fill the data array with pointers to the specs, first the
-     specs with non-wildcard names, then the specs with wildcard
-     names.  It's OK to process the specs in different order from the
-     given order, because we've already determined that no section
-     will match more than one spec.  */
-  data_counter = 0;
-  for (sec = ptr->section_list; sec != NULL; sec = sec->next)
-    if (!wildcardp (sec->spec.name))
-      ptr->handler_data[data_counter++] = sec;
-  for (sec = ptr->section_list; sec != NULL; sec = sec->next)
-    if (wildcardp (sec->spec.name))
-      ptr->handler_data[data_counter++] = sec;
-}
-
-/* Handle a wild statement for a single file F.  */
-
-static void
-walk_wild_file (lang_wild_statement_type *s,
-		lang_input_statement_type *f,
-		callback_t callback,
-		void *data)
-{
-  if (walk_wild_file_in_exclude_list (s->exclude_name_list, f))
-    return;
-
-  if (f->the_bfd == NULL
-      || !bfd_check_format (f->the_bfd, bfd_archive))
-    walk_wild_section (s, f, callback, data);
-  else
-    {
-      bfd *member;
-
-      /* This is an archive file.  We must map each member of the
-	 archive separately.  */
-      member = bfd_openr_next_archived_file (f->the_bfd, NULL);
-      while (member != NULL)
-	{
-	  /* When lookup_name is called, it will call the add_symbols
-	     entry point for the archive.  For each element of the
-	     archive which is included, BFD will call ldlang_add_file,
-	     which will set the usrdata field of the member to the
-	     lang_input_statement.  */
-	  if (bfd_usrdata (member) != NULL)
-	    walk_wild_section (s, bfd_usrdata (member), callback, data);
-
-	  member = bfd_openr_next_archived_file (f->the_bfd, member);
-	}
-    }
-}
+/* For each input section that matches wild statement S calls
+   CALLBACK with DATA.  */
 
 static void
 walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
 {
-  const char *file_spec = s->filename;
-  char *p;
+  lang_statement_union_type *l;
 
-  if (file_spec == NULL)
+  for (l = s->matching_sections.head; l; l = l->header.next)
     {
-      /* Perform the iteration over all files in the list.  */
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  walk_wild_file (s, f, callback, data);
-	}
-    }
-  else if ((p = archive_path (file_spec)) != NULL)
-    {
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  if (input_statement_is_archive_path (file_spec, p, f))
-	    walk_wild_file (s, f, callback, data);
-	}
-    }
-  else if (wildcardp (file_spec))
-    {
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  if (fnmatch (file_spec, f->filename, 0) == 0)
-	    walk_wild_file (s, f, callback, data);
-	}
-    }
-  else
-    {
-      lang_input_statement_type *f;
-
-      /* Perform the iteration over a single file.  */
-      f = lookup_name (file_spec);
-      if (f)
-	walk_wild_file (s, f, callback, data);
+      (*callback) (s, l->input_matcher.pattern, l->input_matcher.section,
+		   l->input_matcher.input_stmt, data);
     }
 }
 
@@ -1125,6 +1118,7 @@ new_afile (const char *name,
   p->flags.add_DT_NEEDED_for_regular = input_flags.add_DT_NEEDED_for_regular;
   p->flags.whole_archive = input_flags.whole_archive;
   p->flags.sysrooted = input_flags.sysrooted;
+  p->sort_key = NULL;
 
   switch (file_type)
     {
@@ -1291,6 +1285,7 @@ void
 lang_init (void)
 {
   obstack_begin (&stat_obstack, 1000);
+  obstack_init (&pt_obstack);
 
   stat_ptr = &statement_list;
 
@@ -1779,7 +1774,7 @@ output_prev_sec_find (lang_output_section_statement_type *os)
       if (lookup->constraint < 0)
 	continue;
 
-      if (lookup->bfd_section != NULL && lookup->bfd_section->owner != NULL)
+      if (lookup->bfd_section != NULL)
 	return lookup->bfd_section;
     }
 
@@ -1798,13 +1793,13 @@ output_prev_sec_find (lang_output_section_statement_type *os)
    image symbols.  */
 
 static lang_statement_union_type **
-insert_os_after (lang_output_section_statement_type *after)
+insert_os_after (lang_statement_union_type *after)
 {
   lang_statement_union_type **where;
   lang_statement_union_type **assign = NULL;
   bool ignore_first;
 
-  ignore_first = after == (void *) lang_os_list.head;
+  ignore_first = after == lang_os_list.head;
 
   for (where = &after->header.next;
        *where != NULL;
@@ -1857,6 +1852,8 @@ insert_os_after (lang_output_section_statement_type *after)
 	case lang_group_statement_enum:
 	case lang_insert_statement_enum:
 	  continue;
+	case lang_input_matcher_enum:
+	  FAIL ();
 	}
       break;
     }
@@ -1939,7 +1936,9 @@ lang_insert_orphan (asection *s,
 	  if (bfd_section == NULL)
 	    bfd_section = output_prev_sec_find (after);
 
-	  if (bfd_section != NULL && bfd_section != snew)
+	  if (bfd_section != NULL
+	      && bfd_section->owner != NULL
+	      && bfd_section != snew)
 	    place->section = &bfd_section->next;
 	}
 
@@ -2162,8 +2161,9 @@ lang_insert_orphan (asection *s,
 	  /* Place OS after AFTER if AFTER_NOTE is TRUE.  */
 	  if (place_after)
 	    {
-	      lang_statement_union_type **where = insert_os_after (after);
+	      lang_statement_union_type **where;
 
+	      where = insert_os_after ((lang_statement_union_type *) after);
 	      *add.tail = *where;
 	      *where = add.head;
 
@@ -2220,7 +2220,7 @@ lang_print_asneeded (void)
 
   for (m = asneeded_list_head; m != NULL; m = m->next)
     {
-      size_t len;
+      int len;
 
       minfo ("%s", m->soname);
       len = strlen (m->soname);
@@ -2230,11 +2230,7 @@ lang_print_asneeded (void)
 	  print_nl ();
 	  len = 0;
 	}
-      while (len < 30)
-	{
-	  print_space ();
-	  ++len;
-	}
+      print_spaces (30 - len);
 
       if (m->ref != NULL)
 	minfo ("%pB ", m->ref);
@@ -2297,37 +2293,21 @@ lang_map (void)
 
   for (m = lang_memory_region_list; m != NULL; m = m->next)
     {
-      char buf[100];
-      int len;
+      fprintf (config.map_file, "%-16s", m->name_list.name);
 
-      fprintf (config.map_file, "%-16s ", m->name_list.name);
+      char buf[32];
+      bfd_sprintf_vma (link_info.output_bfd, buf, m->origin);
+      fprintf (config.map_file, " 0x%-16s", buf);
+      bfd_sprintf_vma (link_info.output_bfd, buf, m->length);
+      fprintf (config.map_file,
+	       " 0x%*s", m->flags || m->not_flags ? -17 : 0, buf);
+      if (m->flags)
+	lang_map_flags (m->flags);
 
-      sprintf_vma (buf, m->origin);
-      minfo ("0x%s ", buf);
-      len = strlen (buf);
-      while (len < 16)
+      if (m->not_flags)
 	{
-	  print_space ();
-	  ++len;
-	}
-
-      minfo ("0x%V", m->length);
-      if (m->flags || m->not_flags)
-	{
-#ifndef BFD64
-	  minfo ("        ");
-#endif
-	  if (m->flags)
-	    {
-	      print_space ();
-	      lang_map_flags (m->flags);
-	    }
-
-	  if (m->not_flags)
-	    {
-	      minfo (" !");
-	      lang_map_flags (m->not_flags);
-	    }
+	  minfo ("!");
+	  lang_map_flags (m->not_flags);
 	}
 
       print_nl ();
@@ -2458,7 +2438,6 @@ exp_init_os (etree_type *exp)
 	{
 	case ADDR:
 	case LOADADDR:
-	case SIZEOF:
 	  {
 	    lang_output_section_statement_type *os;
 
@@ -2564,7 +2543,7 @@ lang_add_section (lang_statement_list_type *ptr,
 	}
       else if (link_info.non_contiguous_regions_warnings)
 	einfo (_("%P:%pS: warning: --enable-non-contiguous-regions makes "
-		 "section `%pA' from '%pB' match /DISCARD/ clause.\n"),
+		 "section `%pA' from `%pB' match /DISCARD/ clause.\n"),
 	       NULL, section, section->owner);
 
       return;
@@ -2597,7 +2576,7 @@ lang_add_section (lang_statement_list_type *ptr,
 
       if (link_info.non_contiguous_regions_warnings && output->bfd_section)
 	einfo (_("%P:%pS: warning: --enable-non-contiguous-regions may "
-		 "change behaviour for section `%pA' from '%pB' (assigned to "
+		 "change behaviour for section `%pA' from `%pB' (assigned to "
 		 "%pA, but additional match: %pA)\n"),
 	       NULL, section, section->owner, section->output_section,
 	       output->bfd_section);
@@ -2736,113 +2715,17 @@ lang_add_section (lang_statement_list_type *ptr,
   new_section->pattern = pattern;
 }
 
-/* Handle wildcard sorting.  This returns the lang_input_section which
-   should follow the one we are going to create for SECTION and FILE,
-   based on the sorting requirements of WILD.  It returns NULL if the
-   new section should just go at the end of the current list.  */
-
-static lang_statement_union_type *
-wild_sort (lang_wild_statement_type *wild,
-	   struct wildcard_list *sec,
-	   lang_input_statement_type *file,
-	   asection *section)
-{
-  lang_statement_union_type *l;
-
-  if (!wild->filenames_sorted
-      && (sec == NULL || sec->spec.sorted == none))
-    return NULL;
-
-  for (l = wild->children.head; l != NULL; l = l->header.next)
-    {
-      lang_input_section_type *ls;
-
-      if (l->header.type != lang_input_section_enum)
-	continue;
-      ls = &l->input_section;
-
-      /* Sorting by filename takes precedence over sorting by section
-	 name.  */
-
-      if (wild->filenames_sorted)
-	{
-	  const char *fn, *ln;
-	  bool fa, la;
-	  int i;
-
-	  /* The PE support for the .idata section as generated by
-	     dlltool assumes that files will be sorted by the name of
-	     the archive and then the name of the file within the
-	     archive.  */
-
-	  if (file->the_bfd != NULL
-	      && file->the_bfd->my_archive != NULL)
-	    {
-	      fn = bfd_get_filename (file->the_bfd->my_archive);
-	      fa = true;
-	    }
-	  else
-	    {
-	      fn = file->filename;
-	      fa = false;
-	    }
-
-	  if (ls->section->owner->my_archive != NULL)
-	    {
-	      ln = bfd_get_filename (ls->section->owner->my_archive);
-	      la = true;
-	    }
-	  else
-	    {
-	      ln = bfd_get_filename (ls->section->owner);
-	      la = false;
-	    }
-
-	  i = filename_cmp (fn, ln);
-	  if (i > 0)
-	    continue;
-	  else if (i < 0)
-	    break;
-
-	  if (fa || la)
-	    {
-	      if (fa)
-		fn = file->filename;
-	      if (la)
-		ln = bfd_get_filename (ls->section->owner);
-
-	      i = filename_cmp (fn, ln);
-	      if (i > 0)
-		continue;
-	      else if (i < 0)
-		break;
-	    }
-	}
-
-      /* Here either the files are not sorted by name, or we are
-	 looking at the sections for this file.  */
-
-      if (sec != NULL
-	  && sec->spec.sorted != none
-	  && sec->spec.sorted != by_none)
-	if (compare_section (sec->spec.sorted, section, ls->section) < 0)
-	  break;
-    }
-
-  return l;
-}
-
 /* Expand a wild statement for a particular FILE.  SECTION may be
-   NULL, in which case it is a wild card.  */
+   NULL, in which case it is a wild card.  This assumes that the
+   wild statement doesn't need any sorting (of filenames or sections).  */
 
 static void
-output_section_callback (lang_wild_statement_type *ptr,
-			 struct wildcard_list *sec,
-			 asection *section,
-			 lang_input_statement_type *file,
-			 void *output)
+output_section_callback_nosort (lang_wild_statement_type *ptr,
+			struct wildcard_list *sec ATTRIBUTE_UNUSED,
+			asection *section,
+			lang_input_statement_type *file ATTRIBUTE_UNUSED,
+			void *output)
 {
-  lang_statement_union_type *before;
   lang_output_section_statement_type *os;
 
   os = (lang_output_section_statement_type *) output;
@@ -2851,40 +2734,8 @@ output_section_callback (lang_wild_statement_type *ptr,
   if (unique_section_p (section, os))
     return;
 
-  before = wild_sort (ptr, sec, file, section);
-
-  /* Here BEFORE points to the lang_input_section which
-     should follow the one we are about to add.  If BEFORE
-     is NULL, then the section should just go at the end
-     of the current list.  */
-
-  if (before == NULL)
-    lang_add_section (&ptr->children, section, ptr->section_list,
-		      ptr->section_flag_list, os);
-  else
-    {
-      lang_statement_list_type list;
-      lang_statement_union_type **pp;
-
-      lang_list_init (&list);
-      lang_add_section (&list, section, ptr->section_list,
-			ptr->section_flag_list, os);
-
-      /* If we are discarding the section, LIST.HEAD will
-	 be NULL.  */
-      if (list.head != NULL)
-	{
-	  ASSERT (list.head->header.next == NULL);
-
-	  for (pp = &ptr->children.head;
-	       *pp != before;
-	       pp = &(*pp)->header.next)
-	    ASSERT (*pp != NULL);
-
-	  list.head->header.next = *pp;
-	  *pp = list.head;
-	}
-    }
+  lang_add_section (&ptr->children, section, ptr->section_list,
+		    ptr->section_flag_list, os);
 }
 
 /* Check if all sections in a wild statement for a particular FILE
@@ -3056,7 +2907,11 @@ load_symbols (lang_input_statement_type *entry,
 
       /* See if the emulation has some special knowledge.  */
       if (ldemul_unrecognized_file (entry))
-	return true;
+	{
+	  if (err == bfd_error_file_ambiguously_recognized)
+	    free (matching);
+	  return true;
+	}
 
       if (err == bfd_error_file_ambiguously_recognized)
 	{
@@ -3066,6 +2921,7 @@ load_symbols (lang_input_statement_type *entry,
 		   " matching formats:"), entry->the_bfd);
 	  for (p = matching; *p != NULL; p++)
 	    einfo (" %s", *p);
+	  free (matching);
 	  einfo ("%F\n");
 	}
       else if (err != bfd_error_file_not_recognized
@@ -3190,23 +3046,22 @@ wild (lang_wild_statement_type *s,
 {
   struct wildcard_list *sec;
 
-  if (s->handler_data[0]
-      && s->handler_data[0]->spec.sorted == by_name
-      && !s->filenames_sorted)
+  if (s->filenames_sorted || s->any_specs_sorted)
     {
       lang_section_bst_type *tree;
 
-      walk_wild (s, output_section_callback_fast, output);
+      walk_wild (s, output_section_callback_sort, output);
 
       tree = s->tree;
       if (tree)
 	{
 	  output_section_callback_tree_to_list (s, tree, output);
 	  s->tree = NULL;
+	  s->rightmost = &s->tree;
 	}
     }
   else
-    walk_wild (s, output_section_callback, output);
+    walk_wild (s, output_section_callback_nosort, output);
 
   if (default_common_section == NULL)
     for (sec = s->section_list; sec != NULL; sec = sec->next)
@@ -4164,22 +4019,25 @@ update_wild_statements (lang_statement_union_type *s)
 		/* Don't sort .init/.fini sections.  */
 		if (strcmp (sec->spec.name, ".init") != 0
 		    && strcmp (sec->spec.name, ".fini") != 0)
-		  switch (sec->spec.sorted)
-		    {
-		    case none:
-		      sec->spec.sorted = sort_section;
-		      break;
-		    case by_name:
-		      if (sort_section == by_alignment)
-			sec->spec.sorted = by_name_alignment;
-		      break;
-		    case by_alignment:
-		      if (sort_section == by_name)
-			sec->spec.sorted = by_alignment_name;
-		      break;
-		    default:
-		      break;
-		    }
+		  {
+		    switch (sec->spec.sorted)
+		      {
+			case none:
+			    sec->spec.sorted = sort_section;
+			    break;
+			case by_name:
+			    if (sort_section == by_alignment)
+			      sec->spec.sorted = by_name_alignment;
+			    break;
+			case by_alignment:
+			    if (sort_section == by_name)
+			      sec->spec.sorted = by_alignment_name;
+			    break;
+			default:
+			    break;
+		      }
+		    s->wild_statement.any_specs_sorted = true;
+		  }
 	      break;
 
 	    case lang_constructors_statement_enum:
@@ -4364,6 +4222,8 @@ map_input_to_output_sections
 	  break;
 	case lang_insert_statement_enum:
 	  break;
+	case lang_input_matcher_enum:
+	  FAIL ();
 	}
     }
 }
@@ -4513,21 +4373,55 @@ process_insert_statements (lang_statement_union_type **start)
 		      else
 			link_info.output_bfd->section_last = first_sec->prev;
 		      /* Add back.  */
-		      last_sec->next = sec->next;
-		      if (sec->next != NULL)
-			sec->next->prev = last_sec;
+		      if (sec->owner == NULL)
+			/* SEC is the absolute section, from the
+			   first dummy output section statement.  Add
+			   back the sections we trimmed off to the
+			   start of the bfd sections.  */
+			sec = NULL;
+		      if (sec != NULL)
+			last_sec->next = sec->next;
+		      else
+			last_sec->next = link_info.output_bfd->sections;
+		      if (last_sec->next != NULL)
+			last_sec->next->prev = last_sec;
 		      else
 			link_info.output_bfd->section_last = last_sec;
 		      first_sec->prev = sec;
-		      sec->next = first_sec;
+		      if (first_sec->prev != NULL)
+			first_sec->prev->next = first_sec;
+		      else
+			link_info.output_bfd->sections = first_sec;
 		    }
 		}
-
-	      first_os = NULL;
-	      last_os = NULL;
 	    }
 
-	  ptr = insert_os_after (where);
+	  lang_statement_union_type *after = (void *) where;
+	  if (where == &lang_os_list.head->output_section_statement
+	      && where->next == first_os)
+	    {
+	      /* PR30155.  Handle a corner case where the statement
+		 list is something like the following:
+		 . LOAD t.o
+		 . .data           0x0000000000000000        0x0
+		 .                 [0x0000000000000000]              b = .
+		 .  *(.data)
+		 .  .data          0x0000000000000000        0x0 t.o
+		 .                 0x0000000000000000        0x4 LONG 0x0
+		 . INSERT BEFORE .text.start
+		 .                 [0x0000000000000004]              a = .
+		 . .text.start     0x0000000000000000        0x0
+		 .                 [0x0000000000000000]              c = .
+		 . OUTPUT(a.out elf64-x86-64)
+		 Here we do not want to allow insert_os_after to
+		 choose a point inside the list we are moving.
+		 That would lose the list.  Instead, let
+		 insert_os_after work from the INSERT, which in this
+		 particular example will result in inserting after
+		 the assignment "a = .".  */
+	      after = *s;
+	    }
+	  ptr = insert_os_after (after);
 	  /* Snip everything from the start of the list, up to and
 	     including the insert statement we are currently processing.  */
 	  first = *start;
@@ -4538,6 +4432,8 @@ process_insert_statements (lang_statement_union_type **start)
 	    statement_list.tail = s;
 	  *ptr = first;
 	  s = start;
+	  first_os = NULL;
+	  last_os = NULL;
 	  continue;
 	}
       s = &(*s)->header.next;
@@ -4675,11 +4571,7 @@ print_output_section_statement
 	      print_nl ();
 	      len = 0;
 	    }
-	  while (len < SECTION_NAME_MAP_LENGTH)
-	    {
-	      print_space ();
-	      ++len;
-	    }
+	  print_spaces (SECTION_NAME_MAP_LENGTH - len);
 
 	  minfo ("0x%V %W", section->vma, TO_ADDR (section->size));
 
@@ -4702,13 +4594,11 @@ static void
 print_assignment (lang_assignment_statement_type *assignment,
 		  lang_output_section_statement_type *output_section)
 {
-  unsigned int i;
   bool is_dot;
   etree_type *tree;
   asection *osec;
 
-  for (i = 0; i < SECTION_NAME_MAP_LENGTH; i++)
-    print_space ();
+  print_spaces (SECTION_NAME_MAP_LENGTH);
 
   if (assignment->exp->type.node_class == etree_assert)
     {
@@ -4732,6 +4622,8 @@ print_assignment (lang_assignment_statement_type *assignment,
   else
     expld.result.valid_p = false;
 
+  char buf[32];
+  const char *str = buf;
   if (expld.result.valid_p)
     {
       bfd_vma value;
@@ -4745,7 +4637,9 @@ print_assignment (lang_assignment_statement_type *assignment,
 	  if (expld.result.section != NULL)
 	    value += expld.result.section->vma;
 
-	  minfo ("0x%V", value);
+	  buf[0] = '0';
+	  buf[1] = 'x';
+	  bfd_sprintf_vma (link_info.output_bfd, buf + 2, value);
 	  if (is_dot)
 	    print_dot = value;
 	}
@@ -4763,25 +4657,26 @@ print_assignment (lang_assignment_statement_type *assignment,
 	      value += h->u.def.section->output_section->vma;
 	      value += h->u.def.section->output_offset;
 
-	      minfo ("[0x%V]", value);
+	      buf[0] = '[';
+	      buf[1] = '0';
+	      buf[2] = 'x';
+	      bfd_sprintf_vma (link_info.output_bfd, buf + 3, value);
+	      strcat (buf, "]");
 	    }
 	  else
-	    minfo ("[unresolved]");
+	    str = "[unresolved]";
 	}
     }
   else
     {
       if (assignment->exp->type.node_class == etree_provide)
-	minfo ("[!provide]");
+	str = "[!provide]";
       else
-	minfo ("*undef*   ");
-#ifdef BFD64
-      minfo ("        ");
-#endif
+	str = "*undef*";
     }
   expld.assign_name = NULL;
 
-  minfo ("                ");
+  fprintf (config.map_file, "%-34s", str);
   exp_print_tree (assignment->exp);
   print_nl ();
 }
@@ -4805,10 +4700,7 @@ print_one_symbol (struct bfd_link_hash_entry *hash_entry, void *ptr)
        || hash_entry->type == bfd_link_hash_defweak)
       && sec == hash_entry->u.def.section)
     {
-      int i;
-
-      for (i = 0; i < SECTION_NAME_MAP_LENGTH; i++)
-	print_space ();
+      print_spaces (SECTION_NAME_MAP_LENGTH);
       minfo ("0x%V   ",
 	     (hash_entry->u.def.value
 	      + hash_entry->u.def.section->output_offset
@@ -4876,8 +4768,7 @@ print_input_section (asection *i, bool is_discarded)
 
   init_opb (i);
 
-  print_space ();
-  minfo ("%s", i->name);
+  minfo (" %s", i->name);
 
   len = 1 + strlen (i->name);
   if (len >= SECTION_NAME_MAP_LENGTH - 1)
@@ -4885,11 +4776,7 @@ print_input_section (asection *i, bool is_discarded)
       print_nl ();
       len = 0;
     }
-  while (len < SECTION_NAME_MAP_LENGTH)
-    {
-      print_space ();
-      ++len;
-    }
+  print_spaces (SECTION_NAME_MAP_LENGTH - len);
 
   if (i->output_section != NULL
       && i->output_section->owner == link_info.output_bfd)
@@ -4901,22 +4788,14 @@ print_input_section (asection *i, bool is_discarded)
 	size = 0;
     }
 
-  minfo ("0x%V %W %pB\n", addr, TO_ADDR (size), i->owner);
+  char buf[32];
+  bfd_sprintf_vma (link_info.output_bfd, buf, addr);
+  minfo ("0x%s %W %pB\n", buf, TO_ADDR (size), i->owner);
 
   if (size != i->rawsize && i->rawsize != 0)
     {
-      len = SECTION_NAME_MAP_LENGTH + 3;
-#ifdef BFD64
-      len += 16;
-#else
-      len += 8;
-#endif
-      while (len > 0)
-	{
-	  print_space ();
-	  --len;
-	}
-
+      len = SECTION_NAME_MAP_LENGTH + 3 + strlen (buf);
+      print_spaces (len);
       minfo (_("%W (size before relaxing)\n"), TO_ADDR (i->rawsize));
     }
 
@@ -4950,14 +4829,12 @@ print_fill_statement (lang_fill_statement_type *fill)
 static void
 print_data_statement (lang_data_statement_type *data)
 {
-  int i;
   bfd_vma addr;
   bfd_size_type size;
   const char *name;
 
   init_opb (data->output_section);
-  for (i = 0; i < SECTION_NAME_MAP_LENGTH; i++)
-    print_space ();
+  print_spaces (SECTION_NAME_MAP_LENGTH);
 
   addr = data->output_offset;
   if (data->output_section != NULL)
@@ -5020,13 +4897,11 @@ print_address_statement (lang_address_statement_type *address)
 static void
 print_reloc_statement (lang_reloc_statement_type *reloc)
 {
-  int i;
   bfd_vma addr;
   bfd_size_type size;
 
   init_opb (reloc->output_section);
-  for (i = 0; i < SECTION_NAME_MAP_LENGTH; i++)
-    print_space ();
+  print_spaces (SECTION_NAME_MAP_LENGTH);
 
   addr = reloc->output_offset;
   if (reloc->output_section != NULL)
@@ -5058,11 +4933,7 @@ print_padding_statement (lang_padding_statement_type *s)
   minfo (" *fill*");
 
   len = sizeof " *fill*" - 1;
-  while (len < SECTION_NAME_MAP_LENGTH)
-    {
-      print_space ();
-      ++len;
-    }
+  print_spaces (SECTION_NAME_MAP_LENGTH - len);
 
   addr = s->output_offset;
   if (s->output_section != NULL)
@@ -5421,15 +5292,15 @@ size_input_section
 	      if (dot + TO_ADDR (i->size) > end)
 		{
 		  if (i->flags & SEC_LINKER_CREATED)
-		    einfo (_("%F%P: Output section '%s' not large enough for the "
-			     "linker-created stubs section '%s'.\n"),
-			   i->output_section->name, i->name);
+		    einfo (_("%F%P: Output section `%pA' not large enough for "
+			     "the linker-created stubs section `%pA'.\n"),
+			   i->output_section, i);
 
 		  if (i->rawsize && i->rawsize != i->size)
 		    einfo (_("%F%P: Relaxation not supported with "
-			     "--enable-non-contiguous-regions (section '%s' "
-			     "would overflow '%s' after it changed size).\n"),
-			   i->name, i->output_section->name);
+			     "--enable-non-contiguous-regions (section `%pA' "
+			     "would overflow `%pA' after it changed size).\n"),
+			   i, i->output_section);
 
 		  *removed = 1;
 		  dot = end;
@@ -5773,7 +5644,6 @@ lang_size_sections_1
 	      os->addr_tree = exp_intop (0);
 	    if (os->addr_tree != NULL)
 	      {
-		os->processed_vma = false;
 		exp_fold_tree (os->addr_tree, bfd_abs_section_ptr, &dot);
 
 		if (expld.result.valid_p)
@@ -7279,7 +7149,7 @@ lang_one_common (struct bfd_link_hash_entry *h, void *info)
       static bool header_printed;
       int len;
       char *name;
-      char buf[50];
+      char buf[32];
 
       if (!header_printed)
 	{
@@ -7307,25 +7177,9 @@ lang_one_common (struct bfd_link_hash_entry *h, void *info)
 	  print_nl ();
 	  len = 0;
 	}
-      while (len < 20)
-	{
-	  print_space ();
-	  ++len;
-	}
 
-      minfo ("0x");
-      if (size <= 0xffffffff)
-	sprintf (buf, "%lx", (unsigned long) size);
-      else
-	sprintf_vma (buf, size);
-      minfo ("%s", buf);
-      len = strlen (buf);
-
-      while (len < 16)
-	{
-	  print_space ();
-	  ++len;
-	}
+      sprintf (buf, "%" PRIx64, (uint64_t) size);
+      fprintf (config.map_file, "%*s0x%-16s", 20 - len, "", buf);
 
       minfo ("%pB\n", section->owner);
     }
@@ -8036,6 +7890,40 @@ lang_propagate_lma_regions (void)
     }
 }
 
+static void
+warn_non_contiguous_discards (void)
+{
+  LANG_FOR_EACH_INPUT_STATEMENT (file)
+    {
+      if ((file->the_bfd->flags & (BFD_LINKER_CREATED | DYNAMIC)) != 0
+	  || file->flags.just_syms)
+	continue;
+
+      for (asection *s = file->the_bfd->sections; s != NULL; s = s->next)
+	if (s->output_section == NULL
+	    && (s->flags & SEC_LINKER_CREATED) == 0)
+	  einfo (_("%P: warning: --enable-non-contiguous-regions "
+		   "discards section `%pA' from `%pB'\n"),
+		 s, file->the_bfd);
+    }
+}
+
+static void
+reset_one_wild (lang_statement_union_type *statement)
+{
+  if (statement->header.type == lang_wild_statement_enum)
+    {
+      lang_wild_statement_type *stmt = &statement->wild_statement;
+      lang_list_init (&stmt->matching_sections);
+    }
+}
+
+static void
+reset_resolved_wilds (void)
+{
+  lang_for_each_statement (reset_one_wild);
+}
+
 void
 lang_process (void)
 {
@@ -8169,6 +8057,8 @@ lang_process (void)
 	      *insert = &files.head->input_statement;
 	      files.head = (lang_statement_union_type *) *iter;
 	      *iter = temp;
+	      if (file_chain.tail == (lang_statement_union_type **) insert)
+		file_chain.tail = (lang_statement_union_type **) iter;
 	      if (my_arch != NULL)
 		{
 		  lang_input_statement_type *parent = bfd_usrdata (my_arch);
@@ -8239,6 +8129,11 @@ lang_process (void)
   /* Size up the common data.  */
   lang_common ();
 
+  if (0)
+    debug_prefix_tree ();
+
+  resolve_wilds ();
+
   /* Remove unreferenced sections if asked to.  */
   lang_gc_sections ();
 
@@ -8249,7 +8144,15 @@ lang_process (void)
 
   ldemul_after_check_relocs ();
 
-  /* Update wild statements.  */
+  /* There might have been new sections created (e.g. as result of
+     checking relocs to need a .got, or suchlike), so to properly order
+     them into our lists of matching sections reset them here.  */
+  reset_resolved_wilds ();
+  resolve_wilds ();
+
+  /* Update wild statements in case the user gave --sort-section.
+     Note how the option might have come after the linker script and
+     so couldn't have been set when the wild statements were created.  */
   update_wild_statements (statement_list.head);
 
   /* Run through the contours of the script and attach input sections
@@ -8348,6 +8251,10 @@ lang_process (void)
   if (command_line.check_section_addresses)
     lang_check_section_addresses ();
 
+  if (link_info.non_contiguous_regions
+      && link_info.non_contiguous_regions_warnings)
+    warn_non_contiguous_discards ();
+
   /* Check any required symbols are known.  */
   ldlang_check_require_defined_symbols ();
 
@@ -8363,12 +8270,15 @@ lang_add_wild (struct wildcard_spec *filespec,
 {
   struct wildcard_list *curr, *next;
   lang_wild_statement_type *new_stmt;
+  bool any_specs_sorted = false;
 
   /* Reverse the list as the parser puts it back to front.  */
   for (curr = section_list, section_list = NULL;
        curr != NULL;
        section_list = curr, curr = next)
     {
+      if (curr->spec.sorted != none && curr->spec.sorted != by_none)
+	any_specs_sorted = true;
       next = curr->next;
       curr->next = section_list;
     }
@@ -8384,6 +8294,7 @@ lang_add_wild (struct wildcard_spec *filespec,
   new_stmt = new_stat (lang_wild_statement, stat_ptr);
   new_stmt->filename = NULL;
   new_stmt->filenames_sorted = false;
+  new_stmt->any_specs_sorted = any_specs_sorted;
   new_stmt->section_flag_list = NULL;
   new_stmt->exclude_name_list = NULL;
   if (filespec != NULL)
@@ -8396,7 +8307,15 @@ lang_add_wild (struct wildcard_spec *filespec,
   new_stmt->section_list = section_list;
   new_stmt->keep_sections = keep_sections;
   lang_list_init (&new_stmt->children);
+  lang_list_init (&new_stmt->matching_sections);
   analyze_walk_wild_section_handler (new_stmt);
+  if (0)
+    {
+      printf ("wild %s(", new_stmt->filename ? new_stmt->filename : "*");
+      for (curr = new_stmt->section_list; curr; curr = curr->next)
+	printf ("%s ", curr->spec.name ? curr->spec.name : "*");
+      printf (")\n");
+    }
 }
 
 void
@@ -8479,6 +8398,126 @@ lang_add_data (int type, union etree_union *exp)
   new_stmt = new_stat (lang_data_statement, stat_ptr);
   new_stmt->exp = exp;
   new_stmt->type = type;
+}
+
+/* Convert escape codes in S.
+   Supports \n, \r, \t and \NNN octals.
+   Returns a copy of S in a malloc'ed buffer.  */
+
+static char *
+convert_string (const char * s)
+{
+  size_t  len = strlen (s);
+  size_t  i;
+  bool    escape = false;
+  char *  buffer = malloc (len + 1);
+  char *  b;
+
+  for (i = 0, b = buffer; i < len; i++)
+    {
+      char c = *s++;
+
+      if (escape)
+	{
+	  switch (c)
+	    {
+	    default:
+	      /* Ignore the escape.  */
+	      break;
+
+	    case 'n': c = '\n'; break;
+	    case 'r': c = '\r'; break;
+	    case 't': c = '\t'; break;
+	  
+	    case '0':
+	    case '1':
+	    case '2':
+	    case '3':
+	    case '4':
+	    case '5':
+	    case '6':
+	    case '7':
+	      /* We have an octal number.  */
+	      {
+		unsigned int value = c - '0';
+
+		c = *s;
+		if ((c >= '0') && (c <= '7'))
+		  {
+		    value <<= 3;
+		    value += (c - '0');
+		    i++;
+		    s++;
+ 
+		    c = *s;
+		    if ((c >= '0') && (c <= '7'))
+		      {
+			value <<= 3;
+			value += (c - '0');
+			i++;
+			s++;
+		      }
+		  }
+
+		if (value > 0xff)
+		  {
+		    /* octal: \777 is treated as '\077' + '7' */
+		    value >>= 3;
+		    i--;
+		    s--;
+		  }
+		
+		c = value;
+	      }
+	      break;
+	    }
+	  escape = false;
+	}
+      else
+	{
+	  if (c == '\\')
+	    {
+	      escape = true;
+	      continue;
+	    }
+	}
+
+      * b ++ = c;
+    }
+
+  * b = 0;
+  return buffer;
+}
+
+void
+lang_add_string (size_t size, const char *s)
+{
+  size_t  len;
+  size_t  i;
+  char *  string;
+
+  string = convert_string (s);
+  len = strlen (string);
+
+  /* Check if it is ASCIZ command (len == 0) */
+  if (size == 0)
+    /* Make sure that we include the terminating nul byte.  */
+    size = len + 1;
+  else if (len >= size)
+    {
+      len = size - 1;
+
+      einfo (_("%P:%pS: warning: ASCII string does not fit in allocated space,"
+               " truncated\n"), NULL);
+    }
+
+  for (i = 0 ; i < len ; i++)
+    lang_add_data (BYTE, exp_intop (string[i]));
+
+  while (i++ < size)
+    lang_add_data (BYTE, exp_intop ('\0'));
+
+  free (string);
 }
 
 /* Create a new reloc statement.  RELOC is the BFD relocation type to
@@ -9689,16 +9728,16 @@ lang_ld_feature (char *str)
 /* Pretty print memory amount.  */
 
 static void
-lang_print_memory_size (bfd_vma sz)
+lang_print_memory_size (uint64_t sz)
 {
   if ((sz & 0x3fffffff) == 0)
-    printf ("%10" BFD_VMA_FMT "u GB", sz >> 30);
+    printf ("%10" PRIu64 " GB", sz >> 30);
   else if ((sz & 0xfffff) == 0)
-    printf ("%10" BFD_VMA_FMT "u MB", sz >> 20);
+    printf ("%10" PRIu64 " MB", sz >> 20);
   else if ((sz & 0x3ff) == 0)
-    printf ("%10" BFD_VMA_FMT "u KB", sz >> 10);
+    printf ("%10" PRIu64 " KB", sz >> 10);
   else
-    printf (" %10" BFD_VMA_FMT "u B", sz);
+    printf (" %10" PRIu64 " B", sz);
 }
 
 /* Implement --print-memory-usage: disply per region memory usage.  */
@@ -9715,7 +9754,7 @@ lang_print_memory_usage (void)
 
       printf ("%16s: ",r->name_list.name);
       lang_print_memory_size (used_length);
-      lang_print_memory_size ((bfd_vma) r->length);
+      lang_print_memory_size (r->length);
 
       if (r->length != 0)
 	{

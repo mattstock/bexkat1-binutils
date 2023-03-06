@@ -1,5 +1,5 @@
 /* Target operations for the remote server for GDB.
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -29,15 +29,57 @@
 
 process_stratum_target *the_target;
 
-int
+/* See target.h.  */
+
+bool
 set_desired_thread ()
 {
   client_state &cs = get_client_state ();
   thread_info *found = find_thread_ptid (cs.general_thread);
 
-  switch_to_thread (found);
+  if (found == nullptr)
+    {
+      process_info *proc = find_process_pid (cs.general_thread.pid ());
+      if (proc == nullptr)
+	{
+	  threads_debug_printf
+	    ("did not find thread nor process for general_thread %s",
+	     cs.general_thread.to_string ().c_str ());
+	}
+      else
+	{
+	  threads_debug_printf
+	    ("did not find thread for general_thread %s, but found process",
+	     cs.general_thread.to_string ().c_str ());
+	}
+      switch_to_process (proc);
+    }
+  else
+    switch_to_thread (found);
+
   return (current_thread != NULL);
 }
+
+/* See target.h.  */
+
+bool
+set_desired_process ()
+{
+  client_state &cs = get_client_state ();
+
+  process_info *proc = find_process_pid (cs.general_thread.pid ());
+  if (proc == nullptr)
+    {
+      threads_debug_printf
+	("did not find process for general_thread %s",
+	 cs.general_thread.to_string ().c_str ());
+    }
+  switch_to_process (proc);
+
+  return proc != nullptr;
+}
+
+/* See target.h.  */
 
 int
 read_inferior_memory (CORE_ADDR memaddr, unsigned char *myaddr, int len)
@@ -304,8 +346,8 @@ process_stratum_target::supports_read_auxv ()
 }
 
 int
-process_stratum_target::read_auxv (CORE_ADDR offset, unsigned char *myaddr,
-				   unsigned int len)
+process_stratum_target::read_auxv (int pid, CORE_ADDR offset,
+				   unsigned char *myaddr, unsigned int len)
 {
   gdb_assert_not_reached ("target op read_auxv not supported");
 }
@@ -654,6 +696,12 @@ process_stratum_target::supports_agent ()
   return false;
 }
 
+bool
+process_stratum_target::supports_btrace ()
+{
+  return false;
+}
+
 btrace_target_info *
 process_stratum_target::enable_btrace (thread_info *tp,
 				       const btrace_config *conf)
@@ -669,15 +717,15 @@ process_stratum_target::disable_btrace (btrace_target_info *tinfo)
 
 int
 process_stratum_target::read_btrace (btrace_target_info *tinfo,
-			     buffer *buffer,
-			     enum btrace_read_type type)
+				     std::string *buffer,
+				     enum btrace_read_type type)
 {
   error (_("Target does not support branch tracing."));
 }
 
 int
 process_stratum_target::read_btrace_conf (const btrace_target_info *tinfo,
-					  buffer *buffer)
+					  std::string *buffer)
 {
   error (_("Target does not support branch tracing."));
 }

@@ -1,6 +1,6 @@
 /* Support for printing Modula 2 values for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -95,7 +95,7 @@ m2_print_long_set (struct type *type, const gdb_byte *valaddr,
       return;
     }
 
-  target = TYPE_TARGET_TYPE (range);
+  target = range->target_type ();
 
   if (get_discrete_bounds (range, &field_low, &field_high))
     {
@@ -139,7 +139,7 @@ m2_print_long_set (struct type *type, const gdb_byte *valaddr,
 	      range = type->field (field).type ()->index_type ();
 	      if (!get_discrete_bounds (range, &field_low, &field_high))
 		break;
-	      target = TYPE_TARGET_TYPE (range);
+	      target = range->target_type ();
 	    }
 	}
       if (element_seen)
@@ -164,14 +164,14 @@ m2_print_unbounded_array (struct value *value,
   LONGEST len;
   struct value *val;
 
-  struct type *type = check_typedef (value_type (value));
-  const gdb_byte *valaddr = value_contents_for_printing (value).data ();
+  struct type *type = check_typedef (value->type ());
+  const gdb_byte *valaddr = value->contents_for_printing ().data ();
 
   addr = unpack_pointer (type->field (0).type (),
 			 (type->field (0).loc_bitpos () / 8) +
 			 valaddr);
 
-  val = value_at_lazy (TYPE_TARGET_TYPE (type->field (0).type ()),
+  val = value_at_lazy (type->field (0).type ()->target_type (),
 		       addr);
   len = unpack_field_as_long (type, valaddr, 1);
 
@@ -187,7 +187,7 @@ print_unpacked_pointer (struct type *type,
 			struct ui_file *stream)
 {
   struct gdbarch *gdbarch = type->arch ();
-  struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+  struct type *elttype = check_typedef (type->target_type ());
   int want_space = 0;
 
   if (elttype->code () == TYPE_CODE_FUNC)
@@ -207,14 +207,14 @@ print_unpacked_pointer (struct type *type,
   /* For a pointer to char or unsigned char, also print the string
      pointed to, unless pointer is null.  */
 
-  if (TYPE_LENGTH (elttype) == 1
+  if (elttype->length () == 1
       && elttype->code () == TYPE_CODE_INT
       && (options->format == 0 || options->format == 's')
       && addr != 0)
     {
       if (want_space)
 	gdb_puts (" ", stream);
-      return val_print_string (TYPE_TARGET_TYPE (type), NULL, addr, -1,
+      return val_print_string (type->target_type (), NULL, addr, -1,
 			       stream, options);
     }
   
@@ -230,7 +230,7 @@ print_variable_at_address (struct type *type,
 {
   struct gdbarch *gdbarch = type->arch ();
   CORE_ADDR addr = unpack_pointer (type, valaddr);
-  struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+  struct type *elttype = check_typedef (type->target_type ());
 
   gdb_printf (stream, "[");
   gdb_puts (paddress (gdbarch, addr), stream);
@@ -239,7 +239,7 @@ print_variable_at_address (struct type *type,
   if (elttype->code () != TYPE_CODE_UNDEF)
     {
       struct value *deref_val =
-	value_at (TYPE_TARGET_TYPE (type), unpack_pointer (type, valaddr));
+	value_at (type->target_type (), unpack_pointer (type, valaddr));
 
       common_val_print (deref_val, stream, recurse, options, current_language);
     }
@@ -260,17 +260,17 @@ m2_print_array_contents (struct value *val,
 			 const struct value_print_options *options,
 			 int len)
 {
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
 
-  if (TYPE_LENGTH (type) > 0)
+  if (type->length () > 0)
     {
       /* For an array of chars, print with string syntax.  */
-      if (TYPE_LENGTH (type) == 1 &&
+      if (type->length () == 1 &&
 	  ((type->code () == TYPE_CODE_INT)
 	   || ((current_language->la_language == language_m2)
 	       && (type->code () == TYPE_CODE_CHAR)))
 	  && (options->format == 0 || options->format == 's'))
-	val_print_string (type, NULL, value_address (val), len+1, stream,
+	val_print_string (type, NULL, val->address (), len+1, stream,
 			  options);
       else
 	{
@@ -305,19 +305,19 @@ m2_language::value_print_inner (struct value *val, struct ui_file *stream,
   unsigned len;
   struct type *elttype;
   CORE_ADDR addr;
-  const gdb_byte *valaddr = value_contents_for_printing (val).data ();
-  const CORE_ADDR address = value_address (val);
+  const gdb_byte *valaddr = val->contents_for_printing ().data ();
+  const CORE_ADDR address = val->address ();
 
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
   switch (type->code ())
     {
     case TYPE_CODE_ARRAY:
-      if (TYPE_LENGTH (type) > 0 && TYPE_LENGTH (TYPE_TARGET_TYPE (type)) > 0)
+      if (type->length () > 0 && type->target_type ()->length () > 0)
 	{
-	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
-	  len = TYPE_LENGTH (type) / TYPE_LENGTH (elttype);
+	  elttype = check_typedef (type->target_type ());
+	  len = type->length () / elttype->length ();
 	  /* For an array of chars, print with string syntax.  */
-	  if (TYPE_LENGTH (elttype) == 1 &&
+	  if (elttype->length () == 1 &&
 	      ((elttype->code () == TYPE_CODE_INT)
 	       || ((current_language->la_language == language_m2)
 		   && (elttype->code () == TYPE_CODE_CHAR)))
@@ -327,17 +327,19 @@ m2_language::value_print_inner (struct value *val, struct ui_file *stream,
 		 elements up to it.  */
 	      if (options->stop_print_at_null)
 		{
+		  unsigned int print_max_chars = get_print_max_chars (options);
 		  unsigned int temp_len;
 
 		  /* Look for a NULL char.  */
 		  for (temp_len = 0;
 		       (valaddr[temp_len]
-			&& temp_len < len && temp_len < options->print_max);
+			&& temp_len < len
+			&& temp_len < print_max_chars);
 		       temp_len++);
 		  len = temp_len;
 		}
 
-	      printstr (stream, TYPE_TARGET_TYPE (type), valaddr, len,
+	      printstr (stream, type->target_type (), valaddr, len,
 			NULL, 0, options);
 	    }
 	  else
@@ -443,9 +445,9 @@ m2_language::value_print_inner (struct value *val, struct ui_file *stream,
       break;
 
     case TYPE_CODE_RANGE:
-      if (TYPE_LENGTH (type) == TYPE_LENGTH (TYPE_TARGET_TYPE (type)))
+      if (type->length () == type->target_type ()->length ())
 	{
-	  struct value *v = value_cast (TYPE_TARGET_TYPE (type), val);
+	  struct value *v = value_cast (type->target_type (), val);
 	  value_print_inner (v, stream, recurse, options);
 	  break;
 	}

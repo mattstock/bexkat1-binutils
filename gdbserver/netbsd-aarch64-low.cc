@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2022 Free Software Foundation, Inc.
+/* Copyright (C) 2020-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -96,7 +96,7 @@ void
 netbsd_aarch64_target::low_arch_setup ()
 {
   target_desc *tdesc
-    = aarch64_create_target_description (0, false);
+    = aarch64_create_target_description ({});
 
   static const char *expedite_regs_aarch64[] = { "x29", "sp", "pc", NULL };
   init_target_desc (tdesc, expedite_regs_aarch64);

@@ -1,5 +1,5 @@
 /* CTF dict creation.
-   Copyright (C) 2019-2022 Free Software Foundation, Inc.
+   Copyright (C) 2019-2023 Free Software Foundation, Inc.
 
    This file is part of libctf.
 
@@ -1319,7 +1319,7 @@ ctf_write_mem (ctf_dict_t *fp, size_t *size, size_t threshold)
 	{
 	  ctf_set_errno (fp, ENOMEM);
 	  ctf_err_warn (fp, 0, 0, _("ctf_write_mem: cannot allocate %li bytes"),
-			(unsigned long) fp->ctf_size + sizeof (struct ctf_header));
+			(unsigned long) (fp->ctf_size + sizeof (struct ctf_header)));
 	  return NULL;
 	}
       ctf_flip_header (hp);

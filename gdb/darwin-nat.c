@@ -1,5 +1,5 @@
 /* Darwin support for GDB, the GNU debugger.
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    Contributed by AdaCore.
 
@@ -2037,7 +2037,7 @@ darwin_nat_target::attach (const char *args, int from_tty)
 
   inf = current_inferior ();
   inferior_appeared (inf, pid);
-  inf->attach_flag = 1;
+  inf->attach_flag = true;
 
   darwin_attach_pid (inf);
 
@@ -2373,7 +2373,7 @@ set_enable_mach_exceptions (const char *args, int from_tty,
     }
 }
 
-char *
+const char *
 darwin_nat_target::pid_to_exec_file (int pid)
 {
   static char path[PATH_MAX];

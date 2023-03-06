@@ -1,3 +1,248 @@
+2023-03-03  Nick Clifton  <nickc@redhat.com>
+
+	PR 30193
+	* ldgram.y (ASCII): Fail if the size is not a constant.
+
+2023-02-23  Fangrui Song  <i@maskray.me>
+
+	* emultempl/riscvelf.em: Add option parsing.
+	* testsuite/ld-riscv-elf/code-model-relax-medlow-01-norelaxgp.d: New.
+	* testsuite/ld-riscv-elf/pcgp-relax-01-norelaxgp.d: New.
+	* testsuite/ld-riscv-elf/pcgp-relax-02.d: Test --relax --relax-gp can be
+	used together.
+
+2023-02-20  Nick Clifton  <nickc@redhat.com>
+
+	PR 30004
+	* pe-dll.c (pe_dll_build_sections): Do not build an edata section
+	if all symbols are being excluded.
+
+2023-02-16  Ulf Samuelsson <binutils@emagii.com>
+	    Nick Clifton  <nickc@redhat.com>
+
+	* ldlex.l: Add ASCII token.
+	* ldgram.y: Add parsing of the ASCII command.
+	* ldlang.c (lang_add_string): Add maximum size parameter.  Move
+	escape character handling code into separate function.
+	* ldlang.h (lang_add_string): Update prototype.
+	* NEWS: Mention the new feature.
+	* ld.texi (Output Section Data): Document the new directives.
+	* testsuite/ld-scripts/asciz.t: Adjust to work on more architectures
+	and to test more aspects of the ASCIZ directive.
+	* testsuite/ld-scripts/asciz.d: Adjust to match the changes to the
+	test linker script.
+	* testsuite/ld-scripts/ascii.d: New test driver.
+	* testsuite/ld-scripts/ascii.s: New test assembler source.
+	* testsuite/ld-scripts/ascii.t: New test script.
+	* testsuite/ld-scripts/script.exp: Run the new test.
+
+2023-02-15  Nick Clifton  <nickc@redhat.com>
+
+	PR 30078
+	* testsuite/ld-elf/merge4b.s: Use .asciz instead of .string in
+	order to avoid the special behaviour of the .string directive on
+	HPPA architectures.
+
+2023-02-14  Nick Clifton  <nickc@redhat.com>
+
+	* ld.texi (Plugins): Mention that the -plugin command line option
+	is used to load plugins.
+
+2023-01-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 29998
+	* pe-dll.c (build_filler_bfd): Initialise the next field of the
+	filler input statement, so that it does not break the file chain.
+
+2023-01-24  Nick Clifton  <nickc@redhat.com>
+
+	PR 29998
+	* pe-dll.c (generate_reloc): Handle sections with no assigned
+	output section.  Terminate early of there are no relocs to put in
+	the .reloc section.
+	(pe_exe_fill_sections): Do not emit an empty .reloc section.
+
+2023-01-06  Nick Clifton  <nickc@redhat.com>
+
+	* po/bg.po: Updated Bulgarian translation.
+
+2023-01-05  Nick Clifton  <nickc@redhat.com>
+
+	* configure.tgt: Add arm64pe as an extra emulation for aarch64pe.
+	* Makefile.am (ALL_64_EMULATION_SOURCES): Add earm64pe.c
+	* emultempl/pep.em: Add suppport for arm64pe emulation.
+	* Makefile.in: Regenerate.
+	* po/BLD-POTFILES.in: Regenerate.
+	* po/ld.pot: Regenerate.
+
+2023-01-05  Andreas K. Huettel  <dilfridge@gentoo.org>
+
+	* testsuite/ld-elf/shared.exp: un-xfail the PR19710 test for the
+	AArch64 architecture.
+
+2023-01-04  Andreas K. Huettel  <dilfridge@gentoo.org>
+
+	PR 29843
+	* testsuite/ld-aarch64/bti-plt-5.d: Relax regxps slightly to allow
+	for differences in build environments.
+	* testsuite/ld-aarch64/tls-relax-gdesc-le-now.d: Likewise.
+
+2023-01-03  Nick Clifton  <nickc@redhat.com>
+
+	* po/uk.po: Updated Ukrainian translation.
+
+2022-12-31  Nick Clifton  <nickc@redhat.com>
+
+	* 2.40 branch created.
+
+2022-12-21  Nick Clifton  <nickc@redhat.com>
+
+	PR 29900
+	* scripttempl/pe.sc: Keep the .drectve section when performing a
+	relocateable link.
+	* scripttempl/pep.sc: Likewise.
+
+2022-12-08  Nick Clifton  <nickc@redhat.com>
+
+	PR 29861
+	* ld.texi (Output Section Type): Note that setting the output
+	section type only works if the section contains untyped data.
+
+2022-12-05  Nick Clifton  <nickc@redhat.com>
+
+	PR 29849
+	* ldlang.c (spec_match): Check that there is sufficient length in
+	the target name to match the spec's prefix.
+
+2022-11-03  Nick Clifton  <nickc@redhat.com>
+
+	PR 29748
+	* configure.tgt (ac_default_ld_warn_rwx_segments): Set to 0 for
+	the V850.
+
+2022-11-03  Nick Clifton  <nickc@redhat.com>
+
+	PR 29741
+	* scripttempl/avr.sc (__DATA_REGION_ORIGIN__): Define.  If a value
+	has not been provided on the command line then use DATA_ORIGIN.
+	(MEMORY): Use __DATA_REGION_ORIGIN__ as the start of the data region.
+
+2022-10-21  Nick Clifton  <nickc@redhat.com>
+
+	PR 29654
+	* ld.h (struct ld_config_type): Add no_warnings field.
+	* ldlex.h (enum option_values): Add OPTION_NO_WARNINGS.
+	* lexsup.c (ld_options): Add --no-warnings.
+	(parse_args): Add support for -w and --no-warnings.
+	* ldmisc.c (vfinfo): Return early if the message is a warning and
+	-w has been enabled.
+	* ld.texi (options): Document new command line option.
+	* NEWS: Mention the new feature.
+
+2022-08-30  Nick Clifton  <nickc@redhat.com>
+
+	PR 29529
+	* testsuite/ld-x86-64/pr27587.err: Update expected output.
+
+2022-08-18  Ralf Habacker  <ralf.habacker@freenet.de>
+
+	PR 28362
+	* testsuite/ld-pe/pe-run2-def.exp: New file.
+
+2022-08-03  Alan Modra  <amodra@gmail.com>
+
+	PR 29389
+	* ldlang.h (lang_input_statement_struct): Add sort_key field.
+	* emultempl/pe.em (after_open): If multiple import libraries refer
+	to the same bfd, store their names in the sort_key field.
+	* emultempl/pep.em (after_open): Likewise.
+	* ldlang.c (sort_filename): New function.  Returns the filename to
+	be used when sorting input files.
+	(wild_sort): Use the sort_filename function.
+
+2022-07-29  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	PR ld/29411
+	* configure.tgt (ac_default_ld_warn_rwx_segments): Extend to all
+	sparc targets.  Expand comment.
+
+2022-07-26  Nick Clifton  <nickc@redhat.com>
+
+	PR 29411
+	* configure.tgt (ac_default_ld_warn_rwx_segments): Disable for
+	sparc-solaris configurations.
+
+2022-07-08  Nick Clifton  <nickc@redhat.com>
+
+	* 2.39 branch created.
+
+2022-06-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 29263
+	* configure.ac: Move HPPA specific code from here...
+	* configure.tgt: ... to here.  Add similar code for MIPS.
+	Move code for CRIS, MIPS and HPPA to block at start of file.
+	* configure: Regenerate.
+
+2022-06-21  Nick Clifton  <nickc@redhat.com>
+
+	PR 29263
+	* configure.ac (ac_default_ld_warn_execstack): Default to 'no' for
+	HPPA targets.
+	(ac_default_ld_warn_rwx_segments): Likewise.
+	* configure: Regenerate.
+	* testsuite/ld-elf/elf.exp: Add the --warn-execstack command line
+	option to the command line when running execstack tests for the
+	HPPA target.
+
+2022-05-12  Alan Modra  <amodra@gmail.com>
+
+	PR 29006
+	* pe-dll.c (dll_name): Delete, replacing with..
+	(dll_filename): ..this, moved earlier in file.
+	(generate_edata): Delete parameters.  Don't set up dll_name here..
+	(pe_process_import_defs): ..instead set up dll_filename and
+	dll_symname here before returning.
+	(dll_symname_len): Delete write-only variable.
+	(pe_dll_generate_implib): Don't set up dll_symname here.
+
+2022-05-03  Nick Clifton  <nickc@redhat.com>
+
+	PR 29101
+	* libdep_plugin.c (get_libdeps): Check for overflow when computing
+	amount of memory to allocate.
+
+2022-04-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 29006
+	* pe-dll.c (make_head): Use asprintf to allocate and populate a
+	buffer containing the temporary name.
+	(make_tail, make_one, make_singleton_name_thunk): Likewise.
+	(make_import_fixup_mark, make_import_fixup_entry): Likewise.
+	(make_runtime_pseudo_reloc): Likewise.
+	(pe_create_runtime_relocator_reference): Likewise.
+
+2022-04-25  Nick Clifton  <nickc@redhat.com>
+
+	PR 29072
+	* testsuite/ld-elf/pr29072.b.warn: Update to include the note
+	about the linker's behaviour being depreccated.
+
+2022-04-20  Clément Chigot  <clement.chigot@atos.net>
+
+	* emultempl/aix.em (params): New variable.
+	(stub_file): New variable.
+	(xcoff_add_stub_section): New function.
+	(xcoff_layout_sections_again): New function
+	(hook_in_stub): New function.
+	(_after_allocation): Add stub creation.
+	(_create_output_section_statements): Allocate stub file and
+	pass params to backend.
+
+2022-04-20  Clément Chigot  <clement.chigot@atos.net>
+
+	* emultempl/aix.em (_after_allocation): New function.
+
 2022-04-07  Mark Harmstone  <mark@harmstone.com>
 
 	* testsuite/ld-pe/secidx1.s: New test source file.
@@ -1835,7 +2080,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021-2022 Free Software Foundation, Inc.
+Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

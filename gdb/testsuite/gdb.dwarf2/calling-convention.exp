@@ -1,4 +1,4 @@
-# Copyright 2022 Free Software Foundation, Inc.
+# Copyright 2022-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,9 +27,7 @@
 load_lib dwarf.exp
 
 # This test can only be run on targets which support DWARF-2 and use gas.
-if {![dwarf2_support]} {
-    return 0
-}
+require dwarf2_support
 
 standard_testfile .c .S
 
@@ -83,12 +81,14 @@ gdb_test "call foo ()" \
 gdb_breakpoint "foo"
 gdb_continue_to_breakpoint "foo"
 
-gdb_test_multiple "return 35" "" {
-    -re "Function 'foo' does not follow the target calling convention.\r\nIf you continue, setting the return value will probably lead to unpredictable behaviors.\r\nMake foo return now\\? \\(y or n\\) $" {
-	pass $gdb_test_name
-	gdb_test "n" "Not confirmed" "cancel return"
-    }
-}
+gdb_test "return 35" \
+       "Not confirmed" \
+       "return 35" \
+       [multi_line \
+           "Function 'foo' does not follow the target calling convention\\." \
+           "If you continue, setting the return value will probably lead to unpredictable behaviors\\." \
+           "Make foo return now\\? \\(y or n\\) $"] \
+       "n"
 
 gdb_test "finish" [multi_line \
     "Run till exit from #0  $hex in foo \\(\\)" \

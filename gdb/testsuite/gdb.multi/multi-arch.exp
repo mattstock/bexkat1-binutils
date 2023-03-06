@@ -1,4 +1,4 @@
-# Copyright 2009-2022 Free Software Foundation, Inc.
+# Copyright 2009-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,9 +19,7 @@
 set testfile "multi-arch"
 
 # The plain remote target can't do multiple inferiors.
-if [use_gdb_stub] {
-    return
-}
+require !use_gdb_stub
 
 # The 64-bit compile may succeed for i386-linux, but gdb won't be able
 # to load the file.
@@ -60,8 +58,8 @@ if { [build_executable "failed to prepare" ${exec1} "${srcfile1}" \
 set options [list debug]
 
 if [istarget "aarch64*-*-*"] {
-    if {[info exists ARM_CC_FOR_TARGET]} {
-	lappend options "compiler=${ARM_CC_FOR_TARGET}"
+    if {[arm_cc_for_target] != ""} {
+	lappend options "compiler=[arm_cc_for_target]"
     } else {
 	unsupported "ARM compiler is not known"
 	return -1
@@ -78,7 +76,7 @@ if { [build_executable "failed to prepare" ${exec2} "${srcfile2}" \
 # Start inferior 1
 
 clean_restart ${exec1}
-if ![runto_main] then {
+if {![runto_main]} {
     return
 }
 
@@ -88,7 +86,7 @@ gdb_test "add-inferior" "Added inferior 2.*" "add empty inferior 2"
 gdb_test "inferior 2" "Switching to inferior 2.*" "switch to inferior 2"
 gdb_load ${binfile2}
 
-if ![runto_main] then {
+if {![runto_main]} {
     return
 }
 

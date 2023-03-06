@@ -1,6 +1,6 @@
 /* Target-dependent code for Analog Devices Blackfin processor, for GDB.
 
-   Copyright (C) 2005-2022 Free Software Foundation, Inc.
+   Copyright (C) 2005-2023 Free Software Foundation, Inc.
 
    Contributed by Analog Devices, Inc.
 
@@ -95,7 +95,7 @@ static const int bfin_linux_sigcontext_reg_offset[BFIN_NUM_REGS] =
 
 static void
 bfin_linux_sigframe_init (const struct tramp_frame *self,
-			  struct frame_info *this_frame,
+			  frame_info_ptr this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func)
 {

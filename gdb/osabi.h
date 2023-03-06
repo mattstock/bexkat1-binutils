@@ -1,5 +1,5 @@
 /* OS ABI variant handling for GDB.
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
    
    This file is part of GDB.
 
@@ -73,6 +73,9 @@ enum gdb_osabi gdbarch_lookup_osabi (bfd *);
 /* Lookup the OS ABI corresponding to the specified target description
    string.  */
 enum gdb_osabi osabi_from_tdesc_string (const char *text);
+
+/* Return true if there's an OS ABI handler for INFO.  */
+bool has_gdb_osabi_handler (struct gdbarch_info info);
 
 /* Initialize the gdbarch for the specified OS ABI variant.  */
 void gdbarch_init_osabi (struct gdbarch_info, struct gdbarch *);

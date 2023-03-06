@@ -1,6 +1,6 @@
 /* Target dependent code for ARC architecture, for GDB.
 
-   Copyright 2005-2022 Free Software Foundation, Inc.
+   Copyright 2005-2023 Free Software Foundation, Inc.
    Contributed by Synopsys Inc.
 
    This file is part of GDB.
@@ -121,7 +121,7 @@ extern bool arc_debug;
 
 /* Target-dependent information.  */
 
-struct arc_gdbarch_tdep : gdbarch_tdep
+struct arc_gdbarch_tdep : gdbarch_tdep_base
 {
   /* Offset to PC value in jump buffer.  If this is negative, longjmp
      support will be disabled.  */
@@ -131,10 +131,10 @@ struct arc_gdbarch_tdep : gdbarch_tdep
   bool has_hw_loops = false;
 
   /* Detect sigtramp.  */
-  bool (*is_sigtramp) (struct frame_info *) = nullptr;
+  bool (*is_sigtramp) (frame_info_ptr) = nullptr;
 
   /* Get address of sigcontext for sigtramp.  */
-  CORE_ADDR (*sigcontext_addr) (struct frame_info *) = nullptr;
+  CORE_ADDR (*sigcontext_addr) (frame_info_ptr) = nullptr;
 
   /* Offset of registers in `struct sigcontext'.  */
   const int *sc_reg_offset = nullptr;
@@ -185,11 +185,6 @@ arc_arch_is_em (const struct bfd_arch_info* arch)
    undesired, then this stream should be set to some invisible stream, but it
    can't be set to an actual NULL value - that would cause a crash.  */
 int arc_delayed_print_insn (bfd_vma addr, struct disassemble_info *info);
-
-/* Return properly initialized disassemble_info for ARC disassembler - it will
-   not print disassembled instructions to stderr.  */
-
-struct disassemble_info arc_disassemble_info (struct gdbarch *gdbarch);
 
 /* Get branch/jump target address for the INSN.  Note that this function
    returns branch target and doesn't evaluate if this branch is taken or not.

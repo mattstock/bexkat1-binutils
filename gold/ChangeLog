@@ -1,3 +1,31 @@
+2023-01-03  Nick Clifton  <nickc@redhat.com>
+
+	* po/ro.po: Updated Romainian translation.
+	* po/uk.po: Updated Ukrainian translation.
+
+2022-12-31  Nick Clifton  <nickc@redhat.com>
+
+	* 2.40 branch created.
+
+2022-12-19  Nick Clifton  <nickc@redhat.com>
+
+	* po/ro.po: New file: Romainian translation.
+
+2022-07-08  Nick Clifton  <nickc@redhat.com>
+
+	* 2.39 branch created.
+
+2022-06-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 23765
+	* fileread.cc (File_read::do_read): Check start parameter before
+	computing number of bytes to read.
+
+2022-05-18  Nick Clifton  <nickc@redhat.com>
+
+	* int_encoding.cc (get_length_as_unsigned_LEB_128): Remove
+	current_length variable.
+
 2022-02-17  Nick Clifton  <nickc@redhat.com>
 
 	* po/sr.po: Updated Serbian translation.
@@ -216,7 +244,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021-2022 Free Software Foundation, Inc.
+Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

@@ -1,5 +1,5 @@
 /* Interface GDB to the GNU Hurd.
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -52,7 +52,6 @@ extern "C"
 #include "defs.h"
 
 #include <ctype.h>
-#include <limits.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <sys/ptrace.h>
@@ -2183,7 +2182,7 @@ gnu_nat_target::attach (const char *args, int from_tty)
   inferior->push_target (this);
 
   inferior_appeared (inferior, pid);
-  inferior->attach_flag = 1;
+  inferior->attach_flag = true;
 
   inf_update_procs (inf);
 
@@ -2623,6 +2622,7 @@ gnu_nat_target::find_memory_regions (find_memory_region_ftype func,
 		     last_protection & VM_PROT_WRITE,
 		     last_protection & VM_PROT_EXECUTE,
 		     1, /* MODIFIED is unknown, pass it as true.  */
+		     false, /* No memory tags in the object file.  */
 		     data);
 	  last_region_address = region_address;
 	  last_region_end = region_address += region_length;
@@ -2637,6 +2637,7 @@ gnu_nat_target::find_memory_regions (find_memory_region_ftype func,
 	     last_protection & VM_PROT_WRITE,
 	     last_protection & VM_PROT_EXECUTE,
 	     1, /* MODIFIED is unknown, pass it as true.  */
+	     false, /* No memory tags in the object file.  */
 	     data);
 
   return 0;
@@ -3060,7 +3061,7 @@ static void
 info_port_rights (const char *args, mach_port_type_t only)
 {
   struct inf *inf = active_inf ();
-  struct value *vmark = value_mark ();
+  scoped_value_mark vmark;
 
   if (args)
     /* Explicit list of port rights.  */
@@ -3086,8 +3087,6 @@ info_port_rights (const char *args, mach_port_type_t only)
       if (err)
 	error (_("%s."), safe_strerror (err));
     }
-
-  value_free_to_mark (vmark);
 }
 
 static void

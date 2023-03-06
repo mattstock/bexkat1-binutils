@@ -1,5 +1,5 @@
 /* BFD back-end for Renesas Super-H COFF binaries.
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
    Written by Steve Chamberlain, <sac@cygnus.com>.
    Relaxing code written by Ian Lance Taylor, <ian@cygnus.com>.
@@ -103,7 +103,7 @@ static reloc_howto_type sh_coff_howtos[] =
   /* Windows CE */
   HOWTO (R_SH_IMM32CE,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -127,7 +127,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_PCDISP8BY2,	/* type */
 	 1,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 8,			/* bitsize */
 	 true,			/* pc_relative */
 	 0,			/* bitpos */
@@ -143,7 +143,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_PCDISP,		/* type */
 	 1,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 12,			/* bitsize */
 	 true,			/* pc_relative */
 	 0,			/* bitpos */
@@ -159,7 +159,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_IMM32,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -175,7 +175,7 @@ static reloc_howto_type sh_coff_howtos[] =
 #ifdef COFF_WITH_PE
   HOWTO (R_SH_IMAGEBASE,	/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -197,7 +197,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_PCRELIMM8BY2,	/* type */
 	 1,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 8,			/* bitsize */
 	 true,			/* pc_relative */
 	 0,			/* bitpos */
@@ -211,7 +211,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_PCRELIMM8BY4,	/* type */
 	 2,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 8,			/* bitsize */
 	 true,			/* pc_relative */
 	 0,			/* bitpos */
@@ -225,7 +225,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_IMM16,		/* type */
 	 0,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 16,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -239,7 +239,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_SWITCH16,		/* type */
 	 0,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 16,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -253,7 +253,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_SWITCH32,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -267,7 +267,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_USES,		/* type */
 	 0,			/* rightshift */
-	 1,			/* size (0 = byte, 1 = short, 2 = long) */
+	 2,			/* size */
 	 16,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -281,7 +281,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_COUNT,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -295,7 +295,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_ALIGN,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -309,7 +309,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_CODE,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -323,7 +323,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_DATA,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -337,7 +337,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_LABEL,		/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
+	 4,			/* size */
 	 32,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -351,7 +351,7 @@ static reloc_howto_type sh_coff_howtos[] =
 
   HOWTO (R_SH_SWITCH8,		/* type */
 	 0,			/* rightshift */
-	 0,			/* size (0 = byte, 1 = short, 2 = long) */
+	 1,			/* size */
 	 8,			/* bitsize */
 	 false,			/* pc_relative */
 	 0,			/* bitpos */
@@ -597,7 +597,8 @@ sh_reloc (bfd *      abfd,
       && bfd_is_und_section (symbol_in->section))
     return bfd_reloc_undefined;
 
-  if (addr > input_section->size)
+  if (!bfd_reloc_offset_in_range (reloc_entry->howto, abfd, input_section,
+				  addr))
     return bfd_reloc_outofrange;
 
   sym_value = get_symbol_value (symbol_in);
@@ -716,6 +717,7 @@ sh_relax_section (bfd *abfd,
   *again = false;
 
   if (bfd_link_relocatable (link_info)
+      || (sec->flags & SEC_HAS_CONTENTS) == 0
       || (sec->flags & SEC_RELOC) == 0
       || sec->reloc_count == 0)
     return true;
@@ -904,12 +906,7 @@ sh_relax_section (bfd *abfd,
 	 the linker is run.  */
 
       coff_section_data (abfd, sec)->relocs = internal_relocs;
-      coff_section_data (abfd, sec)->keep_relocs = true;
-
       coff_section_data (abfd, sec)->contents = contents;
-      coff_section_data (abfd, sec)->keep_contents = true;
-
-      obj_coff_keep_syms (abfd) = true;
 
       /* Replace the jsr with a bsr.  */
 
@@ -1026,12 +1023,7 @@ sh_relax_section (bfd *abfd,
       if (swapped)
 	{
 	  coff_section_data (abfd, sec)->relocs = internal_relocs;
-	  coff_section_data (abfd, sec)->keep_relocs = true;
-
 	  coff_section_data (abfd, sec)->contents = contents;
-	  coff_section_data (abfd, sec)->keep_contents = true;
-
-	  obj_coff_keep_syms (abfd) = true;
 	}
     }
 
@@ -1373,6 +1365,7 @@ sh_relax_delete_bytes (bfd *abfd,
       bfd_byte *ocontents;
 
       if (o == sec
+	  || (o->flags & SEC_HAS_CONTENTS) == 0
 	  || (o->flags & SEC_RELOC) == 0
 	  || o->reloc_count == 0)
 	continue;
@@ -1434,8 +1427,6 @@ sh_relax_delete_bytes (bfd *abfd,
 	      if (val > addr && val < toaddr)
 		bfd_put_32 (abfd, val - count,
 			    ocontents + irelscan->r_vaddr - o->vma);
-
-	      coff_section_data (abfd, o)->keep_contents = true;
 	    }
 	}
     }
@@ -2921,6 +2912,13 @@ sh_coff_get_relocated_section_contents (bfd *output_bfd,
 						       relocatable,
 						       symbols);
 
+  bfd_byte *orig_data = data;
+  if (data == NULL)
+    {
+      data = bfd_malloc (input_section->size);
+      if (data == NULL)
+	return NULL;
+    }
   memcpy (data, coff_section_data (input_bfd, input_section)->contents,
 	  (size_t) input_section->size);
 
@@ -2996,6 +2994,8 @@ sh_coff_get_relocated_section_contents (bfd *output_bfd,
   free (internal_relocs);
   free (internal_syms);
   free (sections);
+  if (orig_data == NULL)
+    free (data);
   return NULL;
 }
 
@@ -3069,7 +3069,7 @@ coff_small_new_section_hook (bfd *abfd, asection *section)
 /* This is copied from bfd_coff_std_swap_table so that we can change
    the default section alignment power.  */
 
-static bfd_coff_backend_data bfd_coff_small_swap_table =
+static const bfd_coff_backend_data bfd_coff_small_swap_table =
 {
   coff_swap_aux_in, coff_swap_sym_in, coff_swap_lineno_in,
   coff_swap_aux_out, coff_swap_sym_out,

@@ -1,5 +1,5 @@
 /* TI PRU assembler.
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
    Contributed by Dimitar Dimitrov <dimitar@dinux.eu>
    Based on tc-nios2.c
 
@@ -1787,7 +1787,7 @@ md_pcrel_from (fixS *fixP ATTRIBUTE_UNUSED)
 
 /* Called just before the assembler exits.  */
 void
-md_end (void)
+pru_md_end (void)
 {
   htab_delete (pru_opcode_hash);
   htab_delete (pru_reg_hash);

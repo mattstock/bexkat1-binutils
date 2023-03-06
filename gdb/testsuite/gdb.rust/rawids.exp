@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 Free Software Foundation, Inc.
+# Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,9 +16,7 @@
 # Test raw identifiers.
 
 load_lib rust-support.exp
-if {[skip_rust_tests]} {
-    continue
-}
+require allow_rust_tests
 
 set v [split [rust_compiler_version] .]
 if {[lindex $v 0] == 1 && [lindex $v 1] < 30} {

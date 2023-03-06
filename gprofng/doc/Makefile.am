@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2012-2021 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,19 +19,31 @@
 
 AUTOMAKE_OPTIONS = info-in-builddir foreign no-texinfo.tex
 
+# Options to extract the man page
+MANCONF = -Dman
+
+TEXI2POD = perl $(srcdir)/../../etc/texi2pod.pl $(AM_MAKEINFOFLAGS)
+POD2MAN = pod2man --center="User Commands" \
+	--release="binutils-$(VERSION)" --section=1
+
 info_TEXINFOS       = gprofng.texi
 gprofng_TEXINFOS    = fdl.texi
-BUILT_SOURCES       = version.texi
-CLEANFILES          = version.texi
 TEXINFO_TEX         = .
 MAKEINFOHTML        = $(MAKEINFO) --html --no-split
 
-version.texi: 
-	@echo "@set EDITION 1.0"                    > $@
-	@echo "@set VERSION 1.0"                   >> $@
-	@echo "@set UPDATED 22 February 2022"      >> $@
-	@echo "@set UPDATED-MONTH February 2022"   >> $@
-#	@echo "@set UPDATED `date +"%-d %B %Y"`"   >> $@
-#	@echo "@set UPDATED-MONTH `date +"%B %Y"`" >> $@
+man_MANS = gprofng.1
 
-MAINTAINERCLEANFILES = gprofng.info
+# Build the man page from the texinfo file
+# The sed command removes the no-adjust Nroff command so that
+# the man output looks standard.
+gprofng.1: $(srcdir)/gprofng.texi
+	$(AM_V_GEN)touch $@
+	$(AM_V_at)-$(TEXI2POD) $(MANCONF) < $(srcdir)/gprofng.texi > gprofng.pod
+	$(AM_V_at)-($(POD2MAN) gprofng.pod | \
+	  sed -e '/^.if n .na/d' > $@.tmp && \
+	  mv -f $@.tmp $@) || (rm -f $@.tmp && exit 1)
+	$(AM_V_at)rm -f gprofng.pod
+
+MAINTAINERCLEANFILES = gprofng.info $(man_MANS)
+
+info: $(man_MANS)

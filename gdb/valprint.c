@@ -1,6 +1,6 @@
 /* Print values for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -94,33 +94,40 @@ static void val_print_type_code_flags (struct type *type,
 				       int embedded_offset,
 				       struct ui_file *stream);
 
-#define PRINT_MAX_DEFAULT 200	/* Start print_max off at this value.  */
-#define PRINT_MAX_DEPTH_DEFAULT 20	/* Start print_max_depth off at this value. */
+/* Start print_max at this value.  */
+#define PRINT_MAX_DEFAULT 200
+
+/* Start print_max_chars at this value (meaning follow print_max).  */
+#define PRINT_MAX_CHARS_DEFAULT PRINT_MAX_CHARS_ELEMENTS
+
+/* Start print_max_depth at this value. */
+#define PRINT_MAX_DEPTH_DEFAULT 20
 
 struct value_print_options user_print_options =
 {
   Val_prettyformat_default,	/* prettyformat */
-  0,				/* prettyformat_arrays */
-  0,				/* prettyformat_structs */
-  0,				/* vtblprint */
-  1,				/* unionprint */
-  1,				/* addressprint */
-  0,				/* objectprint */
+  false,			/* prettyformat_arrays */
+  false,			/* prettyformat_structs */
+  false,			/* vtblprint */
+  true,				/* unionprint */
+  true,				/* addressprint */
+  false,			/* nibblesprint */
+  false,			/* objectprint */
   PRINT_MAX_DEFAULT,		/* print_max */
+  PRINT_MAX_CHARS_DEFAULT,	/* print_max_chars */
   10,				/* repeat_count_threshold */
   0,				/* output_format */
   0,				/* format */
-  1,				/* memory_tag_violations */
-  0,				/* stop_print_at_null */
-  0,				/* print_array_indexes */
-  0,				/* deref_ref */
-  1,				/* static_field_print */
-  1,				/* pascal_static_field_print */
-  0,				/* raw */
-  0,				/* summary */
-  1,				/* symbol_print */
+  true,				/* memory_tag_violations */
+  false,			/* stop_print_at_null */
+  false,			/* print_array_indexes */
+  false,			/* deref_ref */
+  true,				/* static_field_print */
+  true,				/* pascal_static_field_print */
+  false,			/* raw */
+  false,			/* summary */
+  true,				/* symbol_print */
   PRINT_MAX_DEPTH_DEFAULT,	/* max_depth */
-  1				/* finish_print */
 };
 
 /* Initialize *OPTS to be a copy of the user print options.  */
@@ -149,16 +156,30 @@ get_formatted_print_options (struct value_print_options *opts,
   opts->format = format;
 }
 
+/* Implement 'show print elements'.  */
+
 static void
 show_print_max (struct ui_file *file, int from_tty,
 		struct cmd_list_element *c, const char *value)
 {
-  gdb_printf (file,
-	      _("Limit on string chars or array "
-		"elements to print is %s.\n"),
-	      value);
+  gdb_printf
+    (file,
+     (user_print_options.print_max_chars != PRINT_MAX_CHARS_ELEMENTS
+      ? _("Limit on array elements to print is %s.\n")
+      : _("Limit on string chars or array elements to print is %s.\n")),
+     value);
 }
 
+/* Implement 'show print characters'.  */
+
+static void
+show_print_max_chars (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file,
+	      _("Limit on string characters to print is %s.\n"),
+	      value);
+}
 
 /* Default input and output radixes, and output format letter.  */
 
@@ -257,6 +278,17 @@ show_unionprint (struct ui_file *file, int from_tty,
 	      value);
 }
 
+/* Controls the format of printing binary values.  */
+
+static void
+show_nibbles (struct ui_file *file, int from_tty,
+		       struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file,
+	      _("Printing binary values in groups is %s.\n"),
+	      value);
+}
+
 /* If nonzero, causes machine addresses to be printed in certain contexts.  */
 
 static void
@@ -287,7 +319,7 @@ val_print_scalar_type_p (struct type *type)
   type = check_typedef (type);
   while (TYPE_IS_REFERENCE (type))
     {
-      type = TYPE_TARGET_TYPE (type);
+      type = type->target_type ();
       type = check_typedef (type);
     }
   switch (type->code ())
@@ -341,16 +373,15 @@ valprint_check_validity (struct ui_file *stream,
       && type->code () != TYPE_CODE_STRUCT
       && type->code () != TYPE_CODE_ARRAY)
     {
-      if (value_bits_any_optimized_out (val,
-					TARGET_CHAR_BIT * embedded_offset,
-					TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+      if (val->bits_any_optimized_out (TARGET_CHAR_BIT * embedded_offset,
+				       TARGET_CHAR_BIT * type->length ()))
 	{
 	  val_print_optimized_out (val, stream);
 	  return 0;
 	}
 
-      if (value_bits_synthetic_pointer (val, TARGET_CHAR_BIT * embedded_offset,
-					TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+      if (val->bits_synthetic_pointer (TARGET_CHAR_BIT * embedded_offset,
+				       TARGET_CHAR_BIT * type->length ()))
 	{
 	  const int is_ref = type->code () == TYPE_CODE_REF;
 	  int ref_is_addressable = 0;
@@ -360,7 +391,7 @@ valprint_check_validity (struct ui_file *stream,
 	      const struct value *deref_val = coerce_ref_if_computed (val);
 
 	      if (deref_val != NULL)
-		ref_is_addressable = value_lval_const (deref_val) == lval_memory;
+		ref_is_addressable = deref_val->lval () == lval_memory;
 	    }
 
 	  if (!is_ref || !ref_is_addressable)
@@ -371,7 +402,7 @@ valprint_check_validity (struct ui_file *stream,
 	  return is_ref;
 	}
 
-      if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
+      if (!val->bytes_available (embedded_offset, type->length ()))
 	{
 	  val_print_unavailable (stream);
 	  return 0;
@@ -384,7 +415,7 @@ valprint_check_validity (struct ui_file *stream,
 void
 val_print_optimized_out (const struct value *val, struct ui_file *stream)
 {
-  if (val != NULL && value_lval_const (val) == lval_register)
+  if (val != NULL && val->lval () == lval_register)
     val_print_not_saved (stream);
   else
     fprintf_styled (stream, metadata_style.style (), _("<optimized out>"));
@@ -444,11 +475,11 @@ generic_val_print_array (struct value *val,
 			 const struct
 			     generic_val_print_decorations *decorations)
 {
-  struct type *type = check_typedef (value_type (val));
-  struct type *unresolved_elttype = TYPE_TARGET_TYPE (type);
+  struct type *type = check_typedef (val->type ());
+  struct type *unresolved_elttype = type->target_type ();
   struct type *elttype = check_typedef (unresolved_elttype);
 
-  if (TYPE_LENGTH (type) > 0 && TYPE_LENGTH (unresolved_elttype) > 0)
+  if (type->length () > 0 && unresolved_elttype->length () > 0)
     {
       LONGEST low_bound, high_bound;
 
@@ -462,7 +493,7 @@ generic_val_print_array (struct value *val,
   else
     {
       /* Array of unspecified length: treat like pointer to first elt.  */
-      print_unpacked_pointer (type, elttype, value_address (val),
+      print_unpacked_pointer (type, elttype, val->address (),
 			      stream, options);
     }
 
@@ -479,9 +510,9 @@ generic_value_print_ptr (struct value *val, struct ui_file *stream,
     value_print_scalar_formatted (val, options, 0, stream);
   else
     {
-      struct type *type = check_typedef (value_type (val));
-      struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
-      const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+      struct type *type = check_typedef (val->type ());
+      struct type *elttype = check_typedef (type->target_type ());
+      const gdb_byte *valaddr = val->contents_for_printing ().data ();
       CORE_ADDR addr = unpack_pointer (type, valaddr);
 
       print_unpacked_pointer (type, elttype, addr, stream, options);
@@ -516,8 +547,8 @@ get_value_addr_contents (struct value *deref_val)
 {
   gdb_assert (deref_val != NULL);
 
-  if (value_lval_const (deref_val) == lval_memory)
-    return value_contents_for_printing_const (value_addr (deref_val)).data ();
+  if (deref_val->lval () == lval_memory)
+    return value_addr (deref_val)->contents_for_printing ().data ();
   else
     {
       /* We have a non-addressable value, such as a DW_AT_const_value.  */
@@ -533,16 +564,15 @@ generic_val_print_ref (struct type *type,
 		       struct value *original_value,
 		       const struct value_print_options *options)
 {
-  struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+  struct type *elttype = check_typedef (type->target_type ());
   struct value *deref_val = NULL;
-  const int value_is_synthetic
-    = value_bits_synthetic_pointer (original_value,
-				    TARGET_CHAR_BIT * embedded_offset,
-				    TARGET_CHAR_BIT * TYPE_LENGTH (type));
+  const bool value_is_synthetic
+    = original_value->bits_synthetic_pointer (TARGET_CHAR_BIT * embedded_offset,
+					      TARGET_CHAR_BIT * type->length ());
   const int must_coerce_ref = ((options->addressprint && value_is_synthetic)
 			       || options->deref_ref);
   const int type_is_defined = elttype->code () != TYPE_CODE_UNDEF;
-  const gdb_byte *valaddr = value_contents_for_printing (original_value).data ();
+  const gdb_byte *valaddr = original_value->contents_for_printing ().data ();
 
   if (must_coerce_ref && type_is_defined)
     {
@@ -554,7 +584,7 @@ generic_val_print_ref (struct type *type,
 	  gdb_assert (embedded_offset == 0);
 	}
       else
-	deref_val = value_at (TYPE_TARGET_TYPE (type),
+	deref_val = value_at (type->target_type (),
 			      unpack_pointer (type, valaddr + embedded_offset));
     }
   /* Else, original_value isn't a synthetic reference or we don't have to print
@@ -690,7 +720,7 @@ generic_val_print_enum (struct type *type,
 
   gdb_assert (!options->format);
 
-  const gdb_byte *valaddr = value_contents_for_printing (original_value).data ();
+  const gdb_byte *valaddr = original_value->contents_for_printing ().data ();
 
   val = unpack_long (type, valaddr + embedded_offset * unit_size);
 
@@ -737,8 +767,8 @@ generic_value_print_bool
     }
   else
     {
-      const gdb_byte *valaddr = value_contents_for_printing (value).data ();
-      struct type *type = check_typedef (value_type (value));
+      const gdb_byte *valaddr = value->contents_for_printing ().data ();
+      struct type *type = check_typedef (value->type ());
       LONGEST val = unpack_long (type, valaddr);
       if (val == 0)
 	gdb_puts (decorations->false_name, stream);
@@ -778,9 +808,9 @@ generic_value_print_char (struct value *value, struct ui_file *stream,
     }
   else
     {
-      struct type *unresolved_type = value_type (value);
+      struct type *unresolved_type = value->type ();
       struct type *type = check_typedef (unresolved_type);
-      const gdb_byte *valaddr = value_contents_for_printing (value).data ();
+      const gdb_byte *valaddr = value->contents_for_printing ().data ();
 
       LONGEST val = unpack_long (type, valaddr);
       if (type->is_unsigned ())
@@ -801,7 +831,7 @@ generic_val_print_float (struct type *type, struct ui_file *stream,
 {
   gdb_assert (!options->format);
 
-  const gdb_byte *valaddr = value_contents_for_printing (original_value).data ();
+  const gdb_byte *valaddr = original_value->contents_for_printing ().data ();
 
   print_floating (valaddr, type, stream);
 }
@@ -816,16 +846,16 @@ generic_val_print_fixed_point (struct value *val, struct ui_file *stream,
     value_print_scalar_formatted (val, options, 0, stream);
   else
     {
-      struct type *type = value_type (val);
+      struct type *type = val->type ();
 
-      const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+      const gdb_byte *valaddr = val->contents_for_printing ().data ();
       gdb_mpf f;
 
-      f.read_fixed_point (gdb::make_array_view (valaddr, TYPE_LENGTH (type)),
+      f.read_fixed_point (gdb::make_array_view (valaddr, type->length ()),
 			  type_byte_order (type), type->is_unsigned (),
 			  type->fixed_point_scaling_factor ());
 
-      const char *fmt = TYPE_LENGTH (type) < 4 ? "%.11Fg" : "%.17Fg";
+      const char *fmt = type->length () < 4 ? "%.11Fg" : "%.17Fg";
       std::string str = gmp_string_printf (fmt, f.val);
       gdb_printf (stream, "%s", str.c_str ());
     }
@@ -863,12 +893,12 @@ generic_value_print_memberptr
     {
       /* Member pointers are essentially specific to C++, and so if we
 	 encounter one, we should print it according to C++ rules.  */
-      struct type *type = check_typedef (value_type (val));
-      const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+      struct type *type = check_typedef (val->type ());
+      const gdb_byte *valaddr = val->contents_for_printing ().data ();
       cp_print_class_member (valaddr, type, stream, "&");
     }
   else
-    generic_value_print (val, stream, recurse, options, decorations);
+    value_print_scalar_formatted (val, options, 0, stream);
 }
 
 /* See valprint.h.  */
@@ -878,7 +908,7 @@ generic_value_print (struct value *val, struct ui_file *stream, int recurse,
 		     const struct value_print_options *options,
 		     const struct generic_val_print_decorations *decorations)
 {
-  struct type *type = value_type (val);
+  struct type *type = val->type ();
 
   type = check_typedef (type);
 
@@ -889,7 +919,7 @@ generic_value_print (struct value *val, struct ui_file *stream, int recurse,
      printer.  */
   while (type->code () == TYPE_CODE_RANGE)
     {
-      type = check_typedef (TYPE_TARGET_TYPE (type));
+      type = check_typedef (type->target_type ());
       val = value_cast (type, val);
     }
 
@@ -933,7 +963,7 @@ generic_value_print (struct value *val, struct ui_file *stream, int recurse,
       if (options->format)
 	value_print_scalar_formatted (val, options, 0, stream);
       else
-	generic_val_print_func (type, 0, value_address (val), stream,
+	generic_val_print_func (type, 0, val->address (), stream,
 				val, options);
       break;
 
@@ -981,7 +1011,7 @@ generic_value_print (struct value *val, struct ui_file *stream, int recurse,
       break;
 
     case TYPE_CODE_METHODPTR:
-      cplus_print_method_ptr (value_contents_for_printing (val).data (), type,
+      cplus_print_method_ptr (val->contents_for_printing ().data (), type,
 			      stream);
       break;
 
@@ -1011,11 +1041,11 @@ common_val_print (struct value *value, struct ui_file *stream, int recurse,
        get a fixed representation of our value.  */
     value = ada_to_fixed_value (value);
 
-  if (value_lazy (value))
-    value_fetch_lazy (value);
+  if (value->lazy ())
+    value->fetch_lazy ();
 
   struct value_print_options local_opts = *options;
-  struct type *type = value_type (value);
+  struct type *type = value->type ();
   struct type *real_type = check_typedef (type);
 
   if (local_opts.prettyformat == Val_prettyformat_default)
@@ -1100,25 +1130,25 @@ value_check_printable (struct value *val, struct ui_file *stream,
       return 0;
     }
 
-  if (value_entirely_optimized_out (val))
+  if (val->entirely_optimized_out ())
     {
-      if (options->summary && !val_print_scalar_type_p (value_type (val)))
+      if (options->summary && !val_print_scalar_type_p (val->type ()))
 	gdb_printf (stream, "...");
       else
 	val_print_optimized_out (val, stream);
       return 0;
     }
 
-  if (value_entirely_unavailable (val))
+  if (val->entirely_unavailable ())
     {
-      if (options->summary && !val_print_scalar_type_p (value_type (val)))
+      if (options->summary && !val_print_scalar_type_p (val->type ()))
 	gdb_printf (stream, "...");
       else
 	val_print_unavailable (stream);
       return 0;
     }
 
-  if (value_type (val)->code () == TYPE_CODE_INTERNAL_FUNCTION)
+  if (val->type ()->code () == TYPE_CODE_INTERNAL_FUNCTION)
     {
       fprintf_styled (stream, metadata_style.style (),
 		      _("<internal function %s>"),
@@ -1126,13 +1156,13 @@ value_check_printable (struct value *val, struct ui_file *stream,
       return 0;
     }
 
-  if (type_not_associated (value_type (val)))
+  if (type_not_associated (val->type ()))
     {
       val_print_not_associated (stream);
       return 0;
     }
 
-  if (type_not_allocated (value_type (val)))
+  if (type_not_allocated (val->type ()))
     {
       val_print_not_allocated (stream);
       return 0;
@@ -1179,11 +1209,23 @@ value_print (struct value *val, struct ui_file *stream,
   current_language->value_print (val, stream, options);
 }
 
+/* Meant to be used in debug sessions, so don't export it in a header file.  */
+extern void ATTRIBUTE_UNUSED debug_val (struct value *val);
+
+/* Print VAL.  */
+
+void ATTRIBUTE_UNUSED
+debug_val (struct value *val)
+{
+  value_print (val, gdb_stdlog, &user_print_options);
+  gdb_flush (gdb_stdlog);
+}
+
 static void
 val_print_type_code_flags (struct type *type, struct value *original_value,
 			   int embedded_offset, struct ui_file *stream)
 {
-  const gdb_byte *valaddr = (value_contents_for_printing (original_value).data ()
+  const gdb_byte *valaddr = (original_value->contents_for_printing ().data ()
 			     + embedded_offset);
   ULONGEST val = unpack_long (type, valaddr);
   int field, nfields = type->num_fields ();
@@ -1238,7 +1280,7 @@ value_print_scalar_formatted (struct value *val,
 			      int size,
 			      struct ui_file *stream)
 {
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
 
   gdb_assert (val != NULL);
 
@@ -1249,7 +1291,7 @@ value_print_scalar_formatted (struct value *val,
     {
       struct value_print_options opts = *options;
       opts.format = 0;
-      opts.deref_ref = 0;
+      opts.deref_ref = false;
       common_val_print (val, stream, 0, &opts, current_language);
       return;
     }
@@ -1257,14 +1299,14 @@ value_print_scalar_formatted (struct value *val,
   /* value_contents_for_printing fetches all VAL's contents.  They are
      needed to check whether VAL is optimized-out or unavailable
      below.  */
-  const gdb_byte *valaddr = value_contents_for_printing (val).data ();
+  const gdb_byte *valaddr = val->contents_for_printing ().data ();
 
   /* A scalar object that does not have all bits available can't be
      printed, because all bits contribute to its representation.  */
-  if (value_bits_any_optimized_out (val, 0,
-				    TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+  if (val->bits_any_optimized_out (0,
+				   TARGET_CHAR_BIT * type->length ()))
     val_print_optimized_out (val, stream);
-  else if (!value_bytes_available (val, 0, TYPE_LENGTH (type)))
+  else if (!val->bytes_available (0, type->length ()))
     val_print_unavailable (stream);
   else
     print_scalar_formatted (valaddr, type, options, size, stream);
@@ -1315,8 +1357,7 @@ print_longest (struct ui_file *stream, int format, int use_c_format,
     case 'o':
       val = int_string (val_long, 8, 0, 0, use_c_format); break;
     default:
-      internal_error (__FILE__, __LINE__,
-		      _("failed internal consistency check"));
+      internal_error (_("failed internal consistency check"));
     } 
   gdb_puts (val, stream);
 }
@@ -1357,17 +1398,22 @@ print_floating (const gdb_byte *valaddr, struct type *type,
 
 void
 print_binary_chars (struct ui_file *stream, const gdb_byte *valaddr,
-		    unsigned len, enum bfd_endian byte_order, bool zero_pad)
+		    unsigned len, enum bfd_endian byte_order, bool zero_pad,
+		    const struct value_print_options *options)
 {
   const gdb_byte *p;
   unsigned int i;
   int b;
   bool seen_a_one = false;
+  const char *digit_separator = nullptr;
 
   /* Declared "int" so it will be signed.
      This ensures that right shift will shift in zeros.  */
 
   const int mask = 0x080;
+
+  if (options->nibblesprint)
+    digit_separator = current_language->get_digit_separator();
 
   if (byte_order == BFD_ENDIAN_BIG)
     {
@@ -1380,6 +1426,9 @@ print_binary_chars (struct ui_file *stream, const gdb_byte *valaddr,
 
 	  for (i = 0; i < (HOST_CHAR_BIT * sizeof (*p)); i++)
 	    {
+	      if (options->nibblesprint && seen_a_one && i % 4 == 0)
+		gdb_putc (*digit_separator, stream);
+
 	      if (*p & (mask >> i))
 		b = '1';
 	      else
@@ -1387,6 +1436,13 @@ print_binary_chars (struct ui_file *stream, const gdb_byte *valaddr,
 
 	      if (zero_pad || seen_a_one || b == '1')
 		gdb_putc (b, stream);
+	      else if (options->nibblesprint)
+		{
+		  if ((0xf0 & (mask >> i) && (*p & 0xf0))
+		      || (0x0f & (mask >> i) && (*p & 0x0f)))
+		    gdb_putc (b, stream);
+		}
+
 	      if (b == '1')
 		seen_a_one = true;
 	    }
@@ -1400,6 +1456,9 @@ print_binary_chars (struct ui_file *stream, const gdb_byte *valaddr,
 	{
 	  for (i = 0; i < (HOST_CHAR_BIT * sizeof (*p)); i++)
 	    {
+	      if (options->nibblesprint && seen_a_one && i % 4 == 0)
+		gdb_putc (*digit_separator, stream);
+
 	      if (*p & (mask >> i))
 		b = '1';
 	      else
@@ -1407,6 +1466,13 @@ print_binary_chars (struct ui_file *stream, const gdb_byte *valaddr,
 
 	      if (zero_pad || seen_a_one || b == '1')
 		gdb_putc (b, stream);
+	      else if (options->nibblesprint)
+		{
+		  if ((0xf0 & (mask >> i) && (*p & 0xf0))
+		      || (0x0f & (mask >> i) && (*p & 0x0f)))
+		    gdb_putc (b, stream);
+		}
+
 	      if (b == '1')
 		seen_a_one = true;
 	    }
@@ -1880,7 +1946,6 @@ value_print_array_elements (struct value *val, struct ui_file *stream,
   unsigned int things_printed = 0;
   unsigned len;
   struct type *elttype, *index_type;
-  unsigned eltlen;
   /* Position of the array element we are examining to see
      whether it is repeated.  */
   unsigned int rep1;
@@ -1888,13 +1953,15 @@ value_print_array_elements (struct value *val, struct ui_file *stream,
   unsigned int reps;
   LONGEST low_bound, high_bound;
 
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
 
-  elttype = TYPE_TARGET_TYPE (type);
-  eltlen = type_length_units (check_typedef (elttype));
+  elttype = type->target_type ();
+  unsigned bit_stride = type->bit_stride ();
+  if (bit_stride == 0)
+    bit_stride = 8 * check_typedef (elttype)->length ();
   index_type = type->index_type ();
   if (index_type->code () == TYPE_CODE_RANGE)
-    index_type = TYPE_TARGET_TYPE (index_type);
+    index_type = index_type->target_type ();
 
   if (get_array_bounds (type, &low_bound, &high_bound))
     {
@@ -1940,23 +2007,36 @@ value_print_array_elements (struct value *val, struct ui_file *stream,
       maybe_print_array_index (index_type, i + low_bound,
 			       stream, options);
 
+      struct value *element = val->from_component_bitsize (elttype,
+							   bit_stride * i,
+							   bit_stride);
       rep1 = i + 1;
       reps = 1;
       /* Only check for reps if repeat_count_threshold is not set to
 	 UINT_MAX (unlimited).  */
       if (options->repeat_count_threshold < UINT_MAX)
 	{
-	  while (rep1 < len
-		 && value_contents_eq (val, i * eltlen,
-				       val, rep1 * eltlen,
-				       eltlen))
+	  bool unavailable = element->entirely_unavailable ();
+	  bool available = element->entirely_available ();
+
+	  while (rep1 < len)
 	    {
+	      struct value *rep_elt
+		= val->from_component_bitsize (elttype,
+					       rep1 * bit_stride,
+					       bit_stride);
+	      bool repeated = ((available
+				&& rep_elt->entirely_available ()
+				&& element->contents_eq (rep_elt))
+			       || (unavailable
+				   && rep_elt->entirely_unavailable ()));
+	      if (!repeated)
+		break;
 	      ++reps;
 	      ++rep1;
 	    }
 	}
 
-      struct value *element = value_from_component (val, elttype, eltlen * i);
       common_val_print (element, stream, recurse + 1, options,
 			current_language);
 
@@ -2027,15 +2107,14 @@ print_wchar (gdb_wint_t w, const gdb_byte *orig,
 	     int orig_len, int width,
 	     enum bfd_endian byte_order,
 	     struct obstack *output,
-	     int quoter, int *need_escapep)
+	     int quoter, bool *need_escapep)
 {
-  int need_escape = *need_escapep;
+  bool need_escape = *need_escapep;
 
-  *need_escapep = 0;
+  *need_escapep = false;
 
-  /* iswprint implementation on Windows returns 1 for tab character.
-     In order to avoid different printout on this host, we explicitly
-     use wchar_printable function.  */
+  /* If any additional cases are added to this switch block, then the
+     function wchar_printable will likely need updating too.  */
   switch (w)
     {
       case LCST ('\a'):
@@ -2061,9 +2140,7 @@ print_wchar (gdb_wint_t w, const gdb_byte *orig,
 	break;
       default:
 	{
-	  if (wchar_printable (w) && (!need_escape || (!gdb_iswdigit (w)
-						       && w != LCST ('8')
-						       && w != LCST ('9'))))
+	  if (gdb_iswprint (w) && !(need_escape && gdb_iswxdigit (w)))
 	    {
 	      gdb_wchar_t wchar = w;
 
@@ -2085,10 +2162,19 @@ print_wchar (gdb_wint_t w, const gdb_byte *orig,
 		  /* If the value fits in 3 octal digits, print it that
 		     way.  Otherwise, print it as a hex escape.  */
 		  if (value <= 0777)
-		    xsnprintf (octal, sizeof (octal), "\\%.3o",
-			       (int) (value & 0777));
+		    {
+		      xsnprintf (octal, sizeof (octal), "\\%.3o",
+				 (int) (value & 0777));
+		      *need_escapep = false;
+		    }
 		  else
-		    xsnprintf (octal, sizeof (octal), "\\x%lx", (long) value);
+		    {
+		      xsnprintf (octal, sizeof (octal), "\\x%lx", (long) value);
+		      /* A hex escape might require the next character
+			 to be escaped, because, unlike with octal,
+			 hex escapes have no length limit.  */
+		      *need_escapep = true;
+		    }
 		  append_string_as_wide (octal, output);
 		}
 	      /* If we somehow have extra bytes, print them now.  */
@@ -2097,11 +2183,10 @@ print_wchar (gdb_wint_t w, const gdb_byte *orig,
 		  char octal[5];
 
 		  xsnprintf (octal, sizeof (octal), "\\%.3o", orig[i] & 0xff);
+		  *need_escapep = false;
 		  append_string_as_wide (octal, output);
 		  ++i;
 		}
-
-	      *need_escapep = 1;
 	    }
 	  break;
 	}
@@ -2119,12 +2204,12 @@ generic_emit_char (int c, struct type *type, struct ui_file *stream,
   enum bfd_endian byte_order
     = type_byte_order (type);
   gdb_byte *c_buf;
-  int need_escape = 0;
+  bool need_escape = false;
 
-  c_buf = (gdb_byte *) alloca (TYPE_LENGTH (type));
+  c_buf = (gdb_byte *) alloca (type->length ());
   pack_long (c_buf, type, c);
 
-  wchar_iterator iter (c_buf, TYPE_LENGTH (type), encoding, TYPE_LENGTH (type));
+  wchar_iterator iter (c_buf, type->length (), encoding, type->length ());
 
   /* This holds the printable form of the wchar_t data.  */
   auto_obstack wchar_buf;
@@ -2162,14 +2247,14 @@ generic_emit_char (int c, struct type *type, struct ui_file *stream,
 	    {
 	      for (i = 0; i < num_chars; ++i)
 		print_wchar (chars[i], buf, buflen,
-			     TYPE_LENGTH (type), byte_order,
+			     type->length (), byte_order,
 			     &wchar_buf, quoter, &need_escape);
 	    }
 	}
 
       /* This handles the NUM_CHARS == 0 case as well.  */
       if (print_escape)
-	print_wchar (gdb_WEOF, buf, buflen, TYPE_LENGTH (type),
+	print_wchar (gdb_WEOF, buf, buflen, type->length (),
 		     byte_order, &wchar_buf, quoter, &need_escape);
     }
 
@@ -2284,7 +2369,7 @@ print_converted_chars_to_obstack (struct obstack *obstack,
   const converted_character *elem;
   enum {START, SINGLE, REPEAT, INCOMPLETE, FINISH} state, last;
   gdb_wchar_t wide_quote_char = gdb_btowc (quote_char);
-  int need_escape = 0;
+  bool need_escape = false;
 
   /* Set the start state.  */
   idx = 0;
@@ -2423,9 +2508,9 @@ print_converted_chars_to_obstack (struct obstack *obstack,
 /* Print the character string STRING, printing at most LENGTH
    characters.  LENGTH is -1 if the string is nul terminated.  TYPE is
    the type of each character.  OPTIONS holds the printing options;
-   printing stops early if the number hits print_max; repeat counts
-   are printed as appropriate.  Print ellipses at the end if we had to
-   stop before printing LENGTH characters, or if FORCE_ELLIPSES.
+   printing stops early if the number hits print_max_chars; repeat
+   counts are printed as appropriate.  Print ellipses at the end if we
+   had to stop before printing LENGTH characters, or if FORCE_ELLIPSES.
    QUOTE_CHAR is the character to print at each end of the string.  If
    C_STYLE_TERMINATOR is true, and the last character is 0, then it is
    omitted.  */
@@ -2439,7 +2524,7 @@ generic_printstr (struct ui_file *stream, struct type *type,
 {
   enum bfd_endian byte_order = type_byte_order (type);
   unsigned int i;
-  int width = TYPE_LENGTH (type);
+  int width = type->length ();
   int finished = 0;
   struct converted_character *last;
 
@@ -2468,7 +2553,7 @@ generic_printstr (struct ui_file *stream, struct type *type,
 
   if (length == 0)
     {
-      gdb_puts ("\"\"", stream);
+      gdb_printf (stream, "%c%c", quote_char, quote_char);
       return;
     }
 
@@ -2479,7 +2564,8 @@ generic_printstr (struct ui_file *stream, struct type *type,
   /* Convert characters until the string is over or the maximum
      number of printed characters has been reached.  */
   i = 0;
-  while (i < options->print_max)
+  unsigned int print_max_chars = get_print_max_chars (options);
+  while (i < print_max_chars)
     {
       int r;
 
@@ -2531,7 +2617,7 @@ generic_printstr (struct ui_file *stream, struct type *type,
 /* Print a string from the inferior, starting at ADDR and printing up to LEN
    characters, of WIDTH bytes a piece, to STREAM.  If LEN is -1, printing
    stops at the first null byte, otherwise printing proceeds (including null
-   bytes) until either print_max or LEN characters have been printed,
+   bytes) until either print_max_chars or LEN characters have been printed,
    whichever is smaller.  ENCODING is the name of the string's
    encoding.  It can be NULL, in which case the target encoding is
    assumed.  */
@@ -2550,18 +2636,20 @@ val_print_string (struct type *elttype, const char *encoding,
   gdb::unique_xmalloc_ptr<gdb_byte> buffer;	/* Dynamically growable fetch buffer.  */
   struct gdbarch *gdbarch = elttype->arch ();
   enum bfd_endian byte_order = type_byte_order (elttype);
-  int width = TYPE_LENGTH (elttype);
+  int width = elttype->length ();
 
   /* First we need to figure out the limit on the number of characters we are
-     going to attempt to fetch and print.  This is actually pretty simple.  If
-     LEN >= zero, then the limit is the minimum of LEN and print_max.  If
-     LEN is -1, then the limit is print_max.  This is true regardless of
-     whether print_max is zero, UINT_MAX (unlimited), or something in between,
-     because finding the null byte (or available memory) is what actually
-     limits the fetch.  */
+     going to attempt to fetch and print.  This is actually pretty simple.
+     If LEN >= zero, then the limit is the minimum of LEN and print_max_chars.
+     If LEN is -1, then the limit is print_max_chars.  This is true regardless
+     of whether print_max_chars is zero, UINT_MAX (unlimited), or something in
+     between, because finding the null byte (or available memory) is what
+     actually limits the fetch.  */
 
-  fetchlimit = (len == -1 ? options->print_max : std::min ((unsigned) len,
-							   options->print_max));
+  unsigned int print_max_chars = get_print_max_chars (options);
+  fetchlimit = (len == -1
+		? print_max_chars
+		: std::min ((unsigned) len, print_max_chars));
 
   err = target_read_string (addr, len, width, fetchlimit,
 			    &buffer, &bytes_read);
@@ -2803,8 +2891,17 @@ using boolean_option_def
   = gdb::option::boolean_option_def<value_print_options>;
 using uinteger_option_def
   = gdb::option::uinteger_option_def<value_print_options>;
-using zuinteger_unlimited_option_def
-  = gdb::option::zuinteger_unlimited_option_def<value_print_options>;
+using pinteger_option_def
+  = gdb::option::pinteger_option_def<value_print_options>;
+
+/* Extra literals supported with the `set print characters' and
+   `print -characters' commands.  */
+static const literal_def print_characters_literals[] =
+  {
+    { "elements", PRINT_MAX_CHARS_ELEMENTS },
+    { "unlimited", PRINT_MAX_CHARS_UNLIMITED, 0 },
+    { nullptr }
+  };
 
 /* Definitions of options for the "print" and "compile print"
    commands.  */
@@ -2837,18 +2934,42 @@ static const gdb::option::option_def value_print_option_defs[] = {
     NULL, /* help_doc */
   },
 
+  boolean_option_def {
+    "nibbles",
+    [] (value_print_options *opt) { return &opt->nibblesprint; },
+    show_nibbles, /* show_cmd_cb */
+    N_("Set whether to print binary values in groups of four bits."),
+    N_("Show whether to print binary values in groups of four bits."),
+    NULL, /* help_doc */
+  },
+
+  uinteger_option_def {
+    "characters",
+    [] (value_print_options *opt) { return &opt->print_max_chars; },
+    print_characters_literals,
+    show_print_max_chars, /* show_cmd_cb */
+    N_("Set limit on string chars to print."),
+    N_("Show limit on string chars to print."),
+    N_("\"elements\" causes the array element limit to be used.\n"
+       "\"unlimited\" causes there to be no limit."),
+  },
+
   uinteger_option_def {
     "elements",
     [] (value_print_options *opt) { return &opt->print_max; },
+    uinteger_unlimited_literals,
     show_print_max, /* show_cmd_cb */
-    N_("Set limit on string chars or array elements to print."),
-    N_("Show limit on string chars or array elements to print."),
-    N_("\"unlimited\" causes there to be no limit."),
+    N_("Set limit on array elements to print."),
+    N_("Show limit on array elements to print."),
+    N_("\"unlimited\" causes there to be no limit.\n"
+       "This setting also applies to string chars when \"print characters\"\n"
+       "is set to \"elements\"."),
   },
 
-  zuinteger_unlimited_option_def {
+  pinteger_option_def {
     "max-depth",
     [] (value_print_options *opt) { return &opt->max_depth; },
+    pinteger_unlimited_literals,
     show_print_max_depth, /* show_cmd_cb */
     N_("Set maximum print depth for nested structures, unions and arrays."),
     N_("Show maximum print depth for nested structures, unions, and arrays."),
@@ -2908,6 +3029,7 @@ pretty-printers for that value.")
   uinteger_option_def {
     "repeats",
     [] (value_print_options *opt) { return &opt->repeat_count_threshold; },
+    uinteger_unlimited_literals,
     show_repeat_count_threshold, /* show_cmd_cb */
     N_("Set threshold for repeated print elements."),
     N_("Show threshold for repeated print elements."),
@@ -2975,8 +3097,8 @@ test_print_flags (gdbarch *arch)
   append_flags_type_field (flags_type, 3, 2, field_type, "B");
   append_flags_type_field (flags_type, 5, 3, field_type, "C");
 
-  value *val = allocate_value (flags_type);
-  gdb_byte *contents = value_contents_writeable (val).data ();
+  value *val = value::allocate (flags_type);
+  gdb_byte *contents = val->contents_writeable ().data ();
   store_unsigned_integer (contents, 4, gdbarch_byte_order (arch), 0xaa);
 
   string_file out;

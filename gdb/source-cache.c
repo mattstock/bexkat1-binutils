@@ -1,5 +1,5 @@
 /* Cache of styled source file text
-   Copyright (C) 2018-2022 Free Software Foundation, Inc.
+   Copyright (C) 2018-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -95,7 +95,7 @@ source_cache::get_plain_source_lines (struct symtab *s,
 {
   scoped_fd desc (open_source_file (s));
   if (desc.get () < 0)
-    perror_with_name (symtab_to_filename_for_display (s));
+    perror_with_name (symtab_to_filename_for_display (s), -desc.get ());
 
   struct stat st;
   if (fstat (desc.get (), &st) < 0)

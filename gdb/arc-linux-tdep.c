@@ -1,6 +1,6 @@
 /* Target dependent code for GNU/Linux ARC.
 
-   Copyright 2020-2022 Free Software Foundation, Inc.
+   Copyright 2020-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -159,7 +159,7 @@ static const int arc_linux_core_reg_offsets[] = {
    Returns TRUE if this is a sigtramp frame.  */
 
 static bool
-arc_linux_is_sigtramp (struct frame_info *this_frame)
+arc_linux_is_sigtramp (frame_info_ptr this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -257,7 +257,7 @@ arc_linux_is_sigtramp (struct frame_info *this_frame)
    etc) in GDB hardcode values.  */
 
 static CORE_ADDR
-arc_linux_sigcontext_addr (struct frame_info *this_frame)
+arc_linux_sigcontext_addr (frame_info_ptr this_frame)
 {
   const int ucontext_offset = 0x80;
   const int sigcontext_offset = 0x14;
@@ -356,7 +356,7 @@ arc_linux_sw_breakpoint_from_kind (struct gdbarch *gdbarch,
    */
 
 static std::vector<CORE_ADDR>
-handle_atomic_sequence (arc_instruction insn, disassemble_info &di)
+handle_atomic_sequence (arc_instruction insn, disassemble_info *di)
 {
   const int atomic_seq_len = 24;    /* Instruction sequence length.  */
   std::vector<CORE_ADDR> next_pcs;
@@ -374,7 +374,7 @@ handle_atomic_sequence (arc_instruction insn, disassemble_info &di)
   for (int insn_count = 0; insn_count < atomic_seq_len; ++insn_count)
     {
       arc_insn_decode (arc_insn_get_linear_next_pc (insn),
-		       &di, arc_delayed_print_insn, &insn);
+		       di, arc_delayed_print_insn, &insn);
 
       if (insn.insn_class == BRCC)
         {
@@ -411,16 +411,16 @@ static std::vector<CORE_ADDR>
 arc_linux_software_single_step (struct regcache *regcache)
 {
   struct gdbarch *gdbarch = regcache->arch ();
-  arc_gdbarch_tdep *tdep = (arc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
-  struct disassemble_info di = arc_disassemble_info (gdbarch);
+  arc_gdbarch_tdep *tdep = gdbarch_tdep<arc_gdbarch_tdep> (gdbarch);
+  struct gdb_non_printing_memory_disassembler dis (gdbarch);
 
   /* Read current instruction.  */
   struct arc_instruction curr_insn;
-  arc_insn_decode (regcache_read_pc (regcache), &di, arc_delayed_print_insn,
-		   &curr_insn);
+  arc_insn_decode (regcache_read_pc (regcache), dis.disasm_info (),
+		   arc_delayed_print_insn, &curr_insn);
 
   if (curr_insn.insn_class == LLOCK)
-    return handle_atomic_sequence (curr_insn, di);
+    return handle_atomic_sequence (curr_insn, dis.disasm_info ());
 
   CORE_ADDR next_pc = arc_insn_get_linear_next_pc (curr_insn);
   std::vector<CORE_ADDR> next_pcs;
@@ -431,7 +431,8 @@ arc_linux_software_single_step (struct regcache *regcache)
   if (curr_insn.has_delay_slot)
     {
       struct arc_instruction next_insn;
-      arc_insn_decode (next_pc, &di, arc_delayed_print_insn, &next_insn);
+      arc_insn_decode (next_pc, dis.disasm_info (), arc_delayed_print_insn,
+		       &next_insn);
       next_pcs.push_back (arc_insn_get_linear_next_pc (next_insn));
     }
   else
@@ -693,7 +694,7 @@ arc_linux_core_read_description (struct gdbarch *gdbarch,
 static void
 arc_linux_init_osabi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
-  arc_gdbarch_tdep *tdep = (arc_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  arc_gdbarch_tdep *tdep = gdbarch_tdep<arc_gdbarch_tdep> (gdbarch);
 
   arc_linux_debug_printf ("GNU/Linux OS/ABI initialization.");
 

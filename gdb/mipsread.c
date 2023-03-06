@@ -1,6 +1,6 @@
 /* Read a symbol table in MIPS' format (Third-Eye).
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    Contributed by Alessandro Forin (af@cs.cmu.edu) at CMU.  Major work
    by Per Bothner, John Gilmore and Ian Lance Taylor at Cygnus Support.
@@ -67,7 +67,7 @@ mipscoff_symfile_init (struct objfile *objfile)
 static void
 mipscoff_symfile_read (struct objfile *objfile, symfile_add_flags symfile_flags)
 {
-  bfd *abfd = objfile->obfd;
+  bfd *abfd = objfile->obfd.get ();
 
   minimal_symbol_reader reader (objfile);
 
@@ -175,7 +175,7 @@ static void
 read_alphacoff_dynamic_symtab (minimal_symbol_reader &reader,
 			       struct objfile *objfile)
 {
-  bfd *abfd = objfile->obfd;
+  bfd *abfd = objfile->obfd.get ();
   struct alphacoff_dynsecinfo si;
   int sym_count;
   int i;

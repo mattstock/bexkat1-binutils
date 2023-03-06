@@ -1,5 +1,5 @@
 /* Plugin control for the GNU linker.
-   Copyright (C) 2010-2022 Free Software Foundation, Inc.
+   Copyright (C) 2010-2023 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -51,7 +51,9 @@
 #if !(defined(errno) || defined(_MSC_VER) && defined(_INC_ERRNO))
 extern int errno;
 #endif
-#if !defined (HAVE_DLFCN_H) && defined (HAVE_WINDOWS_H)
+#if defined (HAVE_DLFCN_H)
+#include <dlfcn.h>
+#elif defined (HAVE_WINDOWS_H)
 #include <windows.h>
 #endif
 
@@ -863,8 +865,11 @@ get_symbols (const void *handle, int nsyms, struct ld_plugin_symbol *syms,
 	  /* We need to know if the sym is referenced from non-IR files.  Or
 	     even potentially-referenced, perhaps in a future final link if
 	     this is a partial one, perhaps dynamically at load-time if the
-	     symbol is externally visible.  Also check for wrapper symbol.  */
-	  if (blhe->non_ir_ref_regular || wrap_status == wrapper)
+	     symbol is externally visible.  Also check for __real_SYM
+	     reference and wrapper symbol.  */
+	  if (blhe->non_ir_ref_regular
+	      || blhe->ref_real
+	      || wrap_status == wrapper)
 	    res = LDPR_PREVAILING_DEF;
 	  else if (wrap_status == wrapped)
 	    res = LDPR_RESOLVED_IR;

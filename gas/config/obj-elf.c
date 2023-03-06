@@ -1,5 +1,5 @@
 /* ELF object file format
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -188,24 +188,7 @@ static const pseudo_typeS ecoff_debug_pseudo_table[] =
 #undef NO_RELOC
 #include "aout/aout64.h"
 
-/* This is called when the assembler starts.  */
-
 asection *elf_com_section_ptr;
-
-void
-elf_begin (void)
-{
-  asection *s;
-
-  /* Add symbols for the known sections to the symbol table.  */
-  s = bfd_get_section_by_name (stdoutput, TEXT_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  s = bfd_get_section_by_name (stdoutput, DATA_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  s = bfd_get_section_by_name (stdoutput, BSS_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  elf_com_section_ptr = bfd_com_section_ptr;
-}
 
 void
 elf_pop_insert (void)
@@ -1055,27 +1038,31 @@ obj_elf_section_name (void)
 	  return NULL;
 	}
 
-      name = xmemdup0 (input_line_pointer, end - input_line_pointer);
+      obstack_grow0 (&notes, input_line_pointer, end - input_line_pointer);
+      name = obstack_base (&notes);
 
       while (flag_sectname_subst)
         {
 	  char *subst = strchr (name, '%');
 	  if (subst && subst[1] == 'S')
 	    {
-	      int oldlen = strlen (name);
-	      int substlen = strlen (now_seg->name);
-	      int newlen = oldlen - 2 + substlen;
-	      char *newname = XNEWVEC (char, newlen + 1);
-	      int headlen = subst - name;
-	      memcpy (newname, name, headlen);
-	      strcpy (newname + headlen, now_seg->name);
-	      strcat (newname + headlen, subst + 2);
-	      xfree (name);
-	      name = newname;
+	      size_t head = subst - name;
+	      size_t tail = strlen (subst + 2) + 1;
+	      size_t slen = strlen (now_seg->name);
+
+	      if (slen > 2)
+		{
+		  obstack_blank (&notes, slen - 2);
+		  name = obstack_base (&notes);
+		}
+	      memmove (name + head + slen, name + head + 2, tail);
+	      memcpy (name + head, now_seg->name, slen);
 	    }
 	  else
 	    break;
 	}
+
+      obstack_finish (&notes);
 
 #ifdef tc_canonicalize_section_name
       name = tc_canonicalize_section_name (name);
@@ -1104,7 +1091,7 @@ obj_elf_attach_to_group (int dummy ATTRIBUTE_UNUSED)
       return;
     }
 
-  elf_group_name (now_seg) = xstrdup (gname);
+  elf_group_name (now_seg) = gname;
   elf_section_flags (now_seg) |= SHF_GROUP;
 }
 
@@ -1315,7 +1302,7 @@ obj_elf_section (int push)
 	      const char *now_group = elf_group_name (now_seg);
 	      if (now_group != NULL)
 		{
-		  match.group_name = xstrdup (now_group);
+		  match.group_name = now_group;
 		  linkonce = (now_seg->flags & SEC_LINK_ONCE) != 0;
 		}
 	    }
@@ -2019,7 +2006,7 @@ obj_elf_vendor_attribute (int vendor)
       if (i == 0)
 	goto bad;
 
-      name = xstrndup (s, i);
+      name = xmemdup0 (s, i);
 
 #ifndef CONVERT_SYMBOLIC_ATTRIBUTE
 #define CONVERT_SYMBOLIC_ATTRIBUTE(a) -1
@@ -2458,10 +2445,11 @@ obj_elf_type (int ignore ATTRIBUTE_UNUSED)
   demand_empty_rest_of_line ();
 }
 
+static segT comment_section;
+
 static void
 obj_elf_ident (int ignore ATTRIBUTE_UNUSED)
 {
-  static segT comment_section;
   segT old_section = now_seg;
   int old_subsection = now_subseg;
 
@@ -2495,7 +2483,7 @@ obj_elf_ident (int ignore ATTRIBUTE_UNUSED)
 void
 obj_elf_init_stab_section (segT seg)
 {
-  const char *file;
+  char *file;
   char *p;
   char *stabstr_name;
   unsigned int stroff;
@@ -2514,7 +2502,7 @@ obj_elf_init_stab_section (segT seg)
   know (stroff == 1 || (stroff == 0 && file[0] == '\0'));
   md_number_to_chars (p, stroff, 4);
   seg_info (seg)->stabu.p = p;
-  xfree ((char *) file);
+  free (file);
 }
 
 #endif
@@ -2809,12 +2797,11 @@ build_additional_section_info (bfd *abfd ATTRIBUTE_UNUSED,
   str_hash_insert (list->indexes, group_name, idx_ptr, 0);
 }
 
-static int
-free_section_idx (void **slot, void *arg ATTRIBUTE_UNUSED)
+static void
+free_section_idx (void *ent)
 {
-  string_tuple_t *tuple = *((string_tuple_t **) slot);
-  free ((char *)tuple->value);
-  return 1;
+  string_tuple_t *tuple = ent;
+  free ((char *) tuple->value);
 }
 
 /* Create symbols for group signature.  */
@@ -2827,7 +2814,8 @@ elf_adjust_symtab (void)
   /* Go find section groups.  */
   groups.num_group = 0;
   groups.head = NULL;
-  groups.indexes = str_htab_create ();
+  groups.indexes = htab_create_alloc (16, hash_string_tuple, eq_string_tuple,
+				      free_section_idx, notes_calloc, NULL);
   bfd_map_over_sections (stdoutput, build_additional_section_info,
 			 &groups);
 
@@ -3001,10 +2989,6 @@ elf_frob_file_after_relocs (void)
       frag_wane (frag_now);
     }
 
-  /* Cleanup hash.  */
-  htab_traverse (groups.indexes, free_section_idx, NULL);
-  htab_delete (groups.indexes);
-
 #ifdef NEED_ECOFF_DEBUG
   if (ECOFF_DEBUGGING)
     /* Generate the ECOFF debugging information.  */
@@ -3117,12 +3101,56 @@ elf_init_stab_section (segT seg)
     obj_elf_init_stab_section (seg);
 }
 
+/* This is called when the assembler starts.  */
+
+void
+elf_begin (void)
+{
+  asection *s;
+
+  /* Add symbols for the known sections to the symbol table.  */
+  s = bfd_get_section_by_name (stdoutput, TEXT_SECTION_NAME);
+  symbol_table_insert (section_symbol (s));
+  s = bfd_get_section_by_name (stdoutput, DATA_SECTION_NAME);
+  symbol_table_insert (section_symbol (s));
+  s = bfd_get_section_by_name (stdoutput, BSS_SECTION_NAME);
+  symbol_table_insert (section_symbol (s));
+  elf_com_section_ptr = bfd_com_section_ptr;
+  previous_section = NULL;
+  previous_subsection = 0;
+  comment_section = NULL;
+  memset (&groups, 0, sizeof (groups));
+}
+
+void
+elf_end (void)
+{
+  while (section_stack)
+    {
+      struct section_stack *top = section_stack;
+      section_stack = top->next;
+      free (top);
+    }
+  while (recorded_attributes)
+    {
+      struct recorded_attribute_info *rai = recorded_attributes;
+      recorded_attributes = rai->next;
+      free (rai);
+    }
+  if (groups.indexes)
+    {
+      htab_delete (groups.indexes);
+      free (groups.head);
+    }
+}
+
 const struct format_ops elf_format_ops =
 {
   bfd_target_elf_flavour,
   0,	/* dfl_leading_underscore */
   1,	/* emit_section_symbols */
   elf_begin,
+  elf_end,
   elf_file_symbol,
   elf_frob_symbol,
   elf_frob_file,

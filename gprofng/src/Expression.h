@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -166,9 +166,7 @@ private:
 
   bool getVal (int propId, Context *ctx);
   bool bEval (Context *ctx);
-
   bool hasLoadObject ();
-  void fixupValues ();
 
   OpCode op;
   Value v;

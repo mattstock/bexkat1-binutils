@@ -1,6 +1,6 @@
 /* Target-dependent code for Moxie
  
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -22,7 +22,7 @@
 
 #include "gdbarch.h"
 
-struct moxie_gdbarch_tdep : gdbarch_tdep
+struct moxie_gdbarch_tdep : gdbarch_tdep_base
 {
   /* gdbarch target dependent data here.  Currently unused for MOXIE.  */
 };

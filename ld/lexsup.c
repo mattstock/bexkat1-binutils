@@ -1,5 +1,5 @@
 /* Parse options for the GNU linker.
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -381,6 +381,9 @@ static const struct ld_option ld_options[] =
   { {"no-undefined", no_argument, NULL, OPTION_NO_UNDEFINED},
     '\0', NULL, N_("Do not allow unresolved references in object files"),
     TWO_DASHES },
+  { {"no-warnings", no_argument, NULL, OPTION_NO_WARNINGS},
+    'w', NULL, N_("Do not display any warning or error messages"),
+    TWO_DASHES },
   { {"allow-shlib-undefined", no_argument, NULL, OPTION_ALLOW_SHLIB_UNDEFINED},
     '\0', NULL, N_("Allow unresolved references in shared libraries"),
     TWO_DASHES },
@@ -396,6 +399,8 @@ static const struct ld_option ld_options[] =
      OPTION_ERROR_HANDLING_SCRIPT},
     '\0', N_("SCRIPT"), N_("Provide a script to help with undefined symbol errors"), TWO_DASHES},
 #endif
+  { {"undefined-version", no_argument, NULL, OPTION_UNDEFINED_VERSION},
+    '\0', NULL, N_("Allow undefined version"), EXACTLY_TWO_DASHES },
   { {"no-undefined-version", no_argument, NULL, OPTION_NO_UNDEFINED_VERSION},
     '\0', NULL, N_("Disallow undefined version"), TWO_DASHES },
   { {"default-symver", no_argument, NULL, OPTION_DEFAULT_SYMVER},
@@ -536,6 +541,14 @@ static const struct ld_option ld_options[] =
   { {"warn-constructors", no_argument, NULL, OPTION_WARN_CONSTRUCTORS},
     '\0', NULL, N_("Warn if global constructors/destructors are seen"),
     TWO_DASHES },
+  { {"warn-execstack", no_argument, NULL, OPTION_WARN_EXECSTACK},
+    '\0', NULL, N_("Warn when creating an executable stack"), TWO_DASHES },
+  { {"no-warn-execstack", no_argument, NULL, OPTION_NO_WARN_EXECSTACK},
+    '\0', NULL, N_("Do not warn when creating an executable stack"), TWO_DASHES },
+  { {"warn-rwx-segments", no_argument, NULL, OPTION_WARN_RWX_SEGMENTS},
+    '\0', NULL, N_("Warn when creating executable segments"), TWO_DASHES },
+  { {"no-warn-rwx-segments", no_argument, NULL, OPTION_NO_WARN_RWX_SEGMENTS},
+    '\0', NULL, N_("Do not warn when creating executable segments"), TWO_DASHES },
   { {"warn-multiple-gp", no_argument, NULL, OPTION_WARN_MULTIPLE_GP},
     '\0', NULL, N_("Warn if the multiple GP values are used"), TWO_DASHES },
   { {"warn-once", no_argument, NULL, OPTION_WARN_ONCE},
@@ -915,6 +928,20 @@ parse_args (unsigned argc, char **argv)
 	case OPTION_NON_CONTIGUOUS_REGIONS_WARNINGS:
 	  link_info.non_contiguous_regions_warnings = true;
 	  break;
+	case OPTION_WARN_EXECSTACK:
+	  link_info.warn_execstack = 1;
+	  break;
+	case OPTION_NO_WARN_EXECSTACK:
+	  link_info.warn_execstack = 0;
+	  break;
+	case OPTION_WARN_RWX_SEGMENTS:
+	  link_info.no_warn_rwx_segments = 0;
+	  link_info.user_warn_rwx_segments = 1;
+	  break;
+	case OPTION_NO_WARN_RWX_SEGMENTS:
+	  link_info.no_warn_rwx_segments = 1;
+	  link_info.user_warn_rwx_segments = 1;
+	  break;
 	case 'e':
 	  lang_add_entry (optarg, true);
 	  break;
@@ -1068,6 +1095,9 @@ parse_args (unsigned argc, char **argv)
 	  break;
 #endif
 
+	case OPTION_UNDEFINED_VERSION:
+	  link_info.allow_undefined_version = true;
+	  break;
 	case OPTION_NO_UNDEFINED_VERSION:
 	  link_info.allow_undefined_version = false;
 	  break;
@@ -1527,6 +1557,11 @@ parse_args (unsigned argc, char **argv)
 	  config.fatal_warnings = true;
 	  break;
 	case OPTION_NO_WARN_FATAL:
+	  config.fatal_warnings = false;
+	  break;
+	case OPTION_NO_WARNINGS:
+	case 'w':
+	  config.no_warnings = true;
 	  config.fatal_warnings = false;
 	  break;
 	case OPTION_WARN_MULTIPLE_GP:
@@ -2124,15 +2159,13 @@ elf_static_list_options (FILE *file)
   fprintf (file, _("\
   --build-id[=STYLE]          Generate build ID note\n"));
   fprintf (file, _("\
-  --compress-debug-sections=[none|zlib|zlib-gnu|zlib-gabi]\n\
-                              Compress DWARF debug sections using zlib\n"));
-#ifdef DEFAULT_FLAG_COMPRESS_DEBUG
+  --package-metadata[=JSON]   Generate package metadata note\n"));
   fprintf (file, _("\
-                                Default: zlib-gabi\n"));
-#else
+  --compress-debug-sections=[none|zlib|zlib-gnu|zlib-gabi|zstd]\n\
+			      Compress DWARF debug sections\n"));
   fprintf (file, _("\
-                                Default: none\n"));
-#endif
+                                Default: %s\n"),
+	   bfd_get_compression_algorithm_name (config.compress_debug));
   fprintf (file, _("\
   -z common-page-size=SIZE    Set common page size to SIZE\n"));
   fprintf (file, _("\
@@ -2149,6 +2182,31 @@ elf_static_list_options (FILE *file)
   -z execstack                Mark executable as requiring executable stack\n"));
   fprintf (file, _("\
   -z noexecstack              Mark executable as not requiring executable stack\n"));
+#if DEFAULT_LD_WARN_EXECSTACK == 1
+  fprintf (file, _("\
+  --warn-execstack            Generate a warning if the stack is executable (default)\n"));
+#else
+  fprintf (file, _("\
+  --warn-execstack            Generate a warning if the stack is executable\n"));
+#endif
+#if DEFAULT_LD_WARN_EXECSTACK == 0
+  fprintf (file, _("\
+  --no-warn-execstack         Do not generate a warning if the stack is executable (default)\n"));
+#else
+  fprintf (file, _("\
+  --no-warn-execstack         Do not generate a warning if the stack is executable\n"));
+#endif
+#if DEFAULT_LD_WARN_RWX_SEGMENTS
+  fprintf (file, _("\
+  --warn-rwx-segments         Generate a warning if a LOAD segment has RWX permissions (default)\n"));
+  fprintf (file, _("\
+  --no-warn-rwx-segments      Do not generate a warning if a LOAD segments has RWX permissions\n"));
+#else
+  fprintf (file, _("\
+  --warn-rwx-segments         Generate a warning if a LOAD segment has RWX permissions\n"));
+  fprintf (file, _("\
+  --no-warn-rwx-segments      Do not generate a warning if a LOAD segments has RWX permissions (default)\n"));
+#endif
   fprintf (file, _("\
   -z unique-symbol            Avoid duplicated local symbol names\n"));
   fprintf (file, _("\

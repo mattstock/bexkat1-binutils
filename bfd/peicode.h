@@ -1,5 +1,5 @@
 /* Support for the generic parts of PE/PEI, for BFD.
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
    Written by Cygnus Solutions.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -191,6 +191,8 @@ coff_swap_filehdr_in (bfd * abfd, void * src, void * dst)
 
 #ifdef COFF_IMAGE_WITH_PE
 # define coff_swap_filehdr_out _bfd_XXi_only_swap_filehdr_out
+#elif defined COFF_WITH_peAArch64
+# define coff_swap_filehdr_out _bfd_XX_only_swap_filehdr_out
 #elif defined COFF_WITH_pex64
 # define coff_swap_filehdr_out _bfd_pex64_only_swap_filehdr_out
 #elif defined COFF_WITH_pep
@@ -231,7 +233,7 @@ coff_swap_scnhdr_in (bfd * abfd, void * ext, void * in)
     {
       scnhdr_int->s_vaddr += pe_data (abfd)->pe_opthdr.ImageBase;
       /* Do not cut upper 32-bits for 64-bit vma.  */
-#if !defined(COFF_WITH_pex64) && !defined(COFF_WITH_peAArch64)
+#if !defined(COFF_WITH_pex64) && !defined(COFF_WITH_peAArch64) && !defined(COFF_WITH_peLoongArch64)
       scnhdr_int->s_vaddr &= 0xffffffff;
 #endif
     }
@@ -290,6 +292,10 @@ pe_mkobject (bfd * abfd)
   pe->dos_message[15] = 0x0;
 
   memset (& pe->pe_opthdr, 0, sizeof pe->pe_opthdr);
+
+  bfd_coff_long_section_names (abfd)
+    = coff_backend_info (abfd)->_bfd_coff_long_section_names;
+
   return true;
 }
 
@@ -438,7 +444,7 @@ pe_bfd_copy_private_bfd_data (bfd *ibfd, bfd *obfd)
 #define SIZEOF_IDATA2		(5 * 4)
 
 /* For PEx64 idata4 & 5 have thumb size of 8 bytes.  */
-#ifdef COFF_WITH_pex64
+#if defined(COFF_WITH_pex64) || defined(COFF_WITH_peAArch64)
 #define SIZEOF_IDATA4		(2 * 4)
 #define SIZEOF_IDATA5		(2 * 4)
 #else
@@ -520,7 +526,6 @@ pe_ILF_save_relocs (pe_ILF_vars * vars,
     abort ();
 
   coff_section_data (vars->abfd, sec)->relocs = vars->int_reltab;
-  coff_section_data (vars->abfd, sec)->keep_relocs = true;
 
   sec->relocation  = vars->reltab;
   sec->reloc_count = vars->relcount;
@@ -588,7 +593,7 @@ pe_ILF_make_a_symbol (pe_ILF_vars *  vars,
   /* Initialise the internal symbol structure.  */
   ent->u.syment.n_sclass	  = sclass;
   ent->u.syment.n_scnum		  = section->target_index;
-  ent->u.syment._n._n_n._n_offset = (bfd_hostptr_t) sym;
+  ent->u.syment._n._n_n._n_offset = (uintptr_t) sym;
   ent->is_sym = true;
 
   sym->symbol.the_bfd = vars->abfd;
@@ -763,6 +768,17 @@ static const jump_table jtab[] =
     16, 12
   },
 #endif
+
+#ifdef LOONGARCH64MAGIC
+/* We don't currently support jumping to DLLs, so if
+   someone does try emit a runtime trap.  Through BREAK 0.  */
+  { LOONGARCH64MAGIC,
+    { 0x00, 0x00, 0x2a, 0x00 },
+    4, 0
+  },
+
+#endif
+
   { 0, { 0 }, 0, 0 }
 };
 
@@ -920,7 +936,7 @@ pe_ILF_build_a_bfd (bfd *	    abfd,
 	/* See PR 20907 for a reproducer.  */
 	goto error_return;
 
-#if defined(COFF_WITH_pex64) || defined(COFF_WITH_peAArch64)
+#if defined(COFF_WITH_pex64) || defined(COFF_WITH_peAArch64) || defined(COFF_WITH_peLoongArch64)
       ((unsigned int *) id4->contents)[0] = ordinal;
       ((unsigned int *) id4->contents)[1] = 0x80000000;
       ((unsigned int *) id5->contents)[0] = ordinal;
@@ -1073,7 +1089,7 @@ pe_ILF_build_a_bfd (bfd *	    abfd,
   if (bfd_coff_mkobject_hook (abfd, (void *) & internal_f, NULL) == NULL)
     goto error_return;
 
-  coff_data (abfd)->pe = 1;
+  obj_pe (abfd) = true;
 #ifdef THUMBPEMAGIC
   if (vars.magic == THUMBPEMAGIC)
     /* Stop some linker warnings about thumb code not supporting interworking.  */
@@ -1088,6 +1104,7 @@ pe_ILF_build_a_bfd (bfd *	    abfd,
   abfd->iovec = &_bfd_memory_iovec;
   abfd->where = 0;
   abfd->origin = 0;
+  abfd->size = 0;
   obj_sym_filepos (abfd) = 0;
 
   /* Now create a symbol describing the imported value.  */
@@ -1219,6 +1236,12 @@ pe_ILF_object_p (bfd * abfd)
     case IMAGE_FILE_MACHINE_ARM64:
 #ifdef AARCH64MAGIC
       magic = AARCH64MAGIC;
+#endif
+      break;
+
+    case IMAGE_FILE_MACHINE_LOONGARCH64:
+#ifdef LOONGARCH64MAGIC
+      magic = LOONGARCH64MAGIC;
 #endif
       break;
 
@@ -1383,7 +1406,7 @@ pe_bfd_read_buildid (bfd *abfd)
 	  */
 	  if (_bfd_XXi_slurp_codeview_record (abfd,
 					      (file_ptr) idd.PointerToRawData,
-					      idd.SizeOfData, cvinfo))
+					      idd.SizeOfData, cvinfo, NULL))
 	    {
 	      struct bfd_build_id* build_id = bfd_alloc (abfd,
 			 sizeof (struct bfd_build_id) + cvinfo->SignatureLength);
@@ -1502,18 +1525,52 @@ pe_bfd_object_p (bfd * abfd)
       if (amt > opt_hdr_size)
 	memset (opthdr + opt_hdr_size, 0, amt - opt_hdr_size);
 
-      bfd_set_error (bfd_error_no_error);
-      bfd_coff_swap_aouthdr_in (abfd, opthdr, & internal_a);
-      if (bfd_get_error () != bfd_error_no_error)
-	return NULL;
-    }
+      bfd_coff_swap_aouthdr_in (abfd, opthdr, &internal_a);
 
+      struct internal_extra_pe_aouthdr *a = &internal_a.pe;
+
+#ifdef ARM
+      /* Use Subsystem to distinguish between pei-arm-little and
+	 pei-arm-wince-little.  */
+#ifdef WINCE
+      if (a->Subsystem != IMAGE_SUBSYSTEM_WINDOWS_CE_GUI)
+#else
+      if (a->Subsystem == IMAGE_SUBSYSTEM_WINDOWS_CE_GUI)
+#endif
+	{
+	  bfd_set_error (bfd_error_wrong_format);
+	  return NULL;
+	}
+#endif
+
+      if ((a->SectionAlignment & -a->SectionAlignment) != a->SectionAlignment
+	  || a->SectionAlignment >= 0x80000000)
+	{
+	  _bfd_error_handler (_("%pB: adjusting invalid SectionAlignment"),
+				abfd);
+	  a->SectionAlignment &= -a->SectionAlignment;
+	  if (a->SectionAlignment >= 0x80000000)
+	    a->SectionAlignment = 0x40000000;
+	}
+
+      if ((a->FileAlignment & -a->FileAlignment) != a->FileAlignment
+	  || a->FileAlignment > a->SectionAlignment)
+	{
+	  _bfd_error_handler (_("%pB: adjusting invalid FileAlignment"),
+			      abfd);
+	  a->FileAlignment &= -a->FileAlignment;
+	  if (a->FileAlignment > a->SectionAlignment)
+	    a->FileAlignment = a->SectionAlignment;
+	}
+
+      if (a->NumberOfRvaAndSizes > IMAGE_NUMBEROF_DIRECTORY_ENTRIES)
+	_bfd_error_handler (_("%pB: invalid NumberOfRvaAndSizes"), abfd);
+    }
 
   result = coff_real_object_p (abfd, internal_f.f_nscns, &internal_f,
 			       (opt_hdr_size != 0
 				? &internal_a
 				: (struct internal_aouthdr *) NULL));
-
 
   if (result)
     {

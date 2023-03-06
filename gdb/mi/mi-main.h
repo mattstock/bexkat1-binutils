@@ -1,6 +1,6 @@
 /* MI Internal Functions for GDB, the GNU debugger.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -70,5 +70,10 @@ extern void mi_execute_cli_command (const char *cmd, bool args_p,
 
 extern void mi_cmd_fix_multi_location_breakpoint_output (const char *command,
 							 char **argv, int argc);
+
+/* Implementation of -fix-breakpoint-script-output.  */
+
+extern void mi_cmd_fix_breakpoint_script_output (const char *command,
+						 char **argv, int argc);
 
 #endif /* MI_MI_MAIN_H */

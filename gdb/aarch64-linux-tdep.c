@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux AArch64.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GDB.
@@ -33,6 +33,7 @@
 #include "target.h"
 #include "target/target.h"
 #include "expop.h"
+#include "auxv.h"
 
 #include "regcache.h"
 #include "regset.h"
@@ -52,6 +53,9 @@
 #include "value.h"
 
 #include "gdbsupport/selftest.h"
+
+#include "elf/common.h"
+#include "elf/aarch64.h"
 
 /* Signal frame handling.
 
@@ -280,13 +284,13 @@ aarch64_linux_restore_vreg (struct trad_frame_cache *cache, int num_regs,
 
 static void
 aarch64_linux_sigframe_init (const struct tramp_frame *self,
-			     struct frame_info *this_frame,
+			     frame_info_ptr this_frame,
 			     struct trad_frame_cache *this_cache,
 			     CORE_ADDR func)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
   CORE_ADDR sp = get_frame_register_unsigned (this_frame, AARCH64_SP_REGNUM);
   CORE_ADDR sigcontext_addr = (sp + AARCH64_RT_SIGFRAME_UCONTEXT_OFFSET
 			       + AARCH64_UCONTEXT_SIGCONTEXT_OFFSET );
@@ -640,7 +644,7 @@ aarch64_linux_collect_sve_regset (const struct regset *regset,
   gdb_byte *header = (gdb_byte *) buf;
   struct gdbarch *gdbarch = regcache->arch ();
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
   uint64_t vq = tdep->vq;
 
   gdb_assert (buf != NULL);
@@ -676,7 +680,7 @@ aarch64_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
 					    void *cb_data,
 					    const struct regcache *regcache)
 {
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   cb (".reg", AARCH64_LINUX_SIZEOF_GREGSET, AARCH64_LINUX_SIZEOF_GREGSET,
       &aarch64_linux_gregset, NULL, cb_data);
@@ -749,6 +753,32 @@ aarch64_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
 	  AARCH64_LINUX_SIZEOF_MTE_REGSET, &aarch64_linux_mte_regset,
 	  "MTE registers", cb_data);
     }
+
+  /* Handle the TLS registers.  */
+  if (tdep->has_tls ())
+    {
+      gdb_assert (tdep->tls_regnum_base != -1);
+      gdb_assert (tdep->tls_register_count > 0);
+
+      int sizeof_tls_regset
+	= AARCH64_TLS_REGISTER_SIZE * tdep->tls_register_count;
+
+      const struct regcache_map_entry tls_regmap[] =
+	{
+	  { tdep->tls_register_count, tdep->tls_regnum_base,
+	    AARCH64_TLS_REGISTER_SIZE },
+	  { 0 }
+	};
+
+      const struct regset aarch64_linux_tls_regset =
+	{
+	  tls_regmap, regcache_supply_regset, regcache_collect_regset,
+	  REGSET_VARIABLE_SIZE
+	};
+
+      cb (".reg-aarch-tls", sizeof_tls_regset, sizeof_tls_regset,
+	  &aarch64_linux_tls_regset, "TLS register", cb_data);
+    }
 }
 
 /* Implement the "core_read_description" gdbarch method.  */
@@ -757,13 +787,26 @@ static const struct target_desc *
 aarch64_linux_core_read_description (struct gdbarch *gdbarch,
 				     struct target_ops *target, bfd *abfd)
 {
-  CORE_ADDR hwcap = linux_get_hwcap (target);
-  CORE_ADDR hwcap2 = linux_get_hwcap2 (target);
+  gdb::optional<gdb::byte_vector> auxv = target_read_auxv_raw (target);
+  CORE_ADDR hwcap = linux_get_hwcap (auxv, target, gdbarch);
+  CORE_ADDR hwcap2 = linux_get_hwcap2 (auxv, target, gdbarch);
 
-  bool pauth_p = hwcap & AARCH64_HWCAP_PACA;
-  bool mte_p = hwcap2 & HWCAP2_MTE;
-  return aarch64_read_description (aarch64_linux_core_read_vq (gdbarch, abfd),
-				   pauth_p, mte_p);
+  aarch64_features features;
+  features.vq = aarch64_linux_core_read_vq (gdbarch, abfd);
+  features.pauth = hwcap & AARCH64_HWCAP_PACA;
+  features.mte = hwcap2 & HWCAP2_MTE;
+
+  /* Handle the TLS section.  */
+  asection *tls = bfd_get_section_by_name (abfd, ".reg-aarch-tls");
+  if (tls != nullptr)
+    {
+      size_t size = bfd_section_size (tls);
+      /* Convert the size to the number of actual registers, by
+	 dividing by 8.  */
+      features.tls = size / AARCH64_TLS_REGISTER_SIZE;
+    }
+
+  return aarch64_read_description (features);
 }
 
 /* Implementation of `gdbarch_stap_is_single_operand', as defined in
@@ -1137,6 +1180,7 @@ enum aarch64_syscall {
   aarch64_sys_finit_module = 273,
   aarch64_sys_sched_setattr = 274,
   aarch64_sys_sched_getattr = 275,
+  aarch64_sys_getrandom = 278
 };
 
 /* aarch64_canonicalize_syscall maps syscall ids from the native AArch64
@@ -1419,6 +1463,7 @@ aarch64_canonicalize_syscall (enum aarch64_syscall syscall_number)
       UNSUPPORTED_SYSCALL_MAP (finit_module);
       UNSUPPORTED_SYSCALL_MAP (sched_setattr);
       UNSUPPORTED_SYSCALL_MAP (sched_getattr);
+      SYSCALL_MAP (getrandom);
   default:
     return gdb_sys_no_syscall;
   }
@@ -1564,7 +1609,7 @@ aarch64_linux_tagged_address_p (struct gdbarch *gdbarch, struct value *address)
   CORE_ADDR addr = value_as_address (address);
 
   /* Remove the top byte for the memory range check.  */
-  addr = address_significant (gdbarch, addr);
+  addr = gdbarch_remove_non_address_bits (gdbarch, addr);
 
   /* Check if the page that contains ADDRESS is mapped with PROT_MTE.  */
   if (!linux_address_in_memtag_page (addr))
@@ -1590,7 +1635,7 @@ aarch64_linux_memtag_matches_p (struct gdbarch *gdbarch,
 
   /* Fetch the allocation tag for ADDRESS.  */
   gdb::optional<CORE_ADDR> atag
-    = aarch64_mte_get_atag (address_significant (gdbarch, addr));
+    = aarch64_mte_get_atag (gdbarch_remove_non_address_bits (gdbarch, addr));
 
   if (!atag.has_value ())
     return true;
@@ -1623,13 +1668,13 @@ aarch64_linux_set_memtags (struct gdbarch *gdbarch, struct value *address,
 
       /* Update the value's content with the tag.  */
       enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-      gdb_byte *srcbuf = value_contents_raw (address).data ();
+      gdb_byte *srcbuf = address->contents_raw ().data ();
       store_unsigned_integer (srcbuf, sizeof (addr), byte_order, addr);
     }
   else
     {
       /* Remove the top byte.  */
-      addr = address_significant (gdbarch, addr);
+      addr = gdbarch_remove_non_address_bits (gdbarch, addr);
 
       /* Make sure we are dealing with a tagged address to begin with.  */
       if (!aarch64_linux_tagged_address_p (gdbarch, address))
@@ -1686,7 +1731,7 @@ aarch64_linux_get_memtag (struct gdbarch *gdbarch, struct value *address,
 	return nullptr;
 
       /* Remove the top byte.  */
-      addr = address_significant (gdbarch, addr);
+      addr = gdbarch_remove_non_address_bits (gdbarch, addr);
       gdb::optional<CORE_ADDR> atag = aarch64_mte_get_atag (addr);
 
       if (!atag.has_value ())
@@ -1721,7 +1766,7 @@ aarch64_linux_report_signal_info (struct gdbarch *gdbarch,
 				  struct ui_out *uiout,
 				  enum gdb_signal siggnal)
 {
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   if (!tdep->has_mte () || siggnal != GDB_SIGNAL_SEGV)
     return;
@@ -1760,7 +1805,8 @@ aarch64_linux_report_signal_info (struct gdbarch *gdbarch,
       uiout->text ("\n");
 
       gdb::optional<CORE_ADDR> atag
-	= aarch64_mte_get_atag (address_significant (gdbarch, fault_addr));
+	= aarch64_mte_get_atag (gdbarch_remove_non_address_bits (gdbarch,
+								 fault_addr));
       gdb_byte ltag = aarch64_mte_get_ltag (fault_addr);
 
       if (!atag.has_value ())
@@ -1781,6 +1827,159 @@ aarch64_linux_report_signal_info (struct gdbarch *gdbarch,
     }
 }
 
+/* AArch64 Linux implementation of the gdbarch_create_memtag_section hook.  */
+
+static asection *
+aarch64_linux_create_memtag_section (struct gdbarch *gdbarch, bfd *obfd,
+				     CORE_ADDR address, size_t size)
+{
+  gdb_assert (obfd != nullptr);
+  gdb_assert (size > 0);
+
+  /* Create the section and associated program header.
+
+     Make sure the section's flags has SEC_HAS_CONTENTS, otherwise BFD will
+     refuse to write data to this section.  */
+  asection *mte_section
+    = bfd_make_section_anyway_with_flags (obfd, "memtag", SEC_HAS_CONTENTS);
+
+  if (mte_section == nullptr)
+    return nullptr;
+
+  bfd_set_section_vma (mte_section, address);
+  /* The size of the memory range covered by the memory tags.  We reuse the
+     section's rawsize field for this purpose.  */
+  mte_section->rawsize = size;
+
+  /* Fetch the number of tags we need to save.  */
+  size_t tags_count
+    = aarch64_mte_get_tag_granules (address, size, AARCH64_MTE_GRANULE_SIZE);
+  /* Tags are stored packed as 2 tags per byte.  */
+  bfd_set_section_size (mte_section, (tags_count + 1) >> 1);
+  /* Store program header information.  */
+  bfd_record_phdr (obfd, PT_AARCH64_MEMTAG_MTE, 1, 0, 0, 0, 0, 0, 1,
+		   &mte_section);
+
+  return mte_section;
+}
+
+/* Maximum number of tags to request.  */
+#define MAX_TAGS_TO_TRANSFER 1024
+
+/* AArch64 Linux implementation of the gdbarch_fill_memtag_section hook.  */
+
+static bool
+aarch64_linux_fill_memtag_section (struct gdbarch *gdbarch, asection *osec)
+{
+  /* We only handle MTE tags for now.  */
+
+  size_t segment_size = osec->rawsize;
+  CORE_ADDR start_address = bfd_section_vma (osec);
+  CORE_ADDR end_address = start_address + segment_size;
+
+  /* Figure out how many tags we need to store in this memory range.  */
+  size_t granules = aarch64_mte_get_tag_granules (start_address, segment_size,
+						  AARCH64_MTE_GRANULE_SIZE);
+
+  /* If there are no tag granules to fetch, just return.  */
+  if (granules == 0)
+    return true;
+
+  CORE_ADDR address = start_address;
+
+  /* Vector of tags.  */
+  gdb::byte_vector tags;
+
+  while (granules > 0)
+    {
+      /* Transfer tags in chunks.  */
+      gdb::byte_vector tags_read;
+      size_t xfer_len
+	= ((granules >= MAX_TAGS_TO_TRANSFER)
+	  ? MAX_TAGS_TO_TRANSFER * AARCH64_MTE_GRANULE_SIZE
+	  : granules * AARCH64_MTE_GRANULE_SIZE);
+
+      if (!target_fetch_memtags (address, xfer_len, tags_read,
+				 static_cast<int> (memtag_type::allocation)))
+	{
+	  warning (_("Failed to read MTE tags from memory range [%s,%s)."),
+		     phex_nz (start_address, sizeof (start_address)),
+		     phex_nz (end_address, sizeof (end_address)));
+	  return false;
+	}
+
+      /* Transfer over the tags that have been read.  */
+      tags.insert (tags.end (), tags_read.begin (), tags_read.end ());
+
+      /* Adjust the remaining granules and starting address.  */
+      granules -= tags_read.size ();
+      address += tags_read.size () * AARCH64_MTE_GRANULE_SIZE;
+    }
+
+  /* Pack the MTE tag bits.  */
+  aarch64_mte_pack_tags (tags);
+
+  if (!bfd_set_section_contents (osec->owner, osec, tags.data (),
+				 0, tags.size ()))
+    {
+      warning (_("Failed to write %s bytes of corefile memory "
+		 "tag content (%s)."),
+	       pulongest (tags.size ()),
+	       bfd_errmsg (bfd_get_error ()));
+    }
+  return true;
+}
+
+/* AArch64 Linux implementation of the gdbarch_decode_memtag_section
+   hook.  Decode a memory tag section and return the requested tags.
+
+   The section is guaranteed to cover the [ADDRESS, ADDRESS + length)
+   range.  */
+
+static gdb::byte_vector
+aarch64_linux_decode_memtag_section (struct gdbarch *gdbarch,
+				     bfd_section *section,
+				     int type,
+				     CORE_ADDR address, size_t length)
+{
+  gdb_assert (section != nullptr);
+
+  /* The requested address must not be less than section->vma.  */
+  gdb_assert (section->vma <= address);
+
+  /* Figure out how many tags we need to fetch in this memory range.  */
+  size_t granules = aarch64_mte_get_tag_granules (address, length,
+						  AARCH64_MTE_GRANULE_SIZE);
+  /* Sanity check.  */
+  gdb_assert (granules > 0);
+
+  /* Fetch the total number of tags in the range [VMA, address + length).  */
+  size_t granules_from_vma
+    = aarch64_mte_get_tag_granules (section->vma,
+				    address - section->vma + length,
+				    AARCH64_MTE_GRANULE_SIZE);
+
+  /* Adjust the tags vector to contain the exact number of packed bytes.  */
+  gdb::byte_vector tags (((granules - 1) >> 1) + 1);
+
+  /* Figure out the starting offset into the packed tags data.  */
+  file_ptr offset = ((granules_from_vma - granules) >> 1);
+
+  if (!bfd_get_section_contents (section->owner, section, tags.data (),
+				 offset, tags.size ()))
+    error (_("Couldn't read contents from memtag section."));
+
+  /* At this point, the tags are packed 2 per byte.  Unpack them before
+     returning.  */
+  bool skip_first = ((granules_from_vma - granules) % 2) != 0;
+  aarch64_mte_unpack_tags (tags, skip_first);
+
+  /* Resize to the exact number of tags that was requested.  */
+  tags.resize (granules);
+
+  return tags;
+}
+
 static void
 aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
@@ -1790,7 +1989,7 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 								    NULL };
   static const char *const stap_register_indirection_suffixes[] = { "]",
 								    NULL };
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   tdep->lowest_pc = 0x8000;
 
@@ -1833,11 +2032,6 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   /* Syscall record.  */
   tdep->aarch64_syscall_record = aarch64_linux_syscall_record;
 
-  /* The top byte of a user space address known as the "tag",
-     is ignored by the kernel and can be regarded as additional
-     data associated with the address.  */
-  set_gdbarch_significant_addr_bit (gdbarch, 56);
-
   /* MTE-specific settings and hooks.  */
   if (tdep->has_mte ())
     {
@@ -1864,6 +2058,21 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
       set_gdbarch_report_signal_info (gdbarch,
 				      aarch64_linux_report_signal_info);
+
+      /* Core file helpers.  */
+
+      /* Core file helper to create a memory tag section for a particular
+	 PT_LOAD segment.  */
+      set_gdbarch_create_memtag_section
+	(gdbarch, aarch64_linux_create_memtag_section);
+
+      /* Core file helper to fill a memory tag section with tag data.  */
+      set_gdbarch_fill_memtag_section
+	(gdbarch, aarch64_linux_fill_memtag_section);
+
+      /* Core file helper to decode a memory tag section.  */
+      set_gdbarch_decode_memtag_section (gdbarch,
+					 aarch64_linux_decode_memtag_section);
     }
 
   /* Initialize the aarch64_linux_record_tdep.  */

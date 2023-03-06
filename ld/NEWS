@@ -1,10 +1,72 @@
 -*- text -*-
 
+* The linker script syntax has two new commands for inserting text into output
+  sections:
+    ASCII (<size>) "string"
+  This will reserve a zero filled block of <size> bytes at the current
+  location and insert "string" at the beginning of the block.  If the string
+  is too long, it will be truncated.
+    ASCIZ "string"
+  This will insert a zero-terminated string at the current location.
+
+Changes in 2.40:
+
+* The linker has a new command line option to suppress the generation of any
+  warning or error messages.  This can be useful when there is a need to create
+  a known non-working binary.  The option is -w or --no-warnings.
+
+* ld now supports zstd compressed debug sections.  The new option
+  --compress-debug-sections=zstd compresses debug sections with zstd.
+
+* Add --enable-default-compressed-debug-sections-algorithm={zlib,zstd}
+  that selects the default compression algorithm
+  for --enable-compressed-debug-sections.
+
+* Remove support for -z bndplt (MPX prefix instructions).
+
+Changes in 2.39:
+
+* The ELF linker will now generate a warning message if the stack is made
+  executable.  By default this warning is not issued if the user has
+  specifically requested an executable stack via the "-z execstack"
+  command line option, but the warning can be forced via the new
+  "--warn-execstack" option.  Alternatively all warnings about creating
+  an executable stack can be suppressed via the "--no-warn-execstack"
+  option.
+
+  In addition the ELF linker will also warn if it creates a memory resident
+  segment with all three of the Read, Write and eXecute permissions set, or
+  if it creates a thread local data segment with the eXecute permission set.
+  These warnings can be disabled via --no-warn-rwx-segments option and
+  re-enabled via the --warn-rwx-segments option.
+
+  New configure options can also control these new features:
+  
+  --enable-warn-execstack=no
+     will disable the warnings about creating an executable stack.
+     
+  --enable-warn-execstack=yes
+     will make --warn-execstack enabled by default.
+     
+  --enable-warn-rwx-segments=no
+     will make --no-warn-rwx-segments enabled by default.
+     
+  --enable-default-execstack=no
+     will stop the creation of an executable stack simply because an input file
+     is missing a .note.GNU-stack section, even on architectures where this
+     behaviour is the default.
+
 * TYPE=<type> is now supported in an output section description to set the
   section type value.
 
 * Remove (rudimentary) support for the x86-64 sub-architectures Intel L1OM and
   Intel K1OM.
+
+* The ELF linker now supports a new --package-metadata option that allows
+  embedding a JSON payload in accordance to the Package Metadata specification.
+  If support for libjansson is enabled at build time, the linker will use it to
+  validate the input. This can be enabled with --enable-jansson.
+  For more details, see: https://systemd.io/ELF_PACKAGE_METADATA/
 
 Changes in 2.38:
 
@@ -893,7 +955,7 @@ Changes in version 2.1:
   other utilities should work on Risc/Ultrix and Irix.
 
 
-Copyright (C) 2012-2022 Free Software Foundation, Inc.
+Copyright (C) 2012-2023 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

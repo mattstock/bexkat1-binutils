@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -223,16 +223,16 @@ memory_error_func (int status ATTRIBUTE_UNUSED, bfd_vma addr ATTRIBUTE_UNUSED,
 	{ \
 	    context->uc_link = NULL; \
 	    void *sp = __collector_getsp(); \
-	    GET_SP(context) = (greg_t)sp; \
-	    GET_FP(context) = (greg_t)__collector_getfp(); \
-	    GET_PC(context) = (greg_t)__collector_getpc(); \
+	    GET_SP(context) = (intptr_t)sp; \
+	    GET_FP(context) = (intptr_t)__collector_getfp(); \
+	    GET_PC(context) = (intptr_t)__collector_getpc(); \
 	    context->uc_stack.ss_sp = sp; \
 	    context->uc_stack.ss_size = 0x100000; \
 	}
 
 #elif ARCH(Aarch64)
 #define FILL_CONTEXT(context) \
-    { getcontext(context);  \
+    { CALL_UTIL (getcontext) (context);  \
       context->uc_mcontext.sp = (__u64) __builtin_frame_address(0); \
     }
 
@@ -557,6 +557,7 @@ __collector_get_frame_info (hrtime_t ts, int mode, void *arg)
   int size = max_frame_size;
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
+#if defined(GPROFNG_JAVA_PROFILING)
   /* get Java info */
   if (__collector_java_mode && __collector_java_asyncgetcalltrace_loaded && context && !pseudo_context)
     {
@@ -569,6 +570,7 @@ __collector_get_frame_info (hrtime_t ts, int mode, void *arg)
 	  size -= sz;
 	}
     }
+#endif
 
   /* get native stack */
   if (context)

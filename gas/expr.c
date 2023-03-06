@@ -1,5 +1,5 @@
 /* expr.c -operands, expressions-
-   Copyright (C) 1987-2022 Free Software Foundation, Inc.
+   Copyright (C) 1987-2023 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -97,7 +97,7 @@ make_expr_symbol (expressionS *expressionP)
   if (expressionP->X_op == O_constant)
     resolve_symbol_value (symbolP);
 
-  n = XNEW (struct expr_symbol_line);
+  n = notes_alloc (sizeof (*n));
   n->sym = symbolP;
   n->file = as_where (&n->line);
   n->next = expr_symbol_lines;
@@ -130,12 +130,12 @@ expr_symbol_where (symbolS *sym, const char **pfile, unsigned int *pline)
 
 /* Look up a previously used .startof. / .sizeof. symbol, or make a fresh
    one.  */
+static symbolS **seen[2];
+static unsigned int nr_seen[2];
 
 static symbolS *
 symbol_lookup_or_make (const char *name, bool start)
 {
-  static symbolS **seen[2];
-  static unsigned int nr_seen[2];
   char *buf = concat (start ? ".startof." : ".sizeof.", name, NULL);
   symbolS *symbolP;
   unsigned int i;
@@ -149,8 +149,8 @@ symbol_lookup_or_make (const char *name, bool start)
 
     name = S_GET_NAME (symbolP);
     if ((symbols_case_sensitive
-	 ? strcasecmp (buf, name)
-	 : strcmp (buf, name)) == 0)
+	 ? strcmp (buf, name)
+	 : strcasecmp (buf, name)) == 0)
       {
 	free (buf);
 	return symbolP;
@@ -573,10 +573,6 @@ integer_constant (int radix, expressionS *expressionP)
 	  symbolP = symbol_find (name);
 	  if ((symbolP != NULL) && (S_IS_DEFINED (symbolP)))
 	    {
-	      /* Local labels are never absolute.  Don't waste time
-		 checking absoluteness.  */
-	      know (SEG_NORMAL (S_GET_SEGMENT (symbolP)));
-
 	      expressionP->X_op = O_symbol;
 	      expressionP->X_add_symbol = symbolP;
 	    }
@@ -604,11 +600,6 @@ integer_constant (int radix, expressionS *expressionP)
 	  name = fb_label_name (number, 1);
 	  symbolP = symbol_find_or_make (name);
 	  /* We have no need to check symbol properties.  */
-#ifndef many_segments
-	  /* Since "know" puts its arg into a "string", we
-	     can't have newlines in the argument.  */
-	  know (S_GET_SEGMENT (symbolP) == undefined_section || S_GET_SEGMENT (symbolP) == text_section || S_GET_SEGMENT (symbolP) == data_section);
-#endif
 	  expressionP->X_op = O_symbol;
 	  expressionP->X_add_symbol = symbolP;
 	  expressionP->X_add_number = 0;
@@ -996,7 +987,7 @@ operand (expressionS *expressionP, enum expr_mode mode)
 	}	    
       else
 	input_line_pointer++;
-      SKIP_WHITESPACE ();
+      SKIP_ALL_WHITESPACE ();
       /* Here with input_line_pointer -> char after "(...)".  */
       return segment;
 
@@ -1596,6 +1587,17 @@ expr_begin (void)
     e.X_op = O_max;
     gas_assert (e.X_op == O_max);
   }
+
+  memset (seen, 0, sizeof seen);
+  memset (nr_seen, 0, sizeof nr_seen);
+  expr_symbol_lines = NULL;
+}
+
+void
+expr_end (void)
+{
+  for (size_t i = 0; i < ARRAY_SIZE (seen); i++)
+    free (seen[i]);
 }
 
 /* Return the encoding for the operator at INPUT_LINE_POINTER, and
@@ -2309,8 +2311,18 @@ resolve_expression (expressionS *expressionP)
 	    return 0;
 	  left = (offsetT) left % (offsetT) right;
 	  break;
-	case O_left_shift:		left <<= right; break;
-	case O_right_shift:		left >>= right; break;
+	case O_left_shift:
+	  if (right >= sizeof (left) * CHAR_BIT)
+	    left = 0;
+	  else
+	    left <<= right;
+	  break;
+	case O_right_shift:
+	  if (right >= sizeof (left) * CHAR_BIT)
+	    left = 0;
+	  else
+	    left >>= right;
+	  break;
 	case O_bit_inclusive_or:	left |= right; break;
 	case O_bit_or_not:		left |= ~right; break;
 	case O_bit_exclusive_or:	left ^= right; break;

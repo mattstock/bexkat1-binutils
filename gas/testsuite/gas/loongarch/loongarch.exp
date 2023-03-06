@@ -1,5 +1,5 @@
 # Expect script for LoongArch assembler tests.
-#   Copyright (C) 2021-2022 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -20,4 +20,5 @@
 
 if [istarget loongarch*-*-*] {
     run_dump_tests [lsort [glob -nocomplain $srcdir/$subdir/*.d]]
+    gas_test_old bfd_reloc_8.s "" "bfd_reloc_8"
 }

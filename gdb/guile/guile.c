@@ -1,6 +1,6 @@
 /* General GDB/Guile code.
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -130,8 +130,12 @@ static const struct extension_language_ops guile_extension_ops =
   gdbscm_breakpoint_has_cond,
   gdbscm_breakpoint_cond_says_stop,
 
-  NULL, /* gdbscm_check_quit_flag, */
   NULL, /* gdbscm_set_quit_flag, */
+  NULL, /* gdbscm_check_quit_flag, */
+  NULL, /* gdbscm_before_prompt, */
+  NULL, /* gdbscm_get_matching_xmethod_workers */
+  NULL, /* gdbscm_colorize */
+  NULL, /* gdbscm_print_insn */
 };
 #endif
 
@@ -673,7 +677,17 @@ gdbscm_initialize (const struct extension_language_defn *extlang)
        "double free or corruption (out)" error.
        Work around the libguile bug by disabling the installation of the
        libgmp memory functions by guile initialization.  */
+
+    /* The scm_install_gmp_memory_functions variable should be removed after
+       version 3.0, so limit usage to 3.0 and before.  */
+#if SCM_MAJOR_VERSION < 3 || (SCM_MAJOR_VERSION == 3 && SCM_MINOR_VERSION == 0)
+    /* This variable is deprecated in Guile 3.0.8 and later but remains
+       available in the whole 3.0 series.  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     scm_install_gmp_memory_functions = 0;
+#pragma GCC diagnostic pop
+#endif
 
     /* scm_with_guile is the most portable way to initialize Guile.  Plus
        we need to initialize the Guile support while in Guile mode (e.g.,

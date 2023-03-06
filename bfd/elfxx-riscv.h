@@ -1,5 +1,5 @@
 /* RISC-V ELF specific backend routines.
-   Copyright (C) 2011-2022 Free Software Foundation, Inc.
+   Copyright (C) 2011-2023 Free Software Foundation, Inc.
 
    Contributed by Andrew Waterman (andrew@sifive.com).
    Based on MIPS target.
@@ -27,6 +27,17 @@
 
 #define RISCV_UNKNOWN_VERSION -1
 
+struct riscv_elf_params
+{
+  /* Whether to relax code sequences to GP-relative addressing.  */
+  bool relax_gp;
+};
+
+extern void riscv_elf32_set_options (struct bfd_link_info *,
+				     struct riscv_elf_params *);
+extern void riscv_elf64_set_options (struct bfd_link_info *,
+				     struct riscv_elf_params *);
+
 extern reloc_howto_type *
 riscv_reloc_name_lookup (bfd *, const char *);
 
@@ -51,6 +62,7 @@ typedef struct
 {
   riscv_subset_t *head;
   riscv_subset_t *tail;
+  const char *arch_str;
 } riscv_subset_list_t;
 
 extern void

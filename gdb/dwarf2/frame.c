@@ -1,6 +1,6 @@
 /* Frame unwinder for frames with DWARF Call Frame Information.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    Contributed by Mark Kettenis.
 
@@ -138,7 +138,7 @@ typedef std::vector<dwarf2_fde *> dwarf2_fde_table;
 struct comp_unit
 {
   comp_unit (struct objfile *objf)
-    : abfd (objf->obfd)
+    : abfd (objf->obfd.get ())
   {
   }
 
@@ -226,7 +226,7 @@ register %s (#%d) at %s"),
 
 static CORE_ADDR
 execute_stack_op (const gdb_byte *exp, ULONGEST len, int addr_size,
-		  struct frame_info *this_frame, CORE_ADDR initial,
+		  frame_info_ptr this_frame, CORE_ADDR initial,
 		  int initial_in_stack_memory, dwarf2_per_objfile *per_objfile)
 {
   dwarf_expr_context ctx (per_objfile, addr_size);
@@ -235,8 +235,8 @@ execute_stack_op (const gdb_byte *exp, ULONGEST len, int addr_size,
   ctx.push_address (initial, initial_in_stack_memory);
   value *result_val = ctx.evaluate (exp, len, true, nullptr, this_frame);
 
-  if (VALUE_LVAL (result_val) == lval_memory)
-    return value_address (result_val);
+  if (result_val->lval () == lval_memory)
+    return result_val->address ();
   else
     return value_as_address (result_val);
 }
@@ -500,8 +500,7 @@ bad CFI data; mismatched DW_CFA_restore_state at %s"),
 			   insn);
 		}
 	      else
-		internal_error (__FILE__, __LINE__,
-				_("Unknown CFI encountered."));
+		internal_error (_("Unknown CFI encountered."));
 	    }
 	}
     }
@@ -580,22 +579,38 @@ execute_cfa_program_test (struct gdbarch *gdbarch)
 
 /* Architecture-specific operations.  */
 
-/* Per-architecture data key.  */
-static struct gdbarch_data *dwarf2_frame_data;
+static void dwarf2_frame_default_init_reg (struct gdbarch *gdbarch,
+					   int regnum,
+					   struct dwarf2_frame_state_reg *reg,
+					   frame_info_ptr this_frame);
 
 struct dwarf2_frame_ops
 {
   /* Pre-initialize the register state REG for register REGNUM.  */
   void (*init_reg) (struct gdbarch *, int, struct dwarf2_frame_state_reg *,
-		    struct frame_info *);
+		    frame_info_ptr)
+    = dwarf2_frame_default_init_reg;
 
   /* Check whether the THIS_FRAME is a signal trampoline.  */
-  int (*signal_frame_p) (struct gdbarch *, struct frame_info *);
+  int (*signal_frame_p) (struct gdbarch *, frame_info_ptr) = nullptr;
 
   /* Convert .eh_frame register number to DWARF register number, or
      adjust .debug_frame register number.  */
-  int (*adjust_regnum) (struct gdbarch *, int, int);
+  int (*adjust_regnum) (struct gdbarch *, int, int) = nullptr;
 };
+
+/* Per-architecture data key.  */
+static const registry<gdbarch>::key<dwarf2_frame_ops> dwarf2_frame_data;
+
+/* Get or initialize the frame ops.  */
+static dwarf2_frame_ops *
+get_frame_ops (struct gdbarch *gdbarch)
+{
+  dwarf2_frame_ops *result = dwarf2_frame_data.get (gdbarch);
+  if (result == nullptr)
+    result = dwarf2_frame_data.emplace (gdbarch);
+  return result;
+}
 
 /* Default architecture-specific register state initialization
    function.  */
@@ -603,7 +618,7 @@ struct dwarf2_frame_ops
 static void
 dwarf2_frame_default_init_reg (struct gdbarch *gdbarch, int regnum,
 			       struct dwarf2_frame_state_reg *reg,
-			       struct frame_info *this_frame)
+			       frame_info_ptr this_frame)
 {
   /* If we have a register that acts as a program counter, mark it as
      a destination for the return address.  If we have a register that
@@ -637,18 +652,6 @@ dwarf2_frame_default_init_reg (struct gdbarch *gdbarch, int regnum,
     reg->how = DWARF2_FRAME_REG_CFA;
 }
 
-/* Return a default for the architecture-specific operations.  */
-
-static void *
-dwarf2_frame_init (struct obstack *obstack)
-{
-  struct dwarf2_frame_ops *ops;
-  
-  ops = OBSTACK_ZALLOC (obstack, struct dwarf2_frame_ops);
-  ops->init_reg = dwarf2_frame_default_init_reg;
-  return ops;
-}
-
 /* Set the architecture-specific register state initialization
    function for GDBARCH to INIT_REG.  */
 
@@ -656,10 +659,9 @@ void
 dwarf2_frame_set_init_reg (struct gdbarch *gdbarch,
 			   void (*init_reg) (struct gdbarch *, int,
 					     struct dwarf2_frame_state_reg *,
-					     struct frame_info *))
+					     frame_info_ptr))
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   ops->init_reg = init_reg;
 }
@@ -669,10 +671,9 @@ dwarf2_frame_set_init_reg (struct gdbarch *gdbarch,
 static void
 dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 		       struct dwarf2_frame_state_reg *reg,
-		       struct frame_info *this_frame)
+		       frame_info_ptr this_frame)
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   ops->init_reg (gdbarch, regnum, reg, this_frame);
 }
@@ -683,10 +684,9 @@ dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 void
 dwarf2_frame_set_signal_frame_p (struct gdbarch *gdbarch,
 				 int (*signal_frame_p) (struct gdbarch *,
-							struct frame_info *))
+							frame_info_ptr))
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   ops->signal_frame_p = signal_frame_p;
 }
@@ -696,10 +696,9 @@ dwarf2_frame_set_signal_frame_p (struct gdbarch *gdbarch,
 
 static int
 dwarf2_frame_signal_frame_p (struct gdbarch *gdbarch,
-			     struct frame_info *this_frame)
+			     frame_info_ptr this_frame)
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   if (ops->signal_frame_p == NULL)
     return 0;
@@ -714,8 +713,7 @@ dwarf2_frame_set_adjust_regnum (struct gdbarch *gdbarch,
 				int (*adjust_regnum) (struct gdbarch *,
 						      int, int))
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   ops->adjust_regnum = adjust_regnum;
 }
@@ -727,8 +725,7 @@ static int
 dwarf2_frame_adjust_regnum (struct gdbarch *gdbarch,
 			    int regnum, int eh_frame_p)
 {
-  struct dwarf2_frame_ops *ops
-    = (struct dwarf2_frame_ops *) gdbarch_data (gdbarch, dwarf2_frame_data);
+  struct dwarf2_frame_ops *ops = get_frame_ops (gdbarch);
 
   if (ops->adjust_regnum == NULL)
     return regnum;
@@ -829,11 +826,27 @@ dwarf2_fetch_cfa_info (struct gdbarch *gdbarch, CORE_ADDR pc,
       return 0;
 
     default:
-      internal_error (__FILE__, __LINE__, _("Unknown CFA rule."));
+      internal_error (_("Unknown CFA rule."));
     }
 }
 
 
+/* Custom function data object for architecture specific prev_register
+   implementation.  Main purpose of this object is to allow caching of
+   expensive data lookups in the prev_register handling.  */
+
+struct dwarf2_frame_fn_data
+{
+  /* The cookie to identify the custom function data by.  */
+  fn_prev_register cookie;
+
+  /* The custom function data.  */
+  void *data;
+
+  /* Pointer to the next custom function data object for this frame.  */
+  struct dwarf2_frame_fn_data *next;
+};
+
 struct dwarf2_frame_cache
 {
   /* DWARF Call Frame Address.  */
@@ -865,10 +878,12 @@ struct dwarf2_frame_cache
      dwarf2_tailcall_frame_unwind unwinder so this field does not apply for
      them.  */
   void *tailcall_cache;
+
+  struct dwarf2_frame_fn_data *fn_data;
 };
 
 static struct dwarf2_frame_cache *
-dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
+dwarf2_frame_cache (frame_info_ptr this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   const int num_regs = gdbarch_num_cooked_regs (gdbarch);
@@ -976,7 +991,7 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
 	  break;
 
 	default:
-	  internal_error (__FILE__, __LINE__, _("Unknown CFA rule."));
+	  internal_error (_("Unknown CFA rule."));
 	}
     }
   catch (const gdb_exception_error &ex)
@@ -1097,7 +1112,7 @@ incomplete CFI data; unspecified registers (e.g., %s) at %s"),
 }
 
 static enum unwind_stop_reason
-dwarf2_frame_unwind_stop_reason (struct frame_info *this_frame,
+dwarf2_frame_unwind_stop_reason (frame_info_ptr this_frame,
 				 void **this_cache)
 {
   struct dwarf2_frame_cache *cache
@@ -1113,7 +1128,7 @@ dwarf2_frame_unwind_stop_reason (struct frame_info *this_frame,
 }
 
 static void
-dwarf2_frame_this_id (struct frame_info *this_frame, void **this_cache,
+dwarf2_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 		      struct frame_id *this_id)
 {
   struct dwarf2_frame_cache *cache =
@@ -1128,7 +1143,7 @@ dwarf2_frame_this_id (struct frame_info *this_frame, void **this_cache,
 }
 
 static struct value *
-dwarf2_frame_prev_register (struct frame_info *this_frame, void **this_cache,
+dwarf2_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
 			    int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -1220,17 +1235,60 @@ dwarf2_frame_prev_register (struct frame_info *this_frame, void **this_cache,
       return cache->reg[regnum].loc.fn (this_frame, this_cache, regnum);
 
     default:
-      internal_error (__FILE__, __LINE__, _("Unknown register rule."));
+      internal_error (_("Unknown register rule."));
     }
+}
+
+/* See frame.h.  */
+
+void *
+dwarf2_frame_get_fn_data (frame_info_ptr this_frame, void **this_cache,
+			  fn_prev_register cookie)
+{
+  struct dwarf2_frame_fn_data *fn_data = nullptr;
+  struct dwarf2_frame_cache *cache
+    = dwarf2_frame_cache (this_frame, this_cache);
+
+  /* Find the object for the function.  */
+  for (fn_data = cache->fn_data; fn_data; fn_data = fn_data->next)
+    if (fn_data->cookie == cookie)
+      return fn_data->data;
+
+  return nullptr;
+}
+
+/* See frame.h.  */
+
+void *
+dwarf2_frame_allocate_fn_data (frame_info_ptr this_frame, void **this_cache,
+			       fn_prev_register cookie, unsigned long size)
+{
+  struct dwarf2_frame_fn_data *fn_data = nullptr;
+  struct dwarf2_frame_cache *cache
+    = dwarf2_frame_cache (this_frame, this_cache);
+
+  /* First try to find an existing object.  */
+  void *data = dwarf2_frame_get_fn_data (this_frame, this_cache, cookie);
+  gdb_assert (data == nullptr);
+
+  /* No object found, lets create a new instance.  */
+  fn_data = FRAME_OBSTACK_ZALLOC (struct dwarf2_frame_fn_data);
+  fn_data->cookie = cookie;
+  fn_data->data = frame_obstack_zalloc (size);
+  fn_data->next = cache->fn_data;
+  cache->fn_data = fn_data;
+
+  return fn_data->data;
 }
 
 /* Proxy for tailcall_frame_dealloc_cache for bottom frame of a virtual tail
    call frames chain.  */
 
 static void
-dwarf2_frame_dealloc_cache (struct frame_info *self, void *this_cache)
+dwarf2_frame_dealloc_cache (frame_info *self, void *this_cache)
 {
-  struct dwarf2_frame_cache *cache = dwarf2_frame_cache (self, &this_cache);
+  struct dwarf2_frame_cache *cache
+      = dwarf2_frame_cache (frame_info_ptr (self), &this_cache);
 
   if (cache->tailcall_cache)
     dwarf2_tailcall_frame_unwind.dealloc_cache (self, cache->tailcall_cache);
@@ -1238,7 +1296,7 @@ dwarf2_frame_dealloc_cache (struct frame_info *self, void *this_cache)
 
 static int
 dwarf2_frame_sniffer (const struct frame_unwind *self,
-		      struct frame_info *this_frame, void **this_cache)
+		      frame_info_ptr this_frame, void **this_cache)
 {
   if (!dwarf2_frame_unwinders_enabled_p)
     return 0;
@@ -1314,7 +1372,7 @@ dwarf2_append_unwinders (struct gdbarch *gdbarch)
    response to the "info frame" command.  */
 
 static CORE_ADDR
-dwarf2_frame_base_address (struct frame_info *this_frame, void **this_cache)
+dwarf2_frame_base_address (frame_info_ptr this_frame, void **this_cache)
 {
   struct dwarf2_frame_cache *cache =
     dwarf2_frame_cache (this_frame, this_cache);
@@ -1331,7 +1389,7 @@ static const struct frame_base dwarf2_frame_base =
 };
 
 const struct frame_base *
-dwarf2_frame_base_sniffer (struct frame_info *this_frame)
+dwarf2_frame_base_sniffer (frame_info_ptr this_frame)
 {
   CORE_ADDR block_addr = get_frame_address_in_block (this_frame);
 
@@ -1346,7 +1404,7 @@ dwarf2_frame_base_sniffer (struct frame_info *this_frame)
    DW_OP_call_frame_cfa.  */
 
 CORE_ADDR
-dwarf2_frame_cfa (struct frame_info *this_frame)
+dwarf2_frame_cfa (frame_info_ptr this_frame)
 {
   if (frame_unwinder_is (this_frame, &record_btrace_tailcall_frame_unwind)
       || frame_unwinder_is (this_frame, &record_btrace_frame_unwind))
@@ -1370,12 +1428,12 @@ dwarf2_frame_cfa (struct frame_info *this_frame)
 
 /* We store the frame data on the BFD.  This is only done if it is
    independent of the address space and so can be shared.  */
-static const struct bfd_key<comp_unit> dwarf2_frame_bfd_data;
+static const registry<bfd>::key<comp_unit> dwarf2_frame_bfd_data;
 
 /* If any BFD sections require relocations (note; really should be if
    any debug info requires relocations), then we store the frame data
    on the objfile instead, and do not share it.  */
-const struct objfile_key<comp_unit> dwarf2_frame_objfile_data;
+static const registry<objfile>::key<comp_unit> dwarf2_frame_objfile_data;
 
 
 /* Pointer encoding helper functions.  */
@@ -1406,7 +1464,7 @@ encoding_for_size (unsigned int size)
     case 8:
       return DW_EH_PE_udata8;
     default:
-      internal_error (__FILE__, __LINE__, _("Unsupported address size"));
+      internal_error (_("Unsupported address size"));
     }
 }
 
@@ -1422,8 +1480,7 @@ read_encoded_value (struct comp_unit *unit, gdb_byte encoding,
   /* GCC currently doesn't generate DW_EH_PE_indirect encodings for
      FDE's.  */
   if (encoding & DW_EH_PE_indirect)
-    internal_error (__FILE__, __LINE__, 
-		    _("Unsupported encoding: DW_EH_PE_indirect"));
+    internal_error (_("Unsupported encoding: DW_EH_PE_indirect"));
 
   *bytes_read_ptr = 0;
 
@@ -1455,8 +1512,7 @@ read_encoded_value (struct comp_unit *unit, gdb_byte encoding,
 	}
       break;
     default:
-      internal_error (__FILE__, __LINE__,
-		      _("Invalid or unsupported encoding"));
+      internal_error (_("Invalid or unsupported encoding"));
     }
 
   if ((encoding & 0x07) == 0x00)
@@ -1503,8 +1559,7 @@ read_encoded_value (struct comp_unit *unit, gdb_byte encoding,
       *bytes_read_ptr += 8;
       return (base + bfd_get_signed_64 (unit->abfd, (bfd_byte *) buf));
     default:
-      internal_error (__FILE__, __LINE__,
-		      _("Invalid or unsupported encoding"));
+      internal_error (_("Invalid or unsupported encoding"));
     }
 }
 
@@ -1534,7 +1589,7 @@ bsearch_fde_cmp (const dwarf2_fde *fde, CORE_ADDR seek_pc)
 static comp_unit *
 find_comp_unit (struct objfile *objfile)
 {
-  bfd *abfd = objfile->obfd;
+  bfd *abfd = objfile->obfd.get ();
   if (gdb_bfd_requires_relocations (abfd))
     return dwarf2_frame_objfile_data.get (objfile);
 
@@ -1547,7 +1602,7 @@ find_comp_unit (struct objfile *objfile)
 static void
 set_comp_unit (struct objfile *objfile, struct comp_unit *unit)
 {
-  bfd *abfd = objfile->obfd;
+  bfd *abfd = objfile->obfd.get ();
   if (gdb_bfd_requires_relocations (abfd))
     return dwarf2_frame_objfile_data.set (objfile, unit);
 
@@ -1564,6 +1619,9 @@ dwarf2_frame_find_fde (CORE_ADDR *pc, dwarf2_per_objfile **out_per_objfile)
     {
       CORE_ADDR offset;
       CORE_ADDR seek_pc;
+
+      if (objfile->obfd == nullptr)
+	continue;
 
       comp_unit *unit = find_comp_unit (objfile);
       if (unit == NULL)
@@ -2201,8 +2259,6 @@ void _initialize_dwarf2_frame ();
 void
 _initialize_dwarf2_frame ()
 {
-  dwarf2_frame_data = gdbarch_data_register_pre_init (dwarf2_frame_init);
-
   add_setshow_boolean_cmd ("unwinders", class_obscure,
 			   &dwarf2_frame_unwinders_enabled_p , _("\
 Set whether the DWARF stack frame unwinders are used."), _("\

@@ -1,5 +1,5 @@
 # tls.exp -- Expect script to test thread-local storage
-# Copyright (C) 1992-2022 Free Software Foundation, Inc.
+# Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ load_lib gdb-python.exp
 
 standard_testfile tls.c tls2.c
 
-if [istarget "*-*-linux"] then {
+if {[istarget "*-*-linux"]} {
     set target_cflags "-D_MIT_POSIX_THREADS"
 } else {
     set target_cflags ""
@@ -72,7 +72,7 @@ proc check_thread_local {number} {
 	    "= $expected_value" \
 	    "${number} thread local storage"
 
-    if {![skip_python_tests]} {
+    if {[allow_python_tests]} {
 	gdb_test_no_output \
 	    "python sym = gdb.lookup_symbol('a_thread_local')\[0\]" \
 	    "${number} look up a_thread_local symbol"
@@ -164,7 +164,7 @@ gdb_test_multiple "print a_thread_local" "" {
     }
 }
 
-if ![runto_main] then {
+if {![runto_main]} {
    return 0
 }
 
@@ -321,5 +321,3 @@ gdb_test "info address a_thread_local" "Symbol \"a_thread_local\" is a thread-lo
 # Done!
 #
 gdb_exit
-
-return 0

@@ -1,4 +1,4 @@
-#   Copyright (C) 2012-2022 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -111,6 +111,16 @@ proc test_call {} {
 	test_dprintf "At foo entry.*arg=1235, g=2222\r\n" "2nd dprintf"
     }
 
+    gdb_test_multiple "print stderr" "stderr symbol check" {
+	-re "\\'stderr\\' has unknown type.*" {
+	    untested "No information available for stderr, exiting early"
+	    return
+	}
+	-re "\\\$1.*" {
+	    pass $gdb_test_name
+	}
+    }
+
     with_test_prefix "fprintf" {
 	restart
 
@@ -204,7 +214,10 @@ gdb_test "set dprintf-style foobar" "Undefined item: \"foobar\"." \
 # as expected.  dprintf relies on support for target-side breakpoint
 # commands --- use it as proxy.
 if [gdb_is_target_remote] {
-    gdb_test_no_output "set remote breakpoint-commands-packet off"
+    gdb_test \
+	"set remote breakpoint-commands-packet off" \
+	"Support for the 'BreakpointCommands' packet on the current remote target is set to \"off\"."
+
     gdb_test "set dprintf-style agent" \
 	"warning: Target cannot run dprintf commands.*" \
 	"set dprintf-style agent, with feature disabled"

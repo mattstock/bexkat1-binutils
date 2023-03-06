@@ -1,6 +1,6 @@
 /* Python pretty-printing
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,7 @@
 
 /* Return type of print_string_repr.  */
 
-enum string_repr_result
+enum gdbpy_string_repr_result
   {
     /* The string method returned None.  */
     string_repr_none,
@@ -38,6 +38,10 @@ enum string_repr_result
     /* Everything ok.  */
     string_repr_ok
   };
+
+/* If non-null, points to options that are in effect while
+   printing.  */
+const struct value_print_options *gdbpy_current_print_options;
 
 /* Helper function for find_pretty_printer which iterates over a list,
    calls each function and inspects output.  This will return a
@@ -273,7 +277,7 @@ print_stack_unless_memory_error (struct ui_file *stream)
 /* Helper for gdbpy_apply_val_pretty_printer which calls to_string and
    formats the result.  */
 
-static enum string_repr_result
+static enum gdbpy_string_repr_result
 print_string_repr (PyObject *printer, const char *hint,
 		   struct ui_file *stream, int recurse,
 		   const struct value_print_options *options,
@@ -281,7 +285,7 @@ print_string_repr (PyObject *printer, const char *hint,
 		   struct gdbarch *gdbarch)
 {
   struct value *replacement = NULL;
-  enum string_repr_result result = string_repr_ok;
+  enum gdbpy_string_repr_result result = string_repr_ok;
 
   gdbpy_ref<> py_str = pretty_print_one_value (printer, &replacement);
   if (py_str != NULL)
@@ -299,7 +303,7 @@ print_string_repr (PyObject *printer, const char *hint,
 	  gdbpy_extract_lazy_string (py_str.get (), &addr, &type,
 				     &length, &encoding);
 
-	  local_opts.addressprint = 0;
+	  local_opts.addressprint = false;
 	  val_print_string (type, encoding.get (), addr, (int) length,
 			    stream, &local_opts);
 	}
@@ -334,7 +338,7 @@ print_string_repr (PyObject *printer, const char *hint,
     {
       struct value_print_options opts = *options;
 
-      opts.addressprint = 0;
+      opts.addressprint = false;
       common_val_print (replacement, stream, recurse, &opts, language);
     }
   else
@@ -502,7 +506,7 @@ print_children (PyObject *printer, const char *hint,
 
 	  gdbpy_extract_lazy_string (py_v, &addr, &type, &length, &encoding);
 
-	  local_opts.addressprint = 0;
+	  local_opts.addressprint = false;
 	  val_print_string (type, encoding.get (), addr, (int) length, stream,
 			    &local_opts);
 	}
@@ -570,15 +574,15 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 				const struct value_print_options *options,
 				const struct language_defn *language)
 {
-  struct type *type = value_type (value);
+  struct type *type = value->type ();
   struct gdbarch *gdbarch = type->arch ();
-  enum string_repr_result print_result;
+  enum gdbpy_string_repr_result print_result;
 
-  if (value_lazy (value))
-    value_fetch_lazy (value);
+  if (value->lazy ())
+    value->fetch_lazy ();
 
   /* No pretty-printer support for unavailable values.  */
-  if (!value_bytes_available (value, 0, TYPE_LENGTH (type)))
+  if (!value->bytes_available (0, type->length ()))
     return EXT_LANG_RC_NOP;
 
   if (!gdb_python_initialized)
@@ -586,7 +590,7 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 
   gdbpy_enter enter_py (gdbarch, language);
 
-  gdbpy_ref<> val_obj (value_to_value_object_no_release (value));
+  gdbpy_ref<> val_obj (value_to_value_object (value));
   if (val_obj == NULL)
     {
       print_stack_unless_memory_error (stream);
@@ -603,6 +607,9 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 
   if (printer == Py_None)
     return EXT_LANG_RC_NOP;
+
+  scoped_restore set_options = make_scoped_restore (&gdbpy_current_print_options,
+						    options);
 
   /* If we are printing a map, we want some special formatting.  */
   gdb::unique_xmalloc_ptr<char> hint (gdbpy_get_display_hint (printer.get ()));
@@ -632,8 +639,12 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 gdbpy_ref<>
 apply_varobj_pretty_printer (PyObject *printer_obj,
 			     struct value **replacement,
-			     struct ui_file *stream)
+			     struct ui_file *stream,
+			     const value_print_options *opts)
 {
+  scoped_restore set_options = make_scoped_restore (&gdbpy_current_print_options,
+						    opts);
+
   *replacement = NULL;
   gdbpy_ref<> py_str = pretty_print_one_value (printer_obj, replacement);
 
@@ -652,7 +663,7 @@ gdbpy_get_varobj_pretty_printer (struct value *value)
 {
   try
     {
-      value = value_copy (value);
+      value = value->copy ();
     }
   catch (const gdb_exception &except)
     {
@@ -687,4 +698,93 @@ gdbpy_default_visualizer (PyObject *self, PyObject *args)
     }
 
   return find_pretty_printer (val_obj).release ();
+}
+
+/* Helper function to set a boolean in a dictionary.  */
+static int
+set_boolean (PyObject *dict, const char *name, bool val)
+{
+  gdbpy_ref<> val_obj (PyBool_FromLong (val));
+  if (val_obj == nullptr)
+    return -1;
+  return PyDict_SetItemString (dict, name, val_obj.get ());
+}
+
+/* Helper function to set an integer in a dictionary.  */
+static int
+set_unsigned (PyObject *dict, const char *name, unsigned int val)
+{
+  gdbpy_ref<> val_obj = gdb_py_object_from_ulongest (val);
+  if (val_obj == nullptr)
+    return -1;
+  return PyDict_SetItemString (dict, name, val_obj.get ());
+}
+
+/* Implement gdb.print_options.  */
+PyObject *
+gdbpy_print_options (PyObject *unused1, PyObject *unused2)
+{
+  gdbpy_ref<> result (PyDict_New ());
+  if (result == nullptr)
+    return nullptr;
+
+  value_print_options opts;
+  gdbpy_get_print_options (&opts);
+
+  if (set_boolean (result.get (), "raw",
+		   opts.raw) < 0
+      || set_boolean (result.get (), "pretty_arrays",
+		      opts.prettyformat_arrays) < 0
+      || set_boolean (result.get (), "pretty_structs",
+		      opts.prettyformat_structs) < 0
+      || set_boolean (result.get (), "array_indexes",
+		      opts.print_array_indexes) < 0
+      || set_boolean (result.get (), "symbols",
+		      opts.symbol_print) < 0
+      || set_boolean (result.get (), "unions",
+		      opts.unionprint) < 0
+      || set_boolean (result.get (), "address",
+		      opts.addressprint) < 0
+      || set_boolean (result.get (), "deref_refs",
+		      opts.deref_ref) < 0
+      || set_boolean (result.get (), "actual_objects",
+		      opts.objectprint) < 0
+      || set_boolean (result.get (), "static_members",
+		      opts.static_field_print) < 0
+      || set_boolean (result.get (), "deref_refs",
+		      opts.deref_ref) < 0
+      || set_boolean (result.get (), "nibbles",
+		      opts.nibblesprint) < 0
+      || set_boolean (result.get (), "summary",
+		      opts.summary) < 0
+      || set_unsigned (result.get (), "max_elements",
+		       opts.print_max) < 0
+      || set_unsigned (result.get (), "max_depth",
+		       opts.max_depth) < 0
+      || set_unsigned (result.get (), "repeat_threshold",
+		       opts.repeat_count_threshold) < 0)
+    return nullptr;
+
+  if (opts.format != 0)
+    {
+      char str[2] = { (char) opts.format, 0 };
+      gdbpy_ref<> fmtstr = host_string_to_python_string (str);
+      if (fmtstr == nullptr)
+	return nullptr;
+      if (PyDict_SetItemString (result.get (), "format", fmtstr.get ()) < 0)
+	return nullptr;
+    }
+
+  return result.release ();
+}
+
+/* Helper function that either finds the prevailing print options, or
+   calls get_user_print_options.  */
+void
+gdbpy_get_print_options (value_print_options *opts)
+{
+  if (gdbpy_current_print_options != nullptr)
+    *opts = *gdbpy_current_print_options;
+  else
+    get_user_print_options (opts);
 }

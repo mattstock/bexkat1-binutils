@@ -1,6 +1,6 @@
 /* Observers
 
-   Copyright (C) 2016-2022 Free Software Foundation, Inc.
+   Copyright (C) 2016-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,6 +28,7 @@ struct objfile;
 struct thread_info;
 struct inferior;
 struct process_stratum_target;
+struct target_ops;
 struct trace_state_variable;
 
 namespace gdb
@@ -180,6 +181,9 @@ extern observable<struct inferior */* inf */> inferior_added;
    process.  */
 extern observable<struct inferior */* inf */> inferior_appeared;
 
+/* Inferior INF is about to be detached.  */
+extern observable<struct inferior */* inf */> inferior_pre_detach;
+
 /* Either the inferior associated with INF has been detached from
    the process, or the process has exited.  */
 extern observable<struct inferior */* inf */> inferior_exit;
@@ -232,7 +236,7 @@ extern observable<ptid_t /* thread */, CORE_ADDR /* address */>
     inferior_call_post;
 
 /* A register in the inferior has been modified by the gdb user.  */
-extern observable<struct frame_info */* frame */, int /* regnum */>
+extern observable<frame_info_ptr /* frame */, int /* regnum */>
     register_changed;
 
 /* The user-selected inferior, thread and/or frame has changed.  The

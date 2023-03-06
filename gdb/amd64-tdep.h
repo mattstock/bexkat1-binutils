@@ -1,6 +1,6 @@
 /* Target-dependent definitions for AMD64.
 
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
    Contributed by Jiri Smid, SuSE Labs.
 
    This file is part of GDB.
@@ -22,7 +22,7 @@
 #define AMD64_TDEP_H
 
 struct gdbarch;
-struct frame_info;
+class frame_info_ptr;
 struct regcache;
 
 #include "i386-tdep.h"

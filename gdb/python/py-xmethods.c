@@ -1,6 +1,6 @@
 /* Support for debug methods in Python.
 
-   Copyright (C) 2013-2022 Free Software Foundation, Inc.
+   Copyright (C) 2013-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -423,7 +423,8 @@ python_xmethod_worker::do_get_result_type (value *obj,
       return EXT_LANG_RC_OK;
     }
 
-  obj_type = check_typedef (value_type (obj));
+  scoped_value_mark free_values;
+  obj_type = check_typedef (obj->type ());
   this_type = check_typedef (type_object_to_type (m_this_type));
   if (obj_type->code () == TYPE_CODE_PTR)
     {
@@ -508,7 +509,7 @@ python_xmethod_worker::invoke (struct value *obj,
   struct type *obj_type, *this_type;
   struct value *res = NULL;
 
-  obj_type = check_typedef (value_type (obj));
+  obj_type = check_typedef (obj->type ());
   this_type = check_typedef (type_object_to_type (m_this_type));
   if (obj_type->code () == TYPE_CODE_PTR)
     {
@@ -580,7 +581,7 @@ python_xmethod_worker::invoke (struct value *obj,
     }
   else
     {
-      res = allocate_value (lookup_typename (current_language,
+      res = value::allocate (lookup_typename (current_language,
 					     "void", NULL, 0));
     }
 

@@ -1,5 +1,5 @@
 /* GDB routines for manipulating the minimal symbol tables.
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
    This file is part of GDB.
@@ -385,13 +385,9 @@ lookup_minimal_symbol (const char *name, const char *sfile,
       if (objf == NULL || objf == objfile
 	  || objf == objfile->separate_debug_objfile_backlink)
 	{
-	  if (symbol_lookup_debug)
-	    {
-	      gdb_printf (gdb_stdlog,
-			  "lookup_minimal_symbol (%s, %s, %s)\n",
-			  name, sfile != NULL ? sfile : "NULL",
-			  objfile_debug_name (objfile));
-	    }
+	  symbol_lookup_debug_printf ("lookup_minimal_symbol (%s, %s, %s)",
+				      name, sfile != NULL ? sfile : "NULL",
+				      objfile_debug_name (objfile));
 
 	  /* Do two passes: the first over the ordinary hash table,
 	     and the second over the demangled hash table.  */
@@ -438,9 +434,9 @@ lookup_minimal_symbol (const char *name, const char *sfile,
 	{
 	  minimal_symbol *minsym = found.external_symbol.minsym;
 
-	  gdb_printf (gdb_stdlog,
-		      "lookup_minimal_symbol (...) = %s (external)\n",
-		      host_address_to_string (minsym));
+	  symbol_lookup_debug_printf
+	    ("lookup_minimal_symbol (...) = %s (external)",
+	     host_address_to_string (minsym));
 	}
       return found.external_symbol;
     }
@@ -452,9 +448,9 @@ lookup_minimal_symbol (const char *name, const char *sfile,
 	{
 	  minimal_symbol *minsym = found.file_symbol.minsym;
 
-	  gdb_printf (gdb_stdlog,
-		      "lookup_minimal_symbol (...) = %s (file-local)\n",
-		      host_address_to_string (minsym));
+	  symbol_lookup_debug_printf
+	    ("lookup_minimal_symbol (...) = %s (file-local)",
+	     host_address_to_string (minsym));
 	}
       return found.file_symbol;
     }
@@ -466,17 +462,16 @@ lookup_minimal_symbol (const char *name, const char *sfile,
 	{
 	  minimal_symbol *minsym = found.trampoline_symbol.minsym;
 
-	  gdb_printf (gdb_stdlog,
-		      "lookup_minimal_symbol (...) = %s (trampoline)\n",
-		      host_address_to_string (minsym));
+	  symbol_lookup_debug_printf
+	    ("lookup_minimal_symbol (...) = %s (trampoline)",
+	     host_address_to_string (minsym));
 	}
 
       return found.trampoline_symbol;
     }
 
   /* Not found.  */
-  if (symbol_lookup_debug)
-    gdb_printf (gdb_stdlog, "lookup_minimal_symbol (...) = NULL\n");
+  symbol_lookup_debug_printf ("lookup_minimal_symbol (...) = NULL");
   return {};
 }
 
@@ -1019,19 +1014,17 @@ stub_gnu_ifunc_resolve_name (const char *function_name,
 /* See elf_gnu_ifunc_resolver_stop for its real implementation.  */
 
 static void
-stub_gnu_ifunc_resolver_stop (struct breakpoint *b)
+stub_gnu_ifunc_resolver_stop (code_breakpoint *b)
 {
-  internal_error (__FILE__, __LINE__,
-		  _("elf_gnu_ifunc_resolver_stop cannot be reached."));
+  internal_error (_("elf_gnu_ifunc_resolver_stop cannot be reached."));
 }
 
 /* See elf_gnu_ifunc_resolver_return_stop for its real implementation.  */
 
 static void
-stub_gnu_ifunc_resolver_return_stop (struct breakpoint *b)
+stub_gnu_ifunc_resolver_return_stop (code_breakpoint *b)
 {
-  internal_error (__FILE__, __LINE__,
-		  _("elf_gnu_ifunc_resolver_return_stop cannot be reached."));
+  internal_error (_("elf_gnu_ifunc_resolver_return_stop cannot be reached."));
 }
 
 /* See elf_gnu_ifunc_fns for its real implementation.  */
@@ -1062,7 +1055,7 @@ get_symbol_leading_char (bfd *abfd)
     {
       objfile *objf = current_program_space->symfile_object_file;
       if (objf->obfd != NULL)
-	return bfd_get_symbol_leading_char (objf->obfd);
+	return bfd_get_symbol_leading_char (objf->obfd.get ());
     }
   return 0;
 }
@@ -1178,17 +1171,15 @@ minimal_symbol_reader::record_full (gdb::string_view name,
 
   /* It's safe to strip the leading char here once, since the name
      is also stored stripped in the minimal symbol table.  */
-  if (name[0] == get_symbol_leading_char (m_objfile->obfd))
+  if (name[0] == get_symbol_leading_char (m_objfile->obfd.get ()))
     name = name.substr (1);
 
   if (ms_type == mst_file_text && startswith (name, "__gnu_compiled"))
     return (NULL);
 
-  if (symtab_create_debug >= 2)
-    gdb_printf (gdb_stdlog,
-		"Recording minsym:  %-21s  %18s  %4d  %.*s\n",
-		mst_str (ms_type), hex_string (address), section,
-		(int) name.size (), name.data ());
+  symtab_create_debug_printf_v ("recording minsym:  %-21s  %18s  %4d  %.*s",
+				mst_str (ms_type), hex_string (address), section,
+				(int) name.size (), name.data ());
 
   if (m_msym_bunch_index == BUNCH_SIZE)
     {
@@ -1389,12 +1380,8 @@ minimal_symbol_reader::install ()
 
   if (m_msym_count > 0)
     {
-      if (symtab_create_debug)
-	{
-	  gdb_printf (gdb_stdlog,
-		      "Installing %d minimal symbols of objfile %s.\n",
-		      m_msym_count, objfile_name (m_objfile));
-	}
+      symtab_create_debug_printf ("installing %d minimal symbols of objfile %s",
+				  m_msym_count, objfile_name (m_objfile));
 
       /* Allocate enough space, into which we will gather the bunches
 	 of new and existing minimal symbols, sort them, and then
@@ -1544,7 +1531,7 @@ lookup_solib_trampoline_symbol_by_pc (CORE_ADDR pc)
    a duplicate function in case this matters someday.  */
 
 CORE_ADDR
-find_solib_trampoline_target (struct frame_info *frame, CORE_ADDR pc)
+find_solib_trampoline_target (frame_info_ptr frame, CORE_ADDR pc)
 {
   struct minimal_symbol *tsymbol = lookup_solib_trampoline_symbol_by_pc (pc);
 

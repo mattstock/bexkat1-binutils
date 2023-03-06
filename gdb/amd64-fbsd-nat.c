@@ -1,6 +1,6 @@
 /* Native-dependent code for FreeBSD/amd64.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -102,7 +102,7 @@ amd64_fbsd_nat_target::fetch_registers (struct regcache *regcache, int regnum)
 {
   struct gdbarch *gdbarch = regcache->arch ();
 #if defined(PT_GETFSBASE) || defined(PT_GETGSBASE)
-  const i386_gdbarch_tdep *tdep = (i386_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  const i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
 #endif
   pid_t pid = get_ptrace_pid (regcache->ptid ());
   const struct regset *gregset = find_gregset (gdbarch);
@@ -174,7 +174,7 @@ amd64_fbsd_nat_target::store_registers (struct regcache *regcache, int regnum)
 {
   struct gdbarch *gdbarch = regcache->arch ();
 #if defined(PT_GETFSBASE) || defined(PT_GETGSBASE)
-  const i386_gdbarch_tdep *tdep = (i386_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  const i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
 #endif
   pid_t pid = get_ptrace_pid (regcache->ptid ());
   const struct regset *gregset = find_gregset (gdbarch);

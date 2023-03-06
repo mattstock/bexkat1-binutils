@@ -1,6 +1,6 @@
 /* External/Public TUI Header File.
 
-   Copyright (C) 1998-2022 Free Software Foundation, Inc.
+   Copyright (C) 1998-2023 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -35,6 +35,9 @@ extern bool debug_tui;
 
 #define TUI_SCOPED_DEBUG_ENTER_EXIT \
   scoped_debug_enter_exit (debug_tui, "tui")
+
+#define TUI_SCOPED_DEBUG_START_END(fmt, ...) \
+  scoped_debug_start_end (debug_tui, "tui", fmt, ##__VA_ARGS__)
 
 struct ui_file;
 

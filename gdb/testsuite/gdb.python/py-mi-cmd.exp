@@ -1,4 +1,4 @@
-# Copyright (C) 2019-2022 Free Software Foundation, Inc.
+# Copyright (C) 2019-2023 Free Software Foundation, Inc.
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -20,7 +20,7 @@ set MIFLAGS "-i=mi"
 
 gdb_exit
 if {[mi_gdb_start]} {
-    continue
+    return
 }
 
 if {[lsearch -exact [mi_get_features] python] < 0} {
@@ -54,8 +54,10 @@ mi_gdb_test "-pycmd ary" \
     "\\^done,result=\\\[\"Hello\",\"42\"\\\]" \
     "-pycmd ary"
 
+set re_order1 "\\^done,result={hello=\"world\",times=\"42\"}"
+set re_order2 "\\^done,result={times=\"42\",hello=\"world\"}"
 mi_gdb_test "-pycmd dct" \
-    "\\^done,result={hello=\"world\",times=\"42\"}" \
+    "($re_order1|$re_order2)" \
     "-pycmd dct"
 
 mi_gdb_test "-pycmd bk1" \

@@ -1,5 +1,5 @@
 /* BFD COFF interfaces used outside of BFD.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -46,7 +46,7 @@ bfd_coff_get_syment (bfd *abfd,
 
   if (csym->native->fix_value)
     psyment->n_value =
-      ((psyment->n_value - (bfd_hostptr_t) obj_raw_syments (abfd))
+      ((psyment->n_value - (uintptr_t) obj_raw_syments (abfd))
        / sizeof (combined_entry_type));
 
   /* FIXME: We should handle fix_line here.  */

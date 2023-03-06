@@ -1,5 +1,5 @@
 /* tc-riscv.h -- header file for tc-riscv.c.
-   Copyright (C) 2011-2022 Free Software Foundation, Inc.
+   Copyright (C) 2011-2023 Free Software Foundation, Inc.
 
    Contributed by Andrew Waterman (andrew@sifive.com).
    Based on MIPS target.
@@ -123,21 +123,23 @@ extern void riscv_elf_final_processing (void);
 /* Adjust debug_line after relaxation.  */
 #define DWARF2_USE_FIXED_ADVANCE_PC 1
 
-#define md_end riscv_md_end
+#define md_finish riscv_md_finish
 #define CONVERT_SYMBOLIC_ATTRIBUTE riscv_convert_symbolic_attribute
 
-extern void riscv_md_end (void);
+extern void riscv_md_finish (void);
 extern int riscv_convert_symbolic_attribute (const char *);
 
 /* Set mapping symbol states.  */
-#define md_cons_align(nbytes) riscv_mapping_state (MAP_DATA, 0)
-void riscv_mapping_state (enum riscv_seg_mstate, int);
+#define md_cons_align(nbytes) riscv_mapping_state (MAP_DATA, 0, 0)
+void riscv_mapping_state (enum riscv_seg_mstate, int, bool);
 
 /* Define target segment type.  */
 #define TC_SEGMENT_INFO_TYPE struct riscv_segment_info_type
 struct riscv_segment_info_type
 {
   enum riscv_seg_mstate map_state;
+  /* The current mapping symbol with architecture string.  */
+  symbolS *arch_map_symbol;
 };
 
 /* Define target fragment type.  */

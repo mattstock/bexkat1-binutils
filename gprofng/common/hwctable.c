@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -4520,29 +4520,23 @@ static char *
 hwc_hwcentry_string_internal (char *buf, size_t buflen, const Hwcentry *ctr,
 			      int show_short_desc)
 {
-  char stderrbuf[1024];
   char regnolist[256];
   if (!buf || !buflen)
     return buf;
-  buf[0] = 0;
   if (ctr == NULL)
     {
-      snprintf (stderrbuf, sizeof (stderrbuf), GTXT ("HW counter not available"));
-      goto hwc_hwcentry_string_done;
+      snprintf (buf, buflen, GTXT ("HW counter not available"));
+      return buf;
     }
   char *desc = NULL;
   if (show_short_desc)
     desc = ctr->short_desc;
   if (desc == NULL)
     desc = ctr->metric ? hwc_i18n_metric (ctr) : NULL;
-  format_columns (stderrbuf, sizeof (stderrbuf), ctr->name, ctr->int_name,
+  format_columns (buf, buflen, ctr->name, ctr->int_name,
 		  hwc_memop_string (ctr->memop), timecvt_string (ctr->timecvt),
 		  get_regnolist (regnolist, sizeof (regnolist), ctr->reg_list, 2),
 		  desc);
-
-hwc_hwcentry_string_done:
-  strncpy (buf, stderrbuf, buflen - 1);
-  buf[buflen - 1] = 0;
   return buf;
 }
 
@@ -4557,16 +4551,14 @@ hwc_hwcentry_string (char *buf, size_t buflen, const Hwcentry *ctr)
 extern char *
 hwc_hwcentry_specd_string (char *buf, size_t buflen, const Hwcentry *ctr)
 {
-  char stderrbuf[1024];
   const char *memop, *timecvt;
   char descstr[1024];
   if (!buf || !buflen)
     return buf;
-  buf[0] = 0;
   if (ctr == NULL)
     {
-      snprintf (stderrbuf, sizeof (stderrbuf), GTXT ("HW counter not available"));
-      goto hwc_hwcentry_specd_string_done;
+      snprintf (buf, buflen, GTXT ("HW counter not available"));
+      return buf;
     }
   timecvt = timecvt_string (ctr->timecvt);
   if (ctr->memop)
@@ -4574,19 +4566,15 @@ hwc_hwcentry_specd_string (char *buf, size_t buflen, const Hwcentry *ctr)
   else
     memop = "";
   if (ctr->metric != NULL)  /* a standard counter for a specific register */
-    snprintf (descstr, sizeof (descstr), GTXT (" (`%s'; %s%s)"),
+    snprintf (descstr, sizeof (descstr), " (`%s'; %s%s)",
 	      hwc_i18n_metric (ctr), memop, timecvt);
   else  /* raw counter */
-    snprintf (descstr, sizeof (descstr), GTXT (" (%s%s)"), memop, timecvt);
+    snprintf (descstr, sizeof (descstr), " (%s%s)", memop, timecvt);
 
   char *rateString = hwc_rate_string (ctr, 1);
-  snprintf (stderrbuf, sizeof (stderrbuf), NTXT ("%s,%s%s"), ctr->name,
+  snprintf (buf, buflen, "%s,%s%s", ctr->name,
 	    rateString ? rateString : "", descstr);
   free (rateString);
-
-hwc_hwcentry_specd_string_done:
-  strncpy (buf, stderrbuf, buflen - 1);
-  buf[buflen - 1] = 0;
   return buf;
 }
 
@@ -5091,8 +5079,24 @@ hwc_usage_internal (int forKernel, FILE *f_usage, const char *cmd, const char *d
       fprintf (f_usage, GTXT ("           `lo'     per-thread maximum rate of ~10 samples/second\n"));
       fprintf (f_usage, GTXT ("           `on'     per-thread maximum rate of ~100 samples/second\n"));
       fprintf (f_usage, GTXT ("           `hi'     per-thread maximum rate of ~1000 samples/second\n\n"));
-      fprintf (f_usage, GTXT ("        <rate> == <interval>\n"));
-      fprintf (f_usage, GTXT ("           event interval; see collect (1) for details\n\n"));
+      fprintf (f_usage, GTXT ("        <rate> == <interval>\n"
+			      "           Fixed event interval value to trigger a sample.\n"
+			      "           Smaller intervals imply more frequent samples.\n"
+			      "           Example: when counting cycles on a 2 GHz processor,\n"
+			      "           an interval of 2,000,003 implies ~1000 samples/sec\n"
+			      "\n"
+			      "           Use this feature with caution, because:\n"
+			      "             (1) Frequent sampling increases overhead and may disturb \n"
+			      "                 other applications on your system.\n"
+			      "             (2) Event counts vary dramatically depending on the event \n"
+			      "                 and depending on the application.\n"
+			      "             (3) A fixed event interval disables any other gprofng\n"
+			      "                 internal mechanisms that may limit event rates.\n"
+			      "\n"
+			      "           Guidelines:  Aim at <1000 events per second.  Start by \n"
+			      "           collecting with the 'hi' option; in the experiment overview,\n"
+			      "           notice how many events are recorded per second; divide by\n"
+			      "           1000, and use that as your starting point.\n\n"));
 
       fprintf (f_usage, GTXT ("        A comma ',' followed immediately by white space may be omitted.\n\n"));
     }

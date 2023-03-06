@@ -1,4 +1,4 @@
-# Copyright 2008-2022 Free Software Foundation, Inc.
+# Copyright 2008-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,9 +21,7 @@
 #
 
 # This test suitable only for process record-replay
-if ![supports_process_record] {
-    return
-}
+require supports_process_record
 
 standard_testfile step-reverse.c
 set precsave [standard_output_file step.precsave]
@@ -34,10 +32,8 @@ if { [prepare_for_testing "failed to prepare" $testfile $srcfile] } {
 
 runto_main
 
-if [supports_process_record] {
-    # Activate process record/replay
-    gdb_test_no_output "record" "turn on process record"
-}
+# Activate process record/replay
+gdb_test_no_output "record" "turn on process record"
 
 set end_of_main [gdb_get_line_number "end of main" ]
 gdb_test "break $end_of_main" \
@@ -86,7 +82,8 @@ gdb_test "step 3" ".*STEP TEST 2.*" "step test 2"
 
 # step over call
 
-gdb_test "step" ".*NEXT OVER THIS CALL.*" "step up to call"
+gdb_test "step" ".*NEXT OVER THIS RECURSION.*" "step up to call"
+gdb_test "next" ".*NEXT OVER THIS CALL.*" "skip recursive call"
 gdb_test "next" ".*STEP INTO THIS CALL.*" "next over call"
 
 # step into call
@@ -280,9 +277,10 @@ gdb_test_multiple "step" "$test_message" {
     }
 }
 
-# next backward over call
+# Next backward over calls.
 
 gdb_test "next" ".*NEXT OVER THIS CALL.*" "reverse next over call"
+gdb_test "next" ".*NEXT OVER THIS RECURSION.*" "reverse next over recursive call"
 
 # step/next backward with count
 

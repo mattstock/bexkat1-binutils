@@ -1,5 +1,5 @@
 /* Simulator tracing/debugging support.
-   Copyright (C) 1997-2022 Free Software Foundation, Inc.
+   Copyright (C) 1997-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <stdarg.h>
 
 #include "ansidecl.h"
+#include "bfd.h"
 #include "dis-asm.h"
 
 /* Standard traceable entities.  */
@@ -125,10 +126,10 @@ enum {
 #define TRACE_debug    (1 << TRACE_DEBUG_IDX)
 
 /* Return non-zero if tracing of idx is enabled (compiled in).  */
-#define WITH_TRACE_P(idx)	(WITH_TRACE & (1 << idx))
+#define WITH_TRACE_P(idx)	((WITH_TRACE & (1 << idx)) != 0)
 
 /* Preprocessor macros to simplify tests of WITH_TRACE.  */
-#define WITH_TRACE_ANY_P	(WITH_TRACE)
+#define WITH_TRACE_ANY_P	(WITH_TRACE != 0)
 #define WITH_TRACE_INSN_P	WITH_TRACE_P (TRACE_INSN_IDX)
 #define WITH_TRACE_DISASM_P	WITH_TRACE_P (TRACE_DISASM_IDX)
 #define WITH_TRACE_DECODE_P	WITH_TRACE_P (TRACE_DECODE_IDX)

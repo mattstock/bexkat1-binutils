@@ -1,5 +1,5 @@
 /* Define a target vector and some small routines for a variant of a.out.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -474,6 +474,9 @@ MY_bfd_final_link (bfd *abfd, struct bfd_link_info *info)
 #endif
 #ifndef MY_find_nearest_line
 #define MY_find_nearest_line NAME (aout, find_nearest_line)
+#endif
+#ifndef MY_find_nearest_line_with_alt
+#define MY_find_nearest_line_with_alt _bfd_nosymbols_find_nearest_line_with_alt
 #endif
 #ifndef MY_find_line
 #define MY_find_line _bfd_nosymbols_find_line

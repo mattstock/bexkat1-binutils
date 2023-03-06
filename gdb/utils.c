@@ -1,6 +1,6 @@
 /* General utility routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,8 @@
 #endif /* HAVE_SYS_RESOURCE_H */
 
 #ifdef TUI
-#include "tui/tui.h"		/* For tui_get_command_dimension.   */
+/* For tui_get_command_dimension and tui_disable.   */
+#include "tui/tui.h"
 #endif
 
 #ifdef __GO32__
@@ -354,6 +355,10 @@ internal_vproblem (struct internal_problem *problem,
       }
   }
 
+#ifdef TUI
+  tui_disable ();
+#endif
+
   /* Create a string containing the full error/warning message.  Need
      to call query with this full string, as otherwize the reason
      (error/warning) and question become separated.  Format using a
@@ -412,7 +417,7 @@ internal_vproblem (struct internal_problem *problem,
   else if (problem->should_quit == internal_problem_no)
     quit_p = 0;
   else
-    internal_error (__FILE__, __LINE__, _("bad switch"));
+    internal_error (_("bad switch"));
 
   gdb_puts (_("\nThis is a bug, please report it."), gdb_stderr);
   if (REPORT_BUGS_TO[0])
@@ -442,7 +447,7 @@ internal_vproblem (struct internal_problem *problem,
   else if (problem->should_dump_core == internal_problem_no)
     dump_core_p = 0;
   else
-    internal_error (__FILE__, __LINE__, _("bad switch"));
+    internal_error (_("bad switch"));
 
   if (quit_p)
     {
@@ -609,42 +614,6 @@ add_internal_problem_command (struct internal_problem *problem)
     }
 }
 
-/* Return a newly allocated string, containing the PREFIX followed
-   by the system error message for errno (separated by a colon).  */
-
-static std::string
-perror_string (const char *prefix)
-{
-  const char *err = safe_strerror (errno);
-  return std::string (prefix) + ": " + err;
-}
-
-/* Print the system error message for errno, and also mention STRING
-   as the file name for which the error was encountered.  Use ERRCODE
-   for the thrown exception.  Then return to command level.  */
-
-void
-throw_perror_with_name (enum errors errcode, const char *string)
-{
-  std::string combined = perror_string (string);
-
-  /* I understand setting these is a matter of taste.  Still, some people
-     may clear errno but not know about bfd_error.  Doing this here is not
-     unreasonable.  */
-  bfd_set_error (bfd_error_no_error);
-  errno = 0;
-
-  throw_error (errcode, _("%s."), combined.c_str ());
-}
-
-/* See throw_perror_with_name, ERRCODE defaults here to GENERIC_ERROR.  */
-
-void
-perror_with_name (const char *string)
-{
-  throw_perror_with_name (GENERIC_ERROR, string);
-}
-
 /* Same as perror_with_name except that it prints a warning instead
    of throwing an error.  */
 
@@ -672,8 +641,8 @@ quit (void)
 {
   if (sync_quit_force_run)
     {
-      sync_quit_force_run = 0;
-      quit_force (NULL, 0);
+      sync_quit_force_run = false;
+      throw_forced_quit ("SIGTERM");
     }
 
 #ifdef __MSDOS__
@@ -714,13 +683,12 @@ malloc_failure (long size)
 {
   if (size > 0)
     {
-      internal_error (__FILE__, __LINE__,
-		      _("virtual memory exhausted: can't allocate %ld bytes."),
+      internal_error (_("virtual memory exhausted: can't allocate %ld bytes."),
 		      size);
     }
   else
     {
-      internal_error (__FILE__, __LINE__, _("virtual memory exhausted."));
+      internal_error (_("virtual memory exhausted."));
     }
 }
 
@@ -799,7 +767,7 @@ public:
       m_ui (NULL)
   {
     target_terminal::ours ();
-    ui_register_input_event_handler (current_ui);
+    current_ui->register_file_handler ();
     if (current_ui->prompt_state == PROMPT_BLOCKED)
       m_ui = current_ui;
   }
@@ -807,7 +775,7 @@ public:
   ~scoped_input_handler ()
   {
     if (m_ui != NULL)
-      ui_unregister_input_event_handler (m_ui);
+      m_ui->unregister_file_handler ();
   }
 
   DISABLE_COPY_AND_ASSIGN (scoped_input_handler);
@@ -880,7 +848,7 @@ defaulted_query (const char *ctlstr, const char defchar, va_list args)
      way, important error messages don't get lost when talking to GDB
      over a pipe.  */
   if (current_ui->instream != current_ui->stdin_stream
-      || !input_interactive_p (current_ui)
+      || !current_ui->input_interactive_p ()
       /* Restrict queries to the main UI.  */
       || current_ui != main_ui)
     {
@@ -2398,7 +2366,31 @@ strncmp_iw_with_mode (const char *string1, const char *string2,
 	  return 0;
 	}
       else
-	return (*string1 != '\0' && *string1 != '(');
+	{
+	  if (*string1 == '(')
+	    {
+	      int p_count = 0;
+
+	      do
+		{
+		  if (*string1 == '(')
+		    ++p_count;
+		  else if (*string1 == ')')
+		    --p_count;
+		  ++string1;
+		}
+	      while (*string1 != '\0' && p_count > 0);
+
+	      /* There maybe things like 'const' after the parameters,
+		 which we do want to ignore.  However, if there's an '@'
+		 then this likely indicates something like '@plt' which we
+		 should not ignore.  */
+	      return *string1 == '@';
+	    }
+
+	  return *string1 == '\0' ? 0 : 1;
+	}
+
     }
   else
     return 1;
@@ -2930,6 +2922,11 @@ strncmp_iw_with_mode_tests ()
   CHECK_MATCH ("foo[abi:a][abi:b](bar[abi:c][abi:d])", "foo[abi:a][abi:b](bar[abi:c][abi:d])",
 	       MATCH_PARAMS);
   CHECK_MATCH ("foo[abi:a][abi:b](bar[abi:c][abi:d])", "foo", MATCH_PARAMS);
+  CHECK_NO_MATCH ("foo(args)@plt", "foo", MATCH_PARAMS);
+  CHECK_NO_MATCH ("foo((())args(()))@plt", "foo", MATCH_PARAMS);
+  CHECK_MATCH ("foo((())args(()))", "foo", MATCH_PARAMS);
+  CHECK_MATCH ("foo(args) const", "foo", MATCH_PARAMS);
+  CHECK_MATCH ("foo(args)const", "foo", MATCH_PARAMS);
 
   /* strncmp_iw_with_mode also supports case insensitivity.  */
   {
@@ -3100,35 +3097,7 @@ strcmp_iw_ordered (const char *string1, const char *string2)
     }
 }
 
-/* See utils.h.  */
-
-bool
-streq (const char *lhs, const char *rhs)
-{
-  return !strcmp (lhs, rhs);
-}
-
 
-
-/*
-   ** subset_compare()
-   **    Answer whether string_to_compare is a full or partial match to
-   **    template_string.  The partial match must be in sequence starting
-   **    at index 0.
- */
-int
-subset_compare (const char *string_to_compare, const char *template_string)
-{
-  int match;
-
-  if (template_string != NULL && string_to_compare != NULL
-      && strlen (string_to_compare) <= strlen (template_string))
-    match =
-      (startswith (template_string, string_to_compare));
-  else
-    match = 0;
-  return match;
-}
 
 static void
 show_debug_timestamp (struct ui_file *file, int from_tty,
@@ -3138,28 +3107,6 @@ show_debug_timestamp (struct ui_file *file, int from_tty,
 	      value);
 }
 
-
-/* See utils.h.  */
-
-CORE_ADDR
-address_significant (gdbarch *gdbarch, CORE_ADDR addr)
-{
-  /* Clear insignificant bits of a target address and sign extend resulting
-     address, avoiding shifts larger or equal than the width of a CORE_ADDR.
-     The local variable ADDR_BIT stops the compiler reporting a shift overflow
-     when it won't occur.  Skip updating of target address if current target
-     has not set gdbarch significant_addr_bit.  */
-  int addr_bit = gdbarch_significant_addr_bit (gdbarch);
-
-  if (addr_bit && (addr_bit < (sizeof (CORE_ADDR) * HOST_CHAR_BIT)))
-    {
-      CORE_ADDR sign = (CORE_ADDR) 1 << (addr_bit - 1);
-      addr &= ((CORE_ADDR) 1 << addr_bit) - 1;
-      addr = (addr ^ sign) - sign;
-    }
-
-  return addr;
-}
 
 const char *
 paddress (struct gdbarch *gdbarch, CORE_ADDR addr)

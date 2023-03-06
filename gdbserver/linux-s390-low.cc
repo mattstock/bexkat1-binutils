@@ -1,6 +1,6 @@
 /* GNU/Linux S/390 specific low level interface, for the remote server
    for GDB.
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -592,7 +592,7 @@ s390_target::low_arch_setup ()
   /* Determine word size and HWCAP.  */
   int pid = pid_of (current_thread);
   int wordsize = s390_get_wordsize (pid);
-  unsigned long hwcap = linux_get_hwcap (wordsize);
+  unsigned long hwcap = linux_get_hwcap (pid, wordsize);
 
   /* Check whether the kernel supports extra register sets.  */
   int have_regset_last_break

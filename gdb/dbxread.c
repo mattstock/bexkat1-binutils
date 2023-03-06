@@ -1,5 +1,5 @@
 /* Read dbx symbol tables and convert to internal format, for GDB.
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -48,6 +48,7 @@
 #include "complaints.h"
 #include "cp-abi.h"
 #include "cp-support.h"
+#include "c-lang.h"
 #include "psympriv.h"
 #include "block.h"
 #include "aout/aout64.h"
@@ -57,7 +58,7 @@
 
 /* Key for dbx-associated data.  */
 
-objfile_key<dbx_symfile_info> dbx_objfile_data_key;
+const registry<objfile>::key<dbx_symfile_info> dbx_objfile_data_key;
 
 /* We put a pointer to this structure in the read_symtab_private field
    of the psymtab.  */
@@ -485,7 +486,7 @@ record_minimal_symbol (minimal_symbol_reader &reader,
       {
 	const char *tempstring = name;
 
-	if (tempstring[0] == bfd_get_symbol_leading_char (objfile->obfd))
+	if (tempstring[0] == bfd_get_symbol_leading_char (objfile->obfd.get ()))
 	  ++tempstring;
 	if (is_vtable_name (tempstring))
 	  ms_type = mst_data;
@@ -520,7 +521,7 @@ dbx_symfile_read (struct objfile *objfile, symfile_add_flags symfile_flags)
   bfd *sym_bfd;
   int val;
 
-  sym_bfd = objfile->obfd;
+  sym_bfd = objfile->obfd.get ();
 
   /* .o and .nlm files are relocatables with text, data and bss segs based at
      0.  This flag disables special (Solaris stabs-in-elf only) fixups for
@@ -583,7 +584,7 @@ static void
 dbx_symfile_init (struct objfile *objfile)
 {
   int val;
-  bfd *sym_bfd = objfile->obfd;
+  bfd *sym_bfd = objfile->obfd.get ();
   const char *name = bfd_get_filename (sym_bfd);
   asection *text_sect;
   unsigned char size_temp[DBX_STRINGTAB_SIZE_SIZE];
@@ -1010,8 +1011,8 @@ read_dbx_symtab (minimal_symbol_reader &reader,
 
   lowest_text_address = (CORE_ADDR) -1;
 
-  symfile_bfd = objfile->obfd;	/* For next_text_symbol.  */
-  abfd = objfile->obfd;
+  symfile_bfd = objfile->obfd.get ();	/* For next_text_symbol.  */
+  abfd = objfile->obfd.get ();
   symbuf_end = symbuf_idx = 0;
   next_symbol_text_func = dbx_next_symbol_text;
   textlow_not_set = 1;
@@ -1437,6 +1438,18 @@ read_dbx_symtab (minimal_symbol_reader &reader,
 	      std::string name (namestring, p - namestring);
 	      gdb::unique_xmalloc_ptr<char> new_name
 		= cp_canonicalize_string (name.c_str ());
+	      if (new_name != nullptr)
+		{
+		  sym_len = strlen (new_name.get ());
+		  sym_name = obstack_strdup (&objfile->objfile_obstack,
+					     new_name.get ());
+		}
+	    }
+	  else if (psymtab_language == language_c)
+	    {
+	      std::string name (namestring, p - namestring);
+	      gdb::unique_xmalloc_ptr<char> new_name
+		= c_canonicalize_name (name.c_str ());
 	      if (new_name != nullptr)
 		{
 		  sym_len = strlen (new_name.get ());
@@ -2120,7 +2133,7 @@ dbx_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
       symbol_size = SYMBOL_SIZE (pst);
 
       /* Read in this file's symbols.  */
-      bfd_seek (objfile->obfd, SYMBOL_OFFSET (pst), SEEK_SET);
+      bfd_seek (objfile->obfd.get (), SYMBOL_OFFSET (pst), SEEK_SET);
       read_ofile_symtab (objfile, pst);
     }
 
@@ -2187,8 +2200,8 @@ read_ofile_symtab (struct objfile *objfile, legacy_psymtab *pst)
   stringtab_global = DBX_STRINGTAB (objfile);
   set_last_source_file (NULL);
 
-  abfd = objfile->obfd;
-  symfile_bfd = objfile->obfd;	/* Implicit param to next_text_symbol.  */
+  abfd = objfile->obfd.get ();
+  symfile_bfd = objfile->obfd.get ();	/* Implicit param to next_text_symbol.  */
   symbuf_end = symbuf_idx = 0;
   symbuf_read = 0;
   symbuf_left = sym_offset + sym_size;
@@ -2318,8 +2331,7 @@ read_ofile_symtab (struct objfile *objfile, legacy_psymtab *pst)
   if (get_last_source_start_addr () > text_offset)
     set_last_source_start_addr (text_offset);
 
-  pst->compunit_symtab = end_compunit_symtab (text_offset + text_size,
-					      SECT_OFF_TEXT (objfile));
+  pst->compunit_symtab = end_compunit_symtab (text_offset + text_size);
 
   end_stabs ();
 
@@ -2349,8 +2361,8 @@ cp_set_block_scope (const struct symbol *symbol,
       const char *name = symbol->demangled_name ();
       unsigned int prefix_len = cp_entire_prefix_len (name);
 
-      block_set_scope (block, obstack_strndup (obstack, name, prefix_len),
-		       obstack);
+      block->set_scope (obstack_strndup (obstack, name, prefix_len),
+			obstack);
     }
 }
 
@@ -2400,6 +2412,9 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
   /* If this is nonzero, we've seen a non-gcc N_OPT symbol for this
      source file.  Used to detect the SunPRO solaris compiler.  */
   static int n_opt_found;
+
+  /* The section index for this symbol.  */
+  int section_index = -1;
 
   /* Something is wrong if we see real data before seeing a source
      file name.  */
@@ -2464,6 +2479,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
       sline_found_in_function = 0;
 
       /* Relocate for dynamic loading.  */
+      section_index = SECT_OFF_TEXT (objfile);
       valu += section_offsets[SECT_OFF_TEXT (objfile)];
       valu = gdbarch_addr_bits_remove (gdbarch, valu);
       last_function_start = valu;
@@ -2552,6 +2568,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
     case N_FN_SEQ:
       /* This kind of symbol indicates the start of an object file.
 	 Relocate for dynamic loading.  */
+      section_index = SECT_OFF_TEXT (objfile);
       valu += section_offsets[SECT_OFF_TEXT (objfile)];
       break;
 
@@ -2560,6 +2577,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 	 source file.  Finish the symbol table of the previous source
 	 file (if any) and start accumulating a new symbol table.
 	 Relocate for dynamic loading.  */
+      section_index = SECT_OFF_TEXT (objfile);
       valu += section_offsets[SECT_OFF_TEXT (objfile)];
 
       n_opt_found = 0;
@@ -2575,7 +2593,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 	      patch_subfile_names (get_current_subfile (), name);
 	      break;		/* Ignore repeated SOs.  */
 	    }
-	  end_compunit_symtab (valu, SECT_OFF_TEXT (objfile));
+	  end_compunit_symtab (valu);
 	  end_stabs ();
 	}
 
@@ -2596,6 +2614,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 	 sub-source-file, one whose contents were copied or included
 	 in the compilation of the main source file (whose name was
 	 given in the N_SO symbol).  Relocate for dynamic loading.  */
+      section_index = SECT_OFF_TEXT (objfile);
       valu += section_offsets[SECT_OFF_TEXT (objfile)];
       start_subfile (name);
       break;
@@ -2696,6 +2715,7 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 		   symbol_file_add as addr (this is known to affect
 		   SunOS 4, and I suspect ELF too).  Since there is no
 		   Ttext.text symbol, we can get addr from the text offset.  */
+		section_index = SECT_OFF_TEXT (objfile);
 		valu += section_offsets[SECT_OFF_TEXT (objfile)];
 		goto define_a_symbol;
 	      }
@@ -2711,28 +2731,31 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 	  case N_ROSYM:
 	    goto case_N_ROSYM;
 	  default:
-	    internal_error (__FILE__, __LINE__,
-			    _("failed internal consistency check"));
+	    internal_error (_("failed internal consistency check"));
 	  }
       }
 
     case_N_STSYM:		/* Static symbol in data segment.  */
     case N_DSLINE:		/* Source line number, data segment.  */
+      section_index = SECT_OFF_DATA (objfile);
       valu += section_offsets[SECT_OFF_DATA (objfile)];
       goto define_a_symbol;
 
     case_N_LCSYM:		/* Static symbol in BSS segment.  */
     case N_BSLINE:		/* Source line number, BSS segment.  */
       /* N_BROWS: overlaps with N_BSLINE.  */
+      section_index = SECT_OFF_BSS (objfile);
       valu += section_offsets[SECT_OFF_BSS (objfile)];
       goto define_a_symbol;
 
     case_N_ROSYM:		/* Static symbol in read-only data segment.  */
+      section_index = SECT_OFF_RODATA (objfile);
       valu += section_offsets[SECT_OFF_RODATA (objfile)];
       goto define_a_symbol;
 
     case N_ENTRY:		/* Alternate entry point.  */
       /* Relocate for dynamic loading.  */
+      section_index = SECT_OFF_TEXT (objfile);
       valu += section_offsets[SECT_OFF_TEXT (objfile)];
       goto define_a_symbol;
 
@@ -2824,10 +2847,17 @@ process_one_symbol (int type, int desc, CORE_ADDR valu, const char *name,
 
 	      newobj = push_context (0, valu);
 	      newobj->name = define_symbol (valu, name, desc, type, objfile);
+	      if (newobj->name != nullptr)
+		newobj->name->set_section_index (section_index);
 	      break;
 
 	    default:
-	      define_symbol (valu, name, desc, type, objfile);
+	      {
+		struct symbol *sym = define_symbol (valu, name, desc, type,
+						    objfile);
+		if (sym != nullptr)
+		  sym->set_section_index (section_index);
+	      }
 	      break;
 	    }
 	}
@@ -2932,7 +2962,7 @@ coffstab_build_psymtabs (struct objfile *objfile,
 			 file_ptr stabstroffset, unsigned int stabstrsize)
 {
   int val;
-  bfd *sym_bfd = objfile->obfd;
+  bfd *sym_bfd = objfile->obfd.get ();
   const char *name = bfd_get_filename (sym_bfd);
   unsigned int stabsize;
 
@@ -3019,7 +3049,7 @@ elfstab_build_psymtabs (struct objfile *objfile, asection *stabsect,
 			file_ptr stabstroffset, unsigned int stabstrsize)
 {
   int val;
-  bfd *sym_bfd = objfile->obfd;
+  bfd *sym_bfd = objfile->obfd.get ();
   const char *name = bfd_get_filename (sym_bfd);
 
   stabsread_new_init ();
@@ -3100,7 +3130,7 @@ stabsect_build_psymtabs (struct objfile *objfile, char *stab_name,
 			 char *stabstr_name, char *text_name)
 {
   int val;
-  bfd *sym_bfd = objfile->obfd;
+  bfd *sym_bfd = objfile->obfd.get ();
   const char *name = bfd_get_filename (sym_bfd);
   asection *stabsect;
   asection *stabstrsect;

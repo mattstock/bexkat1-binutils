@@ -1,6 +1,6 @@
 /* General Compile and inject code
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -72,6 +72,19 @@ struct symbol_error
      hash table.  */
 
   char *message;
+};
+
+/* An object that maps a gdb type to a gcc type.  */
+
+struct type_map_instance
+{
+  /* The gdb type.  */
+
+  struct type *type;
+
+  /* The corresponding gcc type handle.  */
+
+  gcc_type gcc_type_handle;
 };
 
 /* Hash a type_map_instance.  */
@@ -297,8 +310,8 @@ compile_file_command (const char *args, int from_tty)
     error (_("You must provide a filename for this command."));
 
   args = skip_spaces (args);
-  gdb::unique_xmalloc_ptr<char> abspath = gdb_abspath (args);
-  std::string buffer = string_printf ("#include \"%s\"\n", abspath.get ());
+  std::string abspath = gdb_abspath (args);
+  std::string buffer = string_printf ("#include \"%s\"\n", abspath.c_str ());
   eval_compile_command (NULL, buffer.c_str (), scope, NULL);
 }
 
@@ -484,13 +497,13 @@ get_expr_block_and_pc (CORE_ADDR *pc)
       struct symtab_and_line cursal = get_current_source_symtab_and_line ();
 
       if (cursal.symtab)
-	block = BLOCKVECTOR_BLOCK (cursal.symtab->compunit ()->blockvector (),
-				   STATIC_BLOCK);
+	block = cursal.symtab->compunit ()->blockvector ()->static_block ();
+
       if (block != NULL)
-	*pc = BLOCK_ENTRY_PC (block);
+	*pc = block->entry_pc ();
     }
   else
-    *pc = BLOCK_ENTRY_PC (block);
+    *pc = block->entry_pc ();
 
   return block;
 }

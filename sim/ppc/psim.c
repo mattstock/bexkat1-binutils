@@ -99,7 +99,7 @@ find_arg(const char *err_msg,
 {
   *ptr_to_argp += 1;
   if (argv[*ptr_to_argp] == NULL)
-    error(err_msg);
+    error("%s", err_msg);
   return argv[*ptr_to_argp];
 }
 
@@ -359,6 +359,11 @@ psim_options(device *root,
 	  {
 	    extern const char version[];
 	    printf ("GNU simulator %s%s\n", PKGVERSION, version);
+	    printf ("Copyright (C) 2023 Free Software Foundation, Inc.\n");
+	    printf ( "\
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>\
+\nThis is free software: you are free to change and redistribute it.\n\
+There is NO WARRANTY, to the extent permitted by law.\n");
 	    if (kind == SIM_OPEN_STANDALONE)
 	      exit (0);
 	    else
@@ -535,7 +540,7 @@ psim_create(const char *file_name,
   if (ppc_trace[trace_print_device_tree] || ppc_trace[trace_dump_device_tree])
     tree_print(root);
   if (ppc_trace[trace_dump_device_tree])
-    error("");
+    error("%s", "");
 
   return system;
 }
@@ -1186,7 +1191,7 @@ psim_merge_device_file(device *root,
       /* append the next line */
       if (!fgets(device_path + curlen, sizeof(device_path) - curlen, description)) {
 	fclose(description);
-	error("%s:%s: unexpected eof in line continuation - %s",
+	error("%s:%d: unexpected eof in line continuation - %s",
 	      file_name, line_nr, device_path);
       }
       if (strchr(device_path, '\n') == NULL) {

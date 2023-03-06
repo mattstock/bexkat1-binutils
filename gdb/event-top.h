@@ -1,6 +1,6 @@
 /* Definitions used by event-top.c, for GDB, the GNU debugger.
 
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    Written by Elena Zannoni <ezannoni@cygnus.com> of Cygnus Solutions.
 
@@ -45,7 +45,6 @@ extern void handle_sigtstp (int sig);
 extern void handle_sigint (int sig);
 extern void handle_sigterm (int sig);
 extern void async_request_quit (void *arg);
-extern void stdin_event_handler (int error, void *client_data);
 extern void async_disable_stdin (void);
 extern void async_enable_stdin (void);
 
@@ -69,6 +68,12 @@ extern void gdb_rl_callback_handler_install (const char *prompt);
 /* Reinstall the readline callback handler (with no prompt), if not
    currently installed.  */
 extern void gdb_rl_callback_handler_reinstall (void);
+
+/* Called by readline after a complete line has been gathered from the
+   user, but before the line is dispatched to back to GDB.  This function
+   is a wrapper around readline's builtin rl_deprep_terminal function, and
+   handles the case where readline received EOF.  */
+extern void gdb_rl_deprep_term_function (void);
 
 typedef void (*segv_handler_t) (int);
 

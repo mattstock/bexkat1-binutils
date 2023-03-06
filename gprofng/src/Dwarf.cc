@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -499,8 +499,7 @@ DwrCU::parseChild (Dwarf_cnt *ctx)
 		  if (link_name && streq (link_name, NTXT ("MAIN")))
 		    ctx->fortranMAIN = Stabs::find_func (NTXT ("MAIN"), ctx->module->functions, true, true);
 		}
-	      if (get_linkage_name () == NULL)
-		break;
+	      break;
 	    }
 	  func = append_Function (ctx);
 	  if (func)
@@ -606,12 +605,15 @@ Dwarf::archive_Dwarf (LoadObject *lo)
 	{
 	  mod->hdrOffset = dwrCUs->size ();
 	  DwrLineRegs *lineReg = dwrCU->get_dwrLineReg ();
-	  dwrCU->srcFiles = new Vector<SourceFile *> (VecSize (lineReg->file_names));
-	  for (long i = 0, sz = VecSize (lineReg->file_names); i < sz; i++)
+	  if (lineReg != NULL)
 	    {
-	      char *fname = lineReg->getPath (i + 1);
-	      SourceFile *sf = mod->findSource (fname, true);
-	      dwrCU->srcFiles->append (sf);
+	      dwrCU->srcFiles = new Vector<SourceFile *> (VecSize (lineReg->file_names));
+	      for (long i = 0, sz = VecSize (lineReg->file_names); i < sz; i++)
+		{
+		  char *fname = lineReg->getPath (i + 1);
+		  SourceFile *sf = mod->findSource (fname, true);
+		  dwrCU->srcFiles->append (sf);
+		}
 	    }
 
 	  Dwarf_cnt ctx;
@@ -986,9 +988,6 @@ DwrCU::append_Function (Dwarf_cnt *ctx)
       if (lineno > 0)
 	{
 	  func->setLineFirst (lineno);
-	  if (dwrLineReg == NULL)
-	    dwrLineReg = new DwrLineRegs (new DwrSec (dwarf->debug_lineSec,
-						   stmt_list_offset), comp_dir);
 	  int fileno = ((int) Dwarf_data (DW_AT_decl_file)) - 1;
 	  SourceFile *sf = ((fileno >= 0) && (fileno < VecSize (srcFiles))) ? srcFiles->get (fileno)
 		  : module->getMainSrc ();

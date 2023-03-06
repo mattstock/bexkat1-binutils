@@ -1,7 +1,7 @@
 /* Machine independent support for QNX Neutrino /proc (process file system)
    for GDB.  Written by Colin Burgess at QNX Software Systems Limited.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    Contributed by QNX Software Systems Ltd.
 
@@ -121,7 +121,7 @@ struct nto_procfs_target : public inf_child_target
 
   const char *extra_thread_info (struct thread_info *) override;
 
-  char *pid_to_exec_file (int pid) override;
+  const char *pid_to_exec_file (int pid) override;
 };
 
 /* For "target native".  */
@@ -658,13 +658,13 @@ nto_procfs_target::files_info ()
 
   gdb_printf ("\tUsing the running image of %s %s via %s.\n",
 	      inf->attach_flag ? "attached" : "child",
-	      target_pid_to_str (inferior_ptid).c_str (),
+	      target_pid_to_str (ptid_t (inf->pid)).c_str (),
 	      (nodestr != NULL) ? nodestr : "local node");
 }
 
 /* Target to_pid_to_exec_file implementation.  */
 
-char *
+const char *
 nto_procfs_target::pid_to_exec_file (const int pid)
 {
   int proc_fd;
@@ -706,7 +706,7 @@ nto_procfs_target::attach (const char *args, int from_tty)
   ptid_t ptid = do_attach (ptid_t (pid));
   inf = current_inferior ();
   inferior_appeared (inf, pid);
-  inf->attach_flag = 1;
+  inf->attach_flag = true;
 
   if (!inf->target_is_pushed (ops))
     inf->push_target (ops);
@@ -1286,7 +1286,7 @@ nto_procfs_target::create_inferior (const char *exec_file,
 
   inf = current_inferior ();
   inferior_appeared (inf, pid);
-  inf->attach_flag = 0;
+  inf->attach_flag = false;
 
   flags = _DEBUG_FLAG_KLC;	/* Kill-on-Last-Close flag.  */
   errn = devctl (ctl_fd, DCMD_PROC_SET_FLAG, &flags, sizeof (flags), 0);

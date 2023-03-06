@@ -1,5 +1,5 @@
 /* Internal interfaces for the Windows code
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,8 +21,14 @@
 #include "gdbsupport/common-debug.h"
 #include "target/target.h"
 
-#ifdef __CYGWIN__
+#undef GetModuleFileNameEx
+
+#ifndef __CYGWIN__
+#define GetModuleFileNameEx GetModuleFileNameExA
+#else
+#include <sys/cygwin.h>
 #define __USEWIDE
+#define GetModuleFileNameEx GetModuleFileNameExW
 #endif
 
 namespace windows_nat
@@ -62,6 +68,10 @@ GenerateConsoleCtrlEvent_ftype *GenerateConsoleCtrlEvent;
 typedef HRESULT WINAPI (GetThreadDescription_ftype) (HANDLE, PWSTR *);
 static GetThreadDescription_ftype *GetThreadDescription;
 
+InitializeProcThreadAttributeList_ftype *InitializeProcThreadAttributeList;
+UpdateProcThreadAttribute_ftype *UpdateProcThreadAttribute;
+DeleteProcThreadAttributeList_ftype *DeleteProcThreadAttributeList;
+
 /* Note that 'debug_events' must be locally defined in the relevant
    functions.  */
 #define DEBUG_EVENTS(fmt, ...) \
@@ -85,8 +95,8 @@ windows_thread_info::suspend ()
 	 We can get Invalid Handle (6) if the main thread
 	 has exited.  */
       if (err != ERROR_INVALID_HANDLE && err != ERROR_ACCESS_DENIED)
-	warning (_("SuspendThread (tid=0x%x) failed. (winerr %u)"),
-		 (unsigned) tid, (unsigned) err);
+	warning (_("SuspendThread (tid=0x%x) failed. (winerr %u: %s)"),
+		 (unsigned) tid, (unsigned) err, strwinerror (err));
       suspended = -1;
     }
   else
@@ -103,8 +113,8 @@ windows_thread_info::resume ()
       if (ResumeThread (h) == (DWORD) -1)
 	{
 	  DWORD err = GetLastError ();
-	  warning (_("warning: ResumeThread (tid=0x%x) failed. (winerr %u)"),
-		   (unsigned) tid, (unsigned) err);
+	  warning (_("warning: ResumeThread (tid=0x%x) failed. (winerr %u: %s)"),
+		   (unsigned) tid, (unsigned) err, strwinerror (err));
 	}
     }
   suspended = 0;
@@ -119,18 +129,128 @@ windows_thread_info::thread_name ()
       HRESULT result = GetThreadDescription (h, &value);
       if (SUCCEEDED (result))
 	{
-	  size_t needed = wcstombs (nullptr, value, 0);
-	  if (needed != (size_t) -1)
+	  int needed = WideCharToMultiByte (CP_ACP, 0, value, -1, nullptr, 0,
+					    nullptr, nullptr);
+	  if (needed != 0)
 	    {
-	      name.reset ((char *) xmalloc (needed));
-	      if (wcstombs (name.get (), value, needed) == (size_t) -1)
-		name.reset ();
+	      /* USED_DEFAULT is how we detect that the encoding
+		 conversion had to fall back to the substitution
+		 character.  It seems better to just reject bad
+		 conversions here.  */
+	      BOOL used_default = FALSE;
+	      gdb::unique_xmalloc_ptr<char> new_name
+		((char *) xmalloc (needed));
+	      if (WideCharToMultiByte (CP_ACP, 0, value, -1,
+				       new_name.get (), needed,
+				       nullptr, &used_default) == needed
+		  && !used_default
+		  && strlen (new_name.get ()) > 0)
+		name = std::move (new_name);
 	    }
 	  LocalFree (value);
 	}
     }
 
   return name.get ();
+}
+
+/* Try to determine the executable filename.
+
+   EXE_NAME_RET is a pointer to a buffer whose size is EXE_NAME_MAX_LEN.
+
+   Upon success, the filename is stored inside EXE_NAME_RET, and
+   this function returns nonzero.
+
+   Otherwise, this function returns zero and the contents of
+   EXE_NAME_RET is undefined.  */
+
+int
+windows_process_info::get_exec_module_filename (char *exe_name_ret,
+						size_t exe_name_max_len)
+{
+  DWORD len;
+  HMODULE dh_buf;
+  DWORD cbNeeded;
+
+  cbNeeded = 0;
+#ifdef __x86_64__
+  if (wow64_process)
+    {
+      if (!EnumProcessModulesEx (handle,
+				 &dh_buf, sizeof (HMODULE), &cbNeeded,
+				 LIST_MODULES_32BIT)
+	  || !cbNeeded)
+	return 0;
+    }
+  else
+#endif
+    {
+      if (!EnumProcessModules (handle,
+			       &dh_buf, sizeof (HMODULE), &cbNeeded)
+	  || !cbNeeded)
+	return 0;
+    }
+
+  /* We know the executable is always first in the list of modules,
+     which we just fetched.  So no need to fetch more.  */
+
+#ifdef __CYGWIN__
+  {
+    /* Cygwin prefers that the path be in /x/y/z format, so extract
+       the filename into a temporary buffer first, and then convert it
+       to POSIX format into the destination buffer.  */
+    wchar_t *pathbuf = (wchar_t *) alloca (exe_name_max_len * sizeof (wchar_t));
+
+    len = GetModuleFileNameEx (handle,
+			       dh_buf, pathbuf, exe_name_max_len);
+    if (len == 0)
+      {
+	unsigned err = (unsigned) GetLastError ();
+	error (_("Error getting executable filename (error %u): %s"),
+	       err, strwinerror (err));
+      }
+    if (cygwin_conv_path (CCP_WIN_W_TO_POSIX, pathbuf, exe_name_ret,
+			  exe_name_max_len) < 0)
+      error (_("Error converting executable filename to POSIX: %d."), errno);
+  }
+#else
+  len = GetModuleFileNameEx (handle,
+			     dh_buf, exe_name_ret, exe_name_max_len);
+  if (len == 0)
+    {
+      unsigned err = (unsigned) GetLastError ();
+      error (_("Error getting executable filename (error %u): %s"),
+	     err, strwinerror (err));
+    }
+#endif
+
+    return 1;	/* success */
+}
+
+const char *
+windows_process_info::pid_to_exec_file (int pid)
+{
+  static char path[MAX_PATH];
+#ifdef __CYGWIN__
+  /* Try to find exe name as symlink target of /proc/<pid>/exe.  */
+  int nchars;
+  char procexe[sizeof ("/proc/4294967295/exe")];
+
+  xsnprintf (procexe, sizeof (procexe), "/proc/%u/exe", pid);
+  nchars = readlink (procexe, path, sizeof(path));
+  if (nchars > 0 && nchars < sizeof (path))
+    {
+      path[nchars] = '\0';	/* Got it */
+      return path;
+    }
+#endif
+
+  /* If we get here then either Cygwin is hosed, this isn't a Cygwin version
+     of gdb, or we're trying to debug a non-Cygwin windows executable.  */
+  if (!get_exec_module_filename (path, sizeof (path)))
+    path[0] = '\0';
+
+  return path;
 }
 
 /* Return the name of the DLL referenced by H at ADDRESS.  UNICODE
@@ -630,6 +750,152 @@ wait_for_debug_event (DEBUG_EVENT *event, DWORD timeout)
   return result;
 }
 
+/* Flags to pass to UpdateProcThreadAttribute.  */
+#define relocate_aslr_flags ((0x2 << 8) | (0x2 << 16))
+
+/* Attribute to pass to UpdateProcThreadAttribute.  */
+#define mitigation_policy 0x00020007
+
+/* Pick one of the symbols as a sentinel.  */
+#ifdef PROCESS_CREATION_MITIGATION_POLICY_FORCE_RELOCATE_IMAGES_ALWAYS_OFF
+
+static_assert ((PROCESS_CREATION_MITIGATION_POLICY_FORCE_RELOCATE_IMAGES_ALWAYS_OFF
+		| PROCESS_CREATION_MITIGATION_POLICY_BOTTOM_UP_ASLR_ALWAYS_OFF)
+	       == relocate_aslr_flags,
+	       "check that ASLR flag values are correct");
+
+static_assert (PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY == mitigation_policy,
+	       "check that mitigation policy value is correct");
+
+#endif
+
+/* Helper template for the CreateProcess wrappers.
+
+   FUNC is the type of the underlying CreateProcess call.  CHAR is the
+   character type to use, and INFO is the "startupinfo" type to use.
+
+   DO_CREATE_PROCESS is the underlying CreateProcess function to use;
+   the remaining arguments are passed to it.  */
+template<typename FUNC, typename CHAR, typename INFO>
+BOOL
+create_process_wrapper (FUNC *do_create_process, const CHAR *image,
+			CHAR *command_line, DWORD flags,
+			void *environment, const CHAR *cur_dir,
+			bool no_randomization,
+			INFO *startup_info,
+			PROCESS_INFORMATION *process_info)
+{
+  if (no_randomization && disable_randomization_available ())
+    {
+      static bool tried_and_failed;
+
+      if (!tried_and_failed)
+	{
+	  /* Windows 8 is required for the real declaration, but to
+	     allow building on earlier versions of Windows, we declare
+	     the type locally.  */
+	  struct gdb_extended_info
+	  {
+	    INFO StartupInfo;
+	    gdb_lpproc_thread_attribute_list lpAttributeList;
+	  };
+
+#	  ifndef EXTENDED_STARTUPINFO_PRESENT
+#	   define EXTENDED_STARTUPINFO_PRESENT 0x00080000
+#	  endif
+
+	  gdb_extended_info info_ex {};
+
+	  if (startup_info != nullptr)
+	    info_ex.StartupInfo = *startup_info;
+	  info_ex.StartupInfo.cb = sizeof (info_ex);
+	  SIZE_T size = 0;
+	  /* Ignore the result here.  The documentation says the first
+	     call always fails, by design.  */
+	  InitializeProcThreadAttributeList (nullptr, 1, 0, &size);
+	  info_ex.lpAttributeList
+	    = (gdb_lpproc_thread_attribute_list) alloca (size);
+	  InitializeProcThreadAttributeList (info_ex.lpAttributeList,
+					     1, 0, &size);
+
+	  gdb::optional<BOOL> return_value;
+	  DWORD attr_flags = relocate_aslr_flags;
+	  if (!UpdateProcThreadAttribute (info_ex.lpAttributeList, 0,
+					  mitigation_policy,
+					  &attr_flags,
+					  sizeof (attr_flags),
+					  nullptr, nullptr))
+	    tried_and_failed = true;
+	  else
+	    {
+	      BOOL result = do_create_process (image, command_line,
+					       nullptr, nullptr,
+					       TRUE,
+					       (flags
+						| EXTENDED_STARTUPINFO_PRESENT),
+					       environment,
+					       cur_dir,
+					       &info_ex.StartupInfo,
+					       process_info);
+	      if (result)
+		return_value = result;
+	      else if (GetLastError () == ERROR_INVALID_PARAMETER)
+		tried_and_failed = true;
+	      else
+		return_value = FALSE;
+	    }
+
+	  DeleteProcThreadAttributeList (info_ex.lpAttributeList);
+
+	  if (return_value.has_value ())
+	    return *return_value;
+	}
+    }
+
+  return do_create_process (image,
+			    command_line, /* command line */
+			    nullptr,	  /* Security */
+			    nullptr,	  /* thread */
+			    TRUE,	  /* inherit handles */
+			    flags,	  /* start flags */
+			    environment,  /* environment */
+			    cur_dir,	  /* current directory */
+			    startup_info,
+			    process_info);
+}
+
+/* See nat/windows-nat.h.  */
+
+BOOL
+create_process (const char *image, char *command_line, DWORD flags,
+		void *environment, const char *cur_dir,
+		bool no_randomization,
+		STARTUPINFOA *startup_info,
+		PROCESS_INFORMATION *process_info)
+{
+  return create_process_wrapper (CreateProcessA, image, command_line, flags,
+				 environment, cur_dir, no_randomization,
+				 startup_info, process_info);
+}
+
+#ifdef __CYGWIN__
+
+/* See nat/windows-nat.h.  */
+
+BOOL
+create_process (const wchar_t *image, wchar_t *command_line, DWORD flags,
+		void *environment, const wchar_t *cur_dir,
+		bool no_randomization,
+		STARTUPINFOW *startup_info,
+		PROCESS_INFORMATION *process_info)
+{
+  return create_process_wrapper (CreateProcessW, image, command_line, flags,
+				 environment, cur_dir, no_randomization,
+				 startup_info, process_info);
+}
+
+#endif /* __CYGWIN__ */
+
 /* Define dummy functions which always return error for the rare cases where
    these functions could not be found.  */
 template<typename... T>
@@ -665,6 +931,16 @@ bad_GetConsoleFontSize (HANDLE w, DWORD nFont)
 /* See windows-nat.h.  */
 
 bool
+disable_randomization_available ()
+{
+  return (InitializeProcThreadAttributeList != nullptr
+	  && UpdateProcThreadAttribute != nullptr
+	  && DeleteProcThreadAttributeList != nullptr);
+}
+
+/* See windows-nat.h.  */
+
+bool
 initialize_loadable ()
 {
   bool result = true;
@@ -690,6 +966,10 @@ initialize_loadable ()
 #endif
       GPA (hm, GenerateConsoleCtrlEvent);
       GPA (hm, GetThreadDescription);
+
+      GPA (hm, InitializeProcThreadAttributeList);
+      GPA (hm, UpdateProcThreadAttribute);
+      GPA (hm, DeleteProcThreadAttributeList);
     }
 
   /* Set variables to dummy versions of these processes if the function

@@ -1,5 +1,5 @@
 /* Target-dependent code for FreeBSD on RISC-V processors.
-   Copyright (C) 2018-2022 Free Software Foundation, Inc.
+   Copyright (C) 2018-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -108,7 +108,7 @@ riscv_fbsd_iterate_over_regset_sections (struct gdbarch *gdbarch,
 
 static void
 riscv_fbsd_sigframe_init (const struct tramp_frame *self,
-			  struct frame_info *this_frame,
+			  frame_info_ptr this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func)
 {

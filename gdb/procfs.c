@@ -1,6 +1,6 @@
 /* Machine independent support for Solaris /proc (process file system) for GDB.
 
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    Written by Michael Snyder at Cygnus Solutions.
    Based on work by Fred Fish, Stu Grossman, Geoff Noer, and others.
@@ -127,7 +127,7 @@ public:
 
   std::string pid_to_str (ptid_t) override;
 
-  char *pid_to_exec_file (int pid) override;
+  const char *pid_to_exec_file (int pid) override;
 
   thread_control_capabilities get_thread_control_capabilities () override
   { return tc_schedlock; }
@@ -141,8 +141,8 @@ public:
   bool info_proc (const char *, enum info_proc_what) override;
 
 #if PR_MODEL_NATIVE == PR_MODEL_LP64
-  int auxv_parse (gdb_byte **readptr,
-		  gdb_byte *endptr, CORE_ADDR *typep, CORE_ADDR *valp)
+  int auxv_parse (const gdb_byte **readptr,
+		  const gdb_byte *endptr, CORE_ADDR *typep, CORE_ADDR *valp)
     override;
 #endif
 
@@ -169,11 +169,12 @@ static procfs_target the_procfs_target;
    is presented in 64-bit format.  We need to provide a custom parser
    to handle that.  */
 int
-procfs_target::auxv_parse (gdb_byte **readptr,
-			   gdb_byte *endptr, CORE_ADDR *typep, CORE_ADDR *valp)
+procfs_target::auxv_parse (const gdb_byte **readptr,
+			   const gdb_byte *endptr, CORE_ADDR *typep,
+			   CORE_ADDR *valp)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
-  gdb_byte *ptr = *readptr;
+  const gdb_byte *ptr = *readptr;
 
   if (endptr == ptr)
     return 0;
@@ -559,15 +560,7 @@ enum { NOKILL, KILL };
 static void
 dead_procinfo (procinfo *pi, const char *msg, int kill_p)
 {
-  char procfile[80];
-
-  if (pi->pathname)
-    print_sys_errmsg (pi->pathname, errno);
-  else
-    {
-      xsnprintf (procfile, sizeof (procfile), "process %d", pi->pid);
-      print_sys_errmsg (procfile, errno);
-    }
+  print_sys_errmsg (pi->pathname, errno);
   if (kill_p == KILL)
     kill (pi->pid, SIGKILL);
 
@@ -1522,7 +1515,7 @@ procfs_address_to_host_pointer (CORE_ADDR addr)
   struct type *ptr_type = builtin_type (target_gdbarch ())->builtin_data_ptr;
   void *ptr;
 
-  gdb_assert (sizeof (ptr) == TYPE_LENGTH (ptr_type));
+  gdb_assert (sizeof (ptr) == ptr_type->length ());
   gdbarch_address_to_pointer (target_gdbarch (), ptr_type,
 			      (gdb_byte *) &ptr, addr);
   return ptr;
@@ -1856,7 +1849,7 @@ do_attach (ptid_t ptid)
   inf = current_inferior ();
   inferior_appeared (inf, pi->pid);
   /* Let GDB know that the inferior was attached.  */
-  inf->attach_flag = 1;
+  inf->attach_flag = true;
 
   /* Create a procinfo for the current lwp.  */
   lwpid = proc_get_current_thread (pi);
@@ -2540,7 +2533,7 @@ procfs_target::files_info ()
 
   gdb_printf (_("\tUsing the running image of %s %s via /proc.\n"),
 	      inf->attach_flag? "attached": "child",
-	      target_pid_to_str (inferior_ptid).c_str ());
+	      target_pid_to_str (ptid_t (inf->pid)).c_str ());
 }
 
 /* Make it die.  Wait for it to die.  Clean up after it.  Note: this
@@ -2704,7 +2697,7 @@ procfs_set_exec_trap (void)
 
   pi = create_procinfo (getpid (), 0);
   if (pi == NULL)
-    perror_with_name (_("procfs: create_procinfo failed in child."));
+    perror_with_name (_("procfs: create_procinfo failed in child"));
 
   if (open_procinfo_files (pi, FD_CTL) == 0)
     {
@@ -2813,7 +2806,7 @@ procfs_target::create_inferior (const char *exec_file,
 	    len = p1 - p;
 	  else
 	    len = strlen (p);
-	  strncpy (tryname, p, len);
+	  memcpy (tryname, p, len);
 	  tryname[len] = '\0';
 	  strcat (tryname, "/");
 	  strcat (tryname, shell_file);
@@ -2927,7 +2920,7 @@ procfs_target::pid_to_str (ptid_t ptid)
 /* Accepts an integer PID; Returns a string representing a file that
    can be opened to get the symbols for the child process.  */
 
-char *
+const char *
 procfs_target::pid_to_exec_file (int pid)
 {
   static char buf[PATH_MAX];
@@ -3020,7 +3013,7 @@ procfs_target::can_use_hw_breakpoint (enum bptype type, int cnt, int othertype)
      different.  */
   struct type *ptr_type = builtin_type (target_gdbarch ())->builtin_data_ptr;
 
-  if (sizeof (void *) != TYPE_LENGTH (ptr_type))
+  if (sizeof (void *) != ptr_type->length ())
     return 0;
 
   /* Other tests here???  */
@@ -3170,6 +3163,7 @@ find_memory_regions_callback (struct prmap *map,
 		  (map->pr_mflags & MA_WRITE) != 0,
 		  (map->pr_mflags & MA_EXEC) != 0,
 		  1, /* MODIFIED is unknown, pass it as true.  */
+		  false,
 		  data);
 }
 

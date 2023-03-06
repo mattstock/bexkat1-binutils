@@ -1,5 +1,5 @@
 /* GNU/Linux on  TI C6x target support.
-   Copyright (C) 2011-2022 Free Software Foundation, Inc.
+   Copyright (C) 2011-2023 Free Software Foundation, Inc.
    Contributed by Yao Qi <yao@codesourcery.com>
 
    This file is part of GDB.
@@ -46,11 +46,11 @@ extern const gdb_byte tic6x_bkpt_illegal_opcode_be[];
 extern const gdb_byte tic6x_bkpt_illegal_opcode_le[];
 
 /* Target-dependent structure in gdbarch.  */
-struct tic6x_gdbarch_tdep : gdbarch_tdep
+struct tic6x_gdbarch_tdep : gdbarch_tdep_base
 {
   /* Return the expected next PC if FRAME is stopped at a syscall
      instruction.  */
-  CORE_ADDR (*syscall_next_pc) (struct frame_info *frame) = nullptr;
+  CORE_ADDR (*syscall_next_pc) (frame_info_ptr frame) = nullptr;
 
   const gdb_byte *breakpoint = nullptr; /* Breakpoint instruction.  */
 

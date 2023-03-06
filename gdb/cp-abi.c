@@ -1,6 +1,6 @@
 /* Generic code for supporting multiple C++ ABI's
 
-   Copyright (C) 2001-2022 Free Software Foundation, Inc.
+   Copyright (C) 2001-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -18,6 +18,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
+#include "language.h"
 #include "value.h"
 #include "cp-abi.h"
 #include "command.h"
@@ -110,7 +111,7 @@ value_rtti_type (struct value *v, int *full,
   struct type *ret = NULL;
 
   if ((current_cp_abi.rtti_type) == NULL
-      || !HAVE_CPLUS_STRUCT (check_typedef (value_type (v))))
+      || !HAVE_CPLUS_STRUCT (check_typedef (v->type ())))
     return NULL;
   try
     {
@@ -152,7 +153,7 @@ cplus_make_method_ptr (struct type *type, gdb_byte *contents,
 }
 
 CORE_ADDR
-cplus_skip_trampoline (struct frame_info *frame,
+cplus_skip_trampoline (frame_info_ptr frame,
 		       CORE_ADDR stop_pc)
 {
   if (current_cp_abi.skip_trampoline == NULL)
@@ -251,8 +252,7 @@ int
 register_cp_abi (struct cp_abi_ops *abi)
 {
   if (num_cp_abis == CP_ABI_MAX)
-    internal_error (__FILE__, __LINE__,
-		    _("Too many C++ ABIs, please increase "
+    internal_error (_("Too many C++ ABIs, please increase "
 		      "CP_ABI_MAX in cp-abi.c"));
 
   cp_abis[num_cp_abis++] = abi;
@@ -268,8 +268,7 @@ set_cp_abi_as_auto_default (const char *short_name)
   struct cp_abi_ops *abi = find_cp_abi (short_name);
 
   if (abi == NULL)
-    internal_error (__FILE__, __LINE__,
-		    _("Cannot find C++ ABI \"%s\" to set it as auto default."),
+    internal_error (_("Cannot find C++ ABI \"%s\" to set it as auto default."),
 		    short_name);
 
   xfree ((char *) auto_cp_abi.longname);

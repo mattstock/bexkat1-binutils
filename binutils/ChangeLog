@@ -1,3 +1,351 @@
+2023-02-09  Tom Tromey  <tromey@adacore.com>
+
+	* dwarf-mode.el: Bump version to 1.8.
+	(dwarf-insert-substructure): Tighten regexp.
+	(dwarf-refresh-all): New defun.
+	(dwarf-mode-map): Bind "A" to dwarf-refresh-all.
+	(dwarf-mode): Remove old FIXME.
+
+2023-02-07  Nick Clifton  <nickc@redhat.com>
+
+	PR 30080
+	* doc/binutils.texi (nm): Update description of the 'n' symbol
+	type.
+
+2023-01-31  Nick Clifton  <nickc@redhat.com>
+
+	* po/sv.po: Updated Swedish translation.
+
+2023-01-23  Nick Clifton  <nickc@redhat.com>
+
+	* po/sv.po: Updated Swedish translation.
+
+2023-01-18  Nick Clifton  <nickc@redhat.com>
+
+	PR 29993
+	* objcopy.c (merge_gnu_build_notes): Remember the last non-deleted
+	note in order to speed up the scan for matching notes.
+
+2023-01-16  Nick Clifton  <nickc@redhat.com>
+
+	* po/sv.po: Updated Swedish translation.
+
+2023-01-09  Nick Clifton  <nickc@redhat.com>
+
+	* po/bg.po: Updated Bulgarian translation.
+	* po/ro.po: Updated Romainian translation.
+
+2023-01-05  Nick Clifton  <nickc@redhat.com>
+
+	* MAINTAINERS: Remove Stephen Casner as the PDP11 maintainer.
+
+2023-01-03  Nick Clifton  <nickc@redhat.com>
+
+	* po/fr.po: Updated French translation.
+	* po/uk.po: Updated Ukrainian translation.
+
+2023-01-03  Luis Machado  <luis.machado@arm.com>
+
+	* readelf.c (get_note_type): Add support for NT_ARM_SSVE and
+	NT_ARM_ZA note types.
+
+2022-12-31  Nick Clifton  <nickc@redhat.com>
+
+	* 2.40 branch created.
+
+2022-12-31  Nick Clifton  <nickc@redhat.com>
+
+	* po/ro.po: Updated Romanian translation.
+
+2022-12-21  Nick Clifton  <nickc@redhat.com>
+
+	PR  29924
+	* objdump.c (load_specific_debug_section): Check for excessively
+	large sections.
+
+2022-12-19  Tom Tromey  <tromey@adacore.com>
+
+	* dwarf-mode.el (dwarf-do-refresh): Avoid compiler warning.
+
+2022-12-19  Nick Clifton  <nickc@redhat.com>
+
+	PR 29914
+	* dwarf.c (fetch_indexed_value): Fail if the section is not big
+	enough to contain a header size field.
+	(display_debug_addr): Fail if the computed address size is too big
+	or too small.
+
+2022-12-16  Nick Clifton  <nickc@redhat.com>
+
+	PR 29908
+	* dwarf.c (display_debug_addr): Check for corrupt header lengths.
+
+2022-12-01  Nick Clifton  <nickc@redhat.com>
+
+	PR 25202
+	* objcopy.c (copy_object): Set VerilogDataEndianness to the
+	endianness of the input file.
+	(copy_main): Verifiy the value set by the --verilog-data-width
+	option.
+	* testsuite/binutils-all/objcopy.exp: Add tests of the new behaviour.
+	* testsuite/binutils-all/verilog-I4.hex: New file.
+
+2022-11-21  Nick Clifton  <nickc@redhat.com>
+
+	PR 29764
+	* doc/binutils.texi (objdump): Note that the -m option supports
+	the <architecture>:<machine> syntax.
+
+2022-11-04  Nick Clifton  <nickc@redhat.com>
+
+	* README-how-to-make-a-release: Add instructions for uploading the
+	gprofng documentation.
+
+2022-10-31  Nick Clifton  <nickc@redhat.com>
+
+	PR 29457
+	* configure.ac: Add --enable-colored-disassembly.
+	* objdump.c: Add --disassembler-color=terminal.
+	* doc/binutils.texi (objdump): Document the new option.
+	* NEWS: Mention new feature.
+	* config.in: Regenerate in.
+	* configure: Regenerate.
+
+2022-10-19  Nick Clifton  <nickc@redhat.com>
+
+	* MAINTAINERS: Add section on patches, copyright and DCO.
+
+2022-10-12  Nick Clifton  <nickc@redhat.com>
+
+	PR 29665
+	* objcopy.c (copy_object): Use the input filename when
+	reporting that a .gnu_debuglink section already exists.
+
+2022-10-03  Nick Clifton  <nickc@redhat.com>
+
+	* readelf.c (get_32bit_section_headers): Return false if the
+	e_shoff field is zero.
+	(get_64bit_section_headers): Likewise.
+
+2022-09-28  Nick Clifton  <nickc@redhat.com>
+
+	PR 29628
+	* size.c (usage): Add -f.
+	* doc/binutils.texi (size): Add -f.
+
+2022-09-20  Nick Clifton  <nickc@redhat.com>
+
+	* objcopy.c (copy_object): Do not issue a warning message when
+	encountering empty .gnu.build.attribute sections.
+
+2022-09-14  Rupesh Potharla  <Rupesh.Potharla@amd.com>
+
+	* testsuite/binutils-all/readelf.exp (readelf_wi_test): Extend
+	regexps to allow for output genreated by the Clang compiler.
+
+2022-09-12  Aaron Merey  <amerey@redhat.com>
+
+	* objcopy.c (might_need_separate_debug_info): Add with_source_code to
+	the options that cause this function to return true.
+	(main.c): Add with_source_code to the options that enable
+	dump_any_debugging.
+
+2022-09-09  Nick Clifton  <nickc@redhat.com>
+
+	PR 29532
+	* objcopy.c (setup_section): Leave group sections intact when
+	creating separate debuginfo files.
+
+2022-09-08  Nick Clifton  <nickc@redhat.com>
+
+	PR 29523
+	* dwarf.c (display_debug_lines_decoded): Correctly handle DWARF-5
+	directory and filename tables.
+
+2022-09-02  Aaron Merey  <amerey@redhat.com>
+
+	PR 29075
+	* objdump.c (find_separate_debug): New function. Finds the bfd
+	corresponding to the separate debuginfod of a given bfd.
+	(find_alt_debug): New function. Finds the bfd corresponding to the
+	.gnu_debugaltlink of a given bfd.
+	(slurp_file): Add bfd parameter. If a source file cannot be found
+	attempt to download it from debuginfod, if enabled.
+	(try_print_file_open): Add bfd parameter and pass it to slurp_file.
+	(show_line): If debuginfod is enabled, call
+	bfd_find_nearest_line_with_alt instead of bfd_find_nearest_line.
+
+2022-09-01  Nick Clifton  <nickc@redhat.com>
+
+	PR 29534
+	* dllwrap.c: Replace uses of choose_temp_base() with
+	make_temp_file().
+	* dlltool.c: Likewise.
+	* resrc.c: Likewise.
+
+2022-08-23  Nick Clifton  <nickc@redhat.com>
+
+	PR 29489
+	* dlltool.c (deterministic): New variable.
+	(gen_lib_file): If deterministic is true set the
+	BFD_DETERMINISTIC_OUTPUT flag.
+	(usage): Mention --deterministic-libraries and
+	--non-deterministic-libraries.
+	(long_options): Add new options.
+	(main): Parse new options.
+	* doc/binutils.texi: Document the new options.
+	* NEWS: Mention the new feature.
+
+2022-08-22  Nick Clifton  <nickc@redhat.com>
+
+	* readelf.c (check_magic_number): New function.  Checks the magic
+	bytes at the start of a file.  If they are not the ELF format
+	magic values, then attempts to generate a helpful error message.
+	(process_file_header): Call check_magic_number.
+
+2022-08-09  Nick Clifton  <nickc@redhat.com>
+
+	PR 29457
+	* objdump.c (disassembler_color): Change type to an enum.
+	(disassembler_extended_color): Remove.
+	(usage): Update.
+	(objdump_color_for_assembler_style): Update.
+	(main): Update initialisation of disassembler_color.  If not
+	initialised via a command line option, set based upon terminal
+	output.
+	* doc/binutils.texi: Update description of disassmbler-color
+	option.
+	* testsuite/binutils-all/arc/objdump.exp: Add
+	--disassembler-color=off option when disassembling.
+	* testsuite/binutils-all/arm/objdump.exp: Likewise.
+
+2022-08-08  Nick Clifton  <nickc@redhat.com>
+
+	* README-how-to-make-a-release: Add a link to the NEWS files in
+	the release announcement email.
+
+2022-07-08  Nick Clifton  <nickc@redhat.com>
+
+	* 2.39 branch created.
+
+2022-07-01  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (display_debug_rnglists): Add newline at end of listing.
+
+2022-06-30  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (dwarf_select_sections_by_name): If the entry's value is
+	zero then clear the corresponding variable.
+	(dwarf_select_sections_by_letters): Likewise.
+	* testsuite/binutils-all/debuginfo.exp: Expect -WE and -wE
+	debuginfod tests to fail.
+
+2022-06-28  Nick Clifton  <nickc@redhat.com>
+
+	PR 29267
+	* dwarf.c (display_debug_rnglists): New function, broken out of..
+	(display_debug_ranges): ... here.
+	(read_and_display_attr_value): Correct calculation of index
+	displayed for DW_FORM_loclistx and DW_FORM_rnglistx.
+	* testsuite/binutils-all/x86-64/pr26808.dump: Update expected
+	output.
+
+2022-06-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 29289
+	* dwarf.c (display_debug_names): Replace assert with a warning
+	message.
+
+2022-06-27  Nick Clifton  <nickc@redhat.com>
+
+	PR 29290
+	* dwarf.c (read_and_display_attr_value): Check that debug_info_p
+	is set before dereferencing it.
+
+2022-06-27  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (fetch_indexed_string): Do not use length of first table
+	in string section as the length of every table in the section.
+
+	* testsuite/binutils-all/pr26112.r: Update expected output.
+
+2022-06-22  Kumar N, Bhuvanendra  <Kavitha.Natarajan@amd.com>
+
+	* dwarf.c (fetch_indexed_string): Added new parameter
+	str_offsets_base to calculate the string offset.
+	(read_and_display_attr_value): Read DW_AT_str_offsets_base
+	attribute.
+	(process_debug_info): While allocating memory and initializing
+	debug_information, do it for do_debug_info also, if its true.
+	(load_separate_debug_files): Load .debug_str_offsets if exists.
+	* dwarf.h (struct debug_info): Add str_offsets_base field.
+
+2022-06-22  Marcus Nilsson <brainbomb@gmail.com>
+
+	* readelf.c: (slurp_relr_relocs) Use malloc instead of xmalloc
+        when allocating space for relocations.
+
+2022-06-21  Kumar N, Bhuvanendra  <Kavitha.Natarajan@amd.com>
+
+	* dwarf.h (struct debug_info): Add rnglists_base field.
+	* dwarf.c (read_and_display_attr_value): Read attribute DW_AT_rnglists_base.
+	(display_debug_rnglists_list): While handling DW_RLE_base_addressx,
+  	DW_RLE_startx_endx, DW_RLE_startx_length items, pass the proper parameter
+	value to fetch_indexed_addr(), i.e. fetch the proper entry in .debug_addr section.
+	(display_debug_ranges): Add rnglists_base to the .debug_rnglists base address.
+	(load_separate_debug_files): Load .debug_addr section, if exists.
+
+2022-05-20  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (dwarf_select_sections_by_names): Return zero if no
+	sections were selected.
+	(dwarf_select_sections_by_letters): Likewise.
+	* dwarf.h: (dwarf_select_sections_by_names): Update prototype.
+	(dwarf_select_sections_by_letters): Update prototype.
+	* objdump.c (might_need_separate_debug_info): New function.
+	(dump_bfd): Call new function before attempting to load separate
+	debug info files.
+	(main): Do not enable dwarf section dumping for -WK or -WN.
+	* readelf.c (parse_args): Do not enable dwarf section dumping for
+	-wK or -wN.
+	(might_need_separate_debug_info): New function.
+	(process_object): Call new function before attempting to load
+	separate debug info files.
+	* testsuite/binutils-all/debuginfo.exp: Expect -WE and -wE
+	debuginfod tests to pass.
+	* testsuite/binutils-all/objdump.Wk: Add extra regexps.
+	* testsuite/binutils-all/readelf.k: Add extra regexps.
+
+2022-05-19  Nick Clifton  <nickc@redhat.com>
+
+	* dlltool.c (run): Initialise errmsg_fmt.
+	* dllwrap.c (run): Likewise.
+	* resrc.c (run_cmd): Likewise.
+	* mclex.c (mc_add_keyword): Initialise usz.
+	* srconv.c (wd_hd): Initialise hd.spare2.
+	* windmc.c (mc_add_node_lang): Initialise s.
+	(mc_generate_bin_item): Initialise cvt_txt.
+	(main): Initialise u.
+
+2022-05-18  Nick Clifton  <nickc@redhat.com>
+
+	PR 29135
+	* nm.c (non_weak): New variable.
+	(filter_symbols): When non-weak is true, ignore weak symbols.
+	(long_options): Add --no-weak.
+	(usage): Mention --no-weak.
+	(main): Handle -W/--no-weak.
+	* doc/binutils.texi: Document new feature.
+	* NEWS: Mention the new feature.
+	* testsuite/binutils-all/nm.exp: Add test of new feature.
+	* testsuite/binutils-all/no-weak.s: New test source file.
+
+2022-04-25  Nick Clifton  <nickc@redhat.com>
+
+	PR 29072
+	* testsuite/lib/binutils-common.exp (prune_warnings_extra): Filter
+	out notes about the executable stacjk behaviour beign deprecated.
+
 2022-04-12  Nick Clifton  <nickc@redhat.com>
 
 	PR 28992
@@ -1724,7 +2072,7 @@
 
 For older changes see ChangeLog-2020
 
-Copyright (C) 2021-2022 Free Software Foundation, Inc.
+Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

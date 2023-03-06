@@ -1,6 +1,6 @@
 /* GDB/Scheme pretty-printing.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,6 +21,7 @@
    conventions, et.al.  */
 
 #include "defs.h"
+#include "top.h"		/* For quit_force().  */
 #include "charset.h"
 #include "symtab.h" /* Needed by language.h.  */
 #include "language.h"
@@ -31,7 +32,7 @@
 
 /* Return type of print_string_repr.  */
 
-enum string_repr_result
+enum guile_string_repr_result
 {
   /* The string method returned None.  */
   STRING_REPR_NONE,
@@ -558,6 +559,10 @@ ppscm_pretty_print_one_value (SCM printer, struct value **out_value,
 	    (_("invalid result from pretty-printer to-string"), result);
 	}
     }
+  catch (const gdb_exception_forced_quit &except)
+    {
+      quit_force (NULL, 0);
+    }
   catch (const gdb_exception &except)
     {
     }
@@ -638,7 +643,7 @@ ppscm_print_exception_unless_memory_error (SCM exception,
 /* Helper for gdbscm_apply_val_pretty_printer which calls to_string and
    formats the result.  */
 
-static enum string_repr_result
+static enum guile_string_repr_result
 ppscm_print_string_repr (SCM printer, enum display_hint hint,
 			 struct ui_file *stream, int recurse,
 			 const struct value_print_options *options,
@@ -647,7 +652,7 @@ ppscm_print_string_repr (SCM printer, enum display_hint hint,
 {
   struct value *replacement = NULL;
   SCM str_scm;
-  enum string_repr_result result = STRING_REPR_ERROR;
+  enum guile_string_repr_result result = STRING_REPR_ERROR;
 
   str_scm = ppscm_pretty_print_one_value (printer, &replacement,
 					  gdbarch, language);
@@ -660,7 +665,7 @@ ppscm_print_string_repr (SCM printer, enum display_hint hint,
       struct value_print_options opts = *options;
 
       gdb_assert (replacement != NULL);
-      opts.addressprint = 0;
+      opts.addressprint = false;
       common_val_print (replacement, stream, recurse, &opts, language);
       result = STRING_REPR_OK;
     }
@@ -698,7 +703,7 @@ ppscm_print_string_repr (SCM printer, enum display_hint hint,
     {
       struct value_print_options local_opts = *options;
 
-      local_opts.addressprint = 0;
+      local_opts.addressprint = false;
       lsscm_val_print_lazy_string (str_scm, stream, &local_opts);
       result = STRING_REPR_OK;
     }
@@ -883,7 +888,7 @@ ppscm_print_children (SCM printer, enum display_hint hint,
 	{
 	  struct value_print_options local_opts = *options;
 
-	  local_opts.addressprint = 0;
+	  local_opts.addressprint = false;
 	  lsscm_val_print_lazy_string (v_scm, stream, &local_opts);
 	}
       else if (scm_is_string (v_scm))
@@ -956,20 +961,20 @@ gdbscm_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 				 const struct value_print_options *options,
 				 const struct language_defn *language)
 {
-  struct type *type = value_type (value);
+  struct type *type = value->type ();
   struct gdbarch *gdbarch = type->arch ();
   SCM exception = SCM_BOOL_F;
   SCM printer = SCM_BOOL_F;
   SCM val_obj = SCM_BOOL_F;
   enum display_hint hint;
   enum ext_lang_rc result = EXT_LANG_RC_NOP;
-  enum string_repr_result print_result;
+  enum guile_string_repr_result print_result;
 
-  if (value_lazy (value))
-    value_fetch_lazy (value);
+  if (value->lazy ())
+    value->fetch_lazy ();
 
   /* No pretty-printer support for unavailable values.  */
-  if (!value_bytes_available (value, 0, TYPE_LENGTH (type)))
+  if (!value->bytes_available (0, type->length ()))
     return EXT_LANG_RC_NOP;
 
   if (!gdb_scheme_initialized)

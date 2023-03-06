@@ -1,6 +1,6 @@
 /* Support for printing Fortran values for GDB, the GNU debugger.
 
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
 
    Contributed by Motorola.  Adapted from the C definitions by Farooq Butt
    (fmbutt@engage.sps.mot.com), additionally worked over by Stan Shebs.
@@ -82,19 +82,17 @@ f77_get_dynamic_length_of_aggregate (struct type *type)
      This function also works for strings which behave very 
      similarly to arrays.  */
 
-  if (TYPE_TARGET_TYPE (type)->code () == TYPE_CODE_ARRAY
-      || TYPE_TARGET_TYPE (type)->code () == TYPE_CODE_STRING)
-    f77_get_dynamic_length_of_aggregate (TYPE_TARGET_TYPE (type));
+  if (type->target_type ()->code () == TYPE_CODE_ARRAY
+      || type->target_type ()->code () == TYPE_CODE_STRING)
+    f77_get_dynamic_length_of_aggregate (type->target_type ());
 
   /* Recursion ends here, start setting up lengths.  */
   lower_bound = f77_get_lowerbound (type);
   upper_bound = f77_get_upperbound (type);
 
   /* Patch in a valid length value.  */
-
-  TYPE_LENGTH (type) =
-    (upper_bound - lower_bound + 1)
-    * TYPE_LENGTH (check_typedef (TYPE_TARGET_TYPE (type)));
+  type->set_length ((upper_bound - lower_bound + 1)
+		    * check_typedef (type->target_type ())->length ());
 }
 
 /* Per-dimension statistics.  */
@@ -263,10 +261,20 @@ public:
     size_t dim_indx = m_dimension - 1;
     struct type *elt_type_prev = m_elt_type_prev;
     LONGEST elt_off_prev = m_elt_off_prev;
-    bool repeated = (m_options->repeat_count_threshold < UINT_MAX
-		     && elt_type_prev != nullptr
-		     && value_contents_eq (m_val, elt_off_prev, m_val, elt_off,
-					   TYPE_LENGTH (elt_type)));
+    bool repeated = false;
+
+    if (m_options->repeat_count_threshold < UINT_MAX
+	&& elt_type_prev != nullptr)
+      {
+	struct value *e_val = value_from_component (m_val, elt_type, elt_off);
+	struct value *e_prev = value_from_component (m_val, elt_type,
+						     elt_off_prev);
+	repeated = ((e_prev->entirely_available ()
+		     && e_val->entirely_available ()
+		     && e_prev->contents_eq (e_val))
+		    || (e_prev->entirely_unavailable ()
+			&& e_val->entirely_unavailable ()));
+      }
 
     if (repeated)
       m_nrepeats++;
@@ -335,11 +343,11 @@ private:
      have been sliced and we do not want to compare any memory contents
      present between the slices requested.  */
   bool
-  dimension_contents_eq (const struct value *val, struct type *type,
+  dimension_contents_eq (struct value *val, struct type *type,
 			 LONGEST offset1, LONGEST offset2)
   {
     if (type->code () == TYPE_CODE_ARRAY
-	&& TYPE_TARGET_TYPE (type)->code () != TYPE_CODE_CHAR)
+	&& type->target_type ()->code () != TYPE_CODE_CHAR)
       {
 	/* Extract the range, and get lower and upper bounds.  */
 	struct type *range_type = check_typedef (type)->index_type ();
@@ -350,7 +358,7 @@ private:
 	/* CALC is used to calculate the offsets for each element.  */
 	fortran_array_offset_calculator calc (type);
 
-	struct type *subarray_type = check_typedef (TYPE_TARGET_TYPE (type));
+	struct type *subarray_type = check_typedef (type->target_type ());
 	for (LONGEST i = lowerbound; i < upperbound + 1; i++)
 	  {
 	    /* Use the index and the stride to work out a new offset.  */
@@ -364,8 +372,16 @@ private:
 	return true;
       }
     else
-      return value_contents_eq (val, offset1, val, offset2,
-				TYPE_LENGTH (type));
+      {
+	struct value *e_val1 = value_from_component (val, type, offset1);
+	struct value *e_val2 = value_from_component (val, type, offset2);
+
+	return ((e_val1->entirely_available ()
+		 && e_val2->entirely_available ()
+		 && e_val1->contents_eq (e_val2))
+		|| (e_val1->entirely_unavailable ()
+		    && e_val2->entirely_unavailable ()));
+      }
   }
 
   /* The number of elements printed so far.  */
@@ -434,33 +450,33 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 			       int recurse,
 			       const struct value_print_options *options) const
 {
-  struct type *type = check_typedef (value_type (val));
+  struct type *type = check_typedef (val->type ());
   struct gdbarch *gdbarch = type->arch ();
   int printed_field = 0; /* Number of fields printed.  */
   struct type *elttype;
   CORE_ADDR addr;
   int index;
-  const gdb_byte *valaddr = value_contents_for_printing (val).data ();
-  const CORE_ADDR address = value_address (val);
+  const gdb_byte *valaddr = val->contents_for_printing ().data ();
+  const CORE_ADDR address = val->address ();
 
   switch (type->code ())
     {
     case TYPE_CODE_STRING:
       f77_get_dynamic_length_of_aggregate (type);
       printstr (stream, builtin_type (gdbarch)->builtin_char, valaddr,
-		TYPE_LENGTH (type), NULL, 0, options);
+		type->length (), NULL, 0, options);
       break;
 
     case TYPE_CODE_ARRAY:
-      if (TYPE_TARGET_TYPE (type)->code () != TYPE_CODE_CHAR)
+      if (type->target_type ()->code () != TYPE_CODE_CHAR)
 	fortran_print_array (type, address, stream, recurse, val, options);
       else
 	{
-	  struct type *ch_type = TYPE_TARGET_TYPE (type);
+	  struct type *ch_type = type->target_type ();
 
 	  f77_get_dynamic_length_of_aggregate (type);
 	  printstr (stream, ch_type, valaddr,
-		    TYPE_LENGTH (type) / TYPE_LENGTH (ch_type), NULL, 0,
+		    type->length () / ch_type->length (), NULL, 0,
 		    options);
 	}
       break;
@@ -476,7 +492,7 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 	  int want_space = 0;
 
 	  addr = unpack_pointer (type, valaddr);
-	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
+	  elttype = check_typedef (type->target_type ());
 
 	  if (elttype->code () == TYPE_CODE_FUNC)
 	    {
@@ -496,14 +512,14 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 
 	  /* For a pointer to char or unsigned char, also print the string
 	     pointed to, unless pointer is null.  */
-	  if (TYPE_LENGTH (elttype) == 1
+	  if (elttype->length () == 1
 	      && elttype->code () == TYPE_CODE_INT
 	      && (options->format == 0 || options->format == 's')
 	      && addr != 0)
 	    {
 	      if (want_space)
 		gdb_puts (" ", stream);
-	      val_print_string (TYPE_TARGET_TYPE (type), NULL, addr, -1,
+	      val_print_string (type->target_type (), NULL, addr, -1,
 				stream, options);
 	    }
 	  return;
@@ -602,13 +618,11 @@ static void
 info_common_command_for_block (const struct block *block, const char *comname,
 			       int *any_printed)
 {
-  struct block_iterator iter;
-  struct symbol *sym;
   struct value_print_options opts;
 
   get_user_print_options (&opts);
 
-  ALL_BLOCK_SYMBOLS (block, iter, sym)
+  for (struct symbol *sym : block_iterator_range (block))
     if (sym->domain () == COMMON_BLOCK_DOMAIN)
       {
 	const struct common_block *common = sym->value_common_block ();
@@ -662,7 +676,7 @@ info_common_command_for_block (const struct block *block, const char *comname,
 static void
 info_common_command (const char *comname, int from_tty)
 {
-  struct frame_info *fi;
+  frame_info_ptr fi;
   const struct block *block;
   int values_printed = 0;
 
@@ -688,9 +702,9 @@ info_common_command (const char *comname, int from_tty)
       info_common_command_for_block (block, comname, &values_printed);
       /* After handling the function's top-level block, stop.  Don't
 	 continue to its superblock, the block of per-file symbols.  */
-      if (BLOCK_FUNCTION (block))
+      if (block->function ())
 	break;
-      block = BLOCK_SUPERBLOCK (block);
+      block = block->superblock ();
     }
 
   if (!values_printed)

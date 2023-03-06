@@ -1,4 +1,4 @@
-# Copyright (C) 2008-2022 Free Software Foundation, Inc.
+# Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,10 +25,7 @@ if {[build_executable $testfile.exp $testfile \
     return -1
 }
 
-# Start with a fresh gdb.
-gdb_exit
-gdb_start
-gdb_reinitialize_dir $srcdir/$subdir
+clean_restart
 
 set remote_source2_py [gdb_remote_download host \
 			   ${srcdir}/${subdir}/source2.py]
@@ -217,7 +214,7 @@ clean_restart ${testfile}
 
 # The following tests require execution.
 
-if ![runto_main] then {
+if {![runto_main]} {
     return 0
 }
 
@@ -297,8 +294,8 @@ with_test_prefix "test decode_line" {
 }
 
 # gdb.write
-gdb_test "python print (sys.stderr)" ".*gdb._GdbOutputErrorFile (instance|object) at.*" "test stderr location"
-gdb_test "python print (sys.stdout)" ".*gdb._GdbOutputFile (instance|object) at.*" "test stdout location"
+gdb_test "python print (sys.stderr)" ".*gdb._GdbFile (instance|object) at.*" "test stderr location"
+gdb_test "python print (sys.stdout)" ".*gdb._GdbFile (instance|object) at.*" "test stdout location"
 gdb_test "python gdb.write(\"Foo\\n\")" "Foo" "test default write"
 gdb_test "python gdb.write(\"Error stream\\n\", stream=gdb.STDERR)" "Error stream" "test stderr write"
 gdb_test "python gdb.write(\"Normal stream\\n\", stream=gdb.STDOUT)" "Normal stream" "test stdout write"
@@ -431,7 +428,7 @@ clean_restart ${testfile}
 
 # The following tests require execution.
 
-if ![runto_main] then {
+if {![runto_main]} {
     return 0
 }
 
@@ -486,7 +483,7 @@ clean_restart ${testfile}
 
 # The following tests require execution.
 
-if ![runto_main] then {
+if {![runto_main]} {
     return 0
 }
 
@@ -514,6 +511,9 @@ gdb_test "python print (pc_rtn > pc_call)" "True" \
 
 gdb_test "python print (gdb.find_pc_line(pc_rtn).line >= line)" "True" \
     "test find_pc_line with resume address"
+gdb_test "python print (gdb.find_pc_line(pc_rtn).line == gdb.find_pc_line(gdb.Value(pc_rtn)).line)" \
+    "True" \
+    "test find_pc_line using Value"
 
 gdb_test_no_output "set variable \$cvar1 = 23" "set convenience variable"
 gdb_test "python print(gdb.convenience_variable('cvar1'))" "23"

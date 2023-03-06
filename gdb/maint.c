@@ -1,6 +1,6 @@
 /* Support for GDB maintenance commands.
 
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    Written by Fred Fish at Cygnus Support.
 
@@ -76,7 +76,7 @@ maintenance_dump_me (const char *args, int from_tty)
 static void
 maintenance_internal_error (const char *args, int from_tty)
 {
-  internal_error (__FILE__, __LINE__, "%s", (args == NULL ? "" : args));
+  internal_error ("%s", (args == NULL ? "" : args));
 }
 
 /* Stimulate the internal error mechanism that GDB uses when an
@@ -87,7 +87,7 @@ maintenance_internal_error (const char *args, int from_tty)
 static void
 maintenance_internal_warning (const char *args, int from_tty)
 {
-  internal_warning (__FILE__, __LINE__, "%s", (args == NULL ? "" : args));
+  internal_warning ("%s", (args == NULL ? "" : args));
 }
 
 /* Stimulate the internal error mechanism that GDB uses when an
@@ -452,9 +452,11 @@ maintenance_info_sections (const char *arg, int from_tty)
   for (objfile *ofile : current_program_space->objfiles ())
     {
       if (ofile->obfd == current_program_space->exec_bfd ())
-	maint_print_all_sections (_("Exec file: "), ofile->obfd, ofile, arg);
+	maint_print_all_sections (_("Exec file: "), ofile->obfd.get (),
+				  ofile, arg);
       else if (opts.all_objects)
-	maint_print_all_sections (_("Object file: "), ofile->obfd, ofile, arg);
+	maint_print_all_sections (_("Object file: "), ofile->obfd.get (),
+				  ofile, arg);
     }
 
   if (core_bfd)
@@ -799,7 +801,7 @@ mcleanup_wrapper (void)
 }
 
 EXTERN_C void monstartup (unsigned long, unsigned long);
-extern int main ();
+extern int main (int, char **);
 
 static void
 maintenance_set_profile_cmd (const char *args, int from_tty,
@@ -943,7 +945,7 @@ count_symtabs_and_blocks (int *nr_symtabs_ptr, int *nr_compunit_symtabs_ptr,
 	  for (compunit_symtab *cu : o->compunits ())
 	    {
 	      ++nr_compunit_symtabs;
-	      nr_blocks += BLOCKVECTOR_NBLOCKS (cu->blockvector ());
+	      nr_blocks += cu->blockvector ()->num_blocks ();
 	      nr_symtabs += std::distance (cu->filetabs ().begin (),
 					   cu->filetabs ().end ());
 	    }
@@ -1040,11 +1042,11 @@ scoped_command_stats::scoped_command_stats (bool msg_type)
 #ifdef HAVE_USEFUL_SBRK
       char *lim = (char *) sbrk (0);
       m_start_space = lim - lim_at_start;
-      m_space_enabled = 1;
+      m_space_enabled = true;
 #endif
     }
   else
-    m_space_enabled = 0;
+    m_space_enabled = false;
 
   if (msg_type == 0 || per_command_time)
     {
@@ -1052,13 +1054,13 @@ scoped_command_stats::scoped_command_stats (bool msg_type)
 
       m_start_cpu_time = run_time_clock::now ();
       m_start_wall_time = steady_clock::now ();
-      m_time_enabled = 1;
+      m_time_enabled = true;
 
       if (per_command_time)
 	print_time (_("command started"));
     }
   else
-    m_time_enabled = 0;
+    m_time_enabled = false;
 
   if (msg_type == 0 || per_command_symtab)
     {
@@ -1068,10 +1070,10 @@ scoped_command_stats::scoped_command_stats (bool msg_type)
       m_start_nr_symtabs = nr_symtabs;
       m_start_nr_compunit_symtabs = nr_compunit_symtabs;
       m_start_nr_blocks = nr_blocks;
-      m_symtab_enabled = 1;
+      m_symtab_enabled = true;
     }
   else
-    m_symtab_enabled = 0;
+    m_symtab_enabled = false;
 
   /* Initialize timer to keep track of how long we waited for the user.  */
   reset_prompt_for_continue_wait_time ();
@@ -1181,11 +1183,11 @@ maintenance_selftest_completer (cmd_list_element *cmd,
     return;
 
 #if GDB_SELF_TEST
-  selftests::for_each_selftest ([&tracker, text] (const std::string &name)
+  for (const auto &test : selftests::all_selftests ())
     {
-      if (startswith (name.c_str (), text))
-	tracker.add_completion (make_unique_xstrdup (name.c_str ()));
-    });
+      if (startswith (test.name.c_str (), text))
+	tracker.add_completion (make_unique_xstrdup (test.name.c_str ()));
+    }
 #endif
 }
 
@@ -1194,9 +1196,8 @@ maintenance_info_selftests (const char *arg, int from_tty)
 {
 #if GDB_SELF_TEST
   gdb_printf ("Registered selftests:\n");
-  selftests::for_each_selftest ([] (const std::string &name) {
-      gdb_printf (" - %s\n", name.c_str ());
-  });
+  for (const auto &test : selftests::all_selftests ())
+    gdb_printf (" - %s\n", test.name.c_str ());
 #else
   gdb_printf (_("\
 Selftests have been disabled for this build.\n"));

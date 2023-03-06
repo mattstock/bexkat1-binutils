@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux on Tilera TILE-Gx processors.
 
-   Copyright (C) 2012-2022 Free Software Foundation, Inc.
+   Copyright (C) 2012-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -34,7 +34,7 @@
 
 static void
 tilegx_linux_sigframe_init (const struct tramp_frame *self,
-			    struct frame_info *this_frame,
+			    frame_info_ptr this_frame,
 			    struct trad_frame_cache *this_cache,
 			    CORE_ADDR func)
 {

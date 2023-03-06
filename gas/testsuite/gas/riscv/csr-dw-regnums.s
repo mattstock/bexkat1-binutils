@@ -1,6 +1,8 @@
 # Check that CFI directives can accept all of the CSR names (including
 # aliases).  The results for this test also ensures that the DWARF
 # register numbers for the CSRs shouldn't change.
+# The register numbers are specified to be CSR-ID + 4096 (see psABI spec).
+# The CFI offsets in this file are CSR-ID x 4.
 
 	.text
 	.global _start
@@ -307,6 +309,97 @@ _start:
 	.cfi_offset vstval, 2316
 	.cfi_offset vsip, 2320
 	.cfi_offset vsatp, 2560
+	# Smaia extension
+	.cfi_offset miselect, 3392
+	.cfi_offset mireg, 3396
+	.cfi_offset mtopei, 3440
+	.cfi_offset mtopi, 16064
+	.cfi_offset mvien, 3104
+	.cfi_offset mvip, 3108
+	.cfi_offset midelegh, 3148
+	.cfi_offset mieh, 3152
+	.cfi_offset mvienh, 3168
+	.cfi_offset mviph, 3172
+	.cfi_offset miph, 3408
+	# Smstateen extension
+	.cfi_offset mstateen0, 3120
+	.cfi_offset mstateen1, 3124
+	.cfi_offset mstateen2, 3128
+	.cfi_offset mstateen3, 3132
+	.cfi_offset sstateen0, 1072
+	.cfi_offset sstateen1, 1076
+	.cfi_offset sstateen2, 1080
+	.cfi_offset sstateen3, 1084
+	.cfi_offset hstateen0, 6192
+	.cfi_offset hstateen1, 6196
+	.cfi_offset hstateen2, 6200
+	.cfi_offset hstateen3, 6204
+	.cfi_offset mstateen0h, 3184
+	.cfi_offset mstateen1h, 3188
+	.cfi_offset mstateen2h, 3192
+	.cfi_offset mstateen3h, 3196
+	.cfi_offset hstateen0h, 6256
+	.cfi_offset hstateen1h, 6260
+	.cfi_offset hstateen2h, 6264
+	.cfi_offset hstateen3h, 6268
+	# Ssaia extension
+	.cfi_offset siselect, 1344
+	.cfi_offset sireg, 1348
+	.cfi_offset stopei, 1392
+	.cfi_offset stopi, 14016
+	.cfi_offset sieh, 1104
+	.cfi_offset siph, 1360
+	.cfi_offset hvien, 6176
+	.cfi_offset hvictl, 6180
+	.cfi_offset hviprio1, 6424
+	.cfi_offset hviprio2, 6428
+	.cfi_offset vsiselect, 2368
+	.cfi_offset vsireg, 2372
+	.cfi_offset vstopei, 2416
+	.cfi_offset vstopi, 15040
+	.cfi_offset hidelegh, 6220
+	.cfi_offset hvienh, 6240
+	.cfi_offset hviph, 6484
+	.cfi_offset hviprio1h, 6488
+	.cfi_offset hviprio2h, 6492
+	.cfi_offset vsieh, 2128
+	.cfi_offset vsiph, 2384
+	# Sscofpmf extension
+	.cfi_offset scountovf, 13952
+	.cfi_offset mhpmevent3h, 7308
+	.cfi_offset mhpmevent4h, 7312
+	.cfi_offset mhpmevent5h, 7316
+	.cfi_offset mhpmevent6h, 7320
+	.cfi_offset mhpmevent7h, 7324
+	.cfi_offset mhpmevent8h, 7328
+	.cfi_offset mhpmevent9h, 7332
+	.cfi_offset mhpmevent10h, 7336
+	.cfi_offset mhpmevent11h, 7340
+	.cfi_offset mhpmevent12h, 7344
+	.cfi_offset mhpmevent13h, 7348
+	.cfi_offset mhpmevent14h, 7352
+	.cfi_offset mhpmevent15h, 7356
+	.cfi_offset mhpmevent16h, 7360
+	.cfi_offset mhpmevent17h, 7364
+	.cfi_offset mhpmevent18h, 7368
+	.cfi_offset mhpmevent19h, 7372
+	.cfi_offset mhpmevent20h, 7376
+	.cfi_offset mhpmevent21h, 7380
+	.cfi_offset mhpmevent22h, 7384
+	.cfi_offset mhpmevent23h, 7388
+	.cfi_offset mhpmevent24h, 7392
+	.cfi_offset mhpmevent25h, 7396
+	.cfi_offset mhpmevent26h, 7400
+	.cfi_offset mhpmevent27h, 7404
+	.cfi_offset mhpmevent28h, 7408
+	.cfi_offset mhpmevent29h, 7412
+	.cfi_offset mhpmevent30h, 7416
+	.cfi_offset mhpmevent31h, 7420
+	# Sstc extension
+	.cfi_offset stimecmp, 1332
+	.cfi_offset stimecmph, 1396
+	.cfi_offset vstimecmp, 2356
+	.cfi_offset vstimecmph, 2420
 	# dropped
 	.cfi_offset ubadaddr, 268	# aliases
 	.cfi_offset sbadaddr, 1292	# aliases

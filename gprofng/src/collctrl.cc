@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -760,7 +760,7 @@ Coll_Ctrl::get_collect_args ()
       *p++ = strdup ("-s");
       if (synctrace_thresh < 0)
 	*p++ = strdup ("calibrate");
-      else if (synctrace_thresh < 0)
+      else if (synctrace_thresh == 0)
 	*p++ = strdup ("all");
       else
 	*p++ = dbe_sprintf ("%d", synctrace_thresh);

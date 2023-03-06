@@ -7,6 +7,9 @@
 #endif
 #define __CONFIG_H__ 1
 
+/* Default compression algorithm for --enable-compressed-debug-sections. */
+#undef DEFAULT_COMPRESSED_DEBUG_ALGORITHM
+
 /* Define to 1 if you want to emit gnu hash in the ELF linker by default. */
 #undef DEFAULT_EMIT_GNU_HASH
 
@@ -16,11 +19,23 @@
 /* Define if you want compressed debug sections by default. */
 #undef DEFAULT_FLAG_COMPRESS_DEBUG
 
+/* Define to 0 if you want to disable the generation of an executable stack
+   when a .note-GNU-stack section is missing. */
+#undef DEFAULT_LD_EXECSTACK
+
 /* The default method for DT_TEXTREL check in ELF linker. */
 #undef DEFAULT_LD_TEXTREL_CHECK
 
 /* Define to 1 if DT_TEXTREL check is warning in ELF linker by default. */
 #undef DEFAULT_LD_TEXTREL_CHECK_WARNING
+
+/* Define to 1 if you want to enable --warn-execstack in ELF linker by
+   default. */
+#undef DEFAULT_LD_WARN_EXECSTACK
+
+/* Define to 0 if you want to disable --warn-rwx-segments in ELF linker by
+   default. */
+#undef DEFAULT_LD_WARN_RWX_SEGMENTS
 
 /* Define to 1 if you want to enable -z relro in ELF linker by default. */
 #undef DEFAULT_LD_Z_RELRO
@@ -63,10 +78,6 @@
 /* Is the prototype for getopt in <unistd.h> in the expected format? */
 #undef HAVE_DECL_GETOPT
 
-/* Define to 1 if you have the declaration of `sbrk', and to 0 if you don't.
-   */
-#undef HAVE_DECL_SBRK
-
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
@@ -87,6 +98,9 @@
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
+
+/* The jansson library is to be used */
+#undef HAVE_JANSSON
 
 /* Define if your <locale.h> file defines LC_MESSAGES. */
 #undef HAVE_LC_MESSAGES
@@ -111,9 +125,6 @@
 
 /* Define to 1 if you have the `realpath' function. */
 #undef HAVE_REALPATH
-
-/* Define to 1 if you have the `sbrk' function. */
-#undef HAVE_SBRK
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
@@ -153,6 +164,9 @@
 
 /* Define to 1 if you have the <windows.h> header file. */
 #undef HAVE_WINDOWS_H
+
+/* Define to 1 if zstd is enabled. */
+#undef HAVE_ZSTD
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */

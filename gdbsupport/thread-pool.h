@@ -1,6 +1,6 @@
 /* Thread pool
 
-   Copyright (C) 2019-2022 Free Software Foundation, Inc.
+   Copyright (C) 2019-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -23,16 +23,100 @@
 #include <queue>
 #include <vector>
 #include <functional>
+#include <chrono>
 #if CXX_STD_THREAD
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#endif
 #include <future>
+#endif
 #include "gdbsupport/gdb_optional.h"
 
 namespace gdb
 {
+
+#if CXX_STD_THREAD
+
+/* Simply use the standard future.  */
+template<typename T>
+using future = std::future<T>;
+
+/* ... and the standard future_status.  */
+using future_status = std::future_status;
+
+#else /* CXX_STD_THREAD */
+
+/* A compatibility enum for std::future_status.  This is just the
+   subset needed by gdb.  */
+enum class future_status
+{
+  ready,
+  timeout,
+};
+
+/* A compatibility wrapper for std::future.  Once <thread> and
+   <future> are available in all GCC builds -- should that ever happen
+   -- this can be removed.  GCC does not implement threading for
+   MinGW, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=93687.
+
+   Meanwhile, in this mode, there are no threads.  Tasks submitted to
+   the thread pool are invoked immediately and their result is stored
+   here.  The base template here simply wraps a T and provides some
+   std::future compatibility methods.  The provided methods are chosen
+   based on what GDB needs presently.  */
+
+template<typename T>
+class future
+{
+public:
+
+  explicit future (T value)
+    : m_value (std::move (value))
+  {
+  }
+
+  future () = default;
+  future (future &&other) = default;
+  future (const future &other) = delete;
+  future &operator= (future &&other) = default;
+  future &operator= (const future &other) = delete;
+
+  void wait () const { }
+
+  template<class Rep, class Period>
+  future_status wait_for (const std::chrono::duration<Rep,Period> &duration)
+    const
+  {
+    return future_status::ready;
+  }
+
+  T get () { return std::move (m_value); }
+
+private:
+
+  T m_value;
+};
+
+/* A specialization for void.  */
+
+template<>
+class future<void>
+{
+public:
+  void wait () const { }
+
+  template<class Rep, class Period>
+  future_status wait_for (const std::chrono::duration<Rep,Period> &duration)
+    const
+  {
+    return future_status::ready;
+  }
+
+  void get () { }
+};
+
+#endif /* CXX_STD_THREAD */
+
 
 /* A thread pool.
 
@@ -64,23 +148,32 @@ public:
 
   /* Post a task to the thread pool.  A future is returned, which can
      be used to wait for the result.  */
-  std::future<void> post_task (std::function<void ()> &&func)
+  future<void> post_task (std::function<void ()> &&func)
   {
+#if CXX_STD_THREAD
     std::packaged_task<void ()> task (std::move (func));
-    std::future<void> result = task.get_future ();
+    future<void> result = task.get_future ();
     do_post_task (std::packaged_task<void ()> (std::move (task)));
     return result;
+#else
+    func ();
+    return {};
+#endif /* CXX_STD_THREAD */
   }
 
   /* Post a task to the thread pool.  A future is returned, which can
      be used to wait for the result.  */
   template<typename T>
-  std::future<T> post_task (std::function<T ()> &&func)
+  future<T> post_task (std::function<T ()> &&func)
   {
+#if CXX_STD_THREAD
     std::packaged_task<T ()> task (std::move (func));
-    std::future<T> result = task.get_future ();
+    future<T> result = task.get_future ();
     do_post_task (std::packaged_task<void ()> (std::move (task)));
     return result;
+#else
+    return future<T> (func ());
+#endif /* CXX_STD_THREAD */
   }
 
 private:

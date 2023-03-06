@@ -1,6 +1,6 @@
 /* TUI display registers in window.
 
-   Copyright (C) 1998-2022 Free Software Foundation, Inc.
+   Copyright (C) 1998-2023 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -85,18 +85,12 @@ tab_expansion_file::write (const char *buf, long length_buf)
    representation of it.  */
 
 static std::string
-tui_register_format (struct frame_info *frame, int regnum)
+tui_register_format (frame_info_ptr frame, int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
 
   /* Expand tabs into spaces, since ncurses on MS-Windows doesn't.  */
   tab_expansion_file stream;
-
-  scoped_restore save_pagination
-    = make_scoped_restore (&pagination_enabled, 0);
-  scoped_restore save_stdout
-    = make_scoped_restore (&gdb_stdout, &stream);
-
   gdbarch_print_registers_info (gdbarch, &stream, frame, regnum, 1);
 
   /* Remove the possible \n.  */
@@ -111,7 +105,7 @@ tui_register_format (struct frame_info *frame, int regnum)
    display.  When changep is set, check if the new register value has
    changed with respect to the previous call.  */
 static void
-tui_get_register (struct frame_info *frame,
+tui_get_register (frame_info_ptr frame,
 		  struct tui_data_item_window *data, 
 		  int regnum, bool *changedp)
 {
@@ -208,7 +202,7 @@ tui_data_window::show_registers (const reggroup *group)
 
 void
 tui_data_window::show_register_group (const reggroup *group,
-				      struct frame_info *frame, 
+				      frame_info_ptr frame, 
 				      bool refresh_values_only)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
@@ -231,7 +225,7 @@ tui_data_window::show_register_group (const reggroup *group,
       /* If the register name is empty, it is undefined for this
 	 processor, so don't display anything.  */
       name = gdbarch_register_name (gdbarch, regnum);
-      if (name == 0 || *name == '\0')
+      if (*name == '\0')
 	continue;
 
       nr_regs++;
@@ -253,7 +247,7 @@ tui_data_window::show_register_group (const reggroup *group,
       /* If the register name is empty, it is undefined for this
 	 processor, so don't display anything.  */
       name = gdbarch_register_name (gdbarch, regnum);
-      if (name == 0 || *name == '\0')
+      if (*name == '\0')
 	continue;
 
       data_item_win = &m_regs_content[pos];
@@ -462,7 +456,7 @@ tui_data_window::do_scroll_vertical (int num_to_scroll)
    given a particular frame.  If the values have changed, they are
    updated with the new value and highlighted.  */
 void
-tui_data_window::check_register_values (struct frame_info *frame)
+tui_data_window::check_register_values (frame_info_ptr frame)
 {
   if (m_regs_content.empty ())
     show_registers (m_current_group);

@@ -1,6 +1,6 @@
 # Expect script for linker support of IFUNC symbols and relocations.
 #
-#   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+#   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 #   Contributed by Red Hat.
 #
 # This file is part of the GNU Binutils.
@@ -714,6 +714,15 @@ run_ld_link_exec_tests [list \
 	"pr18841cn" \
 	"pr18841.out" \
     ] \
+    [list \
+	"Run pr29216" \
+	"$NOPIE_LDFLAGS" \
+	"" \
+	{ pr29216.c } \
+	"pr29216" \
+	"pass.out" \
+	"-fPIC" \
+    ] \
 ]
 
 # The pr23169 testcase is not valid.  In general, you can't call ifunc
@@ -726,9 +735,10 @@ run_ld_link_exec_tests [list \
 # in the executable (which is relocated last by ld.so).
 if { [isnative]
      && !([istarget "powerpc-*-*"]
-           || [istarget "aarch64*-*-*"]
-           || [istarget "sparc*-*-*"]
-           || [istarget "riscv*-*-*"]) } {
+	  || [istarget "aarch64*-*-*"]
+	  || [istarget "arm*-*-*"]
+	  || [istarget "sparc*-*-*"]
+	  || [istarget "riscv*-*-*"]) } {
 run_ld_link_exec_tests [list \
     [list \
 	"Run pr23169a" \

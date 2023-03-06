@@ -1,6 +1,6 @@
 /* Interface between gdb and its extension languages.
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -33,6 +33,7 @@
 #include "python/python.h"
 #include "guile/guile.h"
 #include <array>
+#include "inferior.h"
 
 static script_sourcer_func source_gdb_script;
 static objfile_script_sourcer_func source_gdb_objfile_script;
@@ -524,7 +525,7 @@ apply_ext_lang_val_pretty_printer (struct value *val,
    rather than trying filters in other extension languages.  */
 
 enum ext_lang_bt_status
-apply_ext_lang_frame_filter (struct frame_info *frame,
+apply_ext_lang_frame_filter (frame_info_ptr frame,
 			     frame_filter_flags flags,
 			     enum ext_lang_frame_args args_type,
 			     struct ui_out *out,
@@ -597,7 +598,7 @@ get_breakpoint_cond_ext_lang (struct breakpoint *b,
 /* Return whether a stop condition for breakpoint B says to stop.
    True is also returned if there is no stop condition for B.  */
 
-int
+bool
 breakpoint_ext_lang_cond_says_stop (struct breakpoint *b)
 {
   enum ext_lang_bp_stop stop = EXT_LANG_BP_STOP_UNSET;
@@ -626,7 +627,7 @@ breakpoint_ext_lang_cond_says_stop (struct breakpoint *b)
 	}
     }
 
-  return stop == EXT_LANG_BP_STOP_NO ? 0 : 1;
+  return stop != EXT_LANG_BP_STOP_NO;
 }
 
 /* ^C/SIGINT support.
@@ -646,22 +647,14 @@ static int quit_flag;
 static const struct extension_language_defn *active_ext_lang
   = &extension_language_gdb;
 
-/* Return the currently active extension language.  */
-
-const struct extension_language_defn *
-get_active_ext_lang (void)
-{
-  return active_ext_lang;
-}
-
 /* Install a SIGINT handler.  */
 
 static void
-install_sigint_handler (const struct signal_handler *handler_state)
+install_ext_sigint_handler (const struct signal_handler *handler_state)
 {
   gdb_assert (handler_state->handler_saved);
 
-  signal (SIGINT, handler_state->handler);
+  install_sigint_handler (handler_state->handler);
 }
 
 /* Install GDB's SIGINT handler, storing the previous version in *PREVIOUS.
@@ -675,7 +668,7 @@ install_gdb_sigint_handler (struct signal_handler *previous)
   /* Save here to simplify comparison.  */
   sighandler_t handle_sigint_for_compare = handle_sigint;
 
-  previous->handler = signal (SIGINT, handle_sigint);
+  previous->handler = install_sigint_handler (handle_sigint);
   if (previous->handler != handle_sigint_for_compare)
     previous->handler_saved = 1;
   else
@@ -687,6 +680,35 @@ namespace selftests {
 void (*hook_set_active_ext_lang) () = nullptr;
 }
 #endif
+
+/* True if cooperative SIGINT handling is disabled.  This is needed so
+   that calls to set_active_ext_lang do not re-enable cooperative
+   handling, which if enabled would make set_quit_flag store the
+   SIGINT in an extension language.  */
+static bool cooperative_sigint_handling_disabled = false;
+
+scoped_disable_cooperative_sigint_handling::scoped_disable_cooperative_sigint_handling ()
+{
+  /* Force the active extension language to the GDB scripting
+     language.  This ensures that a previously saved SIGINT is moved
+     to the quit_flag global, as well as ensures that future SIGINTs
+     are also saved in the global.  */
+  m_prev_active_ext_lang_state
+    = set_active_ext_lang (&extension_language_gdb);
+
+  /* Set the "cooperative SIGINT handling disabled" global flag, so
+     that a future call to set_active_ext_lang does not re-enable
+     cooperative mode.  */
+  m_prev_cooperative_sigint_handling_disabled
+    = cooperative_sigint_handling_disabled;
+  cooperative_sigint_handling_disabled = true;
+}
+
+scoped_disable_cooperative_sigint_handling::~scoped_disable_cooperative_sigint_handling ()
+{
+  cooperative_sigint_handling_disabled = m_prev_cooperative_sigint_handling_disabled;
+  restore_active_ext_lang (m_prev_active_ext_lang_state);
+}
 
 /* Set the currently active extension language to NOW_ACTIVE.
    The result is a pointer to a malloc'd block of memory to pass to
@@ -709,7 +731,15 @@ void (*hook_set_active_ext_lang) () = nullptr;
    check_quit_flag is not called, the original SIGINT will be thrown.
    Non-cooperative extension languages are free to install their own SIGINT
    handler but the original must be restored upon return, either itself
-   or via restore_active_ext_lang.  */
+   or via restore_active_ext_lang.
+
+   If cooperative SIGINT handling is force-disabled (e.g., we're in
+   the middle of handling an inferior event), then we don't actually
+   record NOW_ACTIVE as the current active extension language, so that
+   set_quit_flag saves the SIGINT in the global quit flag instead of
+   in the extension language.  The caller does not need to concern
+   itself about this, though.  The currently active extension language
+   concept only exists for cooperative SIGINT handling.  */
 
 struct active_ext_lang_state *
 set_active_ext_lang (const struct extension_language_defn *now_active)
@@ -718,6 +748,22 @@ set_active_ext_lang (const struct extension_language_defn *now_active)
   if (selftests::hook_set_active_ext_lang)
     selftests::hook_set_active_ext_lang ();
 #endif
+
+  /* If cooperative SIGINT handling was previously force-disabled,
+     make sure to not re-enable it (as NOW_ACTIVE could be a language
+     that supports cooperative SIGINT handling).  */
+  if (cooperative_sigint_handling_disabled)
+    {
+      /* Ensure set_quit_flag saves SIGINT in the quit_flag
+	 global.  */
+      gdb_assert (active_ext_lang->ops == nullptr
+		  || active_ext_lang->ops->check_quit_flag == nullptr);
+
+      /* The only thing the caller can do with the result is pass it
+	 to restore_active_ext_lang, which expects NULL when
+	 cooperative SIGINT handling is disabled.  */
+      return nullptr;
+    }
 
   struct active_ext_lang_state *previous
     = XCNEW (struct active_ext_lang_state);
@@ -750,13 +796,20 @@ set_active_ext_lang (const struct extension_language_defn *now_active)
 void
 restore_active_ext_lang (struct active_ext_lang_state *previous)
 {
+  if (cooperative_sigint_handling_disabled)
+    {
+      /* See set_active_ext_lang.  */
+      gdb_assert (previous == nullptr);
+      return;
+    }
+
   active_ext_lang = previous->ext_lang;
 
   if (target_terminal::is_ours ())
     {
       /* Restore the previous SIGINT handler if one was saved.  */
       if (previous->sigint_handler.handler_saved)
-	install_sigint_handler (&previous->sigint_handler);
+	install_ext_sigint_handler (&previous->sigint_handler);
 
       /* If there's a SIGINT recorded in the cooperative extension languages,
 	 move it to the new language, or save it in GDB's global flag if the
@@ -922,6 +975,26 @@ ext_lang_colorize_disasm (const std::string &content, gdbarch *gdbarch)
     }
 
   return result;
+}
+
+/* See extension.h.  */
+
+gdb::optional<int>
+ext_lang_print_insn (struct gdbarch *gdbarch, CORE_ADDR address,
+		     struct disassemble_info *info)
+{
+  for (const struct extension_language_defn *extlang : extension_languages)
+    {
+      if (extlang->ops == nullptr
+	  || extlang->ops->print_insn == nullptr)
+	continue;
+      gdb::optional<int> length
+	= extlang->ops->print_insn (gdbarch, address, info);
+      if (length.has_value ())
+	return length;
+    }
+
+  return {};
 }
 
 /* Called via an observer before gdb prints its prompt.

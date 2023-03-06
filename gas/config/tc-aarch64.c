@@ -1,6 +1,6 @@
 /* tc-aarch64.c -- Assemble for the AArch64 ISA
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GAS.
@@ -31,8 +31,11 @@
 #ifdef OBJ_ELF
 #include "elf/aarch64.h"
 #include "dw2gencfi.h"
+#include "sframe.h"
+#include "gen-sframe.h"
 #endif
 
+#include "dw2gencfi.h"
 #include "dwarf2dbg.h"
 
 /* Types of processor to assemble for.  */
@@ -61,21 +64,30 @@ static aarch64_instr_sequence *insn_sequence = NULL;
 #ifdef OBJ_ELF
 /* Pre-defined "_GLOBAL_OFFSET_TABLE_"	*/
 static symbolS *GOT_symbol;
+#endif
 
 /* Which ABI to use.  */
 enum aarch64_abi_type
 {
   AARCH64_ABI_NONE = 0,
   AARCH64_ABI_LP64 = 1,
-  AARCH64_ABI_ILP32 = 2
+  AARCH64_ABI_ILP32 = 2,
+  AARCH64_ABI_LLP64 = 3
 };
+
+unsigned int aarch64_sframe_cfa_sp_reg;
+/* The other CFA base register for SFrame stack trace info.  */
+unsigned int aarch64_sframe_cfa_fp_reg;
+unsigned int aarch64_sframe_cfa_ra_reg;
 
 #ifndef DEFAULT_ARCH
 #define DEFAULT_ARCH "aarch64"
 #endif
 
+#ifdef OBJ_ELF
 /* DEFAULT_ARCH is initialized in gas/configure.tgt.  */
 static const char *default_arch = DEFAULT_ARCH;
+#endif
 
 /* AArch64 ABI for the output file.  */
 static enum aarch64_abi_type aarch64_abi = AARCH64_ABI_NONE;
@@ -85,7 +97,10 @@ static enum aarch64_abi_type aarch64_abi = AARCH64_ABI_NONE;
    64-bit model, in which the C int type is 32-bits but the C long type
    and all pointer types are 64-bit objects (LP64).  */
 #define ilp32_p		(aarch64_abi == AARCH64_ABI_ILP32)
-#endif
+
+/* When non zero, C types int and long are 32 bit,
+   pointers, however are 64 bit */
+#define llp64_p (aarch64_abi == AARCH64_ABI_LLP64)
 
 enum vector_el_type
 {
@@ -565,25 +580,18 @@ static bool in_aarch64_get_expression = false;
 #define ALLOW_ABSENT  false
 #define REJECT_ABSENT true
 
-/* Fifth argument to aarch64_get_expression.  */
-#define NORMAL_RESOLUTION false
-
 /* Return TRUE if the string pointed by *STR is successfully parsed
    as an valid expression; *EP will be filled with the information of
    such an expression.  Otherwise return FALSE.
 
    If ALLOW_IMMEDIATE_PREFIX is true then skip a '#' at the start.
-   If REJECT_ABSENT is true then trat missing expressions as an error.
-   If DEFER_RESOLUTION is true, then do not resolve expressions against
-   constant symbols.  Necessary if the expression is part of a fixup
-   that uses a reloc that must be emitted.  */
+   If REJECT_ABSENT is true then trat missing expressions as an error.  */
 
 static bool
 aarch64_get_expression (expressionS *  ep,
 			char **        str,
 			bool           allow_immediate_prefix,
-			bool           reject_absent,
-			bool           defer_resolution)
+			bool           reject_absent)
 {
   char *save_in;
   segT seg;
@@ -603,10 +611,7 @@ aarch64_get_expression (expressionS *  ep,
   save_in = input_line_pointer;
   input_line_pointer = *str;
   in_aarch64_get_expression = true;
-  if (defer_resolution)
-    seg = deferred_expression (ep);
-  else
-    seg = expression (ep);
+  seg = expression (ep);
   in_aarch64_get_expression = false;
 
   if (ep->X_op == O_illegal || (reject_absent && ep->X_op == O_absent))
@@ -1035,8 +1040,7 @@ parse_typed_reg (char **ccp, aarch64_reg_type type, aarch64_reg_type *rtype,
 
       atype.defined |= NTA_HASINDEX;
 
-      aarch64_get_expression (&exp, &str, GE_NO_PREFIX, REJECT_ABSENT,
-			      NORMAL_RESOLUTION);
+      aarch64_get_expression (&exp, &str, GE_NO_PREFIX, REJECT_ABSENT);
 
       if (exp.X_op != O_constant)
 	{
@@ -1239,8 +1243,7 @@ parse_vector_reg_list (char **ccp, aarch64_reg_type type,
 	{
 	  expressionS exp;
 
-	  aarch64_get_expression (&exp, &str, GE_NO_PREFIX, REJECT_ABSENT,
-				  NORMAL_RESOLUTION);
+	  aarch64_get_expression (&exp, &str, GE_NO_PREFIX, REJECT_ABSENT);
 	  if (exp.X_op != O_constant)
 	    {
 	      set_first_syntax_error (_("constant expression required."));
@@ -1412,11 +1415,7 @@ s_unreq (int a ATTRIBUTE_UNUSED)
   char saved_char;
 
   name = input_line_pointer;
-
-  while (*input_line_pointer != 0
-	 && *input_line_pointer != ' ' && *input_line_pointer != '\n')
-    ++input_line_pointer;
-
+  input_line_pointer = find_end_of_line (input_line_pointer, flag_m68k_mri);
   saved_char = *input_line_pointer;
   *input_line_pointer = 0;
 
@@ -1475,7 +1474,7 @@ s_unreq (int a ATTRIBUTE_UNUSED)
 
 /* Directives: Instruction set selection.  */
 
-#ifdef OBJ_ELF
+#if defined OBJ_ELF || defined OBJ_COFF
 /* This code is to handle mapping symbols as defined in the ARM AArch64 ELF
    spec.  (See "Mapping symbols", section 4.5.4, ARM AAELF64 version 0.05).
    Note that previously, $a and $t has type STT_FUNC (BSF_OBJECT flag),
@@ -1890,10 +1889,9 @@ s_ltorg (int ignored ATTRIBUTE_UNUSED)
     }
 }
 
-#ifdef OBJ_ELF
+#if defined(OBJ_ELF) || defined(OBJ_COFF)
 /* Forward declarations for functions below, in the MD interface
    section.  */
-static fixS *fix_new_aarch64 (fragS *, int, short, expressionS *, int, int);
 static struct reloc_table_entry * find_reloc_table_entry (char **);
 
 /* Directives: Data.  */
@@ -1901,7 +1899,7 @@ static struct reloc_table_entry * find_reloc_table_entry (char **);
    implemented properly.  */
 
 static void
-s_aarch64_elf_cons (int nbytes)
+s_aarch64_cons (int nbytes)
 {
   expressionS exp;
 
@@ -1951,6 +1949,12 @@ s_aarch64_elf_cons (int nbytes)
   input_line_pointer--;
   demand_empty_rest_of_line ();
 }
+#endif
+
+#ifdef OBJ_ELF
+/* Forward declarations for functions below, in the MD interface
+   section.  */
+ static fixS *fix_new_aarch64 (fragS *, int, short, expressionS *, int, int);
 
 /* Mark symbol that it follows a variant PCS convention.  */
 
@@ -2093,6 +2097,57 @@ s_tlsdescldr (int ignored ATTRIBUTE_UNUSED)
 }
 #endif	/* OBJ_ELF */
 
+#ifdef TE_PE
+static void
+s_secrel (int dummy ATTRIBUTE_UNUSED)
+{
+  expressionS exp;
+
+  do
+    {
+      expression (&exp);
+      if (exp.X_op == O_symbol)
+	exp.X_op = O_secrel;
+
+      emit_expr (&exp, 4);
+    }
+  while (*input_line_pointer++ == ',');
+
+  input_line_pointer--;
+  demand_empty_rest_of_line ();
+}
+
+void
+tc_pe_dwarf2_emit_offset (symbolS *symbol, unsigned int size)
+{
+  expressionS exp;
+
+  exp.X_op = O_secrel;
+  exp.X_add_symbol = symbol;
+  exp.X_add_number = 0;
+  emit_expr (&exp, size);
+}
+
+static void
+s_secidx (int dummy ATTRIBUTE_UNUSED)
+{
+  expressionS exp;
+
+  do
+    {
+      expression (&exp);
+      if (exp.X_op == O_symbol)
+	exp.X_op = O_secidx;
+
+      emit_expr (&exp, 2);
+    }
+  while (*input_line_pointer++ == ',');
+
+  input_line_pointer--;
+  demand_empty_rest_of_line ();
+}
+#endif	/* TE_PE */
+
 static void s_aarch64_arch (int);
 static void s_aarch64_cpu (int);
 static void s_aarch64_arch_extension (int);
@@ -2120,11 +2175,17 @@ const pseudo_typeS md_pseudo_table[] = {
   {"tlsdescadd", s_tlsdescadd, 0},
   {"tlsdesccall", s_tlsdesccall, 0},
   {"tlsdescldr", s_tlsdescldr, 0},
-  {"word", s_aarch64_elf_cons, 4},
-  {"long", s_aarch64_elf_cons, 4},
-  {"xword", s_aarch64_elf_cons, 8},
-  {"dword", s_aarch64_elf_cons, 8},
   {"variant_pcs", s_variant_pcs, 0},
+#endif
+#if defined(OBJ_ELF) || defined(OBJ_COFF)
+  {"word", s_aarch64_cons, 4},
+  {"long", s_aarch64_cons, 4},
+  {"xword", s_aarch64_cons, 8},
+  {"dword", s_aarch64_cons, 8},
+#endif
+#ifdef TE_PE
+  {"secrel32", s_secrel, 0},
+  {"secidx", s_secidx, 0},
 #endif
   {"float16", float_cons, 'h'},
   {"bfloat16", float_cons, 'b'},
@@ -2187,8 +2248,7 @@ parse_immediate_expression (char **str, expressionS *exp,
       return false;
     }
 
-  aarch64_get_expression (exp, str, GE_OPT_PREFIX, REJECT_ABSENT,
-			  NORMAL_RESOLUTION);
+  aarch64_get_expression (exp, str, GE_OPT_PREFIX, REJECT_ABSENT);
 
   if (exp->X_op == O_absent)
     {
@@ -2422,8 +2482,7 @@ parse_big_immediate (char **str, int64_t *imm, aarch64_reg_type reg_type)
       return false;
     }
 
-  aarch64_get_expression (&inst.reloc.exp, &ptr, GE_OPT_PREFIX, REJECT_ABSENT,
-			  NORMAL_RESOLUTION);
+  aarch64_get_expression (&inst.reloc.exp, &ptr, GE_OPT_PREFIX, REJECT_ABSENT);
 
   if (inst.reloc.exp.X_op == O_constant)
     *imm = inst.reloc.exp.X_add_number;
@@ -3080,7 +3139,7 @@ aarch64_force_reloc (unsigned int type)
     case BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_LO12_NC:
       /* Pseudo relocs that need to be fixed up according to
 	 ilp32_p.  */
-      return 0;
+      return 1;
 
     case BFD_RELOC_AARCH64_ADD_LO12:
     case BFD_RELOC_AARCH64_ADR_GOT_PAGE:
@@ -3097,6 +3156,7 @@ aarch64_force_reloc (unsigned int type)
     case BFD_RELOC_AARCH64_LDST32_LO12:
     case BFD_RELOC_AARCH64_LDST64_LO12:
     case BFD_RELOC_AARCH64_LDST8_LO12:
+    case BFD_RELOC_AARCH64_LDST_LO12:
     case BFD_RELOC_AARCH64_TLSDESC_ADD_LO12:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21:
@@ -3130,6 +3190,8 @@ aarch64_force_reloc (unsigned int type)
     case BFD_RELOC_AARCH64_TLSLD_LDST64_DTPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSLD_LDST8_DTPREL_LO12:
     case BFD_RELOC_AARCH64_TLSLD_LDST8_DTPREL_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSLD_LDST_DTPREL_LO12:
+    case BFD_RELOC_AARCH64_TLSLD_LDST_DTPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G0:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G0_NC:
     case BFD_RELOC_AARCH64_TLSLD_MOVW_DTPREL_G1:
@@ -3143,6 +3205,8 @@ aarch64_force_reloc (unsigned int type)
     case BFD_RELOC_AARCH64_TLSLE_LDST64_TPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSLE_LDST8_TPREL_LO12:
     case BFD_RELOC_AARCH64_TLSLE_LDST8_TPREL_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSLE_LDST_TPREL_LO12:
+    case BFD_RELOC_AARCH64_TLSLE_LDST_TPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12_NC:
@@ -3315,8 +3379,7 @@ parse_shift (char **str, aarch64_opnd_info *operand, enum parse_shift_mode mode)
 	  p++;
 	  exp_has_prefix = 1;
 	}
-      (void) aarch64_get_expression (&exp, &p, GE_NO_PREFIX, ALLOW_ABSENT,
-				     NORMAL_RESOLUTION);
+      aarch64_get_expression (&exp, &p, GE_NO_PREFIX, ALLOW_ABSENT);
     }
   if (kind == AARCH64_MOD_MUL_VL)
     /* For consistency, give MUL VL the same shift amount as an implicit
@@ -3380,7 +3443,7 @@ parse_shifter_operand_imm (char **str, aarch64_opnd_info *operand,
 
   /* Accept an immediate expression.  */
   if (! aarch64_get_expression (&inst.reloc.exp, &p, GE_OPT_PREFIX,
-				REJECT_ABSENT, NORMAL_RESOLUTION))
+				REJECT_ABSENT))
     return false;
 
   /* Accept optional LSL for arithmetic immediate values.  */
@@ -3504,8 +3567,7 @@ parse_shifter_operand_reloc (char **str, aarch64_opnd_info *operand,
 
       /* Next, we parse the expression.  */
       if (! aarch64_get_expression (&inst.reloc.exp, str, GE_NO_PREFIX,
-				    REJECT_ABSENT,
-				    aarch64_force_reloc (entry->add_type) == 1))
+				    REJECT_ABSENT))
 	return false;
       
       /* Record the relocation type (use the ADD variant here).  */
@@ -3651,8 +3713,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand,
 	    }
 
 	  /* #:<reloc_op>:  */
-	  if (! aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT,
-					aarch64_force_reloc (entry->add_type) == 1))
+	  if (! aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT))
 	    {
 	      set_syntax_error (_("invalid relocation expression"));
 	      return false;
@@ -3668,8 +3729,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand,
 	    /* =immediate; need to generate the literal in the literal pool. */
 	    inst.gen_lit_pool = 1;
 
-	  if (!aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT,
-				       NORMAL_RESOLUTION))
+	  if (!aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT))
 	    {
 	      set_syntax_error (_("invalid address"));
 	      return false;
@@ -3775,8 +3835,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand,
 	      /* We now have the group relocation table entry corresponding to
 	         the name in the assembler source.  Next, we parse the
 	         expression.  */
-	      if (! aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT,
-					    aarch64_force_reloc (entry->add_type) == 1))
+	      if (! aarch64_get_expression (exp, &p, GE_NO_PREFIX, REJECT_ABSENT))
 		{
 		  set_syntax_error (_("invalid relocation expression"));
 		  return false;
@@ -3789,8 +3848,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand,
 	    }
 	  else
 	    {
-	      if (! aarch64_get_expression (exp, &p, GE_OPT_PREFIX, REJECT_ABSENT,
-					    NORMAL_RESOLUTION))
+	      if (! aarch64_get_expression (exp, &p, GE_OPT_PREFIX, REJECT_ABSENT))
 		{
 		  set_syntax_error (_("invalid expression in the address"));
 		  return false;
@@ -3846,8 +3904,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand,
 	  operand->addr.offset.regno = reg->number;
 	  operand->addr.offset.is_reg = 1;
 	}
-      else if (! aarch64_get_expression (exp, &p, GE_OPT_PREFIX, REJECT_ABSENT,
-					 NORMAL_RESOLUTION))
+      else if (! aarch64_get_expression (exp, &p, GE_OPT_PREFIX, REJECT_ABSENT))
 	{
 	  /* [Xn],#expr */
 	  set_syntax_error (_("invalid expression in the address"));
@@ -3975,8 +4032,7 @@ parse_half (char **str, int *internal_fixup_p)
   else
     *internal_fixup_p = 1;
 
-  if (! aarch64_get_expression (&inst.reloc.exp, &p, GE_NO_PREFIX, REJECT_ABSENT,
-				aarch64_force_reloc (inst.reloc.type) == 1))
+  if (! aarch64_get_expression (&inst.reloc.exp, &p, GE_NO_PREFIX, REJECT_ABSENT))
     return false;
 
   *str = p;
@@ -4018,8 +4074,7 @@ parse_adrp (char **str)
     inst.reloc.type = BFD_RELOC_AARCH64_ADR_HI21_PCREL;
 
   inst.reloc.pc_rel = 1;
-  if (! aarch64_get_expression (&inst.reloc.exp, &p, GE_NO_PREFIX, REJECT_ABSENT,
-				aarch64_force_reloc (inst.reloc.type) == 1))
+  if (! aarch64_get_expression (&inst.reloc.exp, &p, GE_NO_PREFIX, REJECT_ABSENT))
     return false;
   *str = p;
   return true;
@@ -5342,6 +5397,41 @@ assign_qualifier_sequence (aarch64_inst *instr,
     instr->operands[i].qualifier = *qualifiers;
 }
 
+/* Callback used by aarch64_print_operand to apply STYLE to the
+   disassembler output created from FMT and ARGS.  The STYLER object holds
+   any required state.  Must return a pointer to a string (created from FMT
+   and ARGS) that will continue to be valid until the complete disassembled
+   instruction has been printed.
+
+   We don't currently add any styling to the output of the disassembler as
+   used within assembler error messages, and so STYLE is ignored here.  A
+   new string is allocated on the obstack help within STYLER and returned
+   to the caller.  */
+
+static const char *aarch64_apply_style
+	(struct aarch64_styler *styler,
+	 enum disassembler_style style ATTRIBUTE_UNUSED,
+	 const char *fmt, va_list args)
+{
+  int res;
+  char *ptr;
+  struct obstack *stack = (struct obstack *) styler->state;
+  va_list ap;
+
+  /* Calculate the required space.  */
+  va_copy (ap, args);
+  res = vsnprintf (NULL, 0, fmt, ap);
+  va_end (ap);
+  gas_assert (res >= 0);
+
+  /* Allocate space on the obstack and format the result.  */
+  ptr = (char *) obstack_alloc (stack, res + 1);
+  res = vsnprintf (ptr, (res + 1), fmt, args);
+  gas_assert (res >= 0);
+
+  return ptr;
+}
+
 /* Print operands for the diagnosis purpose.  */
 
 static void
@@ -5349,10 +5439,17 @@ print_operands (char *buf, const aarch64_opcode *opcode,
 		const aarch64_opnd_info *opnds)
 {
   int i;
+  struct aarch64_styler styler;
+  struct obstack content;
+  obstack_init (&content);
+
+  styler.apply_style = aarch64_apply_style;
+  styler.state = (void *) &content;
 
   for (i = 0; i < AARCH64_MAX_OPND_NUM; ++i)
     {
       char str[128];
+      char cmt[128];
 
       /* We regard the opcode operand info more, however we also look into
 	 the inst->operands to support the disassembling of the optional
@@ -5365,7 +5462,7 @@ print_operands (char *buf, const aarch64_opcode *opcode,
 
       /* Generate the operand string in STR.  */
       aarch64_print_operand (str, sizeof (str), 0, opcode, opnds, i, NULL, NULL,
-			     NULL, cpu_variant);
+			     NULL, cmt, sizeof (cmt), cpu_variant, &styler);
 
       /* Delimiter.  */
       if (str[0] != '\0')
@@ -5373,7 +5470,18 @@ print_operands (char *buf, const aarch64_opcode *opcode,
 
       /* Append the operand string.  */
       strcat (buf, str);
+
+      /* Append a comment.  This works because only the last operand ever
+	 adds a comment.  If that ever changes then we'll need to be
+	 smarter here.  */
+      if (cmt[0] != '\0')
+	{
+	  strcat (buf, "\t// ");
+	  strcat (buf, cmt);
+	}
     }
+
+  obstack_free (&content, NULL);
 }
 
 /* Send to stderr a string as information.  */
@@ -6598,6 +6706,8 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	case AARCH64_OPND_SVE_IMM_ROT1:
 	case AARCH64_OPND_SVE_IMM_ROT2:
 	case AARCH64_OPND_SVE_IMM_ROT3:
+	case AARCH64_OPND_CSSC_SIMM8:
+	case AARCH64_OPND_CSSC_UIMM8:
 	  po_imm_nc_or_fail ();
 	  info->imm.value = val;
 	  break;
@@ -6691,8 +6801,7 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	      goto failure;
 	    str = saved;
 	    po_misc_or_fail (aarch64_get_expression (&inst.reloc.exp, &str,
-						     GE_OPT_PREFIX, REJECT_ABSENT,
-						     NORMAL_RESOLUTION));
+						     GE_OPT_PREFIX, REJECT_ABSENT));
 	    /* The MOV immediate alias will be fixed up by fix_mov_imm_insn
 	       later.  fix_mov_imm_insn will try to determine a machine
 	       instruction (MOVZ, MOVN or ORR) for it and will issue an error
@@ -8306,7 +8415,7 @@ aarch64_handle_align (fragS * fragP)
   fix = bytes & (noop_size - 1);
   if (fix)
     {
-#ifdef OBJ_ELF
+#if defined OBJ_ELF || defined OBJ_COFF
       insert_data_mapping_symbol (MAP_INSN, fragP->fr_fix, fragP, fix);
 #endif
       memset (p, 0, fix);
@@ -8364,6 +8473,51 @@ aarch64_init_frag (fragS * fragP, int max_chars)
       break;
     }
 }
+
+/* Whether SFrame stack trace info is supported.  */
+
+bool
+aarch64_support_sframe_p (void)
+{
+  /* At this time, SFrame is supported for aarch64 only.  */
+  return (aarch64_abi == AARCH64_ABI_LP64);
+}
+
+/* Specify if RA tracking is needed.  */
+
+bool
+aarch64_sframe_ra_tracking_p (void)
+{
+  return true;
+}
+
+/* Specify the fixed offset to recover RA from CFA.
+   (useful only when RA tracking is not needed).  */
+
+offsetT
+aarch64_sframe_cfa_ra_offset (void)
+{
+  return (offsetT) SFRAME_CFA_FIXED_RA_INVALID;
+}
+
+/* Get the abi/arch indentifier for SFrame.  */
+
+unsigned char
+aarch64_sframe_get_abi_arch (void)
+{
+  unsigned char sframe_abi_arch = 0;
+
+  if (aarch64_support_sframe_p ())
+    {
+      sframe_abi_arch = target_big_endian
+	? SFRAME_ABI_AARCH64_ENDIAN_BIG
+	: SFRAME_ABI_AARCH64_ENDIAN_LITTLE;
+    }
+
+  return sframe_abi_arch;
+}
+
+#endif /* OBJ_ELF */
 
 /* Initialize the DWARF-2 unwind information for this procedure.  */
 
@@ -8372,7 +8526,6 @@ tc_aarch64_frame_initial_instructions (void)
 {
   cfi_add_CFA_def_cfa (REG_SP, 0);
 }
-#endif /* OBJ_ELF */
 
 /* Convert REGNAME to a DWARF-2 register number.  */
 
@@ -8409,10 +8562,10 @@ tc_aarch64_regname_to_dw2regnum (char *regname)
 int
 aarch64_dwarf2_addr_size (void)
 {
-#if defined (OBJ_MAYBE_ELF) || defined (OBJ_ELF)
   if (ilp32_p)
     return 4;
-#endif
+  else if (llp64_p)
+    return 8;
   return bfd_arch_bits_per_address (stdoutput) / 8;
 }
 
@@ -8819,7 +8972,8 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
 
   /* Note whether this will delete the relocation.  */
 
-  if (fixP->fx_addsy == 0 && !fixP->fx_pcrel)
+  if (fixP->fx_addsy == 0 && !fixP->fx_pcrel
+      && aarch64_force_reloc (fixP->fx_r_type) <= 0)
     fixP->fx_done = 1;
 
   /* Process the relocations.  */
@@ -9168,6 +9322,11 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
       /* An error will already have been reported.  */
       break;
 
+    case BFD_RELOC_RVA:
+    case BFD_RELOC_32_SECREL:
+    case BFD_RELOC_16_SECIDX:
+      break;
+
     default:
       as_bad_where (fixP->fx_file, fixP->fx_line,
 		    _("unexpected %s fixup"),
@@ -9251,32 +9410,47 @@ cons_fix_new_aarch64 (fragS * frag, int where, int size, expressionS * exp)
   bfd_reloc_code_real_type type;
   int pcrel = 0;
 
-  /* Pick a reloc.
-     FIXME: @@ Should look at CPU word size.  */
-  switch (size)
+#ifdef TE_PE
+  if (exp->X_op == O_secrel)
     {
-    case 1:
-      type = BFD_RELOC_8;
-      break;
-    case 2:
-      type = BFD_RELOC_16;
-      break;
-    case 4:
-      type = BFD_RELOC_32;
-      break;
-    case 8:
-      type = BFD_RELOC_64;
-      break;
-    default:
-      as_bad (_("cannot do %u-byte relocation"), size);
-      type = BFD_RELOC_UNUSED;
-      break;
+      exp->X_op = O_symbol;
+      type = BFD_RELOC_32_SECREL;
     }
+  else if (exp->X_op == O_secidx)
+    {
+      exp->X_op = O_symbol;
+      type = BFD_RELOC_16_SECIDX;
+    }
+  else
+    {
+#endif
+    /* Pick a reloc.
+       FIXME: @@ Should look at CPU word size.  */
+    switch (size)
+      {
+      case 1:
+	type = BFD_RELOC_8;
+	break;
+      case 2:
+	type = BFD_RELOC_16;
+	break;
+      case 4:
+	type = BFD_RELOC_32;
+	break;
+      case 8:
+	type = BFD_RELOC_64;
+	break;
+      default:
+	as_bad (_("cannot do %u-byte relocation"), size);
+	type = BFD_RELOC_UNUSED;
+	break;
+      }
+#ifdef TE_PE
+    }
+#endif
 
   fix_new_exp (frag, where, (int) size, exp, pcrel, type);
 }
-
-#ifdef OBJ_ELF
 
 /* Implement md_after_parse_args.  This is the earliest time we need to decide
    ABI.  If no -mabi specified, the ABI will be decided by target triplet.  */
@@ -9287,13 +9461,18 @@ aarch64_after_parse_args (void)
   if (aarch64_abi != AARCH64_ABI_NONE)
     return;
 
+#ifdef OBJ_ELF
   /* DEFAULT_ARCH will have ":32" extension if it's configured for ILP32.  */
   if (strlen (default_arch) > 7 && strcmp (default_arch + 7, ":32") == 0)
     aarch64_abi = AARCH64_ABI_ILP32;
   else
     aarch64_abi = AARCH64_ABI_LP64;
+#else
+  aarch64_abi = AARCH64_ABI_LLP64;
+#endif
 }
 
+#ifdef OBJ_ELF
 const char *
 elf64_aarch64_target_format (void)
 {
@@ -9315,6 +9494,12 @@ void
 aarch64elf_frob_symbol (symbolS * symp, int *puntp)
 {
   elf_frob_symbol (symp, puntp);
+}
+#elif defined OBJ_COFF
+const char *
+coff_aarch64_target_format (void)
+{
+  return "pe-aarch64-little";
 }
 #endif
 
@@ -9631,9 +9816,20 @@ md_begin (void)
   cpu_variant = *mcpu_cpu_opt;
 
   /* Record the CPU type.  */
-  mach = ilp32_p ? bfd_mach_aarch64_ilp32 : bfd_mach_aarch64;
+  if(ilp32_p)
+    mach = bfd_mach_aarch64_ilp32;
+  else if (llp64_p)
+    mach = bfd_mach_aarch64_llp64;
+  else
+    mach = bfd_mach_aarch64;
 
   bfd_set_arch_mach (stdoutput, TARGET_ARCH, mach);
+#ifdef OBJ_ELF
+  /* FIXME - is there a better way to do it ?  */
+  aarch64_sframe_cfa_sp_reg = 31;
+  aarch64_sframe_cfa_fp_reg = 29; /* x29.  */
+  aarch64_sframe_cfa_ra_reg = 30;
+#endif
 }
 
 /* Command line processing.  */
@@ -9989,6 +10185,8 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
 			AARCH64_ARCH_NONE},
   {"hbc",		AARCH64_FEATURE (AARCH64_FEATURE_HBC, 0),
 			AARCH64_ARCH_NONE},
+  {"cssc",		AARCH64_FEATURE (AARCH64_FEATURE_CSSC, 0),
+			AARCH64_ARCH_NONE},
   {NULL,		AARCH64_ARCH_NONE, AARCH64_ARCH_NONE},
 };
 
@@ -10199,8 +10397,12 @@ struct aarch64_option_abi_value_table
 };
 
 static const struct aarch64_option_abi_value_table aarch64_abis[] = {
+#ifdef OBJ_ELF
   {"ilp32",		AARCH64_ABI_ILP32},
   {"lp64",		AARCH64_ABI_LP64},
+#else
+  {"llp64",		AARCH64_ABI_LLP64},
+#endif
 };
 
 static int
@@ -10226,10 +10428,8 @@ aarch64_parse_abi (const char *str)
 }
 
 static struct aarch64_long_option_table aarch64_long_opts[] = {
-#ifdef OBJ_ELF
   {"mabi=", N_("<abi name>\t  specify for ABI <abi name>"),
    aarch64_parse_abi, NULL},
-#endif /* OBJ_ELF */
   {"mcpu=", N_("<cpu name>\t  assemble for CPU <cpu name>"),
    aarch64_parse_cpu, NULL},
   {"march=", N_("<arch name>\t  assemble for architecture <arch name>"),
@@ -10343,8 +10543,7 @@ s_aarch64_cpu (int ignored ATTRIBUTE_UNUSED)
   size_t optlen;
 
   name = input_line_pointer;
-  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-    input_line_pointer++;
+  input_line_pointer = find_end_of_line (input_line_pointer, flag_m68k_mri);
   saved_char = *input_line_pointer;
   *input_line_pointer = 0;
 
@@ -10389,8 +10588,7 @@ s_aarch64_arch (int ignored ATTRIBUTE_UNUSED)
   size_t optlen;
 
   name = input_line_pointer;
-  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-    input_line_pointer++;
+  input_line_pointer = find_end_of_line (input_line_pointer, flag_m68k_mri);
   saved_char = *input_line_pointer;
   *input_line_pointer = 0;
 
@@ -10429,10 +10627,9 @@ static void
 s_aarch64_arch_extension (int ignored ATTRIBUTE_UNUSED)
 {
   char saved_char;
-  char *ext = input_line_pointer;;
+  char *ext = input_line_pointer;
 
-  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-    input_line_pointer++;
+  input_line_pointer = find_end_of_line (input_line_pointer, flag_m68k_mri);
   saved_char = *input_line_pointer;
   *input_line_pointer = 0;
 

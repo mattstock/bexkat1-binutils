@@ -325,7 +325,6 @@ the native maintainer when resolving ABI issues.
 	s390		--target=s390-linux-gnu ,-Werror
 			Andreas Arnez		arnez@linux.ibm.com
 
-	score		--target=score-elf
 	sh		--target=sh-elf ,-Werror
 
 	sparc		--target=sparcv9-solaris2.11 ,-Werror
@@ -389,7 +388,8 @@ SystemTap		Sergio Durigan Junior	sergiodj@sergiodj.net
 
 Reverse debugging / Record and Replay / Tracing:
 
-record btrace		Markus T. Metzger	markus.t.metzger@intel.com
+record
+  btrace		Markus T. Metzger	markus.t.metzger@intel.com
 
 
 
@@ -451,7 +451,6 @@ To get recommended for the Write After Approval list you need a valid
 FSF assignment and have submitted one good patch.
 
 Tankut Baris Aktemur				tankut.baris.aktemur@intel.com
-Mihails Strasuns				mihails.strasuns@intel.com
 David Anderson					davea@sgi.com
 John David Anglin				dave.anglin@nrc-cnrc.gc.ca
 Andreas Arnez					arnez@linux.ibm.com
@@ -460,7 +459,7 @@ Sterling Augustine				saugustine@google.com
 John Baldwin					jhb@freebsd.org
 Scott Bambrough					scottb@netwinder.org
 Marco Barisione					mbarisione@undo.io
-Thiago Jung Bauermann				bauerman@br.ibm.com
+Thiago Jung Bauermann				thiago.bauermann@linaro.org
 Jon Beniston					jon@beniston.com
 Gary Benson					gbenson@redhat.com
 Gabriel Krisman Bertazi				gabriel@krisman.be
@@ -575,7 +574,8 @@ Jeff Law					law@redhat.com
 Justin Lebar					justin.lebar@gmail.com
 David Lecomber					david@streamline-computing.com
 Don Lee						don.lee@sunplusct.com
-Enze Li						lienze2010@hotmail.com
+Kévin Le Gouguec				legouguec@adacore.com
+Enze Li						enze.li@hotmail.com
 Yan-Ting Lin					currygt52@gmail.com
 Robert Lipe					rjl@sco.com
 Lei Liu						lei.liu2@windriver.com
@@ -599,6 +599,7 @@ Alan Modra					amodra@gmail.com
 Fawzi Mohamed					fawzi.mohamed@nokia.com
 Jason Molenda					jmolenda@apple.com
 Chris Moller					cmoller@redhat.com
+Patrick Monnerat				patrick@monnerat.net
 Phil Muldoon					pmuldoon@redhat.com
 Pierre Muller					muller@sourceware.org
 Gaius Mulley                                    gaius@glam.ac.uk
@@ -610,6 +611,7 @@ Will Newton					will.newton@linaro.org
 Nathanael Nerode				neroden@gcc.gnu.org
 Hans-Peter Nilsson				hp@bitrange.com
 David O'Brien					obrien@freebsd.org
+Tsukasa Oi					research_trasio@irq.a4lg.com
 Alexandre Oliva					aoliva@redhat.com
 Rainer Orth					ro@cebitec.uni-bielefeld.de
 Karen Osmond					karen.osmond@gmail.com
@@ -636,6 +638,7 @@ Pierre-Marie de Rodat				derodat@adacore.com
 Xavier Roirand 					roirand@adacore.com
 Bob Rossi 					bob_rossi@cox.net
 Theodore A. Roth				troth@openavr.org
+Yvan Roux					yvan.roux@foss.st.com
 Ian Roxborough					irox@redhat.com
 Maciej W. Rozycki				macro@orcam.me.uk
 Kamil Rytarowski				n54@gmx.com
@@ -665,8 +668,10 @@ David Smith					dsmith@redhat.com
 Stephen P. Smith				ischis2@cox.net
 Jackie Smith Cashion				jsmith@redhat.com
 Petr Sorfa					petrs@caldera.com
+Mihails Strasuns				mihails.strasuns@intel.com
 Andrew Stubbs					ams@codesourcery.com
 Emi Suzuki					emi-suzuki@tjsys.co.jp
+Torbjörn Svensson				torbjorn.svensson@foss.st.com
 Alfred M. Szmidt				ams@gnu.org
 Ali Tamur					tamur@google.com
 David Taylor					david.taylor@emc.com

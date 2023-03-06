@@ -147,7 +147,7 @@ libgdbsupport_a_LIBADD =
 @HAVE_PIPE_OR_PIPE2_TRUE@am__objects_1 = event-pipe.$(OBJEXT)
 @SELFTEST_TRUE@am__objects_2 = selftest.$(OBJEXT)
 am_libgdbsupport_a_OBJECTS = agent.$(OBJEXT) btrace-common.$(OBJEXT) \
-	buffer.$(OBJEXT) cleanups.$(OBJEXT) common-debug.$(OBJEXT) \
+	cleanups.$(OBJEXT) common-debug.$(OBJEXT) \
 	common-exceptions.$(OBJEXT) common-inferior.$(OBJEXT) \
 	common-regcache.$(OBJEXT) common-utils.$(OBJEXT) \
 	environ.$(OBJEXT) errors.$(OBJEXT) event-loop.$(OBJEXT) \
@@ -233,6 +233,7 @@ CATOBJEXT = @CATOBJEXT@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
+CONFIG_STATUS_DEPENDENCIES = @CONFIG_STATUS_DEPENDENCIES@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
 CXX = @CXX@
@@ -253,6 +254,7 @@ GMSGFMT = @GMSGFMT@
 GREP = @GREP@
 HAVE_CXX11 = @HAVE_CXX11@
 HAVE_LIBIPT = @HAVE_LIBIPT@
+HAVE_LIBXXHASH = @HAVE_LIBXXHASH@
 INCINTL = @INCINTL@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -267,8 +269,10 @@ LIBINTL_DEP = @LIBINTL_DEP@
 LIBIPT = @LIBIPT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
+LIBXXHASH = @LIBXXHASH@
 LTLIBIPT = @LTLIBIPT@
 LTLIBOBJS = @LTLIBOBJS@
+LTLIBXXHASH = @LTLIBXXHASH@
 MAINT = @MAINT@
 MAKEINFO = @MAKEINFO@
 MKDIR_P = @MKDIR_P@
@@ -365,7 +369,6 @@ noinst_LIBRARIES = libgdbsupport.a
 libgdbsupport_a_SOURCES = \
     agent.cc \
     btrace-common.cc \
-    buffer.cc \
     cleanups.cc \
     common-debug.cc \
     common-exceptions.cc \
@@ -474,7 +477,6 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/agent.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btrace-common.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/buffer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cleanups.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/common-debug.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/common-exceptions.Po@am__quote@

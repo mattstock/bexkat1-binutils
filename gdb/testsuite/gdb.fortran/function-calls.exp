@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Free Software Foundation, Inc.
+# Copyright 2019-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 # Exercise passing and returning arguments in Fortran. This test case
 # is based on the GNU Fortran Argument passing conventions.
 
-if {[skip_fortran_tests]} { return -1 }
+require allow_fortran_tests
 
 standard_testfile ".f90"
 
@@ -39,9 +39,8 @@ with_complaints 5 {
     }
 }
 
-if {![runto [gdb_get_line_number "post_init"]]} then {
-    perror "couldn't run to breakpoint post_init"
-    continue
+if {![runto [gdb_get_line_number "post_init"]]} {
+    return
 }
 
 # Use inspired by gdb.base/callfuncs.exp.

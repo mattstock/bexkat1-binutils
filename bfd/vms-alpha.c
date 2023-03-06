@@ -1,5 +1,5 @@
 /* vms.c -- BFD back-end for EVAX (openVMS/Alpha) files.
-   Copyright (C) 1996-2022 Free Software Foundation, Inc.
+   Copyright (C) 1996-2023 Free Software Foundation, Inc.
 
    Initial version written by Klaus Kaempf (kkaempf@rmi.de)
    Major rewrite by Adacore.
@@ -266,8 +266,9 @@ struct module
 
 struct vms_private_data_struct
 {
-  /* If true, relocs have been read.  */
-  bool reloc_done;
+  /* If 1, relocs have been read successfully, if 0 they have yet to be
+     read, if -1 reading relocs failed.  */
+  int reloc_done;
 
   /* Record input buffer.  */
   struct vms_rec_rd recrd;
@@ -522,7 +523,7 @@ _bfd_vms_slurp_eisd (bfd *abfd, unsigned int offset)
       struct vms_eisd *eisd;
       unsigned int rec_size;
       unsigned int size;
-      bfd_uint64_t vaddr;
+      uint64_t vaddr;
       unsigned int flags;
       unsigned int vbn;
       char *name = NULL;
@@ -1570,6 +1571,8 @@ dst_define_location (bfd *abfd, unsigned int loc)
 			       (loc + 1) * sizeof (unsigned int));
       if (PRIV (dst_ptr_offsets) == NULL)
 	return false;
+      memset (PRIV (dst_ptr_offsets) + PRIV (dst_ptr_offsets_count), 0,
+	      (loc - PRIV (dst_ptr_offsets_count)) * sizeof (unsigned int));
       PRIV (dst_ptr_offsets_count) = loc + 1;
     }
 
@@ -3378,7 +3381,8 @@ alpha_vms_write_exec (bfd *abfd)
   /* Place sections.  */
   for (sec = abfd->sections; sec; sec = sec->next)
     {
-      if (!(sec->flags & SEC_HAS_CONTENTS))
+      if (!(sec->flags & SEC_HAS_CONTENTS)
+	  || sec->contents == NULL)
 	continue;
 
       eisd = vms_section_data (sec)->eisd;
@@ -3458,7 +3462,8 @@ alpha_vms_write_exec (bfd *abfd)
       unsigned char blk[VMS_BLOCK_SIZE];
       bfd_size_type len;
 
-      if (sec->size == 0 || !(sec->flags & SEC_HAS_CONTENTS))
+      if (sec->size == 0 || !(sec->flags & SEC_HAS_CONTENTS)
+	  || sec->contents == NULL)
 	continue;
       if (bfd_bwrite (sec->contents, sec->size, abfd) != sec->size)
 	return false;
@@ -4332,7 +4337,7 @@ new_module (bfd *abfd)
     = (struct module *) bfd_zalloc (abfd, sizeof (struct module));
   module->file_table_count = 16; /* Arbitrary.  */
   module->file_table
-    = bfd_malloc (module->file_table_count * sizeof (struct fileinfo));
+    = bfd_zmalloc (module->file_table_count * sizeof (struct fileinfo));
   return module;
 }
 
@@ -4340,7 +4345,7 @@ new_module (bfd *abfd)
 
 static bool
 parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
-	      int length)
+	      bfd_size_type length)
 {
   unsigned char *maxptr = ptr + length;
   unsigned char *src_ptr, *pcl_ptr;
@@ -4361,7 +4366,7 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
     return false;
   module->line_table = curr_line;
 
-  while (length == -1 || ptr < maxptr)
+  while (ptr + 3 < maxptr)
     {
       /* The first byte is not counted in the recorded length.  */
       int rec_length = bfd_getl16 (ptr) + 1;
@@ -4369,15 +4374,19 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 
       vms_debug2 ((2, "DST record: leng %d, type %d\n", rec_length, rec_type));
 
-      if (length == -1 && rec_type == DST__K_MODEND)
+      if (rec_length > maxptr - ptr)
+	break;
+      if (rec_type == DST__K_MODEND)
 	break;
 
       switch (rec_type)
 	{
 	case DST__K_MODBEG:
+	  if (rec_length <= DST_S_B_MODBEG_NAME)
+	    break;
 	  module->name
 	    = _bfd_vms_save_counted_string (abfd, ptr + DST_S_B_MODBEG_NAME,
-					    maxptr - (ptr + DST_S_B_MODBEG_NAME));
+					    rec_length - DST_S_B_MODBEG_NAME);
 
 	  curr_pc = 0;
 	  prev_pc = 0;
@@ -4391,13 +4400,15 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 	  break;
 
 	case DST__K_RTNBEG:
+	  if (rec_length <= DST_S_B_RTNBEG_NAME)
+	    break;
 	  funcinfo = (struct funcinfo *)
 	    bfd_zalloc (abfd, sizeof (struct funcinfo));
 	  if (!funcinfo)
 	    return false;
 	  funcinfo->name
 	    = _bfd_vms_save_counted_string (abfd, ptr + DST_S_B_RTNBEG_NAME,
-					    maxptr - (ptr + DST_S_B_RTNBEG_NAME));
+					    rec_length - DST_S_B_RTNBEG_NAME);
 	  funcinfo->low = bfd_getl32 (ptr + DST_S_L_RTNBEG_ADDRESS);
 	  funcinfo->next = module->func_table;
 	  module->func_table = funcinfo;
@@ -4407,6 +4418,8 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 	  break;
 
 	case DST__K_RTNEND:
+	  if (rec_length < DST_S_L_RTNEND_SIZE + 4)
+	    break;
 	  if (!module->func_table)
 	    return false;
 	  module->func_table->high = module->func_table->low
@@ -4439,9 +4452,62 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 
 	  vms_debug2 ((3, "source info\n"));
 
-	  while (src_ptr < ptr + rec_length)
+	  while (src_ptr - ptr < rec_length)
 	    {
 	      int cmd = src_ptr[0], cmd_length, data;
+
+	      switch (cmd)
+		{
+		case DST__K_SRC_DECLFILE:
+		  if (src_ptr - ptr + DST_S_B_SRC_DF_LENGTH >= rec_length)
+		    cmd_length = 0x10000;
+		  else
+		    cmd_length = src_ptr[DST_S_B_SRC_DF_LENGTH] + 2;
+		  break;
+
+		case DST__K_SRC_DEFLINES_B:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_SRC_DEFLINES_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SRC_INCRLNUM_B:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_SRC_SETFILE:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SRC_SETLNUM_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SRC_SETLNUM_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SRC_SETREC_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SRC_SETREC_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SRC_FORMFEED:
+		  cmd_length = 1;
+		  break;
+
+		default:
+		  cmd_length = 2;
+		  break;
+		}
+
+	      if (src_ptr - ptr + cmd_length > rec_length)
+		break;
 
 	      switch (cmd)
 		{
@@ -4454,20 +4520,22 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		       src_ptr + DST_S_B_SRC_DF_FILENAME,
 		       ptr + rec_length - (src_ptr + DST_S_B_SRC_DF_FILENAME));
 
-		    while (fileid >= module->file_table_count)
+		    if (fileid >= module->file_table_count)
 		      {
-			module->file_table_count *= 2;
+			unsigned int old_count = module->file_table_count;
+			module->file_table_count += fileid;
 			module->file_table
 			  = bfd_realloc_or_free (module->file_table,
 						 module->file_table_count
 						 * sizeof (struct fileinfo));
 			if (module->file_table == NULL)
 			  return false;
+			memset (module->file_table + old_count, 0,
+				fileid * sizeof (struct fileinfo));
 		      }
 
 		    module->file_table [fileid].name = filename;
 		    module->file_table [fileid].srec = 1;
-		    cmd_length = src_ptr[DST_S_B_SRC_DF_LENGTH] + 2;
 		    vms_debug2 ((4, "DST_S_C_SRC_DECLFILE: %d, %s\n",
 				 fileid, module->file_table [fileid].name));
 		  }
@@ -4484,7 +4552,6 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		  srec->sfile = curr_srec->sfile;
 		  curr_srec->next = srec;
 		  curr_srec = srec;
-		  cmd_length = 2;
 		  vms_debug2 ((4, "DST_S_C_SRC_DEFLINES_B: %d\n", data));
 		  break;
 
@@ -4499,36 +4566,34 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		  srec->sfile = curr_srec->sfile;
 		  curr_srec->next = srec;
 		  curr_srec = srec;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST_S_C_SRC_DEFLINES_W: %d\n", data));
 		  break;
 
 		case DST__K_SRC_INCRLNUM_B:
 		  data = src_ptr[DST_S_B_SRC_UNSBYTE];
 		  curr_srec->line += data;
-		  cmd_length = 2;
 		  vms_debug2 ((4, "DST_S_C_SRC_INCRLNUM_B: %d\n", data));
 		  break;
 
 		case DST__K_SRC_SETFILE:
 		  data = bfd_getl16 (src_ptr + DST_S_W_SRC_UNSWORD);
-		  curr_srec->sfile = data;
-		  curr_srec->srec = module->file_table[data].srec;
-		  cmd_length = 3;
+		  if ((unsigned int) data < module->file_table_count)
+		    {
+		      curr_srec->sfile = data;
+		      curr_srec->srec = module->file_table[data].srec;
+		    }
 		  vms_debug2 ((4, "DST_S_C_SRC_SETFILE: %d\n", data));
 		  break;
 
 		case DST__K_SRC_SETLNUM_L:
 		  data = bfd_getl32 (src_ptr + DST_S_L_SRC_UNSLONG);
 		  curr_srec->line = data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST_S_C_SRC_SETLNUM_L: %d\n", data));
 		  break;
 
 		case DST__K_SRC_SETLNUM_W:
 		  data = bfd_getl16 (src_ptr + DST_S_W_SRC_UNSWORD);
 		  curr_srec->line = data;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST_S_C_SRC_SETLNUM_W: %d\n", data));
 		  break;
 
@@ -4536,7 +4601,6 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		  data = bfd_getl32 (src_ptr + DST_S_L_SRC_UNSLONG);
 		  curr_srec->srec = data;
 		  module->file_table[curr_srec->sfile].srec = data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST_S_C_SRC_SETREC_L: %d\n", data));
 		  break;
 
@@ -4544,19 +4608,16 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		  data = bfd_getl16 (src_ptr + DST_S_W_SRC_UNSWORD);
 		  curr_srec->srec = data;
 		  module->file_table[curr_srec->sfile].srec = data;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST_S_C_SRC_SETREC_W: %d\n", data));
 		  break;
 
 		case DST__K_SRC_FORMFEED:
-		  cmd_length = 1;
 		  vms_debug2 ((4, "DST_S_C_SRC_FORMFEED\n"));
 		  break;
 
 		default:
 		  _bfd_error_handler (_("unknown source command %d"),
 				      cmd);
-		  cmd_length = 2;
 		  break;
 		}
 
@@ -4569,7 +4630,7 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 
 	  vms_debug2 ((3, "line info\n"));
 
-	  while (pcl_ptr < ptr + rec_length)
+	  while (pcl_ptr - ptr < rec_length)
 	    {
 	      /* The command byte is signed so we must sign-extend it.  */
 	      int cmd = ((signed char *)pcl_ptr)[0], cmd_length, data;
@@ -4577,10 +4638,106 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 	      switch (cmd)
 		{
 		case DST__K_DELTA_PC_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_DELTA_PC_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_INCR_LINUM:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_INCR_LINUM_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_INCR_LINUM_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SET_LINUM_INCR:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_SET_LINUM_INCR_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_RESET_LINUM_INCR:
+		  cmd_length = 1;
+		  break;
+
+		case DST__K_BEG_STMT_MODE:
+		  cmd_length = 1;
+		  break;
+
+		case DST__K_END_STMT_MODE:
+		  cmd_length = 1;
+		  break;
+
+		case DST__K_SET_LINUM_B:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_SET_LINUM:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SET_LINUM_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SET_PC:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_SET_PC_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_SET_PC_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SET_STMTNUM:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_TERM:
+		  cmd_length = 2;
+		  break;
+
+		case DST__K_TERM_W:
+		  cmd_length = 3;
+		  break;
+
+		case DST__K_TERM_L:
+		  cmd_length = 5;
+		  break;
+
+		case DST__K_SET_ABS_PC:
+		  cmd_length = 5;
+		  break;
+
+		default:
+		  if (cmd <= 0)
+		    cmd_length = 1;
+		  else
+		    cmd_length = 2;
+		  break;
+		}
+
+	      if (pcl_ptr - ptr + cmd_length > rec_length)
+		break;
+
+	      switch (cmd)
+		{
+		case DST__K_DELTA_PC_W:
 		  data = bfd_getl16 (pcl_ptr + DST_S_W_PCLINE_UNSWORD);
 		  curr_pc += data;
 		  curr_linenum += 1;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST__K_DELTA_PC_W: %d\n", data));
 		  break;
 
@@ -4588,131 +4745,111 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		  data = bfd_getl32 (pcl_ptr + DST_S_L_PCLINE_UNSLONG);
 		  curr_pc += data;
 		  curr_linenum += 1;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST__K_DELTA_PC_L: %d\n", data));
 		  break;
 
 		case DST__K_INCR_LINUM:
 		  data = pcl_ptr[DST_S_B_PCLINE_UNSBYTE];
 		  curr_linenum += data;
-		  cmd_length = 2;
 		  vms_debug2 ((4, "DST__K_INCR_LINUM: %d\n", data));
 		  break;
 
 		case DST__K_INCR_LINUM_W:
 		  data = bfd_getl16 (pcl_ptr + DST_S_W_PCLINE_UNSWORD);
 		  curr_linenum += data;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST__K_INCR_LINUM_W: %d\n", data));
 		  break;
 
 		case DST__K_INCR_LINUM_L:
 		  data = bfd_getl32 (pcl_ptr + DST_S_L_PCLINE_UNSLONG);
 		  curr_linenum += data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST__K_INCR_LINUM_L: %d\n", data));
 		  break;
 
 		case DST__K_SET_LINUM_INCR:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_LINUM_INCR");
-		  cmd_length = 2;
 		  break;
 
 		case DST__K_SET_LINUM_INCR_W:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_LINUM_INCR_W");
-		  cmd_length = 3;
 		  break;
 
 		case DST__K_RESET_LINUM_INCR:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_RESET_LINUM_INCR");
-		  cmd_length = 1;
 		  break;
 
 		case DST__K_BEG_STMT_MODE:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_BEG_STMT_MODE");
-		  cmd_length = 1;
 		  break;
 
 		case DST__K_END_STMT_MODE:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_END_STMT_MODE");
-		  cmd_length = 1;
 		  break;
 
 		case DST__K_SET_LINUM_B:
 		  data = pcl_ptr[DST_S_B_PCLINE_UNSBYTE];
 		  curr_linenum = data;
-		  cmd_length = 2;
 		  vms_debug2 ((4, "DST__K_SET_LINUM_B: %d\n", data));
 		  break;
 
 		case DST__K_SET_LINUM:
 		  data = bfd_getl16 (pcl_ptr + DST_S_W_PCLINE_UNSWORD);
 		  curr_linenum = data;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST__K_SET_LINE_NUM: %d\n", data));
 		  break;
 
 		case DST__K_SET_LINUM_L:
 		  data = bfd_getl32 (pcl_ptr + DST_S_L_PCLINE_UNSLONG);
 		  curr_linenum = data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST__K_SET_LINUM_L: %d\n", data));
 		  break;
 
 		case DST__K_SET_PC:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_PC");
-		  cmd_length = 2;
 		  break;
 
 		case DST__K_SET_PC_W:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_PC_W");
-		  cmd_length = 3;
 		  break;
 
 		case DST__K_SET_PC_L:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_PC_L");
-		  cmd_length = 5;
 		  break;
 
 		case DST__K_SET_STMTNUM:
 		  _bfd_error_handler
 		    (_("%s not implemented"), "DST__K_SET_STMTNUM");
-		  cmd_length = 2;
 		  break;
 
 		case DST__K_TERM:
 		  data = pcl_ptr[DST_S_B_PCLINE_UNSBYTE];
 		  curr_pc += data;
-		  cmd_length = 2;
 		  vms_debug2 ((4, "DST__K_TERM: %d\n", data));
 		  break;
 
 		case DST__K_TERM_W:
 		  data = bfd_getl16 (pcl_ptr + DST_S_W_PCLINE_UNSWORD);
 		  curr_pc += data;
-		  cmd_length = 3;
 		  vms_debug2 ((4, "DST__K_TERM_W: %d\n", data));
 		  break;
 
 		case DST__K_TERM_L:
 		  data = bfd_getl32 (pcl_ptr + DST_S_L_PCLINE_UNSLONG);
 		  curr_pc += data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST__K_TERM_L: %d\n", data));
 		  break;
 
 		case DST__K_SET_ABS_PC:
 		  data = bfd_getl32 (pcl_ptr + DST_S_L_PCLINE_UNSLONG);
 		  curr_pc = data;
-		  cmd_length = 5;
 		  vms_debug2 ((4, "DST__K_SET_ABS_PC: 0x%x\n", data));
 		  break;
 
@@ -4721,15 +4858,11 @@ parse_module (bfd *abfd, struct module *module, unsigned char *ptr,
 		    {
 		      curr_pc -= cmd;
 		      curr_linenum += 1;
-		      cmd_length = 1;
 		      vms_debug2 ((4, "bump pc to 0x%lx and line to %d\n",
 				   (unsigned long)curr_pc, curr_linenum));
 		    }
 		  else
-		    {
-		      _bfd_error_handler (_("unknown line command %d"), cmd);
-		      cmd_length = 2;
-		    }
+		    _bfd_error_handler (_("unknown line command %d"), cmd);
 		  break;
 		}
 
@@ -4859,7 +4992,8 @@ build_module_list (bfd *abfd)
 	return NULL;
 
       module = new_module (abfd);
-      if (!parse_module (abfd, module, PRIV (dst_section)->contents, -1))
+      if (!parse_module (abfd, module, PRIV (dst_section)->contents,
+			 PRIV (dst_section)->size))
 	return NULL;
       list = module;
     }
@@ -5120,15 +5254,14 @@ alpha_vms_slurp_relocs (bfd *abfd)
   vms_debug2 ((3, "alpha_vms_slurp_relocs\n"));
 
   /* We slurp relocs only once, for all sections.  */
-  if (PRIV (reloc_done))
-      return true;
-  PRIV (reloc_done) = true;
+  if (PRIV (reloc_done) != 0)
+    return PRIV (reloc_done) == 1;
 
   if (alpha_vms_canonicalize_symtab (abfd, NULL) < 0)
-    return false;
+    goto fail;
 
   if (bfd_seek (abfd, 0, SEEK_SET) != 0)
-    return false;
+    goto fail;
 
   while (1)
     {
@@ -5149,6 +5282,8 @@ alpha_vms_slurp_relocs (bfd *abfd)
 
       /* Skip non-ETIR records.  */
       type = _bfd_vms_get_object_record (abfd);
+      if (type < 0)
+	goto fail;
       if (type == EOBJ__C_EEOM)
 	break;
       if (type != EOBJ__C_ETIR)
@@ -5190,7 +5325,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		    /* xgettext:c-format */
 		    (_("unknown reloc %s + %s"), _bfd_vms_etir_name (prev_cmd),
 		     _bfd_vms_etir_name (cmd));
-		  return false;
+		  goto fail;
 		}
 	      cur_psect = cur_psidx;
 	      vaddr = cur_addend;
@@ -5208,7 +5343,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 			/* xgettext:c-format */
 			(_("unknown reloc %s + %s"), _bfd_vms_etir_name (cmd),
 			 _bfd_vms_etir_name (ETIR__C_STA_LW));
-		      return false;
+		      goto fail;
 		    }
 		}
 	      cur_addend = bfd_getl32 (ptr + 4);
@@ -5223,7 +5358,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		    /* xgettext:c-format */
 		    (_("unknown reloc %s + %s"), _bfd_vms_etir_name (cmd),
 		     _bfd_vms_etir_name (ETIR__C_STA_QW));
-		  return false;
+		  goto fail;
 		}
 	      cur_addend = bfd_getl64 (ptr + 4);
 	      prev_cmd = cmd;
@@ -5240,7 +5375,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		  _bfd_error_handler (_("unknown reloc %s + %s"),
 				      _bfd_vms_etir_name (prev_cmd),
 				      _bfd_vms_etir_name (ETIR__C_STO_LW));
-		  return false;
+		  goto fail;
 		}
 	      reloc_code = BFD_RELOC_32;
 	      break;
@@ -5253,7 +5388,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		  _bfd_error_handler (_("unknown reloc %s + %s"),
 				      _bfd_vms_etir_name (prev_cmd),
 				      _bfd_vms_etir_name (ETIR__C_STO_QW));
-		  return false;
+		  goto fail;
 		}
 	      reloc_code = BFD_RELOC_64;
 	      break;
@@ -5265,7 +5400,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		  _bfd_error_handler (_("unknown reloc %s + %s"),
 				      _bfd_vms_etir_name (prev_cmd),
 				      _bfd_vms_etir_name (ETIR__C_STO_OFF));
-		  return false;
+		  goto fail;
 		}
 	      reloc_code = BFD_RELOC_64;
 	      break;
@@ -5278,7 +5413,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		  _bfd_error_handler (_("unknown reloc %s + %s"),
 				      _bfd_vms_etir_name (prev_cmd),
 				      _bfd_vms_etir_name (ETIR__C_OPR_ADD));
-		  return false;
+		  goto fail;
 		}
 	      prev_cmd = ETIR__C_OPR_ADD;
 	      continue;
@@ -5332,7 +5467,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 	    default:
 	      _bfd_error_handler (_("unknown reloc %s"),
 				  _bfd_vms_etir_name (cmd));
-	      return false;
+	      goto fail;
 	    }
 
 	  {
@@ -5345,16 +5480,16 @@ alpha_vms_slurp_relocs (bfd *abfd)
 	    if (cur_psect < 0 || cur_psect > (int)PRIV (section_count))
 	      {
 		_bfd_error_handler (_("invalid section index in ETIR"));
-		return false;
+		goto fail;
 	      }
 
 	    if (PRIV (sections) == NULL)
-	      return false;
+	      goto fail;
 	    sec = PRIV (sections)[cur_psect];
 	    if (sec == bfd_abs_section_ptr)
 	      {
 		_bfd_error_handler (_("relocation for non-REL psect"));
-		return false;
+		goto fail;
 	      }
 
 	    vms_sec = vms_section_data (sec);
@@ -5374,7 +5509,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 		    sec->relocation = bfd_realloc_or_free
 		      (sec->relocation, vms_sec->reloc_max * sizeof (arelent));
 		    if (sec->relocation == NULL)
-		      return false;
+		      goto fail;
 		  }
 	      }
 	    reloc = &sec->relocation[sec->reloc_count];
@@ -5412,7 +5547,7 @@ alpha_vms_slurp_relocs (bfd *abfd)
 	    else if (cur_psidx >= 0)
 	      {
 		if (PRIV (sections) == NULL || cur_psidx >= (int) PRIV (section_count))
-		  return false;
+		  goto fail;
 		reloc->sym_ptr_ptr =
 		  PRIV (sections)[cur_psidx]->symbol_ptr_ptr;
 	      }
@@ -5436,8 +5571,12 @@ alpha_vms_slurp_relocs (bfd *abfd)
 	}
     }
   vms_debug2 ((3, "alpha_vms_slurp_relocs: result = true\n"));
-
+  PRIV (reloc_done) = 1;
   return true;
+
+fail:
+  PRIV (reloc_done) = -1;
+  return false;
 }
 
 /* Return the number of bytes required to store the relocation
@@ -5446,7 +5585,8 @@ alpha_vms_slurp_relocs (bfd *abfd)
 static long
 alpha_vms_get_reloc_upper_bound (bfd *abfd ATTRIBUTE_UNUSED, asection *section)
 {
-  alpha_vms_slurp_relocs (abfd);
+  if (!alpha_vms_slurp_relocs (abfd))
+    return -1;
 
   return (section->reloc_count + 1L) * sizeof (arelent *);
 }
@@ -5515,7 +5655,7 @@ static reloc_howto_type alpha_howto_table[] =
 {
   HOWTO (ALPHA_R_IGNORE,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 0,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 1,			/* Size.  */
 	 8,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5530,7 +5670,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* A 64 bit reference to a symbol.  */
   HOWTO (ALPHA_R_REFQUAD,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 4,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 8,			/* Size.  */
 	 64,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5547,7 +5687,7 @@ static reloc_howto_type alpha_howto_table[] =
      relative offset in the instruction.  */
   HOWTO (ALPHA_R_BRADDR,	/* Type.  */
 	 2,			/* Rightshift.  */
-	 2,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 4,			/* Size.  */
 	 21,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5562,7 +5702,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* A hint for a jump to a register.  */
   HOWTO (ALPHA_R_HINT,		/* Type.  */
 	 2,			/* Rightshift.  */
-	 1,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 2,			/* Size.  */
 	 14,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5577,7 +5717,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* 16 bit PC relative offset.  */
   HOWTO (ALPHA_R_SREL16,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 1,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 2,			/* Size.  */
 	 16,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5592,7 +5732,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* 32 bit PC relative offset.  */
   HOWTO (ALPHA_R_SREL32,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 2,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 4,			/* Size.  */
 	 32,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5607,7 +5747,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* A 64 bit PC relative offset.  */
   HOWTO (ALPHA_R_SREL64,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 4,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 8,			/* Size.  */
 	 64,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5622,7 +5762,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* Push a value on the reloc evaluation stack.  */
   HOWTO (ALPHA_R_OP_PUSH,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 0,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5638,7 +5778,7 @@ static reloc_howto_type alpha_howto_table[] =
      a bitfield of size r_size starting at bit position r_offset.  */
   HOWTO (ALPHA_R_OP_STORE,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 4,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 8,			/* Size.  */
 	 64,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5654,7 +5794,7 @@ static reloc_howto_type alpha_howto_table[] =
      relocation stack.  */
   HOWTO (ALPHA_R_OP_PSUB,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 0,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5670,7 +5810,7 @@ static reloc_howto_type alpha_howto_table[] =
      given value.  */
   HOWTO (ALPHA_R_OP_PRSHIFT,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 0,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5685,7 +5825,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* Hack. Linkage is done by linker.  */
   HOWTO (ALPHA_R_LINKAGE,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 0,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5700,7 +5840,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* A 32 bit reference to a symbol.  */
   HOWTO (ALPHA_R_REFLONG,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 2,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 4,			/* Size.  */
 	 32,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5715,7 +5855,7 @@ static reloc_howto_type alpha_howto_table[] =
   /* A 64 bit reference to a procedure, written as 32 bit value.  */
   HOWTO (ALPHA_R_CODEADDR,	/* Type.  */
 	 0,			/* Rightshift.  */
-	 4,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 8,			/* Size.  */
 	 64,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5729,7 +5869,7 @@ static reloc_howto_type alpha_howto_table[] =
 
   HOWTO (ALPHA_R_NOP,		/* Type.  */
 	 0,			/* Rightshift.  */
-	 3,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 /* The following value must match that of ALPHA_R_BSR/ALPHA_R_BOH
 	    because the calculations for the 3 relocations are the same.
@@ -5746,7 +5886,7 @@ static reloc_howto_type alpha_howto_table[] =
 
   HOWTO (ALPHA_R_BSR,		/* Type.  */
 	 0,			/* Rightshift.  */
-	 3,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5760,7 +5900,7 @@ static reloc_howto_type alpha_howto_table[] =
 
   HOWTO (ALPHA_R_LDA,		/* Type.  */
 	 0,			/* Rightshift.  */
-	 3,			/* Size (0 = byte, 1 = short, 2 = long).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 false,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -5774,7 +5914,7 @@ static reloc_howto_type alpha_howto_table[] =
 
   HOWTO (ALPHA_R_BOH,		/* Type.  */
 	 0,			/* Rightshift.  */
-	 3,			/* Size (0 = byte, 1 = short, 2 = long, 3 = nil).  */
+	 0,			/* Size.  */
 	 0,			/* Bitsize.  */
 	 true,			/* PC relative.  */
 	 0,			/* Bitpos.  */
@@ -6713,7 +6853,7 @@ static void
 evax_bfd_print_eobj (struct bfd *abfd, FILE *file)
 {
   bool is_first = true;
-  bool has_records = false;
+  bool has_records = true;
 
   while (1)
     {
@@ -6722,80 +6862,67 @@ evax_bfd_print_eobj (struct bfd *abfd, FILE *file)
       unsigned char *rec;
       unsigned int hdr_size;
       unsigned int type;
+      unsigned char buf[6];
 
-      if (is_first)
+      hdr_size = has_records ? 6 : 4;
+      if (bfd_bread (buf, hdr_size, abfd) != hdr_size)
 	{
-	  unsigned char buf[6];
+	  fprintf (file, _("cannot read GST record header\n"));
+	  return;
+	}
 
-	  is_first = false;
+      type = bfd_getl16 (buf);
+      rec_len = bfd_getl16 (buf + 2);
+      pad_len = rec_len;
+      if (has_records)
+	{
+	  unsigned int rec_len2 = bfd_getl16 (buf + 4);
 
-	  /* Read 6 bytes.  */
-	  if (bfd_bread (buf, sizeof (buf), abfd) != sizeof (buf))
+	  if (is_first)
 	    {
-	      fprintf (file, _("cannot read GST record length\n"));
-	      return;
+	      is_first = false;
+	      if (type == rec_len2 && rec_len == EOBJ__C_EMH)
+		/* Matched a VMS record EMH.  */
+		;
+	      else
+		{
+		  has_records = false;
+		  if (type != EOBJ__C_EMH)
+		    {
+		      /* Ill-formed.  */
+		      fprintf (file, _("cannot find EMH in first GST record\n"));
+		      return;
+		    }
+		}
 	    }
-	  rec_len = bfd_getl16 (buf + 0);
-	  if (rec_len == bfd_getl16 (buf + 4)
-	      && bfd_getl16 (buf + 2) == EOBJ__C_EMH)
+
+	  if (has_records)
 	    {
-	      /* The format is raw: record-size, type, record-size.  */
-	      has_records = true;
+	      /* VMS record format is: record-size, type, record-size.
+		 See maybe_adjust_record_pointer_for_object comment.  */
+	      if (type == rec_len2)
+		{
+		  type = rec_len;
+		  rec_len = rec_len2;
+		}
+	      else
+		rec_len = 0;
 	      pad_len = (rec_len + 1) & ~1U;
 	      hdr_size = 4;
 	    }
-	  else if (rec_len == EOBJ__C_EMH)
-	    {
-	      has_records = false;
-	      pad_len = bfd_getl16 (buf + 2);
-	      hdr_size = 6;
-	    }
-	  else
-	    {
-	      /* Ill-formed.  */
-	      fprintf (file, _("cannot find EMH in first GST record\n"));
-	      return;
-	    }
-	  rec = bfd_malloc (pad_len);
-	  memcpy (rec, buf + sizeof (buf) - hdr_size, hdr_size);
 	}
-      else
+
+      if (rec_len < hdr_size)
 	{
-	  unsigned int rec_len2 = 0;
-	  unsigned char hdr[4];
-
-	  if (has_records)
-	    {
-	      unsigned char buf_len[2];
-
-	      if (bfd_bread (buf_len, sizeof (buf_len), abfd)
-		  != sizeof (buf_len))
-		{
-		  fprintf (file, _("cannot read GST record length\n"));
-		  return;
-		}
-	      rec_len2 = (unsigned)bfd_getl16 (buf_len);
-	    }
-
-	  if (bfd_bread (hdr, sizeof (hdr), abfd) != sizeof (hdr))
-	    {
-	      fprintf (file, _("cannot read GST record header\n"));
-	      return;
-	    }
-	  rec_len = (unsigned)bfd_getl16 (hdr + 2);
-	  if (has_records)
-	    pad_len = (rec_len + 1) & ~1U;
-	  else
-	    pad_len = rec_len;
-	  rec = bfd_malloc (pad_len);
-	  memcpy (rec, hdr, sizeof (hdr));
-	  hdr_size = sizeof (hdr);
-	  if (has_records && rec_len2 != rec_len)
-	    {
-	      fprintf (file, _(" corrupted GST\n"));
-	      break;
-	    }
+	  fprintf (file, _("corrupted GST\n"));
+	  return;
 	}
+
+      rec = bfd_malloc (pad_len);
+      if (rec == NULL)
+	return;
+
+      memcpy (rec, buf + (has_records ? 2 : 0), hdr_size);
 
       if (bfd_bread (rec + hdr_size, pad_len - hdr_size, abfd)
 	  != pad_len - hdr_size)
@@ -6803,8 +6930,6 @@ evax_bfd_print_eobj (struct bfd *abfd, FILE *file)
 	  fprintf (file, _("cannot read GST record\n"));
 	  return;
 	}
-
-      type = (unsigned)bfd_getl16 (rec);
 
       switch (type)
 	{
@@ -9992,6 +10117,8 @@ bfd_vms_get_data (bfd *abfd)
 #define alpha_vms_find_inliner_info	   _bfd_nosymbols_find_inliner_info
 #define alpha_vms_bfd_make_debug_symbol	   _bfd_nosymbols_bfd_make_debug_symbol
 #define alpha_vms_find_nearest_line	   _bfd_vms_find_nearest_line
+#define alpha_vms_find_nearest_line_with_alt \
+   _bfd_nosymbols_find_nearest_line_with_alt
 #define alpha_vms_find_line		   _bfd_nosymbols_find_line
 #define alpha_vms_bfd_is_local_label_name  vms_bfd_is_local_label_name
 

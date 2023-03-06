@@ -1,6 +1,6 @@
 /* Python interface to inferiors.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,17 +30,10 @@
 #include "gdbsupport/gdb_signals.h"
 #include "py-event.h"
 #include "py-stopevent.h"
+#include <unordered_map>
 
-struct threadlist_entry
-{
-  threadlist_entry (gdbpy_ref<thread_object> &&ref)
-    : thread_obj (std::move (ref))
-  {
-  }
-
-  gdbpy_ref<thread_object> thread_obj;
-  struct threadlist_entry *next;
-};
+using thread_map_t
+  = std::unordered_map<thread_info *, gdbpy_ref<thread_object>>;
 
 struct inferior_object
 {
@@ -49,18 +42,33 @@ struct inferior_object
   /* The inferior we represent.  */
   struct inferior *inferior;
 
-  /* thread_object instances under this inferior.  This list owns a
+  /* thread_object instances under this inferior.  This owns a
      reference to each object it contains.  */
-  struct threadlist_entry *threads;
-
-  /* Number of threads in the list.  */
-  int nthreads;
+  thread_map_t *threads;
 };
 
 extern PyTypeObject inferior_object_type
     CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("inferior_object");
 
-static const struct inferior_data *infpy_inf_data_key;
+/* Deleter to clean up when an inferior is removed.  */
+struct infpy_deleter
+{
+  void operator() (inferior_object *obj)
+  {
+    if (!gdb_python_initialized)
+      return;
+
+    gdbpy_enter enter_py;
+    gdbpy_ref<inferior_object> inf_obj (obj);
+
+    inf_obj->inferior = NULL;
+
+    delete inf_obj->threads;
+  }
+};
+
+static const registry<inferior>::key<inferior_object, infpy_deleter>
+     infpy_inf_data_key;
 
 /* Require that INFERIOR be a valid inferior ID.  */
 #define INFPY_REQUIRE_VALID(Inferior)				\
@@ -146,7 +154,7 @@ python_on_memory_change (struct inferior *inferior, CORE_ADDR addr, ssize_t len,
    command). */
 
 static void
-python_on_register_change (struct frame_info *frame, int regnum)
+python_on_register_change (frame_info_ptr frame, int regnum)
 {
   gdbpy_enter enter_py (target_gdbarch ());
 
@@ -197,6 +205,20 @@ python_new_objfile (struct objfile *objfile)
     }
 }
 
+/* Emit a Python event when an objfile is about to be removed.  */
+
+static void
+python_free_objfile (struct objfile *objfile)
+{
+  if (!gdb_python_initialized)
+    return;
+
+  gdbpy_enter enter_py (objfile->arch ());
+
+  if (emit_free_objfile_event (objfile) < 0)
+    gdbpy_print_stack ();
+}
+
 /* Return a reference to the Python object of type Inferior
    representing INFERIOR.  If the object has already been created,
    return it and increment the reference count,  otherwise, create it.
@@ -207,7 +229,7 @@ inferior_to_inferior_object (struct inferior *inferior)
 {
   inferior_object *inf_obj;
 
-  inf_obj = (inferior_object *) inferior_data (inferior, infpy_inf_data_key);
+  inf_obj = infpy_inf_data_key.get (inferior);
   if (!inf_obj)
     {
       inf_obj = PyObject_New (inferior_object, &inferior_object_type);
@@ -215,12 +237,11 @@ inferior_to_inferior_object (struct inferior *inferior)
 	return NULL;
 
       inf_obj->inferior = inferior;
-      inf_obj->threads = NULL;
-      inf_obj->nthreads = 0;
+      inf_obj->threads = new thread_map_t ();
 
       /* PyObject_New initializes the new object with a refcount of 1.  This
 	 counts for the reference we are keeping in the inferior data.  */
-      set_inferior_data (inferior, infpy_inf_data_key, inf_obj);
+      infpy_inf_data_key.set (inferior, inf_obj);
     }
 
   /* We are returning a new reference.  */
@@ -291,11 +312,10 @@ thread_to_thread_object (thread_info *thr)
   if (inf_obj == NULL)
     return NULL;
 
-  for (threadlist_entry *thread = inf_obj->threads;
-       thread != NULL;
-       thread = thread->next)
-    if (thread->thread_obj->thread == thr)
-      return gdbpy_ref<>::new_reference ((PyObject *) thread->thread_obj.get ());
+  auto thread_it = inf_obj->threads->find (thr);
+  if (thread_it != inf_obj->threads->end ())
+    return gdbpy_ref<>::new_reference
+      ((PyObject *) (thread_it->second.get ()));
 
   PyErr_SetString (PyExc_SystemError,
 		   _("could not find gdb thread object"));
@@ -306,7 +326,6 @@ static void
 add_thread_object (struct thread_info *tp)
 {
   inferior_object *inf_obj;
-  struct threadlist_entry *entry;
 
   if (!gdb_python_initialized)
     return;
@@ -322,18 +341,19 @@ add_thread_object (struct thread_info *tp)
 
   inf_obj = (inferior_object *) thread_obj->inf_obj;
 
-  entry = new threadlist_entry (std::move (thread_obj));
-  entry->next = inf_obj->threads;
+  auto ins_result = inf_obj->threads->emplace
+    (thread_map_t::value_type (tp, std::move (thread_obj)));
 
-  inf_obj->threads = entry;
-  inf_obj->nthreads++;
+  if (!ins_result.second)
+    return;
 
   if (evregpy_no_listeners_p (gdb_py_events.new_thread))
     return;
 
-  gdbpy_ref<> event = create_thread_event_object (&new_thread_event_object_type,
-						  (PyObject *)
-						  entry->thread_obj.get ());
+  gdbpy_ref<> event = create_thread_event_object
+    (&new_thread_event_object_type,
+     (PyObject *) ins_result.first->second.get ());
+
   if (event == NULL
       || evpy_emit_event (event.get (), gdb_py_events.new_thread) < 0)
     gdbpy_print_stack ();
@@ -342,8 +362,6 @@ add_thread_object (struct thread_info *tp)
 static void
 delete_thread_object (struct thread_info *tp, int ignore)
 {
-  struct threadlist_entry **entry, *tmp;
-
   if (!gdb_python_initialized)
     return;
 
@@ -353,29 +371,22 @@ delete_thread_object (struct thread_info *tp, int ignore)
   if (inf_obj == NULL)
     return;
 
-  /* Find thread entry in its inferior's thread_list.  */
-  for (entry = &inf_obj->threads; *entry != NULL; entry =
-	 &(*entry)->next)
-    if ((*entry)->thread_obj->thread == tp)
-      break;
-
-  if (!*entry)
-    return;
-
-  tmp = *entry;
-  tmp->thread_obj->thread = NULL;
-
-  *entry = (*entry)->next;
-  inf_obj->nthreads--;
-
-  delete tmp;
+  auto it = inf_obj->threads->find (tp);
+  if (it != inf_obj->threads->end ())
+    {
+      /* Some python code can still hold a reference to the thread_object
+	 instance.   Make sure to remove the link to the associated
+	 thread_info object as it will be freed soon.  This makes the python
+	 object invalid (i.e. gdb.InfThread.is_valid returns False).  */
+      it->second->thread = nullptr;
+      inf_obj->threads->erase (it);
+    }
 }
 
 static PyObject *
 infpy_threads (PyObject *self, PyObject *args)
 {
-  int i;
-  struct threadlist_entry *entry;
+  int i = 0;
   inferior_object *inf_obj = (inferior_object *) self;
   PyObject *tuple;
 
@@ -390,16 +401,16 @@ infpy_threads (PyObject *self, PyObject *args)
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  tuple = PyTuple_New (inf_obj->nthreads);
+  tuple = PyTuple_New (inf_obj->threads->size ());
   if (!tuple)
     return NULL;
 
-  for (i = 0, entry = inf_obj->threads; i < inf_obj->nthreads;
-       i++, entry = entry->next)
+  for (const thread_map_t::value_type &entry : *inf_obj->threads)
     {
-      PyObject *thr = (PyObject *) entry->thread_obj.get ();
+      PyObject *thr = (PyObject *) entry.second.get ();
       Py_INCREF (thr);
       PyTuple_SET_ITEM (tuple, i, thr);
+      i = i + 1;
     }
 
   return tuple;
@@ -703,8 +714,8 @@ infpy_thread_from_thread_handle (PyObject *self, PyObject *args, PyObject *kw)
   else if (gdbpy_is_value_object (handle_obj))
     {
       struct value *val = value_object_to_value (handle_obj);
-      bytes = value_contents_all (val).data ();
-      bytes_len = TYPE_LENGTH (value_type (val));
+      bytes = val->contents_all ().data ();
+      bytes_len = val->type ()->length ();
     }
   else
     {
@@ -781,32 +792,6 @@ infpy_dealloc (PyObject *obj)
   Py_TYPE (obj)->tp_free (obj);
 }
 
-/* Clear the INFERIOR pointer in an Inferior object and clear the
-   thread list.  */
-static void
-py_free_inferior (struct inferior *inf, void *datum)
-{
-  struct threadlist_entry *th_entry, *th_tmp;
-
-  if (!gdb_python_initialized)
-    return;
-
-  gdbpy_enter enter_py;
-  gdbpy_ref<inferior_object> inf_obj ((inferior_object *) datum);
-
-  inf_obj->inferior = NULL;
-
-  /* Deallocate threads list.  */
-  for (th_entry = inf_obj->threads; th_entry != NULL;)
-    {
-      th_tmp = th_entry;
-      th_entry = th_entry->next;
-      delete th_tmp;
-    }
-
-  inf_obj->nthreads = 0;
-}
-
 /* Implementation of gdb.selected_inferior() -> gdb.Inferior.
    Returns the current inferior object.  */
 
@@ -815,14 +800,6 @@ gdbpy_selected_inferior (PyObject *self, PyObject *args)
 {
   return ((PyObject *)
 	  inferior_to_inferior_object (current_inferior ()).release ());
-}
-
-void _initialize_py_inferior ();
-void
-_initialize_py_inferior ()
-{
-  infpy_inf_data_key =
-    register_inferior_data_with_cleanup (NULL, py_free_inferior);
 }
 
 int
@@ -853,6 +830,7 @@ gdbpy_initialize_inferior (void)
   gdb::observers::new_objfile.attach
     (python_new_objfile, "py-inferior",
      { &auto_load_new_objfile_observer_token });
+  gdb::observers::free_objfile.attach (python_free_objfile, "py-inferior");
   gdb::observers::inferior_added.attach (python_new_inferior, "py-inferior");
   gdb::observers::inferior_removed.attach (python_inferior_deleted,
 					   "py-inferior");

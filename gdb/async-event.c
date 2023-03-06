@@ -1,5 +1,5 @@
 /* Async events for the GDB event loop.
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -293,8 +293,10 @@ create_async_event_handler (async_event_handler_func *proc,
 void
 mark_async_event_handler (async_event_handler *async_handler_ptr)
 {
-  event_loop_debug_printf ("marking async event handler `%s`",
-			   async_handler_ptr->name);
+  event_loop_debug_printf ("marking async event handler `%s` "
+			   "(previous state was %d)",
+			   async_handler_ptr->name,
+			   async_handler_ptr->ready);
   async_handler_ptr->ready = 1;
 }
 

@@ -1,6 +1,6 @@
 /* Target-dependent code for the Matsushita MN10300 for GDB, the GNU debugger.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -464,7 +464,7 @@ am33_iterate_over_regset_sections (struct gdbarch *gdbarch,
 
 static void
 am33_linux_sigframe_cache_init (const struct tramp_frame *self,
-				struct frame_info *this_frame,
+				frame_info_ptr this_frame,
 				struct trad_frame_cache *this_cache,
 				CORE_ADDR func);
 
@@ -607,7 +607,7 @@ struct sigcontext {
 
 static void
 am33_linux_sigframe_cache_init (const struct tramp_frame *self,
-				struct frame_info *this_frame,
+				frame_info_ptr this_frame,
 				struct trad_frame_cache *this_cache,
 				CORE_ADDR func)
 {

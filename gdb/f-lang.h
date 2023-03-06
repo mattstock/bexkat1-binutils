@@ -1,6 +1,6 @@
 /* Fortran language support definitions for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2022 Free Software Foundation, Inc.
+   Copyright (C) 1992-2023 Free Software Foundation, Inc.
 
    Contributed by Motorola.  Adapted from the C definitions by Farooq Butt
    (fmbutt@engage.sps.mot.com).
@@ -23,6 +23,7 @@
 #ifndef F_LANG_H
 #define F_LANG_H
 
+#include "language.h"
 #include "valprint.h"
 
 struct type_print_options;
@@ -175,7 +176,7 @@ public:
   {
     const char *type_encoding = get_encoding (elttype);
 
-    if (TYPE_LENGTH (elttype) == 4)
+    if (elttype->length () == 4)
       gdb_puts ("4_", stream);
 
     if (!encoding || !*encoding)
@@ -197,7 +198,7 @@ public:
     type = check_typedef (type);
     return (type->code () == TYPE_CODE_STRING
 	    || (type->code () == TYPE_CODE_ARRAY
-		&& TYPE_TARGET_TYPE (type)->code () == TYPE_CODE_CHAR));
+		&& type->target_type ()->code () == TYPE_CODE_CHAR));
   }
 
   /* See language.h.  */
@@ -317,22 +318,22 @@ extern int calc_f77_array_dims (struct type *);
 
 struct builtin_f_type
 {
-  struct type *builtin_character;
-  struct type *builtin_integer_s1;
-  struct type *builtin_integer_s2;
-  struct type *builtin_integer;
-  struct type *builtin_integer_s8;
-  struct type *builtin_logical_s1;
-  struct type *builtin_logical_s2;
-  struct type *builtin_logical;
-  struct type *builtin_logical_s8;
-  struct type *builtin_real;
-  struct type *builtin_real_s8;
-  struct type *builtin_real_s16;
-  struct type *builtin_complex;
-  struct type *builtin_complex_s8;
-  struct type *builtin_complex_s16;
-  struct type *builtin_void;
+  struct type *builtin_character = nullptr;
+  struct type *builtin_integer_s1 = nullptr;
+  struct type *builtin_integer_s2 = nullptr;
+  struct type *builtin_integer = nullptr;
+  struct type *builtin_integer_s8 = nullptr;
+  struct type *builtin_logical_s1 = nullptr;
+  struct type *builtin_logical_s2 = nullptr;
+  struct type *builtin_logical = nullptr;
+  struct type *builtin_logical_s8 = nullptr;
+  struct type *builtin_real = nullptr;
+  struct type *builtin_real_s8 = nullptr;
+  struct type *builtin_real_s16 = nullptr;
+  struct type *builtin_complex = nullptr;
+  struct type *builtin_complex_s8 = nullptr;
+  struct type *builtin_complex_s16 = nullptr;
+  struct type *builtin_void = nullptr;
 };
 
 /* Return the Fortran type table for the specified architecture.  */

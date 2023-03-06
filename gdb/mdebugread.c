@@ -1,6 +1,6 @@
 /* Read a symbol table in ECOFF format (Third-Eye).
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    Original version contributed by Alessandro Forin (af@cs.cmu.edu) at
    CMU.  Major work by Per Bothner, John Gilmore and Ian Lance Taylor
@@ -86,7 +86,7 @@ static struct objfile *mdebugread_objfile;
 /* We put a pointer to this structure in the read_symtab_private field
    of the psymtab.  */
 
-struct symloc
+struct md_symloc
   {
     /* Index of the FDR that this psymtab represents.  */
     int fdr_idx;
@@ -102,7 +102,7 @@ struct symloc
     enum language pst_language;
   };
 
-#define PST_PRIVATE(p) ((struct symloc *)(p)->read_symtab_private)
+#define PST_PRIVATE(p) ((struct md_symloc *)(p)->read_symtab_private)
 #define FDR_IDX(p) (PST_PRIVATE(p)->fdr_idx)
 #define CUR_BFD(p) (PST_PRIVATE(p)->cur_bfd)
 #define DEBUG_SWAP(p) (PST_PRIVATE(p)->debug_swap)
@@ -236,7 +236,8 @@ static struct type *new_type (char *);
 
 enum block_type { FUNCTION_BLOCK, NON_FUNCTION_BLOCK };
 
-static struct block *new_block (enum block_type, enum language);
+static struct block *new_block (struct objfile *objfile,
+				enum block_type, enum language);
 
 static struct compunit_symtab *new_symtab (const char *, int, struct objfile *);
 
@@ -335,7 +336,7 @@ mdebug_build_psymtabs (minimal_symbol_reader &reader,
 		       const struct ecoff_debug_swap *swap,
 		       struct ecoff_debug_info *info)
 {
-  cur_bfd = objfile->obfd;
+  cur_bfd = objfile->obfd.get ();
   debug_swap = swap;
   debug_info = info;
 
@@ -357,7 +358,7 @@ mdebug_build_psymtabs (minimal_symbol_reader &reader,
 		 + info->symbolic_header.ifdMax * swap->external_fdr_size);
       fdr_ptr = info->fdr;
       for (; fdr_src < fdr_end; fdr_src += swap->external_fdr_size, fdr_ptr++)
-	(*swap->swap_fdr_in) (objfile->obfd, fdr_src, fdr_ptr);
+	(*swap->swap_fdr_in) (objfile->obfd.get (), fdr_src, fdr_ptr);
     }
 
   psymbol_functions *psf = new psymbol_functions ();
@@ -597,6 +598,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
   else
     name = debug_info->ss + cur_fdr->issBase + sh->iss;
 
+  int section_index = -1;
   switch (sh->sc)
     {
     case scText:
@@ -607,20 +609,23 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	 The value of a stBlock symbol is the displacement from the
 	 procedure address.  */
       if (sh->st != stEnd && sh->st != stBlock)
-	sh->value += section_offsets[SECT_OFF_TEXT (objfile)];
+	section_index = SECT_OFF_TEXT (objfile);
       break;
     case scData:
     case scSData:
     case scRData:
     case scPData:
     case scXData:
-      sh->value += section_offsets[SECT_OFF_DATA (objfile)];
+      section_index = SECT_OFF_DATA (objfile);
       break;
     case scBss:
     case scSBss:
-      sh->value += section_offsets[SECT_OFF_BSS (objfile)];
+      section_index = SECT_OFF_BSS (objfile);
       break;
     }
+
+  if (section_index != -1)
+    sh->value += section_offsets[section_index];
 
   switch (sh->st)
     {
@@ -628,9 +633,9 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       break;
 
     case stGlobal:		/* External symbol, goes into global block.  */
-      b = BLOCKVECTOR_BLOCK (top_stack->cur_st->compunit ()->blockvector (),
-			     GLOBAL_BLOCK);
+      b = top_stack->cur_st->compunit ()->blockvector ()->global_block ();
       s = new_symbol (name);
+      s->set_section_index (section_index);
       s->set_value_address (sh->value);
       add_data_symbol (sh, ax, bigend, s, LOC_STATIC, b, objfile, name);
       break;
@@ -648,7 +653,10 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	  global_sym_chain[bucket] = s;
 	}
       else
-	s->set_value_address (sh->value);
+	{
+	  s->set_section_index (section_index);
+	  s->set_value_address (sh->value);
+	}
       add_data_symbol (sh, ax, bigend, s, LOC_STATIC, b, objfile, name);
       break;
 
@@ -705,6 +713,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       s = new_symbol (name);
       s->set_domain (VAR_DOMAIN);	/* So that it can be used */
       s->set_aclass_index (LOC_LABEL);	/* but not misused.  */
+      s->set_section_index (section_index);
       s->set_value_address (sh->value);
       s->set_type (objfile_type (objfile)->builtin_int);
       add_symbol (s, top_stack->cur_st, top_stack->cur_block);
@@ -746,6 +755,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       s = new_symbol (name);
       s->set_domain (VAR_DOMAIN);
       s->set_aclass_index (LOC_BLOCK);
+      s->set_section_index (section_index);
       /* Type of the return value.  */
       if (SC_IS_UNDEF (sh->sc) || sh->sc == scNil)
 	t = objfile_type (objfile)->builtin_int;
@@ -770,19 +780,19 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       b = top_stack->cur_block;
       if (sh->st == stProc)
 	{
-	  const struct blockvector *bv
+	  struct blockvector *bv
 	    = top_stack->cur_st->compunit ()->blockvector ();
 
 	  /* The next test should normally be true, but provides a
 	     hook for nested functions (which we don't want to make
 	     global).  */
-	  if (b == BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK))
-	    b = BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK);
+	  if (b == bv->static_block ())
+	    b = bv->global_block ();
 	  /* Irix 5 sometimes has duplicate names for the same
 	     function.  We want to add such names up at the global
 	     level, not as a nested function.  */
 	  else if (sh->value == top_stack->procadr)
-	    b = BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK);
+	    b = bv->global_block ();
 	}
       add_symbol (s, top_stack->cur_st, b);
 
@@ -795,11 +805,12 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	s->type ()->set_is_prototyped (true);
 
       /* Create and enter a new lexical context.  */
-      b = new_block (FUNCTION_BLOCK, s->language ());
+      b = new_block (objfile, FUNCTION_BLOCK, s->language ());
       s->set_value_block (b);
-      BLOCK_FUNCTION (b) = s;
-      BLOCK_START (b) = BLOCK_END (b) = sh->value;
-      BLOCK_SUPERBLOCK (b) = top_stack->cur_block;
+      b->set_function (s);
+      b->set_start (sh->value);
+      b->set_end (sh->value);
+      b->set_superblock (top_stack->cur_block);
       add_block (b, top_stack->cur_st);
 
       /* Not if we only have partial info.  */
@@ -1022,7 +1033,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 				 name, (char *) NULL));
 
 	t->set_code (type_code);
-	TYPE_LENGTH (t) = sh->value;
+	t->set_length (sh->value);
 	t->set_num_fields (nfields);
 	f = ((struct field *) TYPE_ALLOC (t, nfields * sizeof (struct field)));
 	t->set_fields (f);
@@ -1041,9 +1052,9 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	       are hopefully rare enough.
 	       Alpha cc -migrate has a sh.value field of zero, we adjust
 	       that too.  */
-	    if (TYPE_LENGTH (t) == t->num_fields ()
-		|| TYPE_LENGTH (t) == 0)
-	      TYPE_LENGTH (t) = gdbarch_int_bit (gdbarch) / HOST_CHAR_BIT;
+	    if (t->length () == t->num_fields ()
+		|| t->length () == 0)
+	      t->set_length (gdbarch_int_bit (gdbarch) / HOST_CHAR_BIT);
 	    for (ext_tsym = ext_sh + external_sym_size;
 		 ;
 		 ext_tsym += external_sym_size)
@@ -1125,9 +1136,9 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	}
 
       top_stack->blocktype = stBlock;
-      b = new_block (NON_FUNCTION_BLOCK, psymtab_language);
-      BLOCK_START (b) = sh->value + top_stack->procadr;
-      BLOCK_SUPERBLOCK (b) = top_stack->cur_block;
+      b = new_block (objfile, NON_FUNCTION_BLOCK, psymtab_language);
+      b->set_start (sh->value + top_stack->procadr);
+      b->set_superblock (top_stack->cur_block);
       top_stack->cur_block = b;
       add_block (b, top_stack->cur_st);
       break;
@@ -1143,14 +1154,14 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 		top_stack->blocktype == stStaticProc))
 	{
 	  /* Finished with procedure */
-	  const struct blockvector *bv
+	  struct blockvector *bv
 	    = top_stack->cur_st->compunit ()->blockvector ();
 	  struct mdebug_extra_func_info *e;
 	  struct block *cblock = top_stack->cur_block;
 	  struct type *ftype = top_stack->cur_type;
-	  int i;
 
-	  BLOCK_END (top_stack->cur_block) += sh->value;	/* size */
+	  top_stack->cur_block->set_end
+	    (top_stack->cur_block->end () + sh->value); /* size */
 
 	  /* Make up special symbol to contain procedure specific info.  */
 	  s = new_symbol (MDEBUG_EFI_SYMBOL_NAME);
@@ -1166,16 +1177,14 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 
 	  /* f77 emits proc-level with address bounds==[0,0],
 	     So look for such child blocks, and patch them.  */
-	  for (i = 0; i < BLOCKVECTOR_NBLOCKS (bv); i++)
+	  for (block *b_bad : bv->blocks ())
 	    {
-	      struct block *b_bad = BLOCKVECTOR_BLOCK (bv, i);
-
-	      if (BLOCK_SUPERBLOCK (b_bad) == cblock
-		  && BLOCK_START (b_bad) == top_stack->procadr
-		  && BLOCK_END (b_bad) == top_stack->procadr)
+	      if (b_bad->superblock () == cblock
+		  && b_bad->start () == top_stack->procadr
+		  && b_bad->end () == top_stack->procadr)
 		{
-		  BLOCK_START (b_bad) = BLOCK_START (cblock);
-		  BLOCK_END (b_bad) = BLOCK_END (cblock);
+		  b_bad->set_start (cblock->start ());
+		  b_bad->set_end (cblock->end ());
 		}
 	    }
 
@@ -1185,19 +1194,16 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 		 type.  Set that from the type of the parameter symbols.  */
 	      int nparams = top_stack->numargs;
 	      int iparams;
-	      struct symbol *sym;
 
 	      if (nparams > 0)
 		{
-		  struct block_iterator iter;
-
 		  ftype->set_num_fields (nparams);
 		  ftype->set_fields
 		    ((struct field *)
 		     TYPE_ALLOC (ftype, nparams * sizeof (struct field)));
 
 		  iparams = 0;
-		  ALL_BLOCK_SYMBOLS (cblock, iter, sym)
+		  for (struct symbol *sym : block_iterator_range (cblock))
 		    {
 		      if (iparams == nparams)
 			break;
@@ -1217,7 +1223,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	  /* End of (code) block.  The value of the symbol is the
 	     displacement from the procedure`s start address of the
 	     end of this block.  */
-	  BLOCK_END (top_stack->cur_block) = sh->value + top_stack->procadr;
+	  top_stack->cur_block->set_end (sh->value + top_stack->procadr);
 	}
       else if (sh->sc == scText && top_stack->blocktype == stNil)
 	{
@@ -1356,8 +1362,8 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 
 /* Basic types.  */
 
-static const struct objfile_key<struct type *,
-				gdb::noop_deleter<struct type *>>
+static const registry<objfile>::key<struct type *,
+				    gdb::noop_deleter<struct type *>>
   basic_type_data;
 
 static struct type *
@@ -1647,7 +1653,7 @@ parse_type (int fd, union aux_ext *ax, unsigned int aux_index, int *bs,
 	 dereference them.  */
       while (tp->code () == TYPE_CODE_PTR
 	     || tp->code () == TYPE_CODE_ARRAY)
-	tp = TYPE_TARGET_TYPE (tp);
+	tp = tp->target_type ();
 
       /* Make sure that TYPE_CODE(tp) has an expected type code.
 	 Any type may be returned from cross_ref if file indirect entries
@@ -1871,7 +1877,7 @@ upgrade_type (int fd, struct type **tpp, int tq, union aux_ext *ax, int bigend,
 	 dbx seems to ignore it too.  */
 
       /* TYPE_TARGET_STUB now takes care of the zero TYPE_LENGTH problem.  */
-      if (TYPE_LENGTH (*tpp) == 0)
+      if ((*tpp)->length () == 0)
 	t->set_target_is_stub (true);
 
       *tpp = t;
@@ -1965,8 +1971,7 @@ parse_procedure (PDR *pr, struct compunit_symtab *search_symtab,
 #else
       s = mylookup_symbol
 	(sh_name,
-	 BLOCKVECTOR_BLOCK (search_symtab->blockvector (),
-			    STATIC_BLOCK),
+	 search_symtab->blockvector ()->static_block (),
 	 VAR_DOMAIN,
 	 LOC_BLOCK);
 #endif
@@ -2024,7 +2029,7 @@ parse_procedure (PDR *pr, struct compunit_symtab *search_symtab,
 	 e->pdr.adr is sometimes offset by a bogus value.
 	 To work around these problems, we replace e->pdr.adr with
 	 the start address of the function.  */
-      e->pdr.adr = BLOCK_START (b);
+      e->pdr.adr = b->start ();
     }
 
   /* It would be reasonable that functions that have been compiled
@@ -2044,7 +2049,7 @@ parse_procedure (PDR *pr, struct compunit_symtab *search_symtab,
 
   if (processing_gcc_compilation == 0
       && found_ecoff_debugging_info == 0
-      && TYPE_TARGET_TYPE (s->type ())->code () == TYPE_CODE_VOID)
+      && s->type ()->target_type ()->code () == TYPE_CODE_VOID)
     s->set_type (objfile_type (mdebugread_objfile)->nodebug_text_symbol);
 }
 
@@ -2607,8 +2612,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 	textlow = 0;
       pst = new legacy_psymtab (fdr_name (fh), partial_symtabs,
 				objfile->per_bfd, textlow);
-      pst->read_symtab_private = XOBNEW (&objfile->objfile_obstack, symloc);
-      memset (pst->read_symtab_private, 0, sizeof (struct symloc));
+      pst->read_symtab_private = XOBNEW (&objfile->objfile_obstack, md_symloc);
+      memset (pst->read_symtab_private, 0, sizeof (struct md_symloc));
 
       save_pst = pst;
       FDR_IDX (pst) = f_idx;
@@ -3961,7 +3966,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 		    {
 		      valu += section_offsets[SECT_OFF_TEXT (objfile)];
 		      previous_stab_code = N_SO;
-		      cust = end_compunit_symtab (valu, SECT_OFF_TEXT (objfile));
+		      cust = end_compunit_symtab (valu);
 		      end_stabs ();
 		      last_symtab_ended = 1;
 		    }
@@ -4021,8 +4026,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 
       if (! last_symtab_ended)
 	{
-	  cust = end_compunit_symtab (pst->raw_text_high (),
-				      SECT_OFF_TEXT (objfile));
+	  cust = end_compunit_symtab (pst->raw_text_high ());
 	  end_stabs ();
 	}
 
@@ -4097,10 +4101,9 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 
       push_parse_stack ();
       top_stack->cur_st = cust->primary_filetab ();
-      top_stack->cur_block
-	= BLOCKVECTOR_BLOCK (cust->blockvector (), STATIC_BLOCK);
-      BLOCK_START (top_stack->cur_block) = pst->text_low (objfile);
-      BLOCK_END (top_stack->cur_block) = 0;
+      top_stack->cur_block = cust->blockvector ()->static_block ();
+      top_stack->cur_block->set_start (pst->text_low (objfile));
+      top_stack->cur_block->set_end (0);
       top_stack->blocktype = stFile;
       top_stack->cur_type = 0;
       top_stack->procadr = 0;
@@ -4187,8 +4190,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 	 FIXME, Maybe quit once we have found the right number of ext's?  */
       top_stack->cur_st = cust->primary_filetab ();
       top_stack->cur_block
-	= BLOCKVECTOR_BLOCK (top_stack->cur_st->compunit ()->blockvector (),
-			     GLOBAL_BLOCK);
+	= top_stack->cur_st->compunit ()->blockvector ()->global_block ();
       top_stack->blocktype = stFile;
 
       ext_ptr = PST_PRIVATE (pst)->extern_tab;
@@ -4460,12 +4462,10 @@ static struct symbol *
 mylookup_symbol (const char *name, const struct block *block,
 		 domain_enum domain, enum address_class theclass)
 {
-  struct block_iterator iter;
   int inc;
-  struct symbol *sym;
 
   inc = name[0];
-  ALL_BLOCK_SYMBOLS (block, iter, sym)
+  for (struct symbol *sym : block_iterator_range (block))
     {
       if (sym->linkage_name ()[0] == inc
 	  && sym->domain () == domain
@@ -4474,7 +4474,7 @@ mylookup_symbol (const char *name, const struct block *block,
 	return sym;
     }
 
-  block = BLOCK_SUPERBLOCK (block);
+  block = block->superblock ();
   if (block)
     return mylookup_symbol (name, block, domain, theclass);
   return 0;
@@ -4486,8 +4486,8 @@ mylookup_symbol (const char *name, const struct block *block,
 static void
 add_symbol (struct symbol *s, struct symtab *symtab, struct block *b)
 {
-  symbol_set_symtab (s, symtab);
-  mdict_add_symbol (BLOCK_MULTIDICT (b), s);
+  s->set_symtab (symtab);
+  mdict_add_symbol (b->multidict (), s);
 }
 
 /* Add a new block B to a symtab S.  */
@@ -4502,12 +4502,13 @@ add_block (struct block *b, struct symtab *s)
 
   bv = (struct blockvector *) xrealloc ((void *) bv,
 					(sizeof (struct blockvector)
-					 + BLOCKVECTOR_NBLOCKS (bv)
-					 * sizeof (bv->block)));
+					 + bv->num_blocks ()
+					 * sizeof (struct block)));
   if (bv != s->compunit ()->blockvector ())
     s->compunit ()->set_blockvector (bv);
 
-  BLOCKVECTOR_BLOCK (bv, BLOCKVECTOR_NBLOCKS (bv)++) = b;
+  bv->set_block (bv->num_blocks (), b);
+  bv->set_num_blocks (bv->num_blocks () + 1);
 }
 
 /* Add a new linenumber entry (LINENO,ADR) to a linevector LT.
@@ -4550,13 +4551,13 @@ add_line (struct linetable *lt, int lineno, CORE_ADDR adr, int last)
 static bool
 block_is_less_than (const struct block *b1, const struct block *b2)
 {
-  CORE_ADDR start1 = BLOCK_START (b1);
-  CORE_ADDR start2 = BLOCK_START (b2);
+  CORE_ADDR start1 = b1->start ();
+  CORE_ADDR start2 = b2->start ();
 
   if (start1 != start2)
     return start1 < start2;
 
-  return (BLOCK_END (b2)) < (BLOCK_END (b1));
+  return (b2->end ()) < (b1->end ());
 }
 
 /* Sort the blocks of a symtab S.
@@ -4571,13 +4572,13 @@ sort_blocks (struct symtab *s)
   struct blockvector *bv
     = (struct blockvector *) s->compunit ()->blockvector ();
 
-  if (BLOCKVECTOR_NBLOCKS (bv) <= FIRST_LOCAL_BLOCK)
+  if (bv->num_blocks () <= FIRST_LOCAL_BLOCK)
     {
       /* Cosmetic */
-      if (BLOCK_END (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK)) == 0)
-	BLOCK_START (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK)) = 0;
-      if (BLOCK_END (BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK)) == 0)
-	BLOCK_START (BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK)) = 0;
+      if (bv->global_block ()->end () == 0)
+	bv->global_block ()->set_start (0);
+      if (bv->static_block ()->end () == 0)
+	bv->static_block ()->set_start (0);
       return;
     }
   /*
@@ -4586,28 +4587,27 @@ sort_blocks (struct symtab *s)
    * are very different.  It would be nice to find a reliable test
    * to detect -O3 images in advance.
    */
-  if (BLOCKVECTOR_NBLOCKS (bv) > FIRST_LOCAL_BLOCK + 1)
-    std::sort (&BLOCKVECTOR_BLOCK (bv, FIRST_LOCAL_BLOCK),
-	       &BLOCKVECTOR_BLOCK (bv, BLOCKVECTOR_NBLOCKS (bv)),
-	       block_is_less_than);
+  if (bv->num_blocks () > FIRST_LOCAL_BLOCK + 1)
+    {
+      gdb::array_view<block *> blocks_view = bv->blocks ();
+
+      std::sort (blocks_view.begin () + FIRST_LOCAL_BLOCK,
+		 blocks_view.end (), block_is_less_than);
+    }
 
   {
     CORE_ADDR high = 0;
-    int i, j = BLOCKVECTOR_NBLOCKS (bv);
+    int i, j = bv->num_blocks ();
 
     for (i = FIRST_LOCAL_BLOCK; i < j; i++)
-      if (high < BLOCK_END (BLOCKVECTOR_BLOCK (bv, i)))
-	high = BLOCK_END (BLOCKVECTOR_BLOCK (bv, i));
-    BLOCK_END (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK)) = high;
+      if (high < bv->block (i)->end ())
+	high = bv->block (i)->end ();
+    bv->global_block ()->set_end (high);
   }
 
-  BLOCK_START (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK)) =
-    BLOCK_START (BLOCKVECTOR_BLOCK (bv, FIRST_LOCAL_BLOCK));
-
-  BLOCK_START (BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK)) =
-    BLOCK_START (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK));
-  BLOCK_END (BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK)) =
-    BLOCK_END (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK));
+  bv->global_block ()->set_start (bv->block (FIRST_LOCAL_BLOCK)->start ());
+  bv->static_block ()->set_start (bv->global_block ()->start ());
+  bv->static_block ()->set_end (bv->global_block ()->end ());
 }
 
 
@@ -4628,14 +4628,13 @@ new_symtab (const char *name, int maxlines, struct objfile *objfile)
   symtab = allocate_symtab (cust, name);
 
   symtab->set_linetable (new_linetable (maxlines));
-  lang = compunit_language (cust);
+  lang = cust->language ();
 
   /* All symtabs must have at least two blocks.  */
   bv = new_bvect (2);
-  BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK) = new_block (NON_FUNCTION_BLOCK, lang);
-  BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK) = new_block (NON_FUNCTION_BLOCK, lang);
-  BLOCK_SUPERBLOCK (BLOCKVECTOR_BLOCK (bv, STATIC_BLOCK)) =
-    BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK);
+  bv->set_block (GLOBAL_BLOCK, new_block (objfile, NON_FUNCTION_BLOCK, lang));
+  bv->set_block (STATIC_BLOCK, new_block (objfile, NON_FUNCTION_BLOCK, lang));
+  bv->static_block ()->set_superblock (bv->global_block ());
   cust->set_blockvector (bv);
 
   cust->set_debugformat ("ECOFF");
@@ -4655,7 +4654,7 @@ new_psymtab (const char *name, psymtab_storage *partial_symtabs,
   /* Keep a backpointer to the file's symbols.  */
 
   psymtab->read_symtab_private
-    = OBSTACK_ZALLOC (&objfile->objfile_obstack, symloc);
+    = OBSTACK_ZALLOC (&objfile->objfile_obstack, md_symloc);
   CUR_BFD (psymtab) = cur_bfd;
   DEBUG_SWAP (psymtab) = debug_swap;
   DEBUG_INFO (psymtab) = debug_info;
@@ -4710,8 +4709,7 @@ new_bvect (int nblocks)
 
   size = sizeof (struct blockvector) + nblocks * sizeof (struct block *);
   bv = (struct blockvector *) xzalloc (size);
-
-  BLOCKVECTOR_NBLOCKS (bv) = nblocks;
+  bv->set_num_blocks (nblocks);
 
   return bv;
 }
@@ -4722,17 +4720,15 @@ new_bvect (int nblocks)
    linearly; otherwise, store them hashed.  */
 
 static struct block *
-new_block (enum block_type type, enum language language)
+new_block (struct objfile *objfile, enum block_type type,
+	   enum language language)
 {
-  /* FIXME: carlton/2003-09-11: This should use allocate_block to
-     allocate the block.  Which, in turn, suggests that the block
-     should be allocated on an obstack.  */
-  struct block *retval = XCNEW (struct block);
+  struct block *retval = new (&objfile->objfile_obstack) block;
 
   if (type == FUNCTION_BLOCK)
-    BLOCK_MULTIDICT (retval) = mdict_create_linear_expandable (language);
+    retval->set_multidict (mdict_create_linear_expandable (language));
   else
-    BLOCK_MULTIDICT (retval) = mdict_create_hashed_expandable (language);
+    retval->set_multidict (mdict_create_hashed_expandable (language));
 
   return retval;
 }
@@ -4771,7 +4767,7 @@ void
 elfmdebug_build_psymtabs (struct objfile *objfile,
 			  const struct ecoff_debug_swap *swap, asection *sec)
 {
-  bfd *abfd = objfile->obfd;
+  bfd *abfd = objfile->obfd.get ();
   struct ecoff_debug_info *info;
 
   /* FIXME: It's not clear whether we should be getting minimal symbol

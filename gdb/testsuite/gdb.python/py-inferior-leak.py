@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 Free Software Foundation, Inc.
+# Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ import re
 # object sent to us in the new_inferior event.
 inf = None
 
+
 # Register the new_inferior event handler.
 def new_inferior_handler(event):
     global inf
@@ -32,6 +33,7 @@ gdb.events.new_inferior.connect(new_inferior_handler)
 # A global filters list, we only care about memory allocations
 # originating from this script.
 filters = [tracemalloc.Filter(True, "*py-inferior-leak.py")]
+
 
 # Add a new inferior, and return the number of the new inferior.
 def add_inferior():

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Free Software Foundation, Inc.
+/* Copyright (C) 2022-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,8 +24,15 @@
 
 #include "../features/loongarch/base32.c"
 #include "../features/loongarch/base64.c"
+#include "../features/loongarch/fpu.c"
 
-static target_desc_up
+#ifndef GDBSERVER
+#define STATIC_IN_GDB static
+#else
+#define STATIC_IN_GDB
+#endif
+
+STATIC_IN_GDB target_desc_up
 loongarch_create_target_description (const struct loongarch_gdbarch_features features)
 {
   /* Now we should create a new target description.  */
@@ -38,6 +45,11 @@ loongarch_create_target_description (const struct loongarch_gdbarch_features fea
   else if (features.xlen == 8)
     arch_name.append ("64");
 
+  if (features.fputype == SINGLE_FLOAT)
+    arch_name.append ("f");
+  else if (features.fputype == DOUBLE_FLOAT)
+    arch_name.append ("d");
+
   set_tdesc_architecture (tdesc.get (), arch_name.c_str ());
 
   long regnum = 0;
@@ -48,8 +60,13 @@ loongarch_create_target_description (const struct loongarch_gdbarch_features fea
   else if (features.xlen == 8)
     regnum = create_feature_loongarch_base64 (tdesc.get (), regnum);
 
+  /* For now we only support creating single float and double float.  */
+  regnum = create_feature_loongarch_fpu (tdesc.get (), regnum);
+
   return tdesc;
 }
+
+#ifndef GDBSERVER
 
 /* Wrapper used by std::unordered_map to generate hash for feature set.  */
 struct loongarch_gdbarch_features_hasher
@@ -86,3 +103,5 @@ loongarch_lookup_target_description (const struct loongarch_gdbarch_features fea
   loongarch_tdesc_cache.emplace (features, std::move (tdesc));
   return ptr;
 }
+
+#endif /* !GDBSERVER */

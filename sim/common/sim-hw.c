@@ -1,5 +1,5 @@
 /* Simulator hardware option handling.
-   Copyright (C) 1998-2022 Free Software Foundation, Inc.
+   Copyright (C) 1998-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support and Andrew Cagney.
 
 This file is part of GDB, the GNU debugger.
@@ -408,8 +408,11 @@ hw_vabort (struct hw *me,
 	   const char *fmt,
 	   va_list ap)
 {
+  int len;
   const char *name;
   char *msg;
+  va_list cpy;
+
   /* find an identity */
   if (me != NULL && hw_path (me) != NULL && hw_path (me) [0] != '\0')
     name = hw_path (me);
@@ -419,16 +422,19 @@ hw_vabort (struct hw *me,
     name = hw_family (me);
   else
     name = "device";
-  /* construct an updated format string */
-  msg = alloca (strlen (name) + strlen (": ") + strlen (fmt) + 1);
-  strcpy (msg, name);
-  strcat (msg, ": ");
-  strcat (msg, fmt);
+
+  /* Expand FMT and AP into MSG buffer.  */
+  va_copy (cpy, ap);
+  len = vsnprintf (NULL, 0, fmt, cpy) + 1;
+  va_end (cpy);
+  msg = alloca (len);
+  vsnprintf (msg, len, fmt, ap);
+
   /* report the problem */
-  sim_engine_vabort (hw_system (me),
-		     STATE_HW (hw_system (me))->cpu,
-		     STATE_HW (hw_system (me))->cia,
-		     msg, ap);
+  sim_engine_abort (hw_system (me),
+		    STATE_HW (hw_system (me))->cpu,
+		    STATE_HW (hw_system (me))->cia,
+		    "%s: %s", name, msg);
 }
 
 void

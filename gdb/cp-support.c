@@ -1,5 +1,5 @@
 /* Helper routines for C++ support in GDB.
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -20,6 +20,7 @@
 
 #include "defs.h"
 #include "cp-support.h"
+#include "language.h"
 #include "demangle.h"
 #include "gdbcmd.h"
 #include "dictionary.h"
@@ -41,6 +42,7 @@
 #include <atomic>
 #include "event-top.h"
 #include "run-on-main-thread.h"
+#include "typeprint.h"
 
 #define d_left(dc) (dc)->u.s_binary.left
 #define d_right(dc) (dc)->u.s_binary.right
@@ -70,17 +72,15 @@ static void add_symbol_overload_list_qualified
 
 struct cmd_list_element *maint_cplus_cmd_list = NULL;
 
-/* A list of typedefs which should not be substituted by replace_typedefs.  */
-static const char * const ignore_typedefs[] =
-  {
-    "std::istream", "std::iostream", "std::ostream", "std::string"
-  };
-
 static void
   replace_typedefs (struct demangle_parse_info *info,
 		    struct demangle_component *ret_comp,
 		    canonicalization_ftype *finder,
 		    void *data);
+
+static struct demangle_component *
+  gdb_cplus_demangle_v3_components (const char *mangled,
+				    int options, void **mem);
 
 /* A convenience function to copy STRING into OBSTACK, returning a pointer
    to the newly allocated string and saving the number of bytes saved in LEN.
@@ -145,13 +145,6 @@ inspect_type (struct demangle_parse_info *info,
   name = (char *) alloca (ret_comp->u.s_name.len + 1);
   memcpy (name, ret_comp->u.s_name.s, ret_comp->u.s_name.len);
   name[ret_comp->u.s_name.len] = '\0';
-
-  /* Ignore any typedefs that should not be substituted.  */
-  for (const char *ignorable : ignore_typedefs)
-    {
-      if (strcmp (name, ignorable) == 0)
-	return 0;
-    }
 
   sym = NULL;
 
@@ -220,10 +213,10 @@ inspect_type (struct demangle_parse_info *info,
 	      struct type *last = otype;
 
 	      /* Find the last typedef for the type.  */
-	      while (TYPE_TARGET_TYPE (last) != NULL
-		     && (TYPE_TARGET_TYPE (last)->code ()
+	      while (last->target_type () != NULL
+		     && (last->target_type ()->code ()
 			 == TYPE_CODE_TYPEDEF))
-		last = TYPE_TARGET_TYPE (last);
+		last = last->target_type ();
 
 	      /* If there is only one typedef for this anonymous type,
 		 do not substitute it.  */
@@ -238,7 +231,14 @@ inspect_type (struct demangle_parse_info *info,
 	  string_file buf;
 	  try
 	    {
-	      type_print (type, "", &buf, -1);
+	      /* Avoid using the current language.  If the language is
+		 C, and TYPE is a struct/class, the printed type is
+		 prefixed with "struct " or "class ", which we don't
+		 want when we're expanding a C++ typedef.  Print using
+		 the type symbol's language to expand a C++ typedef
+		 the C++ way even if the current language is C.  */
+	      const language_defn *lang = language_def (sym->language ());
+	      lang->print_type (type, "", &buf, -1, 0, &type_print_raw_options);
 	    }
 	  /* If type_print threw an exception, there is little point
 	     in continuing, so just bow out gracefully.  */
@@ -670,8 +670,8 @@ mangled_name_to_comp (const char *mangled_name, int options,
     {
       struct demangle_component *ret;
 
-      ret = cplus_demangle_v3_components (mangled_name,
-					  options, memory);
+      ret = gdb_cplus_demangle_v3_components (mangled_name,
+					      options, memory);
       if (ret)
 	{
 	  std::unique_ptr<demangle_parse_info> info (new demangle_parse_info);
@@ -1274,12 +1274,9 @@ add_symbol_overload_list_block (const char *name,
 				const struct block *block,
 				std::vector<symbol *> *overload_list)
 {
-  struct block_iterator iter;
-  struct symbol *sym;
-
   lookup_name_info lookup_name (name, symbol_name_match_type::FULL);
 
-  ALL_BLOCK_SYMBOLS_WITH_NAME (block, lookup_name, iter, sym)
+  for (struct symbol *sym : block_iterator_range (block, &lookup_name))
     overload_list_add_symbol (sym, name, overload_list);
 }
 
@@ -1307,15 +1304,17 @@ add_symbol_overload_list_namespace (const char *func_name,
     }
 
   /* Look in the static block.  */
-  block = block_static_block (get_selected_block (0));
-  if (block)
-    add_symbol_overload_list_block (name, block, overload_list);
+  block = get_selected_block (0);
+  block = block == nullptr ? nullptr : block->static_block ();
+  if (block != nullptr)
+    {
+      add_symbol_overload_list_block (name, block, overload_list);
 
-  /* Look in the global block.  */
-  block = block_global_block (block);
-  if (block)
-    add_symbol_overload_list_block (name, block, overload_list);
-
+      /* Look in the global block.  */
+      block = block->global_block ();
+      if (block)
+	add_symbol_overload_list_block (name, block, overload_list);
+    }
 }
 
 /* Search the namespace of the given type and namespace of and public
@@ -1337,7 +1336,7 @@ add_symbol_overload_list_adl_namespace (struct type *type,
       if (type->code () == TYPE_CODE_TYPEDEF)
 	type = check_typedef (type);
       else
-	type = TYPE_TARGET_TYPE (type);
+	type = type->target_type ();
     }
 
   type_name = type->name ();
@@ -1400,8 +1399,8 @@ add_symbol_overload_list_using (const char *func_name,
 
   for (block = get_selected_block (0);
        block != NULL;
-       block = BLOCK_SUPERBLOCK (block))
-    for (current = block_using (block);
+       block = block->superblock ())
+    for (current = block->get_using ();
 	current != NULL;
 	current = current->next)
       {
@@ -1440,7 +1439,7 @@ static void
 add_symbol_overload_list_qualified (const char *func_name,
 				    std::vector<symbol *> *overload_list)
 {
-  const struct block *b, *surrounding_static_block = 0;
+  const struct block *surrounding_static_block = 0;
 
   /* Look through the partial symtabs for all symbols which begin by
      matching FUNC_NAME.  Make sure we read that symbol table in.  */
@@ -1451,36 +1450,43 @@ add_symbol_overload_list_qualified (const char *func_name,
   /* Search upwards from currently selected frame (so that we can
      complete on local vars.  */
 
-  for (b = get_selected_block (0); b != NULL; b = BLOCK_SUPERBLOCK (b))
+  for (const block *b = get_selected_block (0);
+       b != nullptr;
+       b = b->superblock ())
     add_symbol_overload_list_block (func_name, b, overload_list);
 
-  surrounding_static_block = block_static_block (get_selected_block (0));
+  surrounding_static_block = get_selected_block (0);
+  surrounding_static_block = (surrounding_static_block == nullptr
+			      ? nullptr
+			      : surrounding_static_block->static_block ());
 
   /* Go through the symtabs and check the externs and statics for
      symbols which match.  */
 
-  for (objfile *objfile : current_program_space->objfiles ())
-    {
-      for (compunit_symtab *cust : objfile->compunits ())
-	{
-	  QUIT;
-	  b = BLOCKVECTOR_BLOCK (cust->blockvector (), GLOBAL_BLOCK);
-	  add_symbol_overload_list_block (func_name, b, overload_list);
-	}
-    }
+  const block *block = get_selected_block (0);
+  struct objfile *current_objfile = block ? block->objfile () : nullptr;
 
-  for (objfile *objfile : current_program_space->objfiles ())
-    {
-      for (compunit_symtab *cust : objfile->compunits ())
-	{
-	  QUIT;
-	  b = BLOCKVECTOR_BLOCK (cust->blockvector (), STATIC_BLOCK);
-	  /* Don't do this block twice.  */
-	  if (b == surrounding_static_block)
-	    continue;
-	  add_symbol_overload_list_block (func_name, b, overload_list);
-	}
-    }
+  gdbarch_iterate_over_objfiles_in_search_order
+    (current_objfile ? current_objfile->arch () : target_gdbarch (),
+     [func_name, surrounding_static_block, &overload_list]
+     (struct objfile *obj)
+       {
+	 for (compunit_symtab *cust : obj->compunits ())
+	   {
+	     QUIT;
+	     const struct block *b = cust->blockvector ()->global_block ();
+	     add_symbol_overload_list_block (func_name, b, overload_list);
+
+	     b = cust->blockvector ()->static_block ();
+	     /* Don't do this block twice.  */
+	     if (b == surrounding_static_block)
+	       continue;
+
+	     add_symbol_overload_list_block (func_name, b, overload_list);
+	   }
+
+	 return 0;
+       }, current_objfile);
 }
 
 /* Lookup the rtti type for a class name.  */
@@ -1631,7 +1637,7 @@ gdb_demangle (const char *name, int options)
 #endif
 
   if (crash_signal == 0)
-    result.reset (bfd_demangle (NULL, name, options));
+    result.reset (bfd_demangle (NULL, name, options | DMGL_VERBOSE));
 
 #ifdef HAVE_WORKING_FORK
   if (catch_demangler_crashes)
@@ -1662,6 +1668,28 @@ gdb_demangle (const char *name, int options)
 #endif
 
   return result;
+}
+
+/* See cp-support.h.  */
+
+char *
+gdb_cplus_demangle_print (int options,
+			  struct demangle_component *tree,
+			  int estimated_length,
+			  size_t *p_allocated_size)
+{
+  return cplus_demangle_print (options | DMGL_VERBOSE, tree,
+			       estimated_length, p_allocated_size);
+}
+
+/* A wrapper for cplus_demangle_v3_components that forces
+   DMGL_VERBOSE.  */
+
+static struct demangle_component *
+gdb_cplus_demangle_v3_components (const char *mangled,
+				  int options, void **mem)
+{
+  return cplus_demangle_v3_components (mangled, options | DMGL_VERBOSE, mem);
 }
 
 /* See cp-support.h.  */

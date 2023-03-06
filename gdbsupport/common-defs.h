@@ -1,6 +1,6 @@
 /* Common definitions.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -70,7 +70,9 @@
 
 /* We don't support Windows versions before XP, so we define
    _WIN32_WINNT correspondingly to ensure the Windows API headers
-   expose the required symbols.  */
+   expose the required symbols.
+
+   NOTE: this must be kept in sync with common.m4.  */
 #if defined (__MINGW32__) || defined (__CYGWIN__)
 # ifdef _WIN32_WINNT
 #  if _WIN32_WINNT < 0x0501
@@ -189,6 +191,12 @@
 #define ATTRIBUTE_UNUSED_RESULT __attribute__ ((__warn_unused_result__))
 #else
 #define ATTRIBUTE_UNUSED_RESULT
+#endif
+
+#if (GCC_VERSION > 4000)
+#define ATTRIBUTE_USED __attribute__ ((__used__))
+#else
+#define ATTRIBUTE_USED
 #endif
 
 #include "libiberty.h"

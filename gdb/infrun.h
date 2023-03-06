@@ -1,4 +1,4 @@
-/* Copyright (C) 1986-2022 Free Software Foundation, Inc.
+/* Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,7 +24,7 @@
 #include "gdbsupport/intrusive_list.h"
 
 struct target_waitstatus;
-struct frame_info;
+class frame_info_ptr;
 struct address_space;
 struct return_value_info;
 struct process_stratum_target;
@@ -47,6 +47,34 @@ extern bool debug_infrun;
 
 #define INFRUN_SCOPED_DEBUG_ENTER_EXIT \
   scoped_debug_enter_exit (debug_infrun, "infrun")
+
+/* A infrun debug helper routine to print out all the threads in the set
+   THREADS (which should be a range type that returns thread_info*
+   objects).
+
+   The TITLE is a string that is printed before the list of threads.
+
+   Output is only produced when 'set debug infrun on'.  */
+
+template<typename ThreadRange>
+static inline void
+infrun_debug_show_threads (const char *title, ThreadRange threads)
+{
+  if (debug_infrun)
+    {
+      INFRUN_SCOPED_DEBUG_ENTER_EXIT;
+
+      infrun_debug_printf ("%s:", title);
+      for (thread_info *thread : threads)
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, "
+			     "state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
+}
+
 
 /* Nonzero if we want to give control to the user when we're notified
    of shared library events by the dynamic linker.  */
@@ -89,6 +117,13 @@ enum exec_direction_kind
 /* The current execution direction.  */
 extern enum exec_direction_kind execution_direction;
 
+/* Call this to point 'previous_thread' at the thread returned by
+   inferior_thread, or at nullptr, if there's no selected thread.  */
+extern void update_previous_thread ();
+
+/* Get a weak reference to 'previous_thread'.  */
+extern thread_info *get_previous_thread ();
+
 extern void start_remote (int from_tty);
 
 /* Clear out all variables saying what to do when inferior is
@@ -121,7 +156,7 @@ extern process_stratum_target *user_visible_resume_target (ptid_t resume_ptid);
    appropriate messages, remove breakpoints, give terminal our modes,
    and run the stop hook.  Returns true if the stop hook proceeded the
    target, false otherwise.  */
-extern int normal_stop (void);
+extern bool normal_stop ();
 
 /* Return the cached copy of the last target/ptid/waitstatus returned
    by target_wait().  The data is actually cached by handle_inferior_event(),
@@ -172,7 +207,7 @@ extern int stepping_past_nonsteppable_watchpoint (void);
 
 /* Record in TP the frame and location we're currently stepping through.  */
 extern void set_step_info (thread_info *tp,
-			   struct frame_info *frame,
+			   frame_info_ptr frame,
 			   struct symtab_and_line sal);
 
 /* Several print_*_reason helper functions to print why the inferior

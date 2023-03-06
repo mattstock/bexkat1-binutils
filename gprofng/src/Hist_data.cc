@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -898,7 +898,8 @@ append_str (StringBuilder *sb, char *s, size_t len, int vis_bits)
 }
 
 void
-Hist_data::print_row (StringBuilder *sb, int row, Metric::HistMetric *hmp, char *mark)
+Hist_data::print_row (StringBuilder *sb, int row, Metric::HistMetric *hmp,
+		      const char *mark)
 {
   TValue res;
   char buf[256];

@@ -1,4 +1,4 @@
-# Copyright 2010-2022 Free Software Foundation, Inc.
+# Copyright 2010-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 
 set nl		"\[\r\n\]+"
 
-if { [skip_cplus_tests] } { continue }
+require allow_cplus_tests
 
 load_lib "cp-support.exp"
 
@@ -42,9 +42,8 @@ if  { [gdb_compile "${tfx}.o ${tfy}.o" ${binfile} executable {debug c++}] != "" 
 
 clean_restart $binfile
 
-if ![runto_main] then {
-    perror "couldn't run to breakpoint"
-    continue
+if {![runto_main]} {
+    return
 }
 
 # set a breakpoint at the return stmt
@@ -55,6 +54,3 @@ gdb_continue_to_breakpoint "marker 1"
 gdb_test "print x->y2 - x->y1" "warning: Type size unknown, assuming 1\. Try casting to a known type, or void \*\.\[^=\]*= 1"
 
 gdb_exit
-return 0
-
-

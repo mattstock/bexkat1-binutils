@@ -1,5 +1,5 @@
 /* GNU/Linux/ARM specific low level interface, for the remote server for GDB.
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -413,9 +413,9 @@ arm_linux_init_hwbp_cap (int pid)
   arm_linux_hwbp_cap.bp_count = (unsigned char)(val & 0xff);
 
   if (arm_linux_hwbp_cap.wp_count > MAX_WPTS)
-    internal_error (__FILE__, __LINE__, "Unsupported number of watchpoints");
+    internal_error ("Unsupported number of watchpoints");
   if (arm_linux_hwbp_cap.bp_count > MAX_BPTS)
-    internal_error (__FILE__, __LINE__, "Unsupported number of breakpoints");
+    internal_error ("Unsupported number of breakpoints");
 }
 
 /* How many hardware breakpoints are available?  */
@@ -958,7 +958,7 @@ get_next_pcs_syscall_next_pc (struct arm_get_next_pcs *self)
 static const struct target_desc *
 arm_read_description (void)
 {
-  unsigned long arm_hwcap = linux_get_hwcap (4);
+  unsigned long arm_hwcap = linux_get_hwcap (current_thread->id.pid (), 4);
 
   if (arm_hwcap & HWCAP_IWMMXT)
     return arm_linux_read_description (ARM_FP_TYPE_IWMMXT);

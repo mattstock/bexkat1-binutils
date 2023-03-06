@@ -1,5 +1,5 @@
 /* Tracepoint code for remote server for GDB.
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -344,6 +344,8 @@ tracepoint_look_up_symbols (void)
    GDBserver side.  */
 
 #ifdef IN_PROCESS_AGENT
+/* See target.h.  */
+
 int
 read_inferior_memory (CORE_ADDR memaddr, unsigned char *myaddr, int len)
 {
@@ -2921,8 +2923,7 @@ get_jump_space_head (void)
       if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_jump_pad_buffer,
 				      &gdb_jump_pad_head))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "error extracting jump_pad_buffer");
+	  internal_error ("error extracting jump_pad_buffer");
 	}
     }
 
@@ -2954,15 +2955,13 @@ claim_trampoline_space (ULONGEST used, CORE_ADDR *trampoline)
       if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer,
 				      &trampoline_buffer_tail))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "error extracting trampoline_buffer");
+	  internal_error ("error extracting trampoline_buffer");
 	}
 
       if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer_end,
 				      &trampoline_buffer_head))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "error extracting trampoline_buffer_end");
+	  internal_error ("error extracting trampoline_buffer_end");
 	}
     }
 
@@ -2997,8 +2996,7 @@ have_fast_tracepoint_trampoline_buffer (char *buf)
   if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer_end,
 				  &trampoline_end))
     {
-      internal_error (__FILE__, __LINE__,
-		      "error extracting trampoline_buffer_end");
+      internal_error ("error extracting trampoline_buffer_end");
     }
   
   if (buf)
@@ -3008,8 +3006,7 @@ have_fast_tracepoint_trampoline_buffer (char *buf)
       if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer_error,
 				  &errbuf))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "error extracting errbuf");
+	  internal_error ("error extracting errbuf");
 	}
 
       read_inferior_memory (errbuf, (unsigned char *) buf, 100);
@@ -3173,7 +3170,7 @@ install_tracepoint (struct tracepoint *tpoint, char *own_buf)
 
     }
   else
-    internal_error (__FILE__, __LINE__, "Unknown tracepoint type");
+    internal_error ("Unknown tracepoint type");
 
   if (tpoint->handle == NULL)
     {
@@ -3362,22 +3359,19 @@ cmd_qtstart (char *packet)
     {
       if (write_inferior_integer (ipa_sym_addrs.addr_tracing, 1))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "Error setting tracing variable in lib");
+	  internal_error ("Error setting tracing variable in lib");
 	}
 
       if (write_inferior_data_pointer (ipa_sym_addrs.addr_stopping_tracepoint,
 				       0))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "Error clearing stopping_tracepoint variable"
+	  internal_error ("Error clearing stopping_tracepoint variable"
 			  " in lib");
 	}
 
       if (write_inferior_integer (ipa_sym_addrs.addr_trace_buffer_is_full, 0))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "Error clearing trace_buffer_is_full variable"
+	  internal_error ("Error clearing trace_buffer_is_full variable"
 			  " in lib");
 	}
 
@@ -3429,8 +3423,7 @@ stop_tracing (void)
     {
       if (write_inferior_integer (ipa_sym_addrs.addr_tracing, 0))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "Error clearing tracing variable in lib");
+	  internal_error ("Error clearing tracing variable in lib");
 	}
     }
 
@@ -5397,13 +5390,13 @@ traceframe_read_sdata (int tfnum, ULONGEST offset,
 }
 
 /* Callback for traceframe_walk_blocks.  Builds a traceframe-info
-   object.  DATA is pointer to a struct buffer holding the
-   traceframe-info object being built.  */
+   object.  DATA is pointer to a string holding the traceframe-info
+   object being built.  */
 
 static int
 build_traceframe_info_xml (char blocktype, unsigned char *dataptr, void *data)
 {
-  struct buffer *buffer = (struct buffer *) data;
+  std::string *buffer = (std::string *) data;
 
   switch (blocktype)
     {
@@ -5416,9 +5409,9 @@ build_traceframe_info_xml (char blocktype, unsigned char *dataptr, void *data)
 	dataptr += sizeof (maddr);
 	memcpy (&mlen, dataptr, sizeof (mlen));
 	dataptr += sizeof (mlen);
-	buffer_xml_printf (buffer,
-			   "<memory start=\"0x%s\" length=\"0x%s\"/>\n",
-			   paddress (maddr), phex_nz (mlen, sizeof (mlen)));
+	string_xml_appendf (*buffer,
+			    "<memory start=\"0x%s\" length=\"0x%s\"/>\n",
+			    paddress (maddr), phex_nz (mlen, sizeof (mlen)));
 	break;
       }
     case 'V':
@@ -5426,7 +5419,7 @@ build_traceframe_info_xml (char blocktype, unsigned char *dataptr, void *data)
 	int vnum;
 
 	memcpy (&vnum, dataptr, sizeof (vnum));
-	buffer_xml_printf (buffer, "<tvar id=\"%d\"/>\n", vnum);
+	string_xml_appendf (*buffer, "<tvar id=\"%d\"/>\n", vnum);
 	break;
       }
     case 'R':
@@ -5448,7 +5441,7 @@ build_traceframe_info_xml (char blocktype, unsigned char *dataptr, void *data)
    BUFFER.  */
 
 int
-traceframe_read_info (int tfnum, struct buffer *buffer)
+traceframe_read_info (int tfnum, std::string *buffer)
 {
   struct traceframe *tframe;
 
@@ -5462,10 +5455,10 @@ traceframe_read_info (int tfnum, struct buffer *buffer)
       return 1;
     }
 
-  buffer_grow_str (buffer, "<traceframe-info>\n");
+  *buffer += "<traceframe-info>\n";
   traceframe_walk_blocks (tframe->data, tframe->data_size,
 			  tfnum, build_traceframe_info_xml, buffer);
-  buffer_grow_str0 (buffer, "</traceframe-info>\n");
+  *buffer += "</traceframe-info>\n";
   return 0;
 }
 
@@ -5599,27 +5592,23 @@ fast_tracepoint_collecting (CORE_ADDR thread_area,
   if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_jump_pad_buffer,
 				  &ipa_gdb_jump_pad_buffer))
     {
-      internal_error (__FILE__, __LINE__,
-		      "error extracting `gdb_jump_pad_buffer'");
+      internal_error ("error extracting `gdb_jump_pad_buffer'");
     }
   if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_jump_pad_buffer_end,
 				  &ipa_gdb_jump_pad_buffer_end))
     {
-      internal_error (__FILE__, __LINE__,
-		      "error extracting `gdb_jump_pad_buffer_end'");
+      internal_error ("error extracting `gdb_jump_pad_buffer_end'");
     }
 
   if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer,
 				  &ipa_gdb_trampoline_buffer))
     {
-      internal_error (__FILE__, __LINE__,
-		      "error extracting `gdb_trampoline_buffer'");
+      internal_error ("error extracting `gdb_trampoline_buffer'");
     }
   if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_trampoline_buffer_end,
 				  &ipa_gdb_trampoline_buffer_end))
     {
-      internal_error (__FILE__, __LINE__,
-		      "error extracting `gdb_trampoline_buffer_end'");
+      internal_error ("error extracting `gdb_trampoline_buffer_end'");
     }
 
   if (ipa_gdb_jump_pad_buffer <= stop_pc
@@ -5978,8 +5967,7 @@ target_malloc (ULONGEST size)
       if (read_inferior_data_pointer (ipa_sym_addrs.addr_gdb_tp_heap_buffer,
 				      &target_tp_heap))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "couldn't get target heap head pointer");
+	  internal_error ("couldn't get target heap head pointer");
 	}
     }
 
@@ -6205,8 +6193,7 @@ download_tracepoint (struct tracepoint *tpoint)
 				      + offsetof (struct tracepoint, next),
 				      &tp_prev_target_next_addr))
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "error reading `tp_prev->next'");
+	  internal_error ("error reading `tp_prev->next'");
 	}
 
       /* tpoint->next = tp_prev->next */
@@ -6458,8 +6445,7 @@ upload_fast_traceframes (void)
 
       if (ipa_tframe.tpnum == 0)
 	{
-	  internal_error (__FILE__, __LINE__,
-			  "Uploading: No (more) fast traceframes, but"
+	  internal_error ("Uploading: No (more) fast traceframes, but"
 			  " ipa_traceframe_count == %u??\n",
 			  ipa_traceframe_write_count
 			  - ipa_traceframe_read_count);
@@ -6834,7 +6820,7 @@ run_inferior_command (char *cmd, int len)
   target_pause_all (false);
   uninsert_all_breakpoints ();
 
-  err = agent_run_command (pid, (const char *) cmd, len);
+  err = agent_run_command (pid, cmd, len);
 
   reinsert_all_breakpoints ();
   target_unpause_all (false);

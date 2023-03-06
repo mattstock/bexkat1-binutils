@@ -1,6 +1,6 @@
 /* Dump-to-file commands, for GDB, the GNU debugger.
 
-   Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   Copyright (C) 2002-2023 Free Software Foundation, Inc.
 
    Contributed by Red Hat.
 
@@ -224,15 +224,15 @@ dump_value_to_file (const char *cmd, const char *mode, const char *file_format)
 
   /* Have everything.  Open/write the data.  */
   if (file_format == NULL || strcmp (file_format, "binary") == 0)
-    dump_binary_file (filename.get (), mode, value_contents (val).data (),
-		      TYPE_LENGTH (value_type (val)));
+    dump_binary_file (filename.get (), mode, val->contents ().data (),
+		      val->type ()->length ());
   else
     {
       CORE_ADDR vaddr;
 
-      if (VALUE_LVAL (val))
+      if (val->lval ())
 	{
-	  vaddr = value_address (val);
+	  vaddr = val->address ();
 	}
       else
 	{
@@ -241,8 +241,8 @@ dump_value_to_file (const char *cmd, const char *mode, const char *file_format)
 	}
 
       dump_bfd_file (filename.get (), mode, file_format, vaddr,
-		     value_contents (val).data (), 
-		     TYPE_LENGTH (value_type (val)));
+		     val->contents ().data (), 
+		     val->type ()->length ());
     }
 }
 

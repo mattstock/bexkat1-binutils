@@ -1,5 +1,5 @@
 /* YACC parser for Ada expressions, for GDB.
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -303,7 +303,7 @@ ada_funcall (int nargs)
       struct value *callee_v = callee->evaluate (nullptr,
 						 pstate->expout.get (),
 						 EVAL_AVOID_SIDE_EFFECTS);
-      callee_t = ada_check_typedef (value_type (callee_v));
+      callee_t = ada_check_typedef (callee_v->type ());
       array_arity = ada_array_arity (callee_t);
     }
 
@@ -342,9 +342,7 @@ static ada_choices_component *
 choice_component ()
 {
   ada_component *last = components.back ().get ();
-  ada_choices_component *result = dynamic_cast<ada_choices_component *> (last);
-  gdb_assert (result != nullptr);
-  return result;
+  return gdb::checked_static_cast<ada_choices_component *> (last);
 }
 
 /* Pop the most recent component from the global stack, and return
@@ -505,7 +503,7 @@ exp1	:	exp
 			    = lhs->evaluate (nullptr, pstate->expout.get (),
 					     EVAL_AVOID_SIDE_EFFECTS);
 			  rhs = resolve (std::move (rhs), true,
-					 value_type (lhs_val));
+					 lhs_val->type ());
 			  pstate->push_new<ada_assign_operation>
 			    (std::move (lhs), std::move (rhs));
 			}
@@ -875,7 +873,7 @@ primary :	primary TICK_ACCESS
 			  if (!ada_is_modular_type (type_arg))
 			    error (_("'modulus must be applied to modular type"));
 			  write_int (pstate, ada_modulus (type_arg),
-				     TYPE_TARGET_TYPE (type_arg));
+				     type_arg->target_type ());
 			}
 	;
 
@@ -1369,8 +1367,7 @@ block_lookup (const struct block *context, const char *raw_name)
     symtab = NULL;
 
   if (symtab != NULL)
-    result = BLOCKVECTOR_BLOCK (symtab->compunit ()->blockvector (),
-				STATIC_BLOCK);
+    result = symtab->compunit ()->blockvector ()->static_block ();
   else if (syms.empty () || syms[0].symbol->aclass () != LOC_BLOCK)
     {
       if (context == NULL)
@@ -1662,8 +1659,7 @@ write_var_or_type (struct parser_state *par_state,
 	      write_selectors (par_state, encoded_name + tail_index);
 	      return NULL;
 	    default:
-	      internal_error (__FILE__, __LINE__,
-			      _("impossible value from ada_parse_renaming"));
+	      internal_error (_("impossible value from ada_parse_renaming"));
 	    }
 
 	  if (type_sym != NULL)
@@ -1701,8 +1697,12 @@ write_var_or_type (struct parser_state *par_state,
 	    }
 	  else if (syms.empty ())
 	    {
+	      struct objfile *objfile = nullptr;
+	      if (block != nullptr)
+		objfile = block->objfile ();
+
 	      struct bound_minimal_symbol msym
-		= ada_lookup_simple_minsym (decoded_name.c_str ());
+		= ada_lookup_simple_minsym (decoded_name.c_str (), objfile);
 	      if (msym.minsym != NULL)
 		{
 		  par_state->push_new<ada_var_msym_value_operation> (msym);

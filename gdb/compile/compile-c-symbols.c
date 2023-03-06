@@ -1,6 +1,6 @@
 /* Convert symbols from GDB to GCC
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -57,7 +57,7 @@ convert_one_symbol (compile_c_instance *context,
 		    int is_local)
 {
   gcc_type sym_type;
-  const char *filename = symbol_symtab (sym.symbol)->filename;
+  const char *filename = sym.symbol->symtab ()->filename;
   unsigned short line = sym.symbol->line ();
 
   context->error_symbol_once (sym.symbol);
@@ -93,7 +93,7 @@ convert_one_symbol (compile_c_instance *context,
 
 	case LOC_BLOCK:
 	  kind = GCC_C_SYMBOL_FUNCTION;
-	  addr = BLOCK_ENTRY_PC (sym.symbol->value_block ());
+	  addr = sym.symbol->value_block ()->entry_pc ();
 	  if (is_global && sym.symbol->type ()->is_gnu_ifunc ())
 	    addr = gnu_ifunc_resolve_addr (target_gdbarch (), addr);
 	  break;
@@ -115,7 +115,7 @@ convert_one_symbol (compile_c_instance *context,
 		 sym.symbol->print_name ());
 
 	case LOC_UNDEF:
-	  internal_error (__FILE__, __LINE__, _("LOC_UNDEF found for \"%s\"."),
+	  internal_error (_("LOC_UNDEF found for \"%s\"."),
 			  sym.symbol->print_name ());
 
 	case LOC_COMMON_BLOCK:
@@ -144,7 +144,7 @@ convert_one_symbol (compile_c_instance *context,
 	     by their name.  */
 	  {
 	    struct value *val;
-	    struct frame_info *frame = NULL;
+	    frame_info_ptr frame = NULL;
 
 	    if (symbol_read_needs_frame (sym.symbol))
 	      {
@@ -156,13 +156,13 @@ convert_one_symbol (compile_c_instance *context,
 	      }
 
 	    val = read_var_value (sym.symbol, sym.block, frame);
-	    if (VALUE_LVAL (val) != lval_memory)
+	    if (val->lval () != lval_memory)
 	      error (_("Symbol \"%s\" cannot be used for compilation "
 		       "evaluation as its address has not been found."),
 		     sym.symbol->print_name ());
 
 	    kind = GCC_C_SYMBOL_VARIABLE;
-	    addr = value_address (val);
+	    addr = val->address ();
 	  }
 	  break;
 
@@ -212,7 +212,6 @@ static void
 convert_symbol_sym (compile_c_instance *context, const char *identifier,
 		    struct block_symbol sym, domain_enum domain)
 {
-  const struct block *static_block;
   int is_local_symbol;
 
   /* If we found a symbol and it is not in the  static or global
@@ -227,7 +226,9 @@ convert_symbol_sym (compile_c_instance *context, const char *identifier,
      }
   */
 
-  static_block = block_static_block (sym.block);
+  const struct block *static_block = nullptr;
+  if (sym.block != nullptr)
+    static_block = sym.block->static_block ();
   /* STATIC_BLOCK is NULL if FOUND_BLOCK is the global block.  */
   is_local_symbol = (sym.block != static_block && static_block != NULL);
   if (is_local_symbol)
@@ -238,7 +239,7 @@ convert_symbol_sym (compile_c_instance *context, const char *identifier,
       /* If the outer symbol is in the static block, we ignore it, as
 	 it cannot be referenced.  */
       if (global_sym.symbol != NULL
-	  && global_sym.block != block_static_block (global_sym.block))
+	  && global_sym.block != global_sym.block->static_block ())
 	{
 	  if (compile_debug)
 	    gdb_printf (gdb_stdlog,
@@ -404,7 +405,7 @@ gcc_symbol_address (void *datum, struct gcc_c_context *gcc_context,
 	    gdb_printf (gdb_stdlog,
 			"gcc_symbol_address \"%s\": full symbol\n",
 			identifier);
-	  result = BLOCK_ENTRY_PC (sym->value_block ());
+	  result = sym->value_block ()->entry_pc ();
 	  if (sym->type ()->is_gnu_ifunc ())
 	    result = gnu_ifunc_resolve_addr (target_gdbarch (), result);
 	  found = 1;
@@ -495,7 +496,7 @@ generate_vla_size (compile_instance *compiler,
   type = check_typedef (type);
 
   if (TYPE_IS_REFERENCE (type))
-    type = check_typedef (TYPE_TARGET_TYPE (type));
+    type = check_typedef (type->target_type ());
 
   switch (type->code ())
     {
@@ -518,7 +519,7 @@ generate_vla_size (compile_instance *compiler,
       generate_vla_size (compiler, stream, gdbarch, registers_used, pc,
 			 type->index_type (), sym);
       generate_vla_size (compiler, stream, gdbarch, registers_used, pc,
-			 TYPE_TARGET_TYPE (type), sym);
+			 type->target_type (), sym);
       break;
 
     case TYPE_CODE_UNION:
@@ -613,7 +614,10 @@ generate_c_for_variable_locations (compile_instance *compiler,
 				   const struct block *block,
 				   CORE_ADDR pc)
 {
-  const struct block *static_block = block_static_block (block);
+  if (block == nullptr)
+    return {};
+
+  const struct block *static_block = block->static_block ();
 
   /* If we're already in the static or global block, there is nothing
      to write.  */
@@ -629,14 +633,9 @@ generate_c_for_variable_locations (compile_instance *compiler,
 
   while (1)
     {
-      struct symbol *sym;
-      struct block_iterator iter;
-
       /* Iterate over symbols in this block, generating code to
 	 compute the location of each local variable.  */
-      for (sym = block_iterator_first (block, &iter);
-	   sym != NULL;
-	   sym = block_iterator_next (&iter))
+      for (struct symbol *sym : block_iterator_range (block))
 	{
 	  if (!symbol_seen (symhash.get (), sym))
 	    generate_c_for_for_one_variable (compiler, stream, gdbarch,
@@ -645,9 +644,9 @@ generate_c_for_variable_locations (compile_instance *compiler,
 
       /* If we just finished the outermost block of a function, we're
 	 done.  */
-      if (BLOCK_FUNCTION (block) != NULL)
+      if (block->function () != NULL)
 	break;
-      block = BLOCK_SUPERBLOCK (block);
+      block = block->superblock ();
     }
 
   return registers_used;

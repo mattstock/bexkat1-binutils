@@ -1,6 +1,6 @@
 /* YACC parser for C++ names, for GDB.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    Parts of the lexer are based on c-exp.y from GDB.
 
@@ -346,7 +346,12 @@ static void yyerror (cpname_state *, const char *);
 %%
 
 result		:	start
-			{ state->global_result = $1; }
+			{
+			  state->global_result = $1;
+
+			  /* Avoid warning about "yynerrs" being unused.  */
+			  (void) yynerrs;
+			}
 		;
 
 start		:	type
@@ -1948,19 +1953,15 @@ allocate_info (void)
   return info;
 }
 
-/* Convert RESULT to a string.  The return value is allocated
-   using xmalloc.  ESTIMATED_LEN is used only as a guide to the
-   length of the result.  This functions handles a few cases that
-   cplus_demangle_print does not, specifically the global destructor
-   and constructor labels.  */
+/* See cp-support.h.  */
 
 gdb::unique_xmalloc_ptr<char>
 cp_comp_to_string (struct demangle_component *result, int estimated_len)
 {
   size_t err;
 
-  char *res = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI,
-				    result, estimated_len, &err);
+  char *res = gdb_cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI,
+					result, estimated_len, &err);
   return gdb::unique_xmalloc_ptr<char> (res);
 }
 
@@ -2060,7 +2061,7 @@ cp_print (struct demangle_component *result)
   char *str;
   size_t err = 0;
 
-  str = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, 64, &err);
+  str = gdb_cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, 64, &err);
   if (str == NULL)
     return;
 

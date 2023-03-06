@@ -1,6 +1,6 @@
 /* Manages interpreters for GDB, the GNU debugger.
 
-   Copyright (C) 2000-2022 Free Software Foundation, Inc.
+   Copyright (C) 2000-2023 Free Software Foundation, Inc.
 
    Written by Jim Ingham <jingham@apple.com> of Apple Computer, Inc.
 
@@ -39,6 +39,7 @@
 #include "top.h"		/* For command_loop.  */
 #include "main.h"
 #include "gdbsupport/buildargv.h"
+#include "gdbsupport/scope-exit.h"
 
 /* Each UI has its own independent set of interpreters.  */
 
@@ -79,14 +80,12 @@ static struct interp *interp_lookup_existing (struct ui *ui,
 					      const char *name);
 
 interp::interp (const char *name)
-  : m_name (xstrdup (name))
+  : m_name (make_unique_xstrdup (name))
 {
-  this->inited = false;
 }
 
 interp::~interp ()
 {
-  xfree (m_name);
 }
 
 /* An interpreter factory.  Maps an interpreter name to the factory
@@ -117,8 +116,7 @@ interp_factory_register (const char *name, interp_factory_func func)
   for (const interp_factory &f : interpreter_factories)
     if (strcmp (f.name, name) == 0)
       {
-	internal_error (__FILE__, __LINE__,
-			_("interpreter factory already registered: \"%s\"\n"),
+	internal_error (_("interpreter factory already registered: \"%s\"\n"),
 			name);
       }
 
@@ -170,21 +168,19 @@ interp_set (struct interp *interp, bool top_level)
   if (top_level)
     ui_interp->top_level_interpreter = interp;
 
-  /* We use interpreter_p for the "set interpreter" variable, so we need
-     to make sure we have a malloc'ed copy for the set command to free.  */
-  if (interpreter_p != NULL
-      && strcmp (interp->name (), interpreter_p) != 0)
-    {
-      xfree (interpreter_p);
+  if (interpreter_p != interp->name ())
+    interpreter_p = interp->name ();
 
-      interpreter_p = xstrdup (interp->name ());
-    }
+  bool warn_about_mi1 = false;
 
   /* Run the init proc.  */
   if (!interp->inited)
     {
       interp->init (top_level);
       interp->inited = true;
+
+      if (streq (interp->name (), "mi1"))
+	warn_about_mi1 = true;
     }
 
   /* Do this only after the interpreter is initialized.  */
@@ -194,6 +190,11 @@ interp_set (struct interp *interp, bool top_level)
   clear_interpreter_hooks ();
 
   interp->resume ();
+
+  if (warn_about_mi1)
+    warning (_("MI version 1 is deprecated in GDB 13 and "
+	       "will be removed in GDB 14.  Please upgrade "
+	       "to a newer version of MI."));
 }
 
 /* Look up the interpreter for NAME.  If no such interpreter exists,
@@ -332,7 +333,7 @@ interp_supports_command_editing (struct interp *interp)
 /* interp_exec - This executes COMMAND_STR in the current 
    interpreter.  */
 
-struct gdb_exception
+void
 interp_exec (struct interp *interp, const char *command_str)
 {
   struct ui_interp_info *ui_interp = get_current_interp_info ();
@@ -341,7 +342,7 @@ interp_exec (struct interp *interp, const char *command_str)
   scoped_restore save_command_interp
     = make_scoped_restore (&ui_interp->command_interpreter, interp);
 
-  return interp->exec (command_str);
+  interp->exec (command_str);
 }
 
 /* A convenience routine that nulls out all the common command hooks.
@@ -393,19 +394,13 @@ interpreter_exec_cmd (const char *args, int from_tty)
     error (_("Could not find interpreter \"%s\"."), prules[0]);
 
   interp_set (interp_to_use, false);
+  SCOPE_EXIT
+    {
+      interp_set (old_interp, false);
+    };
 
   for (i = 1; i < nrules; i++)
-    {
-      struct gdb_exception e = interp_exec (interp_to_use, prules[i]);
-
-      if (e.reason < 0)
-	{
-	  interp_set (old_interp, 0);
-	  error (_("error in command: \"%s\"."), prules[i]);
-	}
-    }
-
-  interp_set (old_interp, 0);
+    interp_exec (interp_to_use, prules[i]);
 }
 
 /* See interps.h.  */

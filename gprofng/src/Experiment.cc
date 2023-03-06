@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -644,7 +644,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 	      exp->exp_start_time = ts;
 	      str = attrs->getValue (NTXT ("time"));
 	      if (str != NULL)
-		exp->start_sec = atol (str);
+		exp->start_sec = atoll (str);
 	      str = attrs->getValue (NTXT ("pid"));
 	      if (str != NULL)
 		exp->pid = atoi (str);
@@ -1370,6 +1370,7 @@ Experiment::Experiment ()
   expt_name = NULL;
   arch_name = NULL;
   fndr_arch_name = NULL;
+  dyntext_name = NULL;
   logFile = NULL;
 
   dataDscrs = new Vector<DataDescriptor*>;
@@ -1432,6 +1433,7 @@ Experiment::~Experiment ()
   free (expt_name);
   free (arch_name);
   free (fndr_arch_name);
+  free (dyntext_name);
   delete jthreads_idx;
   delete cstack;
   delete cstackShowHide;
@@ -4136,7 +4138,8 @@ Experiment::write_header ()
   if (dbeSession->ipc_mode || dbeSession->rdt_mode)
     {
       // In GUI: print start time at the beginning
-      char *start_time = ctime (&start_sec);
+      time_t t = (time_t) start_sec;
+      char *start_time = ctime (&t);
       if (start_time != NULL)
 	{
 	  sb.setLength (0);
@@ -4258,7 +4261,8 @@ Experiment::write_header ()
     }
 
   // add comment for start time
-  char *p = ctime (&start_sec);
+  time_t t = (time_t) start_sec;
+  char *p = ctime (&t);
   sb.setLength (0);
   if (p != NULL)
     sb.sprintf (GTXT ("Experiment started %s"), p);
@@ -6050,11 +6054,10 @@ Experiment::fetch_pprocq ()
 int
 Experiment::read_dyntext_file ()
 {
-  char *data_file_name = dbe_sprintf ("%s/%s", expt_name, SP_DYNTEXT_FILE);
-  Data_window *dwin = new Data_window (data_file_name);
+  dyntext_name = dbe_sprintf ("%s/%s", expt_name, SP_DYNTEXT_FILE);
+  Data_window *dwin = new Data_window (dyntext_name);
   if (dwin->not_opened ())
     {
-      free (data_file_name);
       delete dwin;
       return 1;
     }
@@ -6087,7 +6090,7 @@ Experiment::read_dyntext_file ()
 	case DT_CODE:
 	  if (fp)
 	    {
-	      fp->img_fname = data_file_name;
+	      fp->img_fname = dyntext_name;
 	      fp->img_offset = offset + sizeof (DT_common);
 	      if ((platform != Intel) && (platform != Amd64))
 		{ //ARCH(SPARC)
@@ -6176,7 +6179,6 @@ Experiment::read_dyntext_file ()
       offset += cpcktsize;
     }
   free (progress_msg);
-  free (data_file_name);
   delete dwin;
   return 0;
 }
@@ -6444,9 +6446,11 @@ Experiment::dump_map (FILE *outfile)
 	load.tv_nsec += NANOSEC;
       }
     fprintf (outfile,
-	     "0x%08llx  %8lld (0x%08llx) %5ld.%09ld %5ld.%09ld  \"%s\"\n",
-	     s->base, s->size, s->size, load.tv_sec, load.tv_nsec,
-	     unload.tv_sec, unload.tv_nsec, s->obj->get_name ());
+	     "0x%08llx  %8lld (0x%08llx) %5lld.%09lld %5lld.%09lld  \"%s\"\n",
+	     (long long) s->base, (long long) s->size, (long long) s->size,
+	     (long long) load.tv_sec, (long long) load.tv_nsec,
+	     (long long) unload.tv_sec, (long long) unload.tv_nsec,
+	     s->obj->get_name ());
   }
   fprintf (outfile, NTXT ("\n"));
 }
@@ -6462,7 +6466,7 @@ int
 Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_msg)
 {
   errno = 0;
-  int fd_w = open64 (aname, O_WRONLY | O_CREAT | O_EXCL, 0644);
+  int fd_w = ::open64 (aname, O_WRONLY | O_CREAT | O_EXCL, 0644);
   if (fd_w == -1)
     {
       if (errno == EEXIST)
@@ -6480,7 +6484,7 @@ Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_
       return 1;
     }
 
-  int fd_r = open64 (name, O_RDONLY);
+  int fd_r = ::open64 (name, O_RDONLY);
   if (fd_r == -1)
     {
       fprintf (stderr, GTXT ("er_archive: unable to open `%s': %s\n"),

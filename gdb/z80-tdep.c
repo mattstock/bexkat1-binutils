@@ -1,6 +1,6 @@
 /* Target-dependent code for the Z80.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -55,7 +55,7 @@ __gdb_break_handler:
      next frame - frame of caller, which has called current function
 */
 
-struct z80_gdbarch_tdep : gdbarch_tdep
+struct z80_gdbarch_tdep : gdbarch_tdep_base
 {
   /* Number of bytes used for address:
       2 bytes for all Z80 family
@@ -109,7 +109,7 @@ struct z80_unwind_cache
   struct trad_frame_saved_reg *saved_regs;
 };
 
-enum instruction_type
+enum z80_instruction_type
 {
   insn_default,
   insn_z80,
@@ -139,17 +139,17 @@ enum instruction_type
   insn_force_nop /* invalid opcode prefix */
 };
 
-struct insn_info
+struct z80_insn_info
 {
   gdb_byte code;
   gdb_byte mask;
   gdb_byte size; /* without prefix(es) */
-  enum instruction_type type;
+  enum z80_instruction_type type;
 };
 
 /* Constants */
 
-static const struct insn_info *
+static const struct z80_insn_info *
 z80_get_insn_info (struct gdbarch *gdbarch, const gdb_byte *buf, int *size);
 
 static const char *z80_reg_names[] =
@@ -167,10 +167,10 @@ static const char *z80_reg_names[] =
 static const char *
 z80_register_name (struct gdbarch *gdbarch, int regnum)
 {
-  if (regnum >= 0 && regnum < ARRAY_SIZE (z80_reg_names))
+  if (regnum < ARRAY_SIZE (z80_reg_names))
     return z80_reg_names[regnum];
 
-  return NULL;
+  return "";
 }
 
 /* Return the type of a register specified by the architecture.  Only
@@ -308,7 +308,7 @@ z80_scan_prologue (struct gdbarch *gdbarch, CORE_ADDR pc_beg, CORE_ADDR pc_end,
 		   struct z80_unwind_cache *info)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  z80_gdbarch_tdep *tdep = gdbarch_tdep<z80_gdbarch_tdep> (gdbarch);
   int addr_len = tdep->addr_length;
   gdb_byte prologue[32]; /* max prologue is 24 bytes: __interrupt with local array */
   int pos = 0;
@@ -522,7 +522,7 @@ z80_return_value (struct gdbarch *gdbarch, struct value *function,
 		  gdb_byte *readbuf, const gdb_byte *writebuf)
 {
   /* Byte are returned in L, word in HL, dword in DEHL.  */
-  int len = TYPE_LENGTH (valtype);
+  int len = valtype->length ();
 
   if ((valtype->code () == TYPE_CODE_STRUCT
        || valtype->code () == TYPE_CODE_UNION
@@ -555,7 +555,7 @@ z80_return_value (struct gdbarch *gdbarch, struct value *function,
 
 /* function unwinds current stack frame and returns next one */
 static struct z80_unwind_cache *
-z80_frame_unwind_cache (struct frame_info *this_frame,
+z80_frame_unwind_cache (frame_info_ptr this_frame,
 			void **this_prologue_cache)
 {
   CORE_ADDR start_pc, current_pc;
@@ -564,7 +564,7 @@ z80_frame_unwind_cache (struct frame_info *this_frame,
   gdb_byte buf[sizeof(void*)];
   struct z80_unwind_cache *info;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  z80_gdbarch_tdep *tdep = gdbarch_tdep<z80_gdbarch_tdep> (gdbarch);
   int addr_len = tdep->addr_length;
 
   if (*this_prologue_cache)
@@ -658,7 +658,7 @@ z80_frame_unwind_cache (struct frame_info *this_frame,
 /* Given a GDB frame, determine the address of the calling function's
    frame.  This will be used to create a new GDB frame struct.  */
 static void
-z80_frame_this_id (struct frame_info *this_frame, void **this_cache,
+z80_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 		   struct frame_id *this_id)
 {
   struct frame_id id;
@@ -682,7 +682,7 @@ z80_frame_this_id (struct frame_info *this_frame, void **this_cache,
 }
 
 static struct value *
-z80_frame_prev_register (struct frame_info *this_frame,
+z80_frame_prev_register (frame_info_ptr this_frame,
 			 void **this_prologue_cache, int regnum)
 {
   struct z80_unwind_cache *info
@@ -697,7 +697,7 @@ z80_frame_prev_register (struct frame_info *this_frame,
 	  ULONGEST pc;
 	  gdb_byte buf[3];
 	  struct gdbarch *gdbarch = get_frame_arch (this_frame);
-	  z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+	  z80_gdbarch_tdep *tdep = gdbarch_tdep<z80_gdbarch_tdep> (gdbarch);
 	  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
 
 	  read_memory (info->saved_regs[Z80_PC_REGNUM].addr (),
@@ -750,7 +750,7 @@ z80_sw_breakpoint_from_kind (struct gdbarch *gdbarch, int kind, int *size)
     }
   else /* kind is non-RST address, use CALL instead, but it is dungerous */
     {
-      z80_gdbarch_tdep *tdep = (z80_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+      z80_gdbarch_tdep *tdep = gdbarch_tdep<z80_gdbarch_tdep> (gdbarch);
       gdb_byte *p = break_insn;
       *p++ = 0xcd;
       *p++ = (kind >> 0) & 0xff;
@@ -776,7 +776,7 @@ z80_software_single_step (struct regcache *regcache)
   ULONGEST addr;
   int opcode;
   int size;
-  const struct insn_info *info;
+  const struct z80_insn_info *info;
   std::vector<CORE_ADDR> ret (1);
   struct gdbarch *gdbarch = target_gdbarch ();
 
@@ -860,9 +860,9 @@ z80_software_single_step (struct regcache *regcache)
 static unsigned (*cache_ovly_region_table)[3] = 0;
 static unsigned cache_novly_regions;
 static CORE_ADDR cache_ovly_region_table_base = 0;
-enum ovly_index
+enum z80_ovly_index
   {
-    VMA, OSIZE, MAPPED_TO_LMA
+    Z80_VMA, Z80_OSIZE, Z80_MAPPED_TO_LMA
   };
 
 static void
@@ -952,12 +952,12 @@ z80_overlay_update_1 (struct obj_section *osect)
 
   /* find region corresponding to the section VMA */
   for (i = 0; i < cache_novly_regions; i++)
-    if (cache_ovly_region_table[i][VMA] == vma)
+    if (cache_ovly_region_table[i][Z80_VMA] == vma)
 	break;
   if (i == cache_novly_regions)
     return 0; /* no such region */
 
-  lma = cache_ovly_region_table[i][MAPPED_TO_LMA];
+  lma = cache_ovly_region_table[i][Z80_MAPPED_TO_LMA];
   i = 0;
 
   /* we have interest for sections with same VMA */
@@ -995,9 +995,9 @@ z80_overlay_update (struct obj_section *osect)
 	bfd_vma vma = bfd_section_vma (bsect);
 
 	for (int i = 0; i < cache_novly_regions; ++i)
-	  if (cache_ovly_region_table[i][VMA] == vma)
+	  if (cache_ovly_region_table[i][Z80_VMA] == vma)
 	    osect->ovly_mapped =
-	      (cache_ovly_region_table[i][MAPPED_TO_LMA] == lma);
+	      (cache_ovly_region_table[i][Z80_MAPPED_TO_LMA] == lma);
       }
 }
 
@@ -1007,7 +1007,7 @@ z80_insn_is_call (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   gdb_byte buf[8];
   int size;
-  const struct insn_info *info;
+  const struct z80_insn_info *info;
   read_memory (addr, buf, sizeof(buf));
   info = z80_get_insn_info (gdbarch, buf, &size);
   if (info)
@@ -1027,7 +1027,7 @@ z80_insn_is_ret (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   gdb_byte buf[8];
   int size;
-  const struct insn_info *info;
+  const struct z80_insn_info *info;
   read_memory (addr, buf, sizeof(buf));
   info = z80_get_insn_info (gdbarch, buf, &size);
   if (info)
@@ -1046,7 +1046,7 @@ z80_insn_is_jump (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   gdb_byte buf[8];
   int size;
-  const struct insn_info *info;
+  const struct z80_insn_info *info;
   read_memory (addr, buf, sizeof(buf));
   info = z80_get_insn_info (gdbarch, buf, &size);
   if (info)
@@ -1081,7 +1081,6 @@ z80_frame_unwind =
 static struct gdbarch *
 z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
-  struct gdbarch *gdbarch;
   struct gdbarch_list *best_arch;
   tdesc_arch_data_up tdesc_data;
   unsigned long mach = info.bfd_arch_info->mach;
@@ -1123,8 +1122,9 @@ z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     }
 
   /* None found, create a new architecture from the information provided.  */
-  z80_gdbarch_tdep *tdep = new z80_gdbarch_tdep;
-  gdbarch = gdbarch_alloc (&info, tdep);
+  gdbarch *gdbarch
+    = gdbarch_alloc (&info, gdbarch_tdep_up (new z80_gdbarch_tdep));
+  z80_gdbarch_tdep *tdep = gdbarch_tdep<z80_gdbarch_tdep> (gdbarch);
 
   if (mach == bfd_mach_ez80_adl)
     {
@@ -1190,7 +1190,7 @@ z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 }
 
 /* Table to disassemble machine codes without prefix.  */
-static const struct insn_info
+static const struct z80_insn_info
 ez80_main_insn_table[] =
 { /* table with double prefix check */
   { 0100, 0377, 0, insn_force_nop}, //double prefix
@@ -1237,7 +1237,7 @@ ez80_main_insn_table[] =
   { 0000, 0000, 1, insn_default  }  //others
 } ;
 
-static const struct insn_info
+static const struct z80_insn_info
 ez80_adl_main_insn_table[] =
 { /* table with double prefix check */
   { 0100, 0377, 0, insn_force_nop}, //double prefix
@@ -1286,7 +1286,7 @@ ez80_adl_main_insn_table[] =
 /* ED prefix opcodes table.
    Note the instruction length does include the ED prefix (+ 1 byte)
 */
-static const struct insn_info
+static const struct z80_insn_info
 ez80_ed_insn_table[] =
 {
   /* eZ80 only instructions */
@@ -1306,7 +1306,7 @@ ez80_ed_insn_table[] =
   { 0000, 0000, 1, insn_default    }
 };
 
-static const struct insn_info
+static const struct z80_insn_info
 ez80_adl_ed_insn_table[] =
 {
   { 0002, 0366, 2, insn_default }, //"lea rr,ii+d"
@@ -1324,7 +1324,7 @@ ez80_adl_ed_insn_table[] =
 };
 
 /* table for FD and DD prefixed instructions */
-static const struct insn_info
+static const struct z80_insn_info
 ez80_ddfd_insn_table[] =
 {
   /* ez80 only instructions */
@@ -1355,7 +1355,7 @@ ez80_ddfd_insn_table[] =
   { 0000, 0000, 0, insn_default }  //not an instruction, exec DD/FD as NOP
 };
 
-static const struct insn_info
+static const struct z80_insn_info
 ez80_adl_ddfd_insn_table[] =
 {
   { 0007, 0307, 2, insn_default }, //"ld rr,(ii+d)"
@@ -1386,11 +1386,11 @@ ez80_adl_ddfd_insn_table[] =
 
 /* Return pointer to instruction information structure corresponded to opcode
    in buf.  */
-static const struct insn_info *
+static const struct z80_insn_info *
 z80_get_insn_info (struct gdbarch *gdbarch, const gdb_byte *buf, int *size)
 {
   int code;
-  const struct insn_info *info;
+  const struct z80_insn_info *info;
   unsigned long mach = gdbarch_bfd_arch_info (gdbarch)->mach;
   *size = 0;
   switch (mach)
@@ -1460,6 +1460,6 @@ extern initialize_file_ftype _initialize_z80_tdep;
 void
 _initialize_z80_tdep ()
 {
-  register_gdbarch_init (bfd_arch_z80, z80_gdbarch_init);
+  gdbarch_register (bfd_arch_z80, z80_gdbarch_init);
   initialize_tdesc_z80 ();
 }

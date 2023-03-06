@@ -1,6 +1,6 @@
 /* Caching of GDB/DWARF index files.
 
-   Copyright (C) 1994-2022 Free Software Foundation, Inc.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -89,19 +89,17 @@ index_cache::disable ()
 /* See dwarf-index-cache.h.  */
 
 void
-index_cache::store (dwarf2_per_objfile *per_objfile)
+index_cache::store (dwarf2_per_bfd *per_bfd)
 {
-  objfile *obj = per_objfile->objfile;
-
   if (!enabled ())
     return;
 
   /* Get build id of objfile.  */
-  const bfd_build_id *build_id = build_id_bfd_get (obj->obfd);
+  const bfd_build_id *build_id = build_id_bfd_get (per_bfd->obfd);
   if (build_id == nullptr)
     {
       index_cache_debug ("objfile %s has no build id",
-			 objfile_name (obj));
+			 bfd_get_filename (per_bfd->obfd));
       return;
     }
 
@@ -109,7 +107,7 @@ index_cache::store (dwarf2_per_objfile *per_objfile)
 
   /* Get build id of dwz file, if present.  */
   gdb::optional<std::string> dwz_build_id_str;
-  const dwz_file *dwz = dwarf2_get_dwz_file (per_objfile->per_bfd);
+  const dwz_file *dwz = dwarf2_get_dwz_file (per_bfd);
   const char *dwz_build_id_ptr = NULL;
 
   if (dwz != nullptr)
@@ -144,18 +142,18 @@ index_cache::store (dwarf2_per_objfile *per_objfile)
 	}
 
       index_cache_debug ("writing index cache for objfile %s",
-			 objfile_name (obj));
+			 bfd_get_filename (per_bfd->obfd));
 
       /* Write the index itself to the directory, using the build id as the
 	 filename.  */
-      write_dwarf_index (per_objfile, m_dir.c_str (),
+      write_dwarf_index (per_bfd, m_dir.c_str (),
 			 build_id_str.c_str (), dwz_build_id_ptr,
 			 dw_index_kind::GDB_INDEX);
     }
   catch (const gdb_exception_error &except)
     {
       index_cache_debug ("couldn't store index cache for objfile %s: %s",
-			 objfile_name (obj), except.what ());
+			 bfd_get_filename (per_bfd->obfd), except.what ());
     }
 }
 
@@ -298,9 +296,7 @@ set_index_cache_directory_command (const char *arg, int from_tty,
 				   cmd_list_element *element)
 {
   /* Make sure the index cache directory is absolute and tilde-expanded.  */
-  gdb::unique_xmalloc_ptr<char> abs
-    = gdb_abspath (index_cache_directory.c_str ());
-  index_cache_directory = abs.get ();
+  index_cache_directory = gdb_abspath (index_cache_directory.c_str ());
   global_index_cache.set_directory (index_cache_directory);
 }
 

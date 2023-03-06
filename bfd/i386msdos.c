@@ -1,5 +1,5 @@
 /* BFD back-end for MS-DOS executables.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Bryan Ford of the University of Utah.
 
    Contributed by the Center for Software Science at the
@@ -252,6 +252,7 @@ msdos_set_section_contents (bfd *abfd,
 #define msdos_get_symbol_version_string \
   _bfd_nosymbols_get_symbol_version_string
 #define msdos_find_nearest_line _bfd_nosymbols_find_nearest_line
+#define msdos_find_nearest_line_with_alt _bfd_nosymbols_find_nearest_line_with_alt
 #define msdos_find_line _bfd_nosymbols_find_line
 #define msdos_find_inliner_info _bfd_nosymbols_find_inliner_info
 #define msdos_get_lineno _bfd_nosymbols_get_lineno

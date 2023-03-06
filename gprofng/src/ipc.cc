@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -69,16 +69,16 @@ bool2str (bool v)
   return v ? "true" : "false";
 }
 
-inline char*
-str2str (String v)
+inline const char*
+str2str (const char* v)
 {
-  return (char*) (v ? v : "NULL");
+  return v ? v : "NULL";
 }
 
-inline char*
-str2s (String v)
+inline const char*
+str2s (const char* v)
 {
-  return (char*) (v ? v : "");
+  return v ? v : "";
 }
 
 inline DbeView *
@@ -95,11 +95,6 @@ extern "C"
 /*
  * Fatal error handlers
  */
-extern "C" void fatalErrorHadler (int sig, siginfo_t *info, void *context);
-extern "C" void sigSEGV_handler (int sig, siginfo_t *info, void *context);
-extern "C" void sigABRT_handler (int sig, siginfo_t *info, void *context);
-static char fatalErrorBuffer1[1024 * 8];
-static char fatalErrorBuffer2[1024 * 8];
 static int fatalErrorCode = 1;
 static int fatalErrorCounter = 0;
 static void *fatalErrorContext = 0;
@@ -127,38 +122,24 @@ fatalErrorHadler (int sig, siginfo_t *info, void *context)
   // Get process ID
   pid_t pid = getpid ();
   // Create dump file
-  snprintf (fatalErrorBuffer1, sizeof (fatalErrorBuffer1), "/tmp/analyzer.%lld",
-	    (long long) pid);
-  mkdir (fatalErrorBuffer1, 0700);
-  snprintf (fatalErrorBuffer1, sizeof (fatalErrorBuffer1),
-	    "/tmp/analyzer.%lld/crash.sig%d.%lld", (long long) pid, sig,
-	    (long long) pid);
+  char fname[128];
+  snprintf (fname, sizeof (fname), "/tmp/gprofng.%lld", (long long) pid);
+  mkdir (fname, 0700);
+  snprintf (fname, sizeof (fname), "/tmp/gprofng.%lld/crash.sig%d.%lld",
+	    (long long) pid, sig, (long long) pid);
   // Dump stack trace in background using pstack
-  snprintf (fatalErrorBuffer2, sizeof (fatalErrorBuffer2),
-	    "/usr/bin/pstack %lld > %s.pstack", (long long) pid, fatalErrorBuffer1);
-  system (fatalErrorBuffer2);
-  int fd = creat (fatalErrorBuffer1, 0600);
+  char buf[256];
+  snprintf (buf, sizeof (buf), "/usr/bin/pstack %lld > %s.pstack",
+	    (long long) pid, fname);
+  system (buf);
+  int fd = creat (fname, 0600);
   if (fd >= 0)
     {
       // Write error message
-      snprintf (fatalErrorBuffer2, sizeof (fatalErrorBuffer2),
-		"A fatal error has been detected by er_print: Signal %lld\n",
-		(long long) sig);
-      write (fd, fatalErrorBuffer2, strlen (fatalErrorBuffer2));
-//      snprintf (fatalErrorBuffer2, sizeof (fatalErrorBuffer2),
-//                "If you would like to submit a bug report, please use your support contract.\n"));
-//      write(fd, fatalErrorBuffer2, strlen(fatalErrorBuffer2));
-      snprintf (fatalErrorBuffer2, sizeof (fatalErrorBuffer2),
-		"Protocol Version: %d\n", IPC_VERSION_NUMBER);
-      write (fd, fatalErrorBuffer2, strlen (fatalErrorBuffer2));
+      dbe_write (fd, "A fatal error has been detected by er_print: Signal %d\n",
+		 sig);
+      dbe_write (fd, "Protocol Version: %d\n", IPC_VERSION_NUMBER);
       close (fd);
-      // Send postmortem error message to the GUI
-      // snprintf(fatalErrorBuffer1, sizeof (fatalErrorBuffer1),
-      //         "%s: %s: /tmp/analyzer.%lld",
-      //         "Unexpected signal in er_print",
-      //         "Crash dump",
-      //         (long long) pid);
-      // res = write(2, fatalErrorBuffer2, strlen(fatalErrorBuffer1));
     }
   wait (0); // wait for pstack
   //sleep(10); // Wait 10 seconds to make sure processing of fatal error is done
@@ -1281,7 +1262,7 @@ ipc_doWork (void *arg)
     {
       int arg1 = readInt (req);
       uint64_t arg2 = readLong (req);
-      ipc_log ("  args = %d, %ld\n", arg1, arg2);
+      ipc_log ("  args = %d, %lld\n", arg1, (long long) arg2);
       dbeSetSelObjV2 (arg1, arg2);
       writeString (NULL, req);
     }

@@ -1,4 +1,4 @@
-# Copyright 2007-2022 Free Software Foundation, Inc.
+# Copyright 2007-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,19 +18,10 @@ load_lib dwarf.exp
 # DW_AT_high_pc but with DW_AT_ranges instead.
 
 # This test can only be run on targets which support DWARF-2 and use gas.
-if {![dwarf2_support]} {
-    verbose "Skipping $gdb_test_file_name."
-    return 0  
-}
+require dwarf2_support
 
 # The .c files use __attribute__.
-if [get_compiler_info] {
-    return -1
-}
-if !$gcc_compiled {
-    verbose "Skipping $gdb_test_file_name."
-    return 0  
-}
+require is_c_compiler_gcc
 
 standard_testfile .c -2.c -3.c
 set asmfile [standard_output_file ${testfile}.s]
@@ -54,7 +45,7 @@ if {[gdb_compile "${srcdir}/${subdir}/${srcfile2}" "${asmfile2}" assembly {}] !=
 # STABS compilation is intentional as it tests the STABS lookup where is no
 # partial_symtab->psymtabs_addrmap supported for that CU (Compilation Unit) in
 # a file containing psymtabs_addrmap-supporting DWARF CUs.
-if {[gdb_compile "${srcdir}/${subdir}/${srcfile3}" "${objfile3}" object {additional_flags=-gstabs}] != "" } {
+if {[gdb_compile "${srcdir}/${subdir}/${srcfile3}" "${objfile3}" object {additional_flags=-gstabs quiet}] != "" } {
     return -1
 }
 

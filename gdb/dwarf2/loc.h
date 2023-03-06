@@ -1,6 +1,6 @@
 /* DWARF 2 location expression support for GDB.
 
-   Copyright (C) 2003-2022 Free Software Foundation, Inc.
+   Copyright (C) 2003-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,7 +37,7 @@ extern unsigned int entry_values_debug;
 
 /* Find a particular location expression from a location list.  */
 const gdb_byte *dwarf2_find_location_expression
-  (struct dwarf2_loclist_baton *baton,
+  (const dwarf2_loclist_baton *baton,
    size_t *locexpr_length,
    CORE_ADDR pc);
 
@@ -65,7 +65,7 @@ value *compute_var_value (const char *name);
    otherwise.  */
 
 struct call_site_parameter *dwarf_expr_reg_to_entry_parameter
-  (struct frame_info *frame, enum call_site_parameter_kind kind,
+  (frame_info_ptr frame, enum call_site_parameter_kind kind,
    union call_site_parameter_u kind_u, dwarf2_per_cu_data **per_cu_return,
    dwarf2_per_objfile **per_objfile_return);
 
@@ -76,7 +76,7 @@ struct call_site_parameter *dwarf_expr_reg_to_entry_parameter
    be a value or a location description.  */
 
 struct value *dwarf2_evaluate_loc_desc (struct type *type,
-					struct frame_info *frame,
+					frame_info_ptr frame,
 					const gdb_byte *data,
 					size_t size,
 					dwarf2_per_cu_data *per_cu,
@@ -120,7 +120,7 @@ struct property_addr_info
    bottom of the stack.  */
 
 bool dwarf2_evaluate_property (const struct dynamic_prop *prop,
-			       struct frame_info *frame,
+			       frame_info_ptr frame,
 			       const struct property_addr_info *addr_stack,
 			       CORE_ADDR *value,
 			       gdb::array_view<CORE_ADDR> push_values = {});
@@ -293,7 +293,18 @@ extern void invalid_synthetic_pointer ();
 
 extern struct value *indirect_synthetic_pointer
   (sect_offset die, LONGEST byte_offset, dwarf2_per_cu_data *per_cu,
-   dwarf2_per_objfile *per_objfile, struct frame_info *frame,
+   dwarf2_per_objfile *per_objfile, frame_info_ptr frame,
    struct type *type, bool resolve_abstract_p = false);
 
+/* Read parameter of TYPE at (callee) FRAME's function entry.  KIND and KIND_U
+   are used to match DW_AT_location at the caller's
+   DW_TAG_call_site_parameter.
+
+   Function always returns non-NULL value.  It throws NO_ENTRY_VALUE_ERROR if
+   it cannot resolve the parameter for any reason.  */
+
+extern struct value *value_of_dwarf_reg_entry (struct type *type,
+					       struct frame_info_ptr frame,
+					       enum call_site_parameter_kind kind,
+					       union call_site_parameter_u kind_u);
 #endif /* DWARF2LOC_H */

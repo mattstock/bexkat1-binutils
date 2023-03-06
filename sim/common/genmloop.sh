@@ -1,5 +1,5 @@
 # Generate the main loop of the simulator.
-# Copyright (C) 1996-2022 Free Software Foundation, Inc.
+# Copyright (C) 1996-2023 Free Software Foundation, Inc.
 # Contributed by Cygnus Support.
 #
 # This file is part of the GNU simulators.
@@ -1167,8 +1167,8 @@ void
   SEM_PC vpc;
 #if WITH_SEM_SWITCH_FULL
   /* For communication between cti's and cti-chain.  */
-  SEM_BRANCH_TYPE pbb_br_type;
-  PCADDR pbb_br_npc;
+  SEM_BRANCH_TYPE pbb_br_type = SEM_BRANCH_UNTAKEN;
+  PCADDR pbb_br_npc = 0;
 #endif
 
 EOF
@@ -1259,8 +1259,8 @@ void
   SEM_PC vpc;
 #if WITH_SEM_SWITCH_FAST
   /* For communication between cti's and cti-chain.  */
-  SEM_BRANCH_TYPE pbb_br_type;
-  PCADDR pbb_br_npc;
+  SEM_BRANCH_TYPE pbb_br_type = SEM_BRANCH_UNTAKEN;
+  PCADDR pbb_br_npc = 0;
 #endif
 
 EOF

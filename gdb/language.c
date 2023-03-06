@@ -1,6 +1,6 @@
 /* Multiple source language support for GDB.
 
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
    Contributed by the Department of Computer Science at the State University
    of New York at Buffalo.
@@ -46,7 +46,6 @@
 #include "c-lang.h"
 #include <algorithm>
 #include "gdbarch.h"
-#include "compile/compile-internal.h"
 
 static void set_range_case (void);
 
@@ -125,7 +124,7 @@ show_language_command (struct ui_file *file, int from_tty,
 
   if (has_stack_frames ())
     {
-      struct frame_info *frame;
+      frame_info_ptr frame;
 
       frame = get_selected_frame (NULL);
       flang = get_frame_language (frame);
@@ -160,7 +159,7 @@ set_language_command (const char *ignore,
 	      language_mode = language_mode_auto;
 	      try
 		{
-		  struct frame_info *frame;
+		  frame_info_ptr frame;
 
 		  frame = get_selected_frame (NULL);
 		  flang = get_frame_language (frame);
@@ -189,8 +188,7 @@ set_language_command (const char *ignore,
 	}
     }
 
-  internal_error (__FILE__, __LINE__,
-		  "Couldn't find language `%s' in known languages list.",
+  internal_error ("Couldn't find language `%s' in known languages list.",
 		  language);
 }
 
@@ -216,8 +214,7 @@ show_range_command (struct ui_file *file, int from_tty,
 	  tmp = "warn";
 	  break;
 	default:
-	  internal_error (__FILE__, __LINE__,
-			  "Unrecognized range check setting.");
+	  internal_error ("Unrecognized range check setting.");
 	}
 
       gdb_printf (file,
@@ -263,8 +260,7 @@ set_range_command (const char *ignore,
     }
   else
     {
-      internal_error (__FILE__, __LINE__,
-		      _("Unrecognized range check setting: \"%s\""), range);
+      internal_error (_("Unrecognized range check setting: \"%s\""), range);
     }
   if (range_check == range_check_warn
       || ((range_check == range_check_on)
@@ -292,8 +288,7 @@ show_case_command (struct ui_file *file, int from_tty,
 	  tmp = "off";
 	  break;
 	default:
-	  internal_error (__FILE__, __LINE__,
-			  "Unrecognized case-sensitive setting.");
+	  internal_error ("Unrecognized case-sensitive setting.");
 	}
 
       gdb_printf (file,
@@ -334,8 +329,7 @@ set_case_command (const char *ignore, int from_tty, struct cmd_list_element *c)
      }
    else
      {
-       internal_error (__FILE__, __LINE__,
-		       "Unrecognized case-sensitive setting: \"%s\"",
+       internal_error ("Unrecognized case-sensitive setting: \"%s\"",
 		       case_sensitive);
      }
 
@@ -418,7 +412,7 @@ range_error (const char *string,...)
       gdb_printf (gdb_stderr, "\n");
       break;
     default:
-      internal_error (__FILE__, __LINE__, _("bad switch"));
+      internal_error (_("bad switch"));
     }
   va_end (args);
 }
@@ -533,7 +527,7 @@ add_set_language_command ()
    Return the result from the first that returns non-zero, or 0 if all
    `fail'.  */
 CORE_ADDR 
-skip_language_trampoline (struct frame_info *frame, CORE_ADDR pc)
+skip_language_trampoline (frame_info_ptr frame, CORE_ADDR pc)
 {
   for (const auto &lang : language_defn::languages)
     {
@@ -601,7 +595,7 @@ language_defn::watch_location_expression (struct type *type,
 					  CORE_ADDR addr) const
 {
   /* Generates an expression that assumes a C like syntax is valid.  */
-  type = check_typedef (TYPE_TARGET_TYPE (check_typedef (type)));
+  type = check_typedef (check_typedef (type)->target_type ());
   std::string name = type_to_string (type);
   return xstrprintf ("* (%s *) %s", name.c_str (), core_addr_to_string (addr));
 }
@@ -631,27 +625,6 @@ language_defn::value_print_inner
 	 const struct value_print_options *options) const
 {
   return c_value_print_inner (val, stream, recurse, options);
-}
-
-/* See language.h.  */
-
-void
-language_defn::emitchar (int ch, struct type *chtype,
-			 struct ui_file * stream, int quoter) const
-{
-  c_emit_char (ch, chtype, stream, quoter);
-}
-
-/* See language.h.  */
-
-void
-language_defn::printstr (struct ui_file *stream, struct type *elttype,
-			 const gdb_byte *string, unsigned int length,
-			 const char *encoding, int force_ellipses,
-			 const struct value_print_options *options) const
-{
-  c_printstr (stream, elttype, string, length, encoding, force_ellipses,
-	      options);
 }
 
 /* See language.h.  */
@@ -850,7 +823,7 @@ public:
     type = check_typedef (type);
     while (type->code () == TYPE_CODE_REF)
       {
-	type = TYPE_TARGET_TYPE (type);
+	type = type->target_type ();
 	type = check_typedef (type);
       }
     return (type->code () == TYPE_CODE_STRING);
@@ -918,8 +891,6 @@ static unknown_language unknown_language_defn;
 
 /* Per-architecture language information.  */
 
-static struct gdbarch_data *language_gdbarch_data;
-
 struct language_gdbarch
 {
   /* A vector of per-language per-architecture info.  Indexed by "enum
@@ -927,15 +898,21 @@ struct language_gdbarch
   struct language_arch_info arch_info[nr_languages];
 };
 
-static void *
-language_gdbarch_post_init (struct gdbarch *gdbarch)
+static const registry<gdbarch>::key<language_gdbarch> language_gdbarch_data;
+
+static language_gdbarch *
+get_language_gdbarch (struct gdbarch *gdbarch)
 {
-  struct language_gdbarch *l
-    = obstack_new<struct language_gdbarch> (gdbarch_obstack (gdbarch));
-  for (const auto &lang : language_defn::languages)
+  struct language_gdbarch *l = language_gdbarch_data.get (gdbarch);
+  if (l == nullptr)
     {
-      gdb_assert (lang != nullptr);
-      lang->language_arch_info (gdbarch, &l->arch_info[lang->la_language]);
+      l = new struct language_gdbarch;
+      for (const auto &lang : language_defn::languages)
+	{
+	  gdb_assert (lang != nullptr);
+	  lang->language_arch_info (gdbarch, &l->arch_info[lang->la_language]);
+	}
+      language_gdbarch_data.set (gdbarch, l);
     }
 
   return l;
@@ -947,8 +924,7 @@ struct type *
 language_string_char_type (const struct language_defn *la,
 			   struct gdbarch *gdbarch)
 {
-  struct language_gdbarch *ld
-    = (struct language_gdbarch *) gdbarch_data (gdbarch, language_gdbarch_data);
+  struct language_gdbarch *ld = get_language_gdbarch (gdbarch);
   return ld->arch_info[la->la_language].string_char_type ();
 }
 
@@ -958,8 +934,7 @@ struct type *
 language_bool_type (const struct language_defn *la,
 		    struct gdbarch *gdbarch)
 {
-  struct language_gdbarch *ld
-    = (struct language_gdbarch *) gdbarch_data (gdbarch, language_gdbarch_data);
+  struct language_gdbarch *ld = get_language_gdbarch (gdbarch);
   return ld->arch_info[la->la_language].bool_type ();
 }
 
@@ -1067,8 +1042,7 @@ language_lookup_primitive_type_1 (const struct language_defn *la,
 				  struct gdbarch *gdbarch,
 				  T arg)
 {
-  struct language_gdbarch *ld =
-    (struct language_gdbarch *) gdbarch_data (gdbarch, language_gdbarch_data);
+  struct language_gdbarch *ld = get_language_gdbarch (gdbarch);
   return ld->arch_info[la->la_language].lookup_primitive_type (arg);
 }
 
@@ -1099,21 +1073,18 @@ language_lookup_primitive_type_as_symbol (const struct language_defn *la,
 					  struct gdbarch *gdbarch,
 					  const char *name)
 {
-  struct language_gdbarch *ld
-    = (struct language_gdbarch *) gdbarch_data (gdbarch, language_gdbarch_data);
+  struct language_gdbarch *ld = get_language_gdbarch (gdbarch);
   struct language_arch_info *lai = &ld->arch_info[la->la_language];
 
-  if (symbol_lookup_debug)
-    gdb_printf (gdb_stdlog,
-		"language_lookup_primitive_type_as_symbol"
-		" (%s, %s, %s)",
-		la->name (), host_address_to_string (gdbarch), name);
+  symbol_lookup_debug_printf
+    ("language = \"%s\", gdbarch @ %s, type = \"%s\")",
+     la->name (), host_address_to_string (gdbarch), name);
 
   struct symbol *sym
     = lai->lookup_primitive_type_as_symbol (name, la->la_language);
 
-  if (symbol_lookup_debug)
-    gdb_printf (gdb_stdlog, " = %s\n", host_address_to_string (sym));
+  symbol_lookup_debug_printf ("found symbol @ %s",
+			      host_address_to_string (sym));
 
   /* Note: The result of symbol lookup is normally a symbol *and* the block
      it was found in.  Builtin types don't live in blocks.  We *could* give
@@ -1134,9 +1105,6 @@ _initialize_language ()
 
   static const char *const case_sensitive_names[]
     = { "on", "off", "auto", NULL };
-
-  language_gdbarch_data
-    = gdbarch_data_register_post_init (language_gdbarch_post_init);
 
   /* GDB commands for language specific stuff.  */
 

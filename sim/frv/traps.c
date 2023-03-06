@@ -1,5 +1,5 @@
 /* frv trap support
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
    Contributed by Red Hat.
 
 This file is part of the GNU simulators.
@@ -138,8 +138,8 @@ frv_itrap (SIM_CPU *current_cpu, PCADDR pc, USI base, SI offset)
 	    sim_engine_halt (sd, current_cpu, NULL, pc, sim_exited, s.arg1);
 	  }
 
-	s.p1 = (PTR) sd;
-	s.p2 = (PTR) current_cpu;
+	s.p1 = sd;
+	s.p2 = current_cpu;
 	s.read_mem = syscall_read_mem;
 	s.write_mem = syscall_write_mem;
 	cb_syscall (cb, &s);

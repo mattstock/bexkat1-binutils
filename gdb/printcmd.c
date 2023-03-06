@@ -1,6 +1,6 @@
 /* Print values for GNU debugger GDB.
 
-   Copyright (C) 1986-2022 Free Software Foundation, Inc.
+   Copyright (C) 1986-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -294,11 +294,11 @@ print_formatted (struct value *val, int size,
 		 const struct value_print_options *options,
 		 struct ui_file *stream)
 {
-  struct type *type = check_typedef (value_type (val));
-  int len = TYPE_LENGTH (type);
+  struct type *type = check_typedef (val->type ());
+  int len = type->length ();
 
-  if (VALUE_LVAL (val) == lval_memory)
-    next_address = value_address (val) + len;
+  if (val->lval () == lval_memory)
+    next_address = val->address () + len;
 
   if (size)
     {
@@ -306,11 +306,11 @@ print_formatted (struct value *val, int size,
 	{
 	case 's':
 	  {
-	    struct type *elttype = value_type (val);
+	    struct type *elttype = val->type ();
 
-	    next_address = (value_address (val)
+	    next_address = (val->address ()
 			    + val_print_string (elttype, NULL,
-						value_address (val), -1,
+						val->address (), -1,
 						stream, options) * len);
 	  }
 	  return;
@@ -318,9 +318,9 @@ print_formatted (struct value *val, int size,
 	case 'i':
 	  /* We often wrap here if there are long symbolic names.  */
 	  stream->wrap_here (4);
-	  next_address = (value_address (val)
+	  next_address = (val->address ()
 			  + gdb_print_insn (type->arch (),
-					    value_address (val), stream,
+					    val->address (), stream,
 					    &branch_delay_insns));
 	  return;
 	}
@@ -349,11 +349,13 @@ float_type_from_length (struct type *type)
   struct gdbarch *gdbarch = type->arch ();
   const struct builtin_type *builtin = builtin_type (gdbarch);
 
-  if (TYPE_LENGTH (type) == TYPE_LENGTH (builtin->builtin_float))
+  if (type->length () == builtin->builtin_half->length ())
+    type = builtin->builtin_half;
+  else if (type->length () == builtin->builtin_float->length ())
     type = builtin->builtin_float;
-  else if (TYPE_LENGTH (type) == TYPE_LENGTH (builtin->builtin_double))
+  else if (type->length () == builtin->builtin_double->length ())
     type = builtin->builtin_double;
-  else if (TYPE_LENGTH (type) == TYPE_LENGTH (builtin->builtin_long_double))
+  else if (type->length () == builtin->builtin_long_double->length ())
     type = builtin->builtin_long_double;
 
   return type;
@@ -369,7 +371,7 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
 			int size, struct ui_file *stream)
 {
   struct gdbarch *gdbarch = type->arch ();
-  unsigned int len = TYPE_LENGTH (type);
+  unsigned int len = type->length ();
   enum bfd_endian byte_order = type_byte_order (type);
 
   /* String printing should go through val_print_scalar_formatted.  */
@@ -377,7 +379,7 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
 
   /* If the value is a pointer, and pointers and addresses are not the
      same, then at this point, the value's length (in target bytes) is
-     gdbarch_addr_bit/TARGET_CHAR_BIT, not TYPE_LENGTH (type).  */
+     gdbarch_addr_bit/TARGET_CHAR_BIT, not type->length ().  */
   if (type->code () == TYPE_CODE_PTR)
     len = gdbarch_addr_bit (gdbarch) / TARGET_CHAR_BIT;
 
@@ -387,8 +389,8 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
   if (options->format != 'c'
       && (options->format != 'd' || type->is_unsigned ()))
     {
-      if (len < TYPE_LENGTH (type) && byte_order == BFD_ENDIAN_BIG)
-	valaddr += TYPE_LENGTH (type) - len;
+      if (len < type->length () && byte_order == BFD_ENDIAN_BIG)
+	valaddr += type->length () - len;
     }
 
   /* Allow LEN == 0, and in this case, don't assume that VALADDR is
@@ -444,8 +446,8 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
       || type->bit_size_differs_p ())
     {
       val_long.emplace (unpack_long (type, valaddr));
-      converted_bytes.resize (TYPE_LENGTH (type));
-      store_signed_integer (converted_bytes.data (), TYPE_LENGTH (type),
+      converted_bytes.resize (type->length ());
+      store_signed_integer (converted_bytes.data (), type->length (),
 			    byte_order, *val_long);
       valaddr = converted_bytes.data ();
     }
@@ -485,7 +487,7 @@ print_scalar_formatted (const gdb_byte *valaddr, struct type *type,
       break;
 
     case 't':
-      print_binary_chars (stream, valaddr, len, byte_order, size > 0);
+      print_binary_chars (stream, valaddr, len, byte_order, size > 0, options);
       break;
     case 'x':
       print_hex_chars (stream, valaddr, len, byte_order, size > 0);
@@ -645,7 +647,7 @@ build_address_symbolic (struct gdbarch *gdbarch,
 	 pointer is <function+3>.  This matches the ISA behavior.  */
       addr = gdbarch_addr_bits_remove (gdbarch, addr);
 
-      name_location = BLOCK_ENTRY_PC (symbol->value_block ());
+      name_location = symbol->value_block ()->entry_pc ();
       if (do_demangle || asm_demangle)
 	name_temp = symbol->print_name ();
       else
@@ -749,7 +751,7 @@ pc_prefix (CORE_ADDR addr)
 {
   if (has_stack_frames ())
     {
-      struct frame_info *frame;
+      frame_info_ptr frame;
       CORE_ADDR pc;
 
       frame = get_selected_frame (NULL);
@@ -957,17 +959,18 @@ find_string_backward (struct gdbarch *gdbarch,
 					 chars_to_read * char_size);
       chars_read /= char_size;
       read_error = (chars_read == chars_to_read) ? 0 : 1;
+      unsigned int print_max_chars = get_print_max_chars (options);
       /* Searching for '\0' from the end of buffer in backward direction.  */
       for (i = 0; i < chars_read && count > 0 ; ++i, ++chars_counted)
 	{
 	  int offset = (chars_to_read - i - 1) * char_size;
 
 	  if (integer_is_zero (&buffer[offset], char_size)
-	      || chars_counted == options->print_max)
+	      || chars_counted == print_max_chars)
 	    {
-	      /* Found '\0' or reached print_max.  As OFFSET is the offset to
-		 '\0', we add CHAR_SIZE to return the start address of
-		 a string.  */
+	      /* Found '\0' or reached `print_max_chars'.  As OFFSET
+		 is the offset to '\0', we add CHAR_SIZE to return
+		 the start address of a string.  */
 	      --count;
 	      string_start_addr = addr + offset + char_size;
 	      chars_counted = 0;
@@ -1028,8 +1031,7 @@ do_examine (struct format_data fmt, struct gdbarch *gdbarch, CORE_ADDR addr)
 	size = 'h';
       else
 	/* Bad value for gdbarch_ptr_bit.  */
-	internal_error (__FILE__, __LINE__,
-			_("failed internal consistency check"));
+	internal_error (_("failed internal consistency check"));
     }
 
   if (size == 'b')
@@ -1088,19 +1090,19 @@ do_examine (struct format_data fmt, struct gdbarch *gdbarch, CORE_ADDR addr)
       else if (format == 's')
 	{
 	  next_address = find_string_backward (gdbarch, addr, count,
-					       TYPE_LENGTH (val_type),
+					       val_type->length (),
 					       &opts, &count);
 	}
       else
 	{
-	  next_address = addr - count * TYPE_LENGTH (val_type);
+	  next_address = addr - count * val_type->length ();
 	}
 
       /* The following call to print_formatted updates next_address in every
 	 iteration.  In backward case, we store the start address here
 	 and update next_address with it before exiting the function.  */
       addr_rewound = (format == 's'
-		      ? next_address - TYPE_LENGTH (val_type)
+		      ? next_address - val_type->length ()
 		      : next_address);
       need_to_update_next_address = 1;
     }
@@ -1242,9 +1244,14 @@ print_command_parse_format (const char **expp, const char *cmdname,
 void
 print_value (value *val, const value_print_options &opts)
 {
-  int histindex = record_latest_value (val);
+  /* This setting allows large arrays to be printed by limiting the
+     number of elements that are loaded into GDB's memory; we only
+     need to load as many array elements as we plan to print.  */
+  scoped_array_length_limiting limit_large_arrays (opts.print_max);
 
-  annotate_value_history_begin (histindex, value_type (val));
+  int histindex = val->record_latest ();
+
+  annotate_value_history_begin (histindex, val->type ());
 
   gdb_printf ("$%d = ", histindex);
 
@@ -1261,22 +1268,22 @@ print_value (value *val, const value_print_options &opts)
 static bool
 should_validate_memtags (struct value *value)
 {
-  gdb_assert (value != nullptr && value_type (value) != nullptr);
+  gdb_assert (value != nullptr && value->type () != nullptr);
 
   if (!target_supports_memory_tagging ())
     return false;
 
-  enum type_code code = value_type (value)->code ();
+  enum type_code code = value->type ()->code ();
 
   /* Skip non-address values.  */
   if (code != TYPE_CODE_PTR
-      && !TYPE_IS_REFERENCE (value_type (value)))
+      && !TYPE_IS_REFERENCE (value->type ()))
     return false;
 
   /* OK, we have an address value.  Check we have a complete value we
      can extract.  */
-  if (value_optimized_out (value)
-      || !value_entirely_available (value))
+  if (value->optimized_out ()
+      || !value->entirely_available ())
     return false;
 
   /* We do.  Check whether it includes any tags.  */
@@ -1301,6 +1308,11 @@ process_print_command_args (const char *args, value_print_options *print_opts,
 
   if (exp != nullptr && *exp)
     {
+      /* This setting allows large arrays to be printed by limiting the
+	 number of elements that are loaded into GDB's memory; we only
+	 need to load as many array elements as we plan to print.  */
+      scoped_array_length_limiting limit_large_arrays (print_opts->print_max);
+
       /* VOIDPRINT is true to indicate that we do want to print a void
 	 value, so invert it for parse_expression.  */
       expression_up expr = parse_expression (exp, nullptr, !voidprint);
@@ -1319,8 +1331,8 @@ print_command_1 (const char *args, int voidprint)
 
   struct value *val = process_print_command_args (args, &print_opts, voidprint);
 
-  if (voidprint || (val && value_type (val) &&
-		    value_type (val)->code () != TYPE_CODE_VOID))
+  if (voidprint || (val && val->type () &&
+		    val->type ()->code () != TYPE_CODE_VOID))
     {
       /* If memory tagging validation is on, check if the tag is valid.  */
       if (print_opts.memory_tag_violations)
@@ -1485,10 +1497,16 @@ output_command (const char *exp, int from_tty)
 
   val = evaluate_expression (expr.get ());
 
-  annotate_value_begin (value_type (val));
+  annotate_value_begin (val->type ());
 
   get_formatted_print_options (&opts, format);
   opts.raw = fmt.raw;
+
+  /* This setting allows large arrays to be printed by limiting the
+     number of elements that are loaded into GDB's memory; we only
+     need to load as many array elements as we plan to print.  */
+  scoped_array_length_limiting limit_large_arrays (opts.print_max);
+
   print_formatted (val, fmt.size, &opts, gdb_stdout);
 
   annotate_value_end ();
@@ -1501,7 +1519,7 @@ set_command (const char *exp, int from_tty)
 {
   expression_up expr = parse_expression (exp);
 
-  switch (expr->op->opcode ())
+  switch (expr->first_opcode ())
     {
     case UNOP_PREINCREMENT:
     case UNOP_POSTINCREMENT:
@@ -1681,10 +1699,10 @@ info_address_command (const char *exp, int from_tty)
   gdb_printf ("\" is ");
   val = sym->value_longest ();
   if (sym->is_objfile_owned ())
-    section = sym->obj_section (symbol_objfile (sym));
+    section = sym->obj_section (sym->objfile ());
   else
     section = NULL;
-  gdbarch = symbol_arch (sym);
+  gdbarch = sym->arch ();
 
   if (SYMBOL_COMPUTED_OPS (sym) != NULL)
     {
@@ -1778,7 +1796,7 @@ info_address_command (const char *exp, int from_tty)
 
     case LOC_BLOCK:
       gdb_printf (_("a function at address "));
-      load_addr = BLOCK_ENTRY_PC (sym->value_block ());
+      load_addr = sym->value_block ()->entry_pc ();
       fputs_styled (paddress (gdbarch, load_addr), address_style.style (),
 		    gdb_stdout);
       if (section_is_overlay (section))
@@ -1883,13 +1901,13 @@ x_command (const char *exp, int from_tty)
       if (from_tty)
 	set_repeat_arguments ("");
       val = evaluate_expression (expr.get ());
-      if (TYPE_IS_REFERENCE (value_type (val)))
+      if (TYPE_IS_REFERENCE (val->type ()))
 	val = coerce_ref (val);
       /* In rvalue contexts, such as this, functions are coerced into
 	 pointers to functions.  This makes "x/i main" work.  */
-      if (value_type (val)->code () == TYPE_CODE_FUNC
-	   && VALUE_LVAL (val) == lval_memory)
-	next_address = value_address (val);
+      if (val->type ()->code () == TYPE_CODE_FUNC
+	  && val->lval () == lval_memory)
+	next_address = val->address ();
       else
 	next_address = value_as_address (val);
 
@@ -1918,7 +1936,7 @@ x_command (const char *exp, int from_tty)
       /* Make last address examined available to the user as $_.  Use
 	 the correct pointer type.  */
       struct type *pointer_type
-	= lookup_pointer_type (value_type (last_examine_value.get ()));
+	= lookup_pointer_type (last_examine_value->type ());
       set_internalvar (lookup_internalvar ("_"),
 		       value_from_pointer (pointer_type,
 					   last_examine_address));
@@ -1927,7 +1945,7 @@ x_command (const char *exp, int from_tty)
 	 as $__.  If the last value has not been fetched from memory
 	 then don't fetch it now; instead mark it by voiding the $__
 	 variable.  */
-      if (value_lazy (last_examine_value.get ()))
+      if (last_examine_value->lazy ())
 	clear_internalvar (lookup_internalvar ("__"));
       else
 	set_internalvar (lookup_internalvar ("__"), last_examine_value.get ());
@@ -2110,7 +2128,7 @@ do_one_display (struct display *d)
 	  d->exp = parse_expression (d->exp_string.c_str (), &tracker);
 	  d->block = tracker.block ();
 	}
-      catch (const gdb_exception &ex)
+      catch (const gdb_exception_error &ex)
 	{
 	  /* Can't re-parse the expression.  Disable this display item.  */
 	  d->enabled_p = false;
@@ -2123,8 +2141,8 @@ do_one_display (struct display *d)
   if (d->block)
     {
       if (d->pspace == current_program_space)
-	within_current_scope = contained_in (get_selected_block (0), d->block,
-					     true);
+	within_current_scope = d->block->contains (get_selected_block (0),
+						   true);
       else
 	within_current_scope = 0;
     }
@@ -2282,7 +2300,7 @@ Num Enb Expression\n"));
       else if (d->format.format)
 	gdb_printf ("/%c ", d->format.format);
       gdb_puts (d->exp_string.c_str ());
-      if (d->block && !contained_in (get_selected_block (0), d->block, true))
+      if (d->block && !d->block->contains (get_selected_block (0), true))
 	gdb_printf (_(" (cannot be evaluated in the current context)"));
       gdb_printf ("\n");
     }
@@ -2355,13 +2373,13 @@ clear_dangling_display_expressions (struct objfile *objfile)
       struct objfile *bl_objf = nullptr;
       if (d->block != nullptr)
 	{
-	  bl_objf = block_objfile (d->block);
+	  bl_objf = d->block->objfile ();
 	  if (bl_objf->separate_debug_objfile_backlink != nullptr)
 	    bl_objf = bl_objf->separate_debug_objfile_backlink;
 	}
 
       if (bl_objf == objfile
-	  || (d->exp != NULL && exp_uses_objfile (d->exp.get (), objfile)))
+	  || (d->exp != nullptr && d->exp->uses_objfile (objfile)))
 	{
 	  d->exp.reset ();
 	  d->block = NULL;
@@ -2380,7 +2398,7 @@ clear_dangling_display_expressions (struct objfile *objfile)
 
 void
 print_variable_and_value (const char *name, struct symbol *var,
-			  struct frame_info *frame,
+			  frame_info_ptr frame,
 			  struct ui_file *stream, int indent)
 {
 
@@ -2401,7 +2419,7 @@ print_variable_and_value (const char *name, struct symbol *var,
 	 a block to it.  */
       val = read_var_value (var, NULL, frame);
       get_user_print_options (&opts);
-      opts.deref_ref = 1;
+      opts.deref_ref = true;
       common_val_print_checked (val, stream, indent, &opts, current_language);
 
       /* common_val_print invalidates FRAME when a pretty printer calls inferior
@@ -2429,11 +2447,11 @@ printf_c_string (struct ui_file *stream, const char *format,
 {
   const gdb_byte *str;
 
-  if (value_type (value)->code () != TYPE_CODE_PTR
-      && VALUE_LVAL (value) == lval_internalvar
-      && c_is_string_type_p (value_type (value)))
+  if (value->type ()->code () != TYPE_CODE_PTR
+      && value->lval () == lval_internalvar
+      && c_is_string_type_p (value->type ()))
     {
-      size_t len = TYPE_LENGTH (value_type (value));
+      size_t len = value->type ()->length ();
 
       /* Copy the internal var value to TEM_STR and append a terminating null
 	 character.  This protects against corrupted C-style strings that lack
@@ -2441,7 +2459,7 @@ printf_c_string (struct ui_file *stream, const char *format,
 	 null terminated) to be printed without problems.  */
       gdb_byte *tem_str = (gdb_byte *) alloca (len + 1);
 
-      memcpy (tem_str, value_contents (value).data (), len);
+      memcpy (tem_str, value->contents ().data (), len);
       tem_str [len] = 0;
       str = tem_str;
     }
@@ -2497,16 +2515,16 @@ printf_wide_c_string (struct ui_file *stream, const char *format,
 {
   const gdb_byte *str;
   size_t len;
-  struct gdbarch *gdbarch = value_type (value)->arch ();
+  struct gdbarch *gdbarch = value->type ()->arch ();
   struct type *wctype = lookup_typename (current_language,
 					 "wchar_t", NULL, 0);
-  int wcwidth = TYPE_LENGTH (wctype);
+  int wcwidth = wctype->length ();
 
-  if (VALUE_LVAL (value) == lval_internalvar
-      && c_is_string_type_p (value_type (value)))
+  if (value->lval () == lval_internalvar
+      && c_is_string_type_p (value->type ()))
     {
-      str = value_contents (value).data ();
-      len = TYPE_LENGTH (value_type (value));
+      str = value->contents ().data ();
+      len = value->type ()->length ();
     }
   else
     {
@@ -2564,7 +2582,7 @@ printf_floating (struct ui_file *stream, const char *format,
 		 struct value *value, enum argclass argclass)
 {
   /* Parameter data.  */
-  struct type *param_type = value_type (value);
+  struct type *param_type = value->type ();
   struct gdbarch *gdbarch = param_type->arch ();
 
   /* Determine target type corresponding to the format string.  */
@@ -2613,16 +2631,16 @@ printf_floating (struct ui_file *stream, const char *format,
   if (fmt_type->code () == TYPE_CODE_FLT)
     {
       param_type = float_type_from_length (param_type);
-      if (param_type != value_type (value))
+      if (param_type != value->type ())
 	value = value_from_contents (param_type,
-				     value_contents (value).data ());
+				     value->contents ().data ());
     }
 
   value = value_cast (fmt_type, value);
 
   /* Convert the value to a string and print it.  */
   std::string str
-    = target_float_to_string (value_contents (value).data (), fmt_type, format);
+    = target_float_to_string (value->contents ().data (), fmt_type, format);
   gdb_puts (str.c_str (), stream);
 }
 
@@ -2772,25 +2790,25 @@ ui_printf (const char *arg, struct ui_file *stream)
 	    break;
 	  case wide_char_arg:
 	    {
-	      struct gdbarch *gdbarch = value_type (val_args[i])->arch ();
+	      struct gdbarch *gdbarch = val_args[i]->type ()->arch ();
 	      struct type *wctype = lookup_typename (current_language,
 						     "wchar_t", NULL, 0);
 	      struct type *valtype;
 	      const gdb_byte *bytes;
 
-	      valtype = value_type (val_args[i]);
-	      if (TYPE_LENGTH (valtype) != TYPE_LENGTH (wctype)
+	      valtype = val_args[i]->type ();
+	      if (valtype->length () != wctype->length ()
 		  || valtype->code () != TYPE_CODE_INT)
 		error (_("expected wchar_t argument for %%lc"));
 
-	      bytes = value_contents (val_args[i]).data ();
+	      bytes = val_args[i]->contents ().data ();
 
 	      auto_obstack output;
 
 	      convert_between_encodings (target_wide_charset (gdbarch),
 					 host_charset (),
-					 bytes, TYPE_LENGTH (valtype),
-					 TYPE_LENGTH (valtype),
+					 bytes, valtype->length (),
+					 valtype->length (),
 					 &output, translit_char);
 	      obstack_grow_str0 (&output, "");
 
@@ -2872,8 +2890,7 @@ ui_printf (const char *arg, struct ui_file *stream)
 	    DIAGNOSTIC_POP
 	    break;
 	  default:
-	    internal_error (__FILE__, __LINE__,
-			    _("failed internal consistency check"));
+	    internal_error (_("failed internal consistency check"));
 	  }
 	/* Maybe advance to the next argument.  */
 	if (piece.argclass != literal_piece)

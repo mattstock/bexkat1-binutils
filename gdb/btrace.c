@@ -1,6 +1,6 @@
 /* Branch trace support for GDB, the GNU debugger.
 
-   Copyright (C) 2013-2022 Free Software Foundation, Inc.
+   Copyright (C) 2013-2023 Free Software Foundation, Inc.
 
    Contributed by Intel Corp. <markus.t.metzger@intel.com>
 
@@ -102,7 +102,7 @@ ftrace_print_filename (const struct btrace_function *bfun)
   sym = bfun->sym;
 
   if (sym != NULL)
-    filename = symtab_to_filename_for_display (symbol_symtab (sym));
+    filename = symtab_to_filename_for_display (sym->symtab ());
   else
     filename = "<unknown>";
 
@@ -210,8 +210,8 @@ ftrace_function_switched (const struct btrace_function *bfun,
 	return 1;
 
       /* Check the location of those functions, as well.  */
-      bfname = symtab_to_fullname (symbol_symtab (sym));
-      fname = symtab_to_fullname (symbol_symtab (fun));
+      bfname = symtab_to_fullname (sym->symtab ());
+      fname = symtab_to_fullname (fun->symtab ());
       if (filename_cmp (fname, bfname) != 0)
 	return 1;
     }
@@ -1512,7 +1512,7 @@ btrace_compute_ftrace_pt (struct thread_info *tp,
 			  const struct btrace_data_pt *btrace,
 			  std::vector<unsigned int> &gaps)
 {
-  internal_error (__FILE__, __LINE__, _("Unexpected branch trace format."));
+  internal_error (_("Unexpected branch trace format."));
 }
 
 #endif /* defined (HAVE_LIBIPT)  */
@@ -1548,7 +1548,7 @@ btrace_compute_ftrace_1 (struct thread_info *tp,
       return;
     }
 
-  internal_error (__FILE__, __LINE__, _("Unknown branch trace format."));
+  internal_error (_("Unknown branch trace format."));
 }
 
 static void
@@ -1808,7 +1808,7 @@ btrace_stitch_trace (struct btrace_data *btrace, struct thread_info *tp)
       return -1;
     }
 
-  internal_error (__FILE__, __LINE__, _("Unknown branch trace format."));
+  internal_error (_("Unknown branch trace format."));
 }
 
 /* Clear the branch trace histories in BTINFO.  */

@@ -1,4 +1,4 @@
-# Copyright 2009-2022 Free Software Foundation, Inc.
+# Copyright 2009-2023 Free Software Foundation, Inc.
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -28,9 +28,7 @@
 # (and thus aren't affected by shared library unloading) are not
 # disabled prematurely.
 
-if { [skip_shlib_tests] } {
-    return 0
-}
+require allow_shlib_tests
 
 # This test is currently not supported for stub targets, because it uses the
 # start command (through gdb_start_cmd).  In theory, it could be changed to
@@ -45,9 +43,7 @@ if { [skip_shlib_tests] } {
 # This is because the initial stop is done before the shared libraries are
 # loaded.
 
-if { [use_gdb_stub] } {
-    return 0
-}
+require !use_gdb_stub
 
 # Library file.
 set libname "solib-display-lib"
@@ -60,10 +56,6 @@ set srcfile ${srcdir}/${subdir}/${testfile}.c
 set executable ${testfile}
 set binfile [standard_output_file ${executable}]
 set bin_flags [list debug shlib=${binfile_lib}]
-
-if [get_compiler_info] {
-    return -1
-}
 
 # SEP must be last for the possible `unsupported' error path.
 foreach libsepdebug {NO IN SEP} { with_test_prefix "$libsepdebug" {
@@ -89,7 +81,7 @@ foreach libsepdebug {NO IN SEP} { with_test_prefix "$libsepdebug" {
 
     clean_restart $executable
 
-    if ![runto_main] then {
+    if {![runto_main]} {
       return 0
     }
 

@@ -1,6 +1,6 @@
 /* Process record and replay target code for GNU/Linux.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -84,7 +84,7 @@
 #define RECORD_Q_XGETQUOTA	(('3' << 8) + 3)
 
 #define OUTPUT_REG(val, num)      phex_nz ((val), \
-    TYPE_LENGTH (gdbarch_register_type (regcache->arch (), (num))))
+    gdbarch_register_type (regcache->arch (), (num))->length ())
 
 /* Record a memory area of length LEN pointed to by register
    REGNUM.  */
@@ -353,6 +353,12 @@ record_linux_system_call (enum gdb_syscall syscall,
     case gdb_sys_pipe:
     case gdb_sys_pipe2:
       if (record_mem_at_reg (regcache, tdep->arg1, tdep->size_int * 2))
+	return -1;
+      break;
+
+    case gdb_sys_getrandom:
+      regcache_raw_read_unsigned (regcache, tdep->arg2, &tmpulongest);
+      if (record_mem_at_reg (regcache, tdep->arg1, tmpulongest))
 	return -1;
       break;
 
@@ -1043,6 +1049,12 @@ Do you want to stop the program?"),
       regcache_raw_read_unsigned (regcache, tdep->arg3, &tmpulongest);
       if (record_full_arch_list_add_mem ((CORE_ADDR) tmpulongest,
 					 tdep->size_stat))
+	return -1;
+      break;
+
+    case gdb_sys_statx:
+      regcache_raw_read_unsigned (regcache, tdep->arg5, &tmpulongest);
+      if (record_full_arch_list_add_mem ((CORE_ADDR) tmpulongest, 256))
 	return -1;
       break;
 

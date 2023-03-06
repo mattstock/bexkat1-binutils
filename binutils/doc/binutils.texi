@@ -10,7 +10,7 @@
 
 @copying
 @c man begin COPYRIGHT
-Copyright @copyright{} 1991-2022 Free Software Foundation, Inc.
+Copyright @copyright{} 1991-2023 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -817,10 +817,10 @@ nm [@option{-A}|@option{-o}|@option{--print-file-name}]
    [@option{-s}|@option{--print-armap}]
    [@option{-t} @var{radix}|@option{--radix=}@var{radix}]
    [@option{-u}|@option{--undefined-only}]
-   [@option{-U} @var{method}] [@option{--unicode=}@var{method}]
+   [@option{-U}|@option{--defined-only}]
    [@option{-V}|@option{--version}]
+   [@option{-W}|@option{--no-weak}]
    [@option{-X 32_64}]
-   [@option{--defined-only}]
    [@option{--no-demangle}]
    [@option{--no-recurse-limit}|@option{--recurse-limit}]]
    [@option{--plugin} @var{name}]
@@ -828,6 +828,7 @@ nm [@option{-A}|@option{-o}|@option{--print-file-name}]
    [@option{--special-syms}]
    [@option{--synthetic}]
    [@option{--target=}@var{bfdname}]
+   [@option{--unicode=}@var{method}]
    [@option{--with-symbol-versions}]
    [@option{--without-symbol-versions}]
    [@var{objfile}@dots{}]
@@ -914,7 +915,7 @@ The symbol is an indirect reference to another symbol.
 The symbol is a debugging symbol.
 
 @item n
-The symbol is in the read-only data section.
+The symbol is in a non-data, non-code, non-debug read-only section.
 
 @item p
 The symbol is in a stack unwind section.
@@ -1137,21 +1138,14 @@ Use @var{radix} as the radix for printing the symbol values.  It must be
 @cindex external symbols
 @cindex undefined symbols
 Display only undefined symbols (those external to each object file).
+By default both defined and undefined symbols are displayed.
 
-@item -U @var{[d|i|l|e|x|h]}
-@itemx --unicode=@var{[default|invalid|locale|escape|hex|highlight]}
-Controls the display of UTF-8 encoded multibyte characters in strings.
-The default (@option{--unicode=default}) is to give them no special
-treatment.  The @option{--unicode=locale} option displays the sequence
-in the current locale, which may or may not support them.  The options
-@option{--unicode=hex} and @option{--unicode=invalid} display them as
-hex byte sequences enclosed by either angle brackets or curly braces.
-
-The @option{--unicode=escape} option displays them as escape sequences
-(@var{\uxxxx}) and the @option{--unicode=highlight} option displays
-them as escape sequences highlighted in red (if supported by the
-output device).  The colouring is intended to draw attention to the
-presence of unicode sequences where they might not be expected.
+@item -U
+@itemx --defined-only
+@cindex external symbols
+@cindex undefined symbols
+Display only defined symbols for each object file.
+By default both defined and undefined symbols are displayed.
 
 @item -V
 @itemx --version
@@ -1162,11 +1156,6 @@ This option is ignored for compatibility with the AIX version of
 @command{nm}.  It takes one parameter which must be the string
 @option{32_64}.  The default mode of AIX @command{nm} corresponds
 to @option{-X 32}, which is not supported by @sc{gnu} @command{nm}.
-
-@item --defined-only
-@cindex external symbols
-@cindex undefined symbols
-Display only defined symbols for each object file.
 
 @item --plugin @var{name}
 @cindex plugins
@@ -1196,6 +1185,9 @@ with the next higher value.  If the @code{bsd} output format is used
 the size of the symbol is printed, rather than the value, and
 @samp{-S} must be used in order both size and value to be printed.
 
+Note - this option does not work if @option{--undefined-only} has been
+enabled as undefined symbols have no size.
+
 @item --special-syms
 Display symbols which have a target-specific special meaning.  These
 symbols are usually used by the target for some special processing and
@@ -1207,6 +1199,24 @@ used to mark transitions between ARM code, THUMB code and data.
 Include synthetic symbols in the output.  These are special symbols
 created by the linker for various purposes.  They are not shown by
 default since they are not part of the binary's original source code.
+
+@item --unicode=@var{[default|invalid|locale|escape|hex|highlight]}
+Controls the display of UTF-8 encoded multibyte characters in strings.
+The default (@option{--unicode=default}) is to give them no special
+treatment.  The @option{--unicode=locale} option displays the sequence
+in the current locale, which may or may not support them.  The options
+@option{--unicode=hex} and @option{--unicode=invalid} display them as
+hex byte sequences enclosed by either angle brackets or curly braces.
+
+The @option{--unicode=escape} option displays them as escape sequences
+(@var{\uxxxx}) and the @option{--unicode=highlight} option displays
+them as escape sequences highlighted in red (if supported by the
+output device).  The colouring is intended to draw attention to the
+presence of unicode sequences where they might not be expected.
+
+@item -W
+@itemx --no-weak
+Do not display weak symbols.
 
 @item --with-symbol-versions
 @item --without-symbol-versions
@@ -2149,21 +2159,23 @@ ELF ABI.  Note - if compression would actually make a section
 @itemx --compress-debug-sections=zlib
 @itemx --compress-debug-sections=zlib-gnu
 @itemx --compress-debug-sections=zlib-gabi
+@itemx --compress-debug-sections=zstd
 For ELF files, these options control how DWARF debug sections are
 compressed.  @option{--compress-debug-sections=none} is equivalent
 to @option{--decompress-debug-sections}.
 @option{--compress-debug-sections=zlib} and
 @option{--compress-debug-sections=zlib-gabi} are equivalent to
 @option{--compress-debug-sections}.
-@option{--compress-debug-sections=zlib-gnu} compresses DWARF debug
-sections using zlib.  The debug sections are renamed to begin with
-@samp{.zdebug} instead of @samp{.debug}.  Note - if compression would
-actually make a section @emph{larger}, then it is not compressed nor
-renamed.
+@option{--compress-debug-sections=zlib-gnu} compresses DWARF debug sections
+using the obsoleted zlib-gnu format.  The debug sections are renamed to begin
+with @samp{.zdebug}.
+@option{--compress-debug-sections=zstd} compresses DWARF debug
+sections using zstd.  Note - if compression would actually make a section
+@emph{larger}, then it is not compressed nor renamed.
 
 @item --decompress-debug-sections
-Decompress DWARF debug sections using zlib.  The original section
-names of the compressed sections are restored.
+Decompress DWARF debug sections.  For a @samp{.zdebug} section, the original
+name is restored.
 
 @item --elf-stt-common=yes
 @itemx --elf-stt-common=no
@@ -2250,6 +2262,7 @@ objdump [@option{-a}|@option{--archive-headers}]
         [@option{-wE}|@option{--dwarf=do-not-use-debuginfod}]
         [@option{-L}|@option{--process-links}]
         [@option{--ctf=}@var{section}]
+        [@option{--sframe=}@var{section}]
         [@option{-G}|@option{--stabs}]
         [@option{-t}|@option{--syms}]
         [@option{-T}|@option{--dynamic-syms}]
@@ -2261,6 +2274,7 @@ objdump [@option{-a}|@option{--archive-headers}]
         [@option{--prefix-addresses}]
         [@option{--[no-]show-raw-insn}]
         [@option{--adjust-vma=}@var{offset}]
+        [@option{--show-all-symbols}]
         [@option{--dwarf-depth=@var{n}}]
         [@option{--dwarf-start=@var{n}}]
         [@option{--ctf-parent=}@var{section}]
@@ -2270,7 +2284,7 @@ objdump [@option{-a}|@option{--archive-headers}]
         [@option{--prefix-strip=}@var{level}]
         [@option{--insn-width=}@var{width}]
         [@option{--visualize-jumps[=color|=extended-color|=off]}
-        [@option{--disassembler-color=[color|extended-color|off]}
+        [@option{--disassembler-color=[off|terminal|on|extended]}
         [@option{-U} @var{method}] [@option{--unicode=}@var{method}]
         [@option{-V}|@option{--version}]
         [@option{-H}|@option{--help}]
@@ -2393,8 +2407,9 @@ used when disassembling.
 
 @item -D
 @itemx --disassemble-all
-Like @option{-d}, but disassemble the contents of all sections, not just
-those expected to contain instructions.
+Like @option{-d}, but disassemble the contents of all non-empty
+non-bss sections, not just those expected to contain instructions.
+@option{-j} may be used to select specific sections.
 
 This option also has a subtle effect on the disassembly of
 instructions in code sections.  When option @option{-d} is in effect
@@ -2488,7 +2503,8 @@ for specification with @option{-b} or @option{-m}.
 @item -j @var{name}
 @itemx --section=@var{name}
 @cindex section information
-Display information only for section @var{name}.
+Display information for section @var{name}.  This option may be
+specified multiple times.
 
 @item -L
 @itemx --process-links
@@ -2512,6 +2528,12 @@ Specify the architecture to use when disassembling object files.  This
 can be useful when disassembling object files which do not describe
 architecture information, such as S-records.  You can list the available
 architectures with the @option{-i} option.
+
+For most architectures it is possible to supply an architecture
+name and a machine name, separated by a colon.  For example
+@samp{foo:bar} would refer to the @samp{bar} machine type in the
+@samp{foo} architecture.  This can be helpful if objdump has been
+configured to support multiple architectures.
 
 If the target is an ARM architecture then this switch has an
 additional effect.  It restricts the disassembly to only those
@@ -2620,7 +2642,7 @@ rather than @code{li}.  All of the @option{-m} arguments for
 @option{601}, @option{603}, @option{604}, @option{620}, @option{7400},
 @option{7410}, @option{7450}, @option{7455}, @option{750cl},
 @option{821}, @option{850}, @option{860}, @option{a2}, @option{booke},
-@option{booke32}, @option{cell}, @option{com}, @option{e200z4},
+@option{booke32}, @option{cell}, @option{com}, @option{e200z2}, @option{e200z4},
 @option{e300}, @option{e500}, @option{e500mc}, @option{e500mc64},
 @option{e500x2}, @option{e5500}, @option{e6500}, @option{efs},
 @option{power4}, @option{power5}, @option{power6}, @option{power7},
@@ -2628,12 +2650,13 @@ rather than @code{li}.  All of the @option{-m} arguments for
 @option{ppc32}, @option{ppc64}, @option{ppc64bridge}, @option{ppcps},
 @option{pwr}, @option{pwr2}, @option{pwr4}, @option{pwr5}, @option{pwr5x},
 @option{pwr6}, @option{pwr7}, @option{pwr8}, @option{pwr9}, @option{pwr10},
-@option{pwrx}, @option{titan}, and @option{vle}.
+@option{pwrx}, @option{titan}, @option{vle}, and @option{future}.
 @option{32} and @option{64} modify the default or a prior CPU
 selection, disabling and enabling 64-bit insns respectively.  In
-addition, @option{altivec}, @option{any}, @option{htm}, @option{vsx},
-and @option{spe} add capabilities to a previous @emph{or later} CPU
-selection.  @option{any} will disassemble any opcode known to
+addition, @option{altivec}, @option{any}, @option{lsp}, @option{htm},
+@option{vsx}, @option{spe} and  @option{spe2} add capabilities to a
+previous @emph{or later} CPU selection.
+@option{any} will disassemble any opcode known to
 binutils, but in cases where an opcode has two different meanings or
 different arguments, you may not see the disassembly you expect.
 If you disassemble without giving a CPU selection, a default will be
@@ -2754,8 +2777,9 @@ disassembly.
 @itemx --full-contents
 @cindex sections, full contents
 @cindex object file sections
-Display the full contents of any sections requested.  By default all
-non-empty sections are displayed.
+Display the full contents of sections, often used in combination with
+@option{-j} to request specific sections.  By default all non-empty
+non-bss sections are displayed.
 
 @item -S
 @itemx --source
@@ -2763,6 +2787,10 @@ non-empty sections are displayed.
 @cindex disassembly, with source
 Display source code intermixed with disassembly, if possible.  Implies
 @option{-d}.
+
+@item --show-all-symbols
+When disassembling, show all the symbols that match a given address,
+not just the first one.
 
 @item --source-comment[=@var{txt}]
 @cindex source disassembly
@@ -2808,15 +2836,26 @@ If it is necessary to disable the @option{visualize-jumps} option
 after it has previously been enabled then use
 @option{visualize-jumps=off}.
 
-@item --disassembler-color=[color|extended-color|off]
-Apply syntax highlighting to the disassembler output.  The
-@option{color} argument adds color using simple terminal colors.
-Alternatively the @option{extended-color} argument will use 8bit
-colors, but these might not work on all terminals.
+@item --disassembler-color=off
+@itemx --disassembler-color=terminal
+@itemx --disassembler-color=on|color|colour
+@itemx --disassembler-color=extened|extended-color|extened-colour
+Enables or disables the use of colored syntax highlighting in
+disassembly output.  The default behaviour is determined via a
+configure time option.  Note, not all architectures support colored
+syntax highlighting, and depending upon the terminal used, colored
+output may not actually be legible.
 
-If it is necessary to disable the @option{--disassembler-color} option
-after it has previously been enabled then use
-@option{--disassembler-color=off}.
+The @option{on} argument adds colors using simple terminal colors.
+
+The @option{terminal} argument does the same, but only if the output
+device is a terminal.
+
+The @option{extended-color} argument is similar to the @option{on}
+argument, but it uses 8-bit colors.  These may not work on all
+terminals.
+
+The @option{off} argument disables colored disassembly.
 
 @item -W[lLiaprmfFsoORtUuTgAckK]
 @itemx --dwarf[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,=frames,=frames-interp,=str,=str-offsets,=loc,=Ranges,=pubtypes,=trace_info,=trace_abbrev,=trace_aranges,=gdb_index,=addr,=cu_index,=links,=follow-links]
@@ -2826,6 +2865,8 @@ after it has previously been enabled then use
 Enable additional checks for consistency of Dwarf information.
 
 @include ctf.options.texi
+
+@include sframe.options.texi
 
 @item -G
 @itemx --stabs
@@ -3102,6 +3143,7 @@ size [@option{-A}|@option{-B}|@option{-G}|@option{--format=}@var{compatibility}]
      [@option{--common}]
      [@option{-t}|@option{--totals}]
      [@option{--target=}@var{bfdname}] [@option{-V}|@option{--version}]
+     [@option{-f}]
      [@var{objfile}@dots{}]
 @c man end
 @end smallexample
@@ -3188,6 +3230,9 @@ Total         388688
 @end smallexample
 
 @item --help
+@itemx -h
+@itemx -H
+@item -?
 Show a summary of acceptable arguments and options.
 
 @item -d
@@ -3219,9 +3264,15 @@ Specify that the object-code format for @var{objfile} is
 automatically recognize many formats.
 @xref{Target Selection}, for more information.
 
+@item -v
 @item -V
 @itemx --version
 Display the version number of @command{size}.
+
+@item -f
+Ignored.  This option is used by other versions of the @command{size}
+program, but it is not supported by the GNU Binutils version.
+
 @end table
 
 @c man end
@@ -3338,7 +3389,7 @@ octal, @samp{x} for hexadecimal, or @samp{d} for decimal.
 @itemx --encoding=@var{encoding}
 Select the character encoding of the strings that are to be found.
 Possible values for @var{encoding} are: @samp{s} = single-7-bit-byte
-characters (ASCII, ISO 8859, etc., default), @samp{S} =
+characters (default), @samp{S} =
 single-8-bit-byte characters, @samp{b} = 16-bit bigendian, @samp{l} =
 16-bit littleendian, @samp{B} = 32-bit bigendian, @samp{L} = 32-bit
 littleendian.  Useful for finding wide character strings. (@samp{l}
@@ -4497,6 +4548,7 @@ dlltool [@option{-d}|@option{--input-def} @var{def-file-name}]
         [@option{-v}|@option{--verbose}]
         [@option{-h}|@option{--help}] [@option{-V}|@option{--version}]
         [@option{--no-leading-underscore}] [@option{--leading-underscore}]
+        [@option{--deterministic-libraries}] [@option{--non-deterministic-libraries}]
         [object-file @dots{}]
 @c man end
 @end smallexample
@@ -4615,6 +4667,14 @@ Specifies the name of the library file to be created by dlltool.
 @item -y @var{filename}
 @itemx --output-delaylib @var{filename}
 Specifies the name of the delay-import library file to be created by dlltool.
+
+@item --deterministic-libraries
+@itemx --non-deterministic-libraries
+When creating output libraries in response to either the
+@option{--output-lib} or @option{--output-delaylib} options either use
+the value of zero for any timestamps, user ids and group ids created
+(@option{--deterministic-libraries}) or the actual timestamps, user
+ids and group ids (@option{--non-deterministic-libraries}).
 
 @item --export-all-symbols
 Treat all global and weak defined symbols found in the input object
@@ -4905,6 +4965,7 @@ readelf [@option{-a}|@option{--all}]
         [@option{--ctf-parent=}@var{section}]
         [@option{--ctf-symbols=}@var{section}]
         [@option{--ctf-strings=}@var{section}]
+        [@option{--sframe=}@var{section}]
         [@option{-I}|@option{--histogram}]
         [@option{-v}|@option{--version}]
         [@option{-W}|@option{--wide}]

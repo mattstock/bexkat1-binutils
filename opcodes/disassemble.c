@@ -1,5 +1,5 @@
 /* Select disassembly routine for specified architecture.
-   Copyright (C) 1994-2022 Free Software Foundation, Inc.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -28,7 +28,6 @@
 #define ARCH_aarch64
 #define ARCH_alpha
 #define ARCH_bpf
-#define ARCH_cris
 #define ARCH_ia64
 #define ARCH_loongarch
 #define ARCH_mips
@@ -44,6 +43,7 @@
 #define ARCH_bexkat1
 #define ARCH_bfin
 #define ARCH_cr16
+#define ARCH_cris
 #define ARCH_crx
 #define ARCH_csky
 #define ARCH_d10v
@@ -99,7 +99,6 @@
 #define ARCH_visium
 #define ARCH_wasm32
 #define ARCH_xstormy16
-#define ARCH_xc16x
 #define ARCH_xgate
 #define ARCH_xtensa
 #define ARCH_z80
@@ -496,11 +495,6 @@ disassembler (enum bfd_architecture a,
       disassemble = print_insn_xstormy16;
       break;
 #endif
-#ifdef ARCH_xc16x
-    case bfd_arch_xc16x:
-      disassemble = print_insn_xc16x;
-      break;
-#endif
 #ifdef ARCH_xtensa
     case bfd_arch_xtensa:
       disassemble = print_insn_xtensa;
@@ -622,12 +616,24 @@ disassemble_init_for_target (struct disassemble_info * info)
     case bfd_arch_aarch64:
       info->symbol_is_valid = aarch64_symbol_is_valid;
       info->disassembler_needs_relocs = true;
+      info->created_styled_output = true;
+      break;
+#endif
+#ifdef ARCH_arc
+    case bfd_arch_arc:
+      info->created_styled_output = true;
       break;
 #endif
 #ifdef ARCH_arm
     case bfd_arch_arm:
       info->symbol_is_valid = arm_symbol_is_valid;
       info->disassembler_needs_relocs = true;
+      info->created_styled_output = true;
+      break;
+#endif
+#ifdef ARCH_avr
+    case bfd_arch_avr:
+      info->created_styled_output = true;
       break;
 #endif
 #ifdef ARCH_csky
@@ -652,6 +658,11 @@ disassemble_init_for_target (struct disassemble_info * info)
       info->skip_zeroes = 32;
       break;
 #endif
+#ifdef ARCH_m68k
+    case bfd_arch_m68k:
+      info->created_styled_output = true;
+      break;
+#endif
 #ifdef ARCH_mep
     case bfd_arch_mep:
       info->skip_zeroes = 256;
@@ -661,6 +672,11 @@ disassemble_init_for_target (struct disassemble_info * info)
 #ifdef ARCH_metag
     case bfd_arch_metag:
       info->disassembler_needs_relocs = true;
+      break;
+#endif
+#ifdef ARCH_mips
+    case bfd_arch_mips:
+      info->created_styled_output = true;
       break;
 #endif
 #ifdef ARCH_m32c
@@ -712,6 +728,7 @@ disassemble_init_for_target (struct disassemble_info * info)
 #endif
 #if defined (ARCH_powerpc) || defined (ARCH_rs6000)
       disassemble_init_powerpc (info);
+      info->created_styled_output = true;
       break;
 #endif
 #ifdef ARCH_riscv
@@ -728,6 +745,7 @@ disassemble_init_for_target (struct disassemble_info * info)
 #ifdef ARCH_s390
     case bfd_arch_s390:
       disassemble_init_s390 (info);
+      info->created_styled_output = true;
       break;
 #endif
 #ifdef ARCH_nds32

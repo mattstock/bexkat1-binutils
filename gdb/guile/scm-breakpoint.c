@@ -1,6 +1,6 @@
 /* Scheme interface to breakpoints.
 
-   Copyright (C) 2008-2022 Free Software Foundation, Inc.
+   Copyright (C) 2008-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -187,9 +187,9 @@ bpscm_print_breakpoint_smob (SCM self, SCM port, scm_print_state *pstate)
       gdbscm_printf (port, " hit:%d", b->hit_count);
       gdbscm_printf (port, " ignore:%d", b->ignore_count);
 
-      if (b->location != nullptr)
+      if (b->locspec != nullptr)
 	{
-	  const char *str = event_location_to_string (b->location.get ());
+	  const char *str = b->locspec->to_string ();
 	  if (str != nullptr)
 	    gdbscm_printf (port, " @%s", str);
 	}
@@ -448,10 +448,10 @@ gdbscm_register_breakpoint_x (SCM self)
   pending_breakpoint_scm = self;
   location = bp_smob->spec.location;
   copy = skip_spaces (location);
-  event_location_up eloc
-    = string_to_event_location_basic (&copy,
-				      current_language,
-				      symbol_name_match_type::WILD);
+  location_spec_up locspec
+    = string_to_location_spec_basic (&copy,
+				     current_language,
+				     symbol_name_match_type::WILD);
 
   try
     {
@@ -463,9 +463,9 @@ gdbscm_register_breakpoint_x (SCM self)
 	case bp_breakpoint:
 	  {
 	    const breakpoint_ops *ops =
-	      breakpoint_ops_for_event_location (eloc.get (), false);
+	      breakpoint_ops_for_location_spec (locspec.get (), false);
 	    create_breakpoint (get_current_arch (),
-			       eloc.get (), NULL, -1, NULL, false,
+			       locspec.get (), NULL, -1, NULL, false,
 			       0,
 			       temporary, bp_breakpoint,
 			       0,
@@ -773,6 +773,11 @@ gdbscm_set_breakpoint_thread_x (SCM self, SCM newvalue)
 	  gdbscm_out_of_range_error (FUNC_NAME, SCM_ARG2, newvalue,
 				     _("invalid thread id"));
 	}
+
+      if (bp_smob->bp->task != -1)
+	scm_misc_error (FUNC_NAME,
+			_("cannot set both task and thread attributes"),
+			SCM_EOL);
     }
   else if (gdbscm_is_false (newvalue))
     id = -1;
@@ -792,7 +797,7 @@ gdbscm_breakpoint_task (SCM self)
   breakpoint_smob *bp_smob
     = bpscm_get_valid_breakpoint_smob_arg_unsafe (self, SCM_ARG1, FUNC_NAME);
 
-  if (bp_smob->bp->task == 0)
+  if (bp_smob->bp->task == -1)
     return SCM_BOOL_F;
 
   return scm_from_long (bp_smob->bp->task);
@@ -828,9 +833,14 @@ gdbscm_set_breakpoint_task_x (SCM self, SCM newvalue)
 	  gdbscm_out_of_range_error (FUNC_NAME, SCM_ARG2, newvalue,
 				     _("invalid task id"));
 	}
+
+      if (bp_smob->bp->thread != -1)
+	scm_misc_error (FUNC_NAME,
+			_("cannot set both task and thread attributes"),
+			SCM_EOL);
     }
   else if (gdbscm_is_false (newvalue))
-    id = 0;
+    id = -1;
   else
     SCM_ASSERT_TYPE (0, newvalue, SCM_ARG2, FUNC_NAME, _("integer or #f"));
 
@@ -855,13 +865,12 @@ gdbscm_breakpoint_location (SCM self)
 {
   breakpoint_smob *bp_smob
     = bpscm_get_valid_breakpoint_smob_arg_unsafe (self, SCM_ARG1, FUNC_NAME);
-  const char *str;
 
   if (bp_smob->bp->type != bp_breakpoint)
     return SCM_BOOL_F;
 
-  str = event_location_to_string (bp_smob->bp->location.get ());
-  if (! str)
+  const char *str = bp_smob->bp->locspec->to_string ();
+  if (str == nullptr)
     str = "";
 
   return gdbscm_scm_from_c_string (str);
@@ -1000,10 +1009,10 @@ gdbscm_breakpoint_commands (SCM self)
 
   string_file buf;
 
-  current_uiout->redirect (&buf);
   gdbscm_gdb_exception exc {};
   try
     {
+      ui_out_redirect_pop redir (current_uiout, &buf);
       print_command_lines (current_uiout, breakpoint_commands (bp), 0);
     }
   catch (const gdb_exception &except)
@@ -1011,7 +1020,6 @@ gdbscm_breakpoint_commands (SCM self)
       exc = unpack (except);
     }
 
-  current_uiout->redirect (NULL);
   GDBSCM_HANDLE_GDB_EXCEPTION (exc);
   result = gdbscm_scm_from_c_string (buf.c_str ());
 

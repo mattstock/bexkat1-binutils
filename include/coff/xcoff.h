@@ -1,6 +1,6 @@
 /* Internal format of XCOFF object file data structures for BFD.
 
-   Copyright (C) 1995-2022 Free Software Foundation, Inc.
+   Copyright (C) 1995-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -432,6 +432,10 @@ struct xcoff_loader_info
   /* Number of ldsym structures.  */
   size_t ldsym_count;
 
+  /* A count of non TOC relative relocs which will need to be
+     allocated in the .loader section.  */
+  size_t ldrel_count;
+
   /* Size of string table.  */
   size_t string_size;
 
@@ -440,6 +444,9 @@ struct xcoff_loader_info
 
   /* Allocated size of string table.  */
   size_t string_alc;
+
+  /* The libpath being used.  */
+  const char *libpath;
 };
 
 /* In case we're on a 32-bit machine, construct a 64-bit "-1" value

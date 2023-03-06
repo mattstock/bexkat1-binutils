@@ -1,6 +1,6 @@
 /* Module support.
 
-   Copyright 1996-2022 Free Software Foundation, Inc.
+   Copyright 1996-2023 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.
 
@@ -272,7 +272,7 @@ sim_module_uninstall (SIM_DESC sd)
 /* Called when ever simulator info is needed */
 
 void
-sim_module_info (SIM_DESC sd, int verbose)
+sim_module_info (SIM_DESC sd, bool verbose)
 {
   struct module_list *modules = STATE_MODULES (sd);
   MODULE_INFO_LIST *modp;

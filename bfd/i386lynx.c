@@ -1,5 +1,5 @@
 /* BFD back-end for i386 a.out binaries under LynxOS.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -87,7 +87,7 @@
 char *lynx_core_file_failing_command ();
 int lynx_core_file_failing_signal ();
 bool lynx_core_file_matches_executable_p ();
-const bfd_target *lynx_core_file_p ();
+bfd_cleanup lynx_core_file_p ();
 
 #define	MY_core_file_failing_command lynx_core_file_failing_command
 #define	MY_core_file_failing_signal lynx_core_file_failing_signal
@@ -120,7 +120,7 @@ NAME(lynx,swap_std_reloc_out) (bfd *abfd,
 
   PUT_WORD (abfd, g->address, natptr->r_address);
 
-  r_length = g->howto->size;	/* Size as a power of two */
+  r_length = bfd_log2 (bfd_get_reloc_size (g->howto));
   r_pcrel = (int) g->howto->pc_relative;	/* Relative to PC? */
   /* r_baserel, r_jmptable, r_relative???  FIXME-soon */
   r_baserel = 0;
@@ -283,8 +283,10 @@ NAME(lynx,swap_ext_reloc_out) (bfd *abfd,
   if (r_extern)								\
     {									\
       /* undefined symbol */						\
-      if (r_index < bfd_get_symcount (abfd))				\
+      if (symbols != NULL && r_index < bfd_get_symcount (abfd))		\
 	cache_ptr->sym_ptr_ptr = symbols + r_index;			\
+      else								\
+	cache_ptr->sym_ptr_ptr = bfd_abs_section_ptr->symbol_ptr_ptr;	\
       cache_ptr->addend = ad;						\
     }									\
   else									\

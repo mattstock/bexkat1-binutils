@@ -1,4 +1,4 @@
-# Copyright 1997-2022 Free Software Foundation, Inc.
+# Copyright 1997-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -31,11 +31,7 @@
 
 standard_testfile .c
 
-if [get_compiler_info] {
-    return -1
-}
-
-set skip_float_test [gdb_skip_float_test]
+set allow_float_test [allow_float_test]
 
 set additional_flags {debug}
 if [support_complex_tests] {
@@ -62,9 +58,8 @@ if [gdb_skip_stdio_test "varargs.exp"] {
     return
 }
 
-if ![runto test] then {
-    perror "couldn't run to breakpoint"
-    continue
+if {![runto test]} {
+    return
 }
 
 gdb_test_stdio "print find_max1(5,1,2,3,4,5)" \
@@ -86,7 +81,7 @@ gdb_test_stdio "print find_max2(3,1,2,3)" \
     ".\[0-9\]+ = 3" \
     "print find_max2(3,1,2,3)"
 
-if {!$skip_float_test} {
+if {$allow_float_test} {
     gdb_test_stdio "print find_max_double(5,1.0,17.0,2.0,3.0,4.0)" \
 	"find_max\\(.*\\) returns 17\\.000000\[ \r\n\]+" \
 	".\[0-9\]+ = 17" \
@@ -107,4 +102,6 @@ if [support_complex_tests] {
     set test "print find_max_long_double_real(4, ldc1, ldc2, ldc3, ldc4)"
     gdb_test $test ".*= 4 \\+ 4i"
 
+    set test "print find_max_struct_long_double_real(4, sldc1, sldc2, sldc3, sldc4)"
+    gdb_test $test ".*= 4 \\+ 4i"
 }

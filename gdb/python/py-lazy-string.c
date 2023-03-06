@@ -1,6 +1,6 @@
 /* Python interface to lazy strings.
 
-   Copyright (C) 2010-2022 Free Software Foundation, Inc.
+   Copyright (C) 2010-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -104,7 +104,6 @@ static PyObject *
 stpy_convert_to_value (PyObject *self, PyObject *args)
 {
   lazy_string_object *self_string = (lazy_string_object *) self;
-  struct value *val = NULL;
 
   if (self_string->address == 0)
     {
@@ -113,10 +112,14 @@ stpy_convert_to_value (PyObject *self, PyObject *args)
       return NULL;
     }
 
+  PyObject *result = nullptr;
   try
     {
+      scoped_value_mark free_values;
+
       struct type *type = type_object_to_type (self_string->type);
       struct type *realtype;
+      struct value *val;
 
       gdb_assert (type != NULL);
       realtype = check_typedef (type);
@@ -130,7 +133,7 @@ stpy_convert_to_value (PyObject *self, PyObject *args)
 	      /* PR 20786: There's no way to specify an array of length zero.
 		 Record a length of [0,-1] which is how Ada does it.  Anything
 		 we do is broken, but this is one possible solution.  */
-	      type = lookup_array_range_type (TYPE_TARGET_TYPE (realtype),
+	      type = lookup_array_range_type (realtype->target_type (),
 					      0, self_string->length - 1);
 	      val = value_at_lazy (type, self_string->address);
 	    }
@@ -141,13 +144,15 @@ stpy_convert_to_value (PyObject *self, PyObject *args)
 	  val = value_at_lazy (type, self_string->address);
 	  break;
 	}
+
+      result = value_to_value_object (val);
     }
   catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  return value_to_value_object (val);
+  return result;
 }
 
 static void
@@ -262,7 +267,7 @@ stpy_lazy_string_elt_type (lazy_string_object *lazy)
     {
     case TYPE_CODE_PTR:
     case TYPE_CODE_ARRAY:
-      return TYPE_TARGET_TYPE (realtype);
+      return realtype->target_type ();
     default:
       /* This is done to preserve existing behaviour.  PR 20769.
 	 E.g., gdb.parse_and_eval("my_int_variable").lazy_string().type.  */

@@ -1,5 +1,5 @@
 /* Tracing support for CGEN-based simulators.
-   Copyright (C) 1996-2022 Free Software Foundation, Inc.
+   Copyright (C) 1996-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -366,8 +366,8 @@ sim_disasm_perror_memory (int status, bfd_vma memaddr,
     /* Actually, address between memaddr and memaddr + len was
        out of bounds.  */
     info->fprintf_func (info->stream,
-			"Address 0x%" BFD_VMA_FMT "x is out of bounds.",
-			memaddr);
+			"Address 0x%" PRIx64 " is out of bounds.",
+			(uint64_t) memaddr);
 }
 
 /* Disassemble using the CGEN opcode table.
@@ -433,7 +433,7 @@ sim_cgen_disassemble_insn (SIM_CPU *cpu, const CGEN_INSN *insn,
   disasm_info.buffer = insn_buf.bytes;
   disasm_info.buffer_length = length;
 
-  ex_info.dis_info = (PTR) &disasm_info;
+  ex_info.dis_info = &disasm_info;
   ex_info.valid = (1 << length) - 1;
   ex_info.insn_bytes = insn_buf.bytes;
 

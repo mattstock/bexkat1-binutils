@@ -1,6 +1,6 @@
 /* Source-language-related definitions for GDB.
 
-   Copyright (C) 1991-2022 Free Software Foundation, Inc.
+   Copyright (C) 1991-2023 Free Software Foundation, Inc.
 
    Contributed by the Department of Computer Science at the State University
    of New York at Buffalo.
@@ -30,7 +30,7 @@
 /* Forward decls for prototypes.  */
 struct value;
 struct objfile;
-struct frame_info;
+class frame_info_ptr;
 struct ui_file;
 struct value_print_options;
 struct type_print_options;
@@ -282,6 +282,13 @@ struct language_defn
 
   virtual const char *natural_name () const = 0;
 
+  /* Digit separator of the language.  */
+
+  virtual const char *get_digit_separator () const
+  {
+    return " ";
+  }
+
   /* Return a vector of file extensions for this language.  The extension
      must include the ".", like ".c".  If this language doesn't need to
      provide any filename extensions, this may be an empty vector (which is
@@ -314,7 +321,7 @@ struct language_defn
 
   virtual struct value *read_var_value (struct symbol *var,
 					const struct block *var_block,
-					struct frame_info *frame) const;
+					frame_info_ptr frame) const;
 
   /* Return information about whether TYPE should be passed
      (and returned) by reference at the language level.  The default
@@ -444,6 +451,13 @@ struct language_defn
     return nullptr;
   }
 
+  /* Return true if this class' implementation of print_type can
+     handle the /o modifier.  */
+  virtual bool can_print_type_offsets () const
+  {
+    return false;
+  }
+
   /* Print TYPE to STREAM using syntax appropriate for this language.
      LEVEL is the depth to indent lines by.  VARSTRING, if not NULL or the
      empty string, is the name of a variable and TYPE should be printed in
@@ -457,7 +471,7 @@ struct language_defn
      If that PC falls in a trampoline belonging to this language, return
      the address of the first pc in the real function, or 0 if it isn't a
      language tramp for this language.  */
-  virtual CORE_ADDR skip_trampoline (struct frame_info *fi, CORE_ADDR pc) const
+  virtual CORE_ADDR skip_trampoline (frame_info_ptr fi, CORE_ADDR pc) const
   {
     return (CORE_ADDR) 0;
   }
@@ -534,7 +548,7 @@ struct language_defn
 			  struct ui_file * stream) const;
 
 /* Print the character string STRING, printing at most LENGTH characters.
-   Printing stops early if the number hits print_max; repeat counts
+   Printing stops early if the number hits print_max_chars; repeat counts
    are printed as appropriate.  Print ellipses at the end if we
    had to stop before printing LENGTH characters, or if FORCE_ELLIPSES.  */
 
@@ -775,7 +789,7 @@ extern const char *language_str (enum language);
 
 /* Check for a language-specific trampoline.  */
 
-extern CORE_ADDR skip_language_trampoline (struct frame_info *, CORE_ADDR pc);
+extern CORE_ADDR skip_language_trampoline (frame_info_ptr, CORE_ADDR pc);
 
 /* Return demangled language symbol, or NULL.  */
 extern gdb::unique_xmalloc_ptr<char> language_demangle

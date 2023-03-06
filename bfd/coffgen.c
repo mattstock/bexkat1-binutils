@@ -1,5 +1,5 @@
 /* Support for the generic parts of COFF, for BFD.
-   Copyright (C) 1990-2022 Free Software Foundation, Inc.
+   Copyright (C) 1990-2023 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -51,7 +51,7 @@ make_a_section_from_file (bfd *abfd,
 			  struct internal_scnhdr *hdr,
 			  unsigned int target_index)
 {
-  asection *return_section;
+  asection *newsect;
   char *name;
   bool result = true;
   flagword flags;
@@ -107,117 +107,95 @@ make_a_section_from_file (bfd *abfd,
       name[sizeof (hdr->s_name)] = 0;
     }
 
-  return_section = bfd_make_section_anyway (abfd, name);
-  if (return_section == NULL)
+  newsect = bfd_make_section_anyway (abfd, name);
+  if (newsect == NULL)
     return false;
 
-  return_section->vma = hdr->s_vaddr;
-  return_section->lma = hdr->s_paddr;
-  return_section->size = hdr->s_size;
-  return_section->filepos = hdr->s_scnptr;
-  return_section->rel_filepos = hdr->s_relptr;
-  return_section->reloc_count = hdr->s_nreloc;
+  newsect->vma = hdr->s_vaddr;
+  newsect->lma = hdr->s_paddr;
+  newsect->size = hdr->s_size;
+  newsect->filepos = hdr->s_scnptr;
+  newsect->rel_filepos = hdr->s_relptr;
+  newsect->reloc_count = hdr->s_nreloc;
 
-  bfd_coff_set_alignment_hook (abfd, return_section, hdr);
+  bfd_coff_set_alignment_hook (abfd, newsect, hdr);
 
-  return_section->line_filepos = hdr->s_lnnoptr;
+  newsect->line_filepos = hdr->s_lnnoptr;
 
-  return_section->lineno_count = hdr->s_nlnno;
-  return_section->userdata = NULL;
-  return_section->next = NULL;
-  return_section->target_index = target_index;
+  newsect->lineno_count = hdr->s_nlnno;
+  newsect->userdata = NULL;
+  newsect->next = NULL;
+  newsect->target_index = target_index;
 
-  if (! bfd_coff_styp_to_sec_flags_hook (abfd, hdr, name, return_section,
-					 & flags))
+  if (!bfd_coff_styp_to_sec_flags_hook (abfd, hdr, name, newsect, &flags))
     result = false;
-
-  return_section->flags = flags;
 
   /* At least on i386-coff, the line number count for a shared library
      section must be ignored.  */
-  if ((return_section->flags & SEC_COFF_SHARED_LIBRARY) != 0)
-    return_section->lineno_count = 0;
+  if ((flags & SEC_COFF_SHARED_LIBRARY) != 0)
+    newsect->lineno_count = 0;
 
   if (hdr->s_nreloc != 0)
-    return_section->flags |= SEC_RELOC;
+    flags |= SEC_RELOC;
   /* FIXME: should this check 'hdr->s_size > 0'.  */
   if (hdr->s_scnptr != 0)
-    return_section->flags |= SEC_HAS_CONTENTS;
+    flags |= SEC_HAS_CONTENTS;
 
-  /* Compress/decompress DWARF debug sections with names: .debug_* and
-     .zdebug_*, after the section flags is set.  */
-  if ((flags & SEC_DEBUGGING)
-      && strlen (name) > 7
-      && ((name[1] == 'd' && name[6] == '_')
-	  || (strlen (name) > 8 && name[1] == 'z' && name[7] == '_')))
+  newsect->flags = flags;
+
+  /* Compress/decompress DWARF debug sections.  */
+  if ((flags & SEC_DEBUGGING) != 0
+      && (flags & SEC_HAS_CONTENTS) != 0
+      && (startswith (name, ".debug_")
+	  || startswith (name, ".zdebug_")
+	  || startswith (name, ".gnu.debuglto_.debug_")
+	  || startswith (name, ".gnu.linkonce.wi.")))
     {
       enum { nothing, compress, decompress } action = nothing;
-      char *new_name = NULL;
 
-      if (bfd_is_section_compressed (abfd, return_section))
+      if (bfd_is_section_compressed (abfd, newsect))
 	{
 	  /* Compressed section.  Check if we should decompress.  */
 	  if ((abfd->flags & BFD_DECOMPRESS))
 	    action = decompress;
 	}
-      else if (!bfd_is_section_compressed (abfd, return_section))
+      else
 	{
 	  /* Normal section.  Check if we should compress.  */
-	  if ((abfd->flags & BFD_COMPRESS) && return_section->size != 0)
+	  if ((abfd->flags & BFD_COMPRESS) && newsect->size != 0)
 	    action = compress;
 	}
 
-      switch (action)
+      if (action == compress)
 	{
-	case nothing:
-	  break;
-	case compress:
-	  if (!bfd_init_section_compress_status (abfd, return_section))
+	  if (!bfd_init_section_compress_status (abfd, newsect))
 	    {
 	      _bfd_error_handler
-		/* xgettext: c-format */
-		(_("%pB: unable to initialize compress status for section %s"),
-		 abfd, name);
+		/* xgettext:c-format */
+		(_("%pB: unable to compress section %s"), abfd, name);
 	      return false;
 	    }
-	  if (return_section->compress_status == COMPRESS_SECTION_DONE)
-	    {
-	      if (name[1] != 'z')
-		{
-		  unsigned int len = strlen (name);
-
-		  new_name = bfd_alloc (abfd, len + 2);
-		  if (new_name == NULL)
-		    return false;
-		  new_name[0] = '.';
-		  new_name[1] = 'z';
-		  memcpy (new_name + 2, name + 1, len);
-		}
-	    }
-	 break;
-	case decompress:
-	  if (!bfd_init_section_decompress_status (abfd, return_section))
+	}
+      else if (action == decompress)
+	{
+	  if (!bfd_init_section_decompress_status (abfd, newsect))
 	    {
 	      _bfd_error_handler
-		/* xgettext: c-format */
-		(_("%pB: unable to initialize decompress status for section %s"),
-		 abfd, name);
+		/* xgettext:c-format */
+		(_("%pB: unable to decompress section %s"), abfd, name);
 	      return false;
 	    }
-	  if (name[1] == 'z')
+	  if (abfd->is_linker_input
+	      && name[1] == 'z')
 	    {
-	      unsigned int len = strlen (name);
-
-	      new_name = bfd_alloc (abfd, len);
+	      /* Rename section from .zdebug_* to .debug_* so that ld
+		 scripts will see this section as a debug section.  */
+	      char *new_name = bfd_zdebug_name_to_debug (abfd, name);
 	      if (new_name == NULL)
 		return false;
-	      new_name[0] = '.';
-	      memcpy (new_name + 1, name + 2, len - 1);
+	      bfd_rename_section (newsect, new_name);
 	    }
-	  break;
 	}
-      if (new_name != NULL)
-	bfd_rename_section (return_section, new_name);
     }
 
   return result;
@@ -595,7 +573,8 @@ coff_count_linenumbers (bfd *abfd)
     {
       asymbol *q_maybe = *p;
 
-      if (bfd_family_coff (bfd_asymbol_bfd (q_maybe)))
+      if (bfd_asymbol_bfd (q_maybe) != NULL
+	  && bfd_family_coff (bfd_asymbol_bfd (q_maybe)))
 	{
 	  coff_symbol_type *q = coffsymbol (q_maybe);
 
@@ -803,8 +782,8 @@ coff_mangle_symbols (bfd *bfd_ptr)
 	    {
 	      /* FIXME: We should use a union here.  */
 	      s->u.syment.n_value =
-		(bfd_hostptr_t) ((combined_entry_type *)
-			  ((bfd_hostptr_t) s->u.syment.n_value))->offset;
+		(uintptr_t) ((combined_entry_type *)
+			     (uintptr_t) s->u.syment.n_value)->offset;
 	      s->fix_value = 0;
 	    }
 	  if (s->fix_line)
@@ -847,11 +826,12 @@ coff_mangle_symbols (bfd *bfd_ptr)
     }
 }
 
-static void
+static bool
 coff_write_auxent_fname (bfd *abfd,
 			 char *str,
 			 union internal_auxent *auxent,
-			 bfd_size_type *string_size_p)
+			 struct bfd_strtab_hash *strtab,
+			 bool hash)
 {
   unsigned int str_length = strlen (str);
   unsigned int filnmlen = bfd_coff_filnmlen (abfd);
@@ -862,9 +842,13 @@ coff_write_auxent_fname (bfd *abfd,
 	strncpy (auxent->x_file.x_n.x_fname, str, filnmlen);
       else
 	{
-	  auxent->x_file.x_n.x_n.x_offset = *string_size_p + STRING_SIZE_SIZE;
+	  bfd_size_type indx = _bfd_stringtab_add (strtab, str, hash, false);
+
+	  if (indx == (bfd_size_type) -1)
+	    return false;
+
+	  auxent->x_file.x_n.x_n.x_offset = STRING_SIZE_SIZE + indx;
 	  auxent->x_file.x_n.x_n.x_zeroes = 0;
-	  *string_size_p += str_length + 1;
 	}
     }
   else
@@ -873,18 +857,22 @@ coff_write_auxent_fname (bfd *abfd,
       if (str_length > filnmlen)
 	str[filnmlen] = '\0';
     }
+
+  return true;
 }
 
-static void
+static bool
 coff_fix_symbol_name (bfd *abfd,
 		      asymbol *symbol,
 		      combined_entry_type *native,
-		      bfd_size_type *string_size_p,
+		      struct bfd_strtab_hash *strtab,
+		      bool hash,
 		      asection **debug_string_section_p,
 		      bfd_size_type *debug_string_size_p)
 {
   unsigned int name_length;
   char *name = (char *) (symbol->name);
+  bfd_size_type indx;
 
   if (name == NULL)
     {
@@ -900,17 +888,20 @@ coff_fix_symbol_name (bfd *abfd,
     {
       if (bfd_coff_force_symnames_in_strings (abfd))
 	{
-	  native->u.syment._n._n_n._n_offset =
-	      (*string_size_p + STRING_SIZE_SIZE);
+	  indx = _bfd_stringtab_add (strtab, ".file", hash, false);
+	  if (indx == (bfd_size_type) -1)
+	    return false;
+
+	  native->u.syment._n._n_n._n_offset = STRING_SIZE_SIZE + indx;
 	  native->u.syment._n._n_n._n_zeroes = 0;
-	  *string_size_p += 6;  /* strlen(".file") + 1 */
 	}
       else
 	strncpy (native->u.syment._n._n_name, ".file", SYMNMLEN);
 
       BFD_ASSERT (! (native + 1)->is_sym);
-      coff_write_auxent_fname (abfd, name, &(native + 1)->u.auxent,
-			       string_size_p);
+      if (!coff_write_auxent_fname (abfd, name, &(native + 1)->u.auxent,
+			       strtab, hash))
+	return false;
     }
   else
     {
@@ -920,10 +911,12 @@ coff_fix_symbol_name (bfd *abfd,
 
       else if (!bfd_coff_symname_in_debug (abfd, &native->u.syment))
 	{
-	  native->u.syment._n._n_n._n_offset = (*string_size_p
-						+ STRING_SIZE_SIZE);
+	  indx = _bfd_stringtab_add (strtab, name, hash, false);
+	  if (indx == (bfd_size_type) -1)
+	    return false;
+
+	  native->u.syment._n._n_n._n_offset = STRING_SIZE_SIZE + indx;
 	  native->u.syment._n._n_n._n_zeroes = 0;
-	  *string_size_p += name_length + 1;
 	}
       else
 	{
@@ -964,6 +957,8 @@ coff_fix_symbol_name (bfd *abfd,
 	  *debug_string_size_p += name_length + 1 + prefix_len;
 	}
     }
+
+  return true;
 }
 
 /* We need to keep track of the symbol index so that when we write out
@@ -979,7 +974,8 @@ coff_write_symbol (bfd *abfd,
 		   asymbol *symbol,
 		   combined_entry_type *native,
 		   bfd_vma *written,
-		   bfd_size_type *string_size_p,
+		   struct bfd_strtab_hash *strtab,
+		   bool hash,
 		   asection **debug_string_section_p,
 		   bfd_size_type *debug_string_size_p)
 {
@@ -1011,8 +1007,9 @@ coff_write_symbol (bfd *abfd,
     native->u.syment.n_scnum =
       output_section->target_index;
 
-  coff_fix_symbol_name (abfd, symbol, native, string_size_p,
-			debug_string_section_p, debug_string_size_p);
+  if (!coff_fix_symbol_name (abfd, symbol, native, strtab, hash,
+			     debug_string_section_p, debug_string_size_p))
+    return false;
 
   symesz = bfd_coff_symesz (abfd);
   buf = bfd_alloc (abfd, symesz);
@@ -1039,9 +1036,10 @@ coff_write_symbol (bfd *abfd,
 	  /* Adjust auxent only if this isn't the filename
 	     auxiliary entry.  */
 	  if (native->u.syment.n_sclass == C_FILE
-	      && (native + j + 1)->u.auxent.x_file.x_ftype)
+	      && (native + j + 1)->u.auxent.x_file.x_ftype
+	      && (native + j + 1)->extrap)
 	    coff_write_auxent_fname (abfd, (char *) (native + j + 1)->extrap,
-				     &(native + j + 1)->u.auxent, string_size_p);
+				     &(native + j + 1)->u.auxent, strtab, hash);
 
 	  bfd_coff_swap_aux_out (abfd,
 				 &((native + j + 1)->u.auxent),
@@ -1069,9 +1067,9 @@ bool
 coff_write_alien_symbol (bfd *abfd,
 			 asymbol *symbol,
 			 struct internal_syment *isym,
-			 union internal_auxent *iaux,
 			 bfd_vma *written,
-			 bfd_size_type *string_size_p,
+			 struct bfd_strtab_hash *strtab,
+			 bool hash,
 			 asection **debug_string_section_p,
 			 bfd_size_type *debug_string_size_p)
 {
@@ -1152,12 +1150,10 @@ coff_write_alien_symbol (bfd *abfd,
   else
     native->u.syment.n_sclass = C_EXT;
 
-  ret = coff_write_symbol (abfd, symbol, native, written, string_size_p,
+  ret = coff_write_symbol (abfd, symbol, native, written, strtab, hash,
 			   debug_string_section_p, debug_string_size_p);
   if (isym != NULL)
     *isym = native->u.syment;
-  if (iaux != NULL && native->u.syment.n_numaux)
-    *iaux = native[1].u.auxent;
   return ret;
 }
 
@@ -1167,7 +1163,7 @@ static bool
 coff_write_native_symbol (bfd *abfd,
 			  coff_symbol_type *symbol,
 			  bfd_vma *written,
-			  bfd_size_type *string_size_p,
+			  struct bfd_strtab_hash *strtab,
 			  asection **debug_string_section_p,
 			  bfd_size_type *debug_string_size_p)
 {
@@ -1217,7 +1213,7 @@ coff_write_native_symbol (bfd *abfd,
     }
 
   return coff_write_symbol (abfd, &(symbol->symbol), native, written,
-			    string_size_p, debug_string_section_p,
+			    strtab, true, debug_string_section_p,
 			    debug_string_size_p);
 }
 
@@ -1232,7 +1228,7 @@ null_error_handler (const char *fmt ATTRIBUTE_UNUSED,
 bool
 coff_write_symbols (bfd *abfd)
 {
-  bfd_size_type string_size;
+  struct bfd_strtab_hash *strtab;
   asection *debug_string_section;
   bfd_size_type debug_string_size;
   unsigned int i;
@@ -1240,26 +1236,26 @@ coff_write_symbols (bfd *abfd)
   bfd_vma written = 0;
   asymbol **p;
 
-  string_size = 0;
   debug_string_section = NULL;
   debug_string_size = 0;
+
+  strtab = _bfd_stringtab_init ();
+  if (strtab == NULL)
+    return false;
 
   /* If this target supports long section names, they must be put into
      the string table.  This is supported by PE.  This code must
      handle section names just as they are handled in
-     coff_write_object_contents.  */
+     coff_write_object_contents.  This is why we pass hash as FALSE below.  */
   if (bfd_coff_long_section_names (abfd))
     {
       asection *o;
 
       for (o = abfd->sections; o != NULL; o = o->next)
-	{
-	  size_t len;
-
-	  len = strlen (o->name);
-	  if (len > SCNNMLEN)
-	    string_size += len + 1;
-	}
+	if (strlen (o->name) > SCNNMLEN
+	    && _bfd_stringtab_add (strtab, o->name, false, false)
+	       == (bfd_size_type) -1)
+	  return false;
     }
 
   /* Seek to the right place.  */
@@ -1276,8 +1272,8 @@ coff_write_symbols (bfd *abfd)
       if (c_symbol == (coff_symbol_type *) NULL
 	  || c_symbol->native == (combined_entry_type *) NULL)
 	{
-	  if (!coff_write_alien_symbol (abfd, symbol, NULL, NULL, &written,
-					&string_size, &debug_string_section,
+	  if (!coff_write_alien_symbol (abfd, symbol, NULL, &written,
+					strtab, true, &debug_string_section,
 					&debug_string_size))
 	    return false;
 	}
@@ -1322,7 +1318,7 @@ coff_write_symbols (bfd *abfd)
 	    }
 
 	  if (!coff_write_native_symbol (abfd, c_symbol, &written,
-					 &string_size, &debug_string_section,
+					 strtab, &debug_string_section,
 					 &debug_string_size))
 	    return false;
 	}
@@ -1330,141 +1326,28 @@ coff_write_symbols (bfd *abfd)
 
   obj_raw_syment_count (abfd) = written;
 
-  /* Now write out strings.  */
-  if (string_size != 0)
-    {
-      unsigned int size = string_size + STRING_SIZE_SIZE;
-      bfd_byte buffer[STRING_SIZE_SIZE];
+  /* Now write out strings.
+
+     We would normally not write anything here if there are no strings, but
+     we'll write out 4 so that any stupid coff reader which tries to read the
+     string table even when there isn't one won't croak.  */
+  {
+    bfd_byte buffer[STRING_SIZE_SIZE];
 
 #if STRING_SIZE_SIZE == 4
-      H_PUT_32 (abfd, size, buffer);
+    H_PUT_32 (abfd, _bfd_stringtab_size (strtab) + STRING_SIZE_SIZE, buffer);
 #else
  #error Change H_PUT_32
 #endif
-      if (bfd_bwrite ((void *) buffer, (bfd_size_type) sizeof (buffer), abfd)
-	  != sizeof (buffer))
-	return false;
+    if (bfd_bwrite ((void *) buffer, (bfd_size_type) sizeof (buffer), abfd)
+	!= sizeof (buffer))
+      return false;
 
-      /* Handle long section names.  This code must handle section
-	 names just as they are handled in coff_write_object_contents.  */
-      if (bfd_coff_long_section_names (abfd))
-	{
-	  asection *o;
+    if (! _bfd_stringtab_emit (abfd, strtab))
+      return false;
+  }
 
-	  for (o = abfd->sections; o != NULL; o = o->next)
-	    {
-	      size_t len;
-
-	      len = strlen (o->name);
-	      if (len > SCNNMLEN)
-		{
-		  if (bfd_bwrite (o->name, (bfd_size_type) (len + 1), abfd)
-		      != len + 1)
-		    return false;
-		}
-	    }
-	}
-
-      for (p = abfd->outsymbols, i = 0;
-	   i < limit;
-	   i++, p++)
-	{
-	  asymbol *q = *p;
-	  size_t name_length = strlen (q->name);
-	  coff_symbol_type *c_symbol = coff_symbol_from (q);
-	  size_t maxlen;
-	  bool is_c_file = false;
-
-	  /* Figure out whether the symbol name should go in the string
-	     table.  Symbol names that are short enough are stored
-	     directly in the syment structure.  File names permit a
-	     different, longer, length in the syment structure.  On
-	     XCOFF, some symbol names are stored in the .debug section
-	     rather than in the string table.  */
-
-	  if (c_symbol == NULL
-	      || c_symbol->native == NULL)
-	    /* This is not a COFF symbol, so it certainly is not a
-	       file name, nor does it go in the .debug section.  */
-	    maxlen = bfd_coff_force_symnames_in_strings (abfd) ? 0 : SYMNMLEN;
-
-	  else if (! c_symbol->native->is_sym)
-	    maxlen = bfd_coff_force_symnames_in_strings (abfd) ? 0 : SYMNMLEN;
-
-	  else if (bfd_coff_symname_in_debug (abfd,
-					      &c_symbol->native->u.syment))
-	    /* This symbol name is in the XCOFF .debug section.
-	       Don't write it into the string table.  */
-	    maxlen = name_length;
-
-	  else if (c_symbol->native->u.syment.n_sclass == C_FILE
-		   && c_symbol->native->u.syment.n_numaux > 0)
-	    {
-	      is_c_file=true;
-	      if (bfd_coff_force_symnames_in_strings (abfd))
-		{
-		  if (bfd_bwrite (".file", (bfd_size_type) 6, abfd) != 6)
-		    return false;
-		}
-	      maxlen = bfd_coff_filnmlen (abfd);
-	    }
-	  else
-	    maxlen = bfd_coff_force_symnames_in_strings (abfd) ? 0 : SYMNMLEN;
-
-	  if (name_length > maxlen)
-	    {
-	      if (bfd_bwrite ((void *) (q->name), (bfd_size_type) name_length + 1,
-			     abfd) != name_length + 1)
-		return false;
-	    }
-
-	  /* Add strings for C_FILE aux entries. */
-	  if (is_c_file
-	      && c_symbol->native->u.syment.n_numaux > 1)
-	    {
-	      for (int j = 1; j < c_symbol->native->u.syment.n_numaux; j++)
-		{
-		  char *str;
-		  size_t str_length;
-
-		  /* Add strings from aux entries only if this isn't the
-		     filename auxiliary entry.  */
-		  if (!c_symbol->native[j + 1].u.auxent.x_file.x_ftype)
-		    continue;
-
-		  if (c_symbol->native[j + 1].u.auxent.x_file.x_n.x_fname[0] != 0)
-		    continue;
-
-		  str = (char *) c_symbol->native[j + 1].extrap;
-		  str_length = strlen (str);
-		  if (str_length > maxlen)
-		    {
-		      if (bfd_bwrite ((void *) (str), (bfd_size_type) str_length + 1,
-				      abfd) != str_length + 1)
-			return false;
-		    }
-
-		}
-	    }
-	}
-    }
-  else
-    {
-      /* We would normally not write anything here, but we'll write
-	 out 4 so that any stupid coff reader which tries to read the
-	 string table even when there isn't one won't croak.  */
-      unsigned int size = STRING_SIZE_SIZE;
-      bfd_byte buffer[STRING_SIZE_SIZE];
-
-#if STRING_SIZE_SIZE == 4
-      H_PUT_32 (abfd, size, buffer);
-#else
- #error Change H_PUT_32
-#endif
-      if (bfd_bwrite ((void *) buffer, (bfd_size_type) STRING_SIZE_SIZE, abfd)
-	  != STRING_SIZE_SIZE)
-	return false;
-    }
+  _bfd_stringtab_free (strtab);
 
   /* Make sure the .debug section was created to be the correct size.
      We should create it ourselves on the fly, but we don't because
@@ -1634,9 +1517,10 @@ build_debug_section (bfd *abfd, asection ** sect_return)
     return NULL;
 
   sec_size = sect->size;
-  debug_section = (char *) _bfd_alloc_and_read (abfd, sec_size, sec_size);
+  debug_section = (char *) _bfd_alloc_and_read (abfd, sec_size + 1, sec_size);
   if (debug_section == NULL)
     return NULL;
+  debug_section[sec_size] = 0;
 
   if (bfd_seek (abfd, position, SEEK_SET) != 0)
     return NULL;
@@ -1930,33 +1814,34 @@ coff_get_normalized_symtab (bfd *abfd)
 
 	      if ((bfd_size_type)(aux->u.auxent.x_file.x_n.x_n.x_offset)
 		  >= obj_coff_strings_len (abfd))
-		internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) _("<corrupt>");
+		internal_ptr->u.syment._n._n_n._n_offset =
+		  (uintptr_t) _("<corrupt>");
 	      else
 		internal_ptr->u.syment._n._n_n._n_offset =
-		  (bfd_hostptr_t) (string_table + (aux->u.auxent.x_file.x_n.x_n.x_offset));
+		  (uintptr_t) (string_table
+			       + aux->u.auxent.x_file.x_n.x_n.x_offset);
 	    }
 	  else
 	    {
 	      /* Ordinary short filename, put into memory anyway.  The
 		 Microsoft PE tools sometimes store a filename in
 		 multiple AUX entries.  */
-	      if (internal_ptr->u.syment.n_numaux > 1
-		  && coff_data (abfd)->pe)
+	      if (internal_ptr->u.syment.n_numaux > 1 && obj_pe (abfd))
 		internal_ptr->u.syment._n._n_n._n_offset =
-		  (bfd_hostptr_t)
-		  copy_name (abfd,
-			     aux->u.auxent.x_file.x_n.x_fname,
-			     internal_ptr->u.syment.n_numaux * symesz);
+		  ((uintptr_t)
+		   copy_name (abfd,
+			      aux->u.auxent.x_file.x_n.x_fname,
+			      internal_ptr->u.syment.n_numaux * symesz));
 	      else
 		internal_ptr->u.syment._n._n_n._n_offset =
-		  ((bfd_hostptr_t)
+		  ((uintptr_t)
 		   copy_name (abfd,
 			      aux->u.auxent.x_file.x_n.x_fname,
 			      (size_t) bfd_coff_filnmlen (abfd)));
 	    }
 
 	  /* Normalize other strings available in C_FILE aux entries.  */
-	  if (!coff_data (abfd)->pe)
+	  if (!obj_pe (abfd))
 	    for (int numaux = 1; numaux < internal_ptr->u.syment.n_numaux; numaux++)
 	      {
 		aux = internal_ptr + numaux + 1;
@@ -1974,14 +1859,16 @@ coff_get_normalized_symtab (bfd *abfd)
 
 		    if ((bfd_size_type)(aux->u.auxent.x_file.x_n.x_n.x_offset)
 			>= obj_coff_strings_len (abfd))
-		      aux->u.auxent.x_file.x_n.x_n.x_offset = (bfd_hostptr_t) _("<corrupt>");
+		      aux->u.auxent.x_file.x_n.x_n.x_offset =
+			(uintptr_t) _("<corrupt>");
 		    else
 		      aux->u.auxent.x_file.x_n.x_n.x_offset =
-			(bfd_hostptr_t) (string_table + (aux->u.auxent.x_file.x_n.x_n.x_offset));
+			(uintptr_t) (string_table
+				     + (aux->u.auxent.x_file.x_n.x_n.x_offset));
 		  }
 		else
 		  aux->u.auxent.x_file.x_n.x_n.x_offset =
-		    ((bfd_hostptr_t)
+		    ((uintptr_t)
 		     copy_name (abfd,
 				aux->u.auxent.x_file.x_n.x_fname,
 				(size_t) bfd_coff_filnmlen (abfd)));
@@ -2006,11 +1893,11 @@ coff_get_normalized_symtab (bfd *abfd)
 	      if (newstring == NULL)
 		return NULL;
 	      strncpy (newstring, internal_ptr->u.syment._n._n_name, i);
-	      internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) newstring;
+	      internal_ptr->u.syment._n._n_n._n_offset = (uintptr_t) newstring;
 	      internal_ptr->u.syment._n._n_n._n_zeroes = 0;
 	    }
 	  else if (internal_ptr->u.syment._n._n_n._n_offset == 0)
-	    internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) "";
+	    internal_ptr->u.syment._n._n_n._n_offset = (uintptr_t) "";
 	  else if (!bfd_coff_symname_in_debug (abfd, &internal_ptr->u.syment))
 	    {
 	      /* Long name already.  Point symbol at the string in the
@@ -2023,12 +1910,12 @@ coff_get_normalized_symtab (bfd *abfd)
 		}
 	      if (internal_ptr->u.syment._n._n_n._n_offset >= obj_coff_strings_len (abfd)
 		  || string_table + internal_ptr->u.syment._n._n_n._n_offset < string_table)
-		internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) _("<corrupt>");
+		internal_ptr->u.syment._n._n_n._n_offset =
+		  (uintptr_t) _("<corrupt>");
 	      else
 		internal_ptr->u.syment._n._n_n._n_offset =
-		  ((bfd_hostptr_t)
-		   (string_table
-		    + internal_ptr->u.syment._n._n_n._n_offset));
+		  ((uintptr_t) (string_table
+				+ internal_ptr->u.syment._n._n_n._n_offset));
 	    }
 	  else
 	    {
@@ -2041,13 +1928,15 @@ coff_get_normalized_symtab (bfd *abfd)
 		  /* PR binutils/17512: Catch out of range offsets into the debug data.  */
 		  if (internal_ptr->u.syment._n._n_n._n_offset > debug_sec->size
 		      || debug_sec_data + internal_ptr->u.syment._n._n_n._n_offset < debug_sec_data)
-		    internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) _("<corrupt>");
+		    internal_ptr->u.syment._n._n_n._n_offset =
+		      (uintptr_t) _("<corrupt>");
 		  else
-		    internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t)
-		      (debug_sec_data + internal_ptr->u.syment._n._n_n._n_offset);
+		    internal_ptr->u.syment._n._n_n._n_offset =
+		      (uintptr_t) (debug_sec_data
+				   + internal_ptr->u.syment._n._n_n._n_offset);
 		}
 	      else
-		internal_ptr->u.syment._n._n_n._n_offset = (bfd_hostptr_t) "";
+		internal_ptr->u.syment._n._n_n._n_offset = (uintptr_t) "";
 	    }
 	}
       internal_ptr += internal_ptr->u.syment.n_numaux;
@@ -2063,19 +1952,25 @@ coff_get_normalized_symtab (bfd *abfd)
 long
 coff_get_reloc_upper_bound (bfd *abfd, sec_ptr asect)
 {
-  if (bfd_get_format (abfd) != bfd_object)
-    {
-      bfd_set_error (bfd_error_invalid_operation);
-      return -1;
-    }
-#if SIZEOF_LONG == SIZEOF_INT
-  if (asect->reloc_count >= LONG_MAX / sizeof (arelent *))
+  size_t count, raw;
+
+  count = asect->reloc_count;
+  if (count >= LONG_MAX / sizeof (arelent *)
+      || _bfd_mul_overflow (count, bfd_coff_relsz (abfd), &raw))
     {
       bfd_set_error (bfd_error_file_too_big);
       return -1;
     }
-#endif
-  return (asect->reloc_count + 1L) * sizeof (arelent *);
+  if (!bfd_write_p (abfd))
+    {
+      ufile_ptr filesize = bfd_get_file_size (abfd);
+      if (filesize != 0 && raw > filesize)
+	{
+	  bfd_set_error (bfd_error_file_truncated);
+	  return -1;
+	}
+    }
+  return (count + 1) * sizeof (arelent *);
 }
 
 asymbol *
@@ -2132,8 +2027,8 @@ coff_get_symbol_info (bfd *abfd, asymbol *symbol, symbol_info *ret)
       && coffsymbol (symbol)->native->fix_value
       && coffsymbol (symbol)->native->is_sym)
     ret->value
-      = (((bfd_hostptr_t) coffsymbol (symbol)->native->u.syment.n_value
-	  - (bfd_hostptr_t) obj_raw_syments (abfd))
+      = (((uintptr_t) coffsymbol (symbol)->native->u.syment.n_value
+	  - (uintptr_t) obj_raw_syments (abfd))
 	 / sizeof (combined_entry_type));
 }
 
@@ -2182,8 +2077,7 @@ coff_print_symbol (bfd *abfd,
 	  if (! combined->fix_value)
 	    val = (bfd_vma) combined->u.syment.n_value;
 	  else
-	    val = (((bfd_hostptr_t) combined->u.syment.n_value
-		    - (bfd_hostptr_t) root)
+	    val = (((uintptr_t) combined->u.syment.n_value - (uintptr_t) root)
 		   / sizeof (combined_entry_type));
 
 	  fprintf (file, "(sec %2d)(fl 0x%02x)(ty %4x)(scl %3d) (nx %d) 0x",
@@ -3263,7 +3157,10 @@ _bfd_coff_close_and_cleanup (bfd *abfd)
 
       if (bfd_get_format (abfd) == bfd_object
 	  || bfd_get_format (abfd) == bfd_core)
-	_bfd_dwarf2_cleanup_debug_info (abfd, &tdata->dwarf2_find_line_info);
+	{
+	  _bfd_dwarf2_cleanup_debug_info (abfd, &tdata->dwarf2_find_line_info);
+	  _bfd_stab_cleanup (abfd, &tdata->line_info);
+	}
     }
   return _bfd_generic_close_and_cleanup (abfd);
 }

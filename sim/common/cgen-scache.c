@@ -1,5 +1,5 @@
 /* Simulator cache routines for CGEN simulators (and maybe others).
-   Copyright (C) 1996-2022 Free Software Foundation, Inc.
+   Copyright (C) 1996-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -420,7 +420,7 @@ scache_lookup_or_alloc (SIM_CPU *cpu, IADDR pc, int n, SCACHE **bufp)
 /* Print cache access statics for CPU.  */
 
 void
-scache_print_profile (SIM_CPU *cpu, int verbose)
+scache_print_profile (SIM_CPU *cpu, bool verbose)
 {
   SIM_DESC sd = CPU_STATE (cpu);
   unsigned long hits = CPU_SCACHE_HITS (cpu);

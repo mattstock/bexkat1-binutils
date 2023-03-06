@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2021 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,11 +23,14 @@ AUTOMAKE_OPTIONS = dejagnu foreign
 if BUILD_COLLECTOR
     COLLECTOR_SUBDIRS = libcollector
 endif
+if BUILD_DOC
+    DOC_SUBDIR = doc
+endif
 if BUILD_SRC
-    SRC_SUBDIRS = src gp-display-html doc
+    SRC_SUBDIRS = src gp-display-html $(DOC_SUBDIR)
 endif
 SUBDIRS = $(COLLECTOR_SUBDIRS) $(SRC_SUBDIRS)
-DIST_SUBDIRS = libcollector src gp-display-html doc
+DIST_SUBDIRS = libcollector src gp-display-html $(DOC_SUBDIR)
 
 # Setup the testing framework, if you have one
 EXPECT = expect
@@ -58,6 +61,7 @@ check-DEJAGNU: site.exp development.exp
 	runtest=$(RUNTEST); \
 	if $(SHELL) -c "$$runtest --version" > /dev/null 2>&1; then \
 	  $$runtest --tool $(DEJATOOL) --srcdir $${srcroot}/testsuite \
+		JDK_INC="$(jdk_inc)" \
 		GPROFNG_BROKEN_JAVAC="$(GPROFNG_BROKEN_JAVAC)" \
 		MAKE="$(MAKE)" CC="$(CC)" CFLAGS="$(CFLAGS) $(PTHREAD_CFLAGS)" \
 		LDFLAGS="$(LDFLAGS)" LIBS="$(PTHREAD_LIBS) $(LIBS)" \

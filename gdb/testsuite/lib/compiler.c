@@ -1,6 +1,6 @@
 /* This test file is part of GDB, the GNU debugger.
 
-   Copyright 1995-2022 Free Software Foundation, Inc.
+   Copyright 1995-2023 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,9 +26,6 @@
 
    TODO: make compiler_info a local variable for get_compiler_info and
    test_compiler_info.
-
-   TODO: all clients should use test_compiler_info and should not
-   use gcc_compiled.
 
    */
 
@@ -75,5 +72,5 @@ set total_length [string length __clang_version__]
 set version_start_index [string last "(" __clang_version__]
 set version_string [string range __clang_version__ $version_start_index+5 $total_length-2]
 set version_updated_string [string map {. -} $version_string]
-set compiler_info "intel-$version_updated_string"
+set compiler_info "icx-$version_updated_string"
 #endif

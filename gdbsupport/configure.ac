@@ -1,5 +1,5 @@
 dnl Autoconf configure script for GDB support library
-dnl Copyright (C) 2020-2022 Free Software Foundation, Inc.
+dnl Copyright (C) 2020-2023 Free Software Foundation, Inc.
 dnl
 dnl This program is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -63,6 +63,14 @@ GDB_AC_PTRACE
 AM_GDB_COMPILER_TYPE
 AM_GDB_WARNINGS
 
+# Set the 'development' global.
+. $srcdir/../bfd/development.sh
+
+if test "$development" = true ; then
+   AC_DEFINE(DEVELOPMENT, 1,
+	     [Define if development-mode features are enabled.])
+fi
+
 case ${host} in
   *mingw32*)
     AC_DEFINE(USE_WIN32API, 1,
@@ -72,6 +80,8 @@ case ${host} in
 	       for Cygwin.])
     ;;
 esac
+
+AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(srcdir)/../bfd/development.sh'])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

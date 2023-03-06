@@ -1,6 +1,6 @@
 /* Native-dependent code for NetBSD.
 
-   Copyright (C) 2006-2022 Free Software Foundation, Inc.
+   Copyright (C) 2006-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,7 +28,7 @@ struct thread_info;
 
 struct nbsd_nat_target : public inf_ptrace_target
 {
-  char *pid_to_exec_file (int pid) override;
+  const char *pid_to_exec_file (int pid) override;
 
   bool thread_alive (ptid_t ptid) override;
   const char *thread_name (struct thread_info *thr) override;

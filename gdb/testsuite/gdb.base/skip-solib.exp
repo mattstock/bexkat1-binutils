@@ -1,4 +1,4 @@
-#   Copyright 2011-2022 Free Software Foundation, Inc.
+#   Copyright 2011-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,10 +20,9 @@
 #
 
 # This only works on GNU/Linux.
-if { ![isnative] || [is_remote host] || ![istarget *-linux*]
-     || [skip_shlib_tests]} {
-    continue
-}
+require isnative allow_shlib_tests
+require {!is_remote host}
+require {istarget *-linux*}
 
 set test "skip-solib"
 set srcfile_main "${test}-main.c"
@@ -41,7 +40,7 @@ set binfile_lib [standard_output_file ${libname}.so]
 #
 
 if {[gdb_compile_shlib ${srcdir}/${subdir}/${srcfile_lib} ${binfile_lib} \
-	 [list debug -Wl,-soname,${libname}.so]] != ""} {
+	 [list debug]] != ""} {
     return -1
 }
 
@@ -54,7 +53,7 @@ set testobjdir [standard_output_file {}]
 if {[gdb_compile "${binfile_main}.o" "${binfile_main}" executable \
 	 [list debug "additional_flags=-L$testobjdir" \
 	      "additional_flags=-l${test}" \
-	      "additional_flags=-Wl,-rpath=$testobjdir"]] != ""} {
+	      "ldflags=-Wl,-rpath=$testobjdir"]] != ""} {
     return -1
 }
 

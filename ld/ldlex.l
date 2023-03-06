@@ -2,7 +2,7 @@
 
 %{
 
-/* Copyright (C) 1991-2022 Free Software Foundation, Inc.
+/* Copyright (C) 1991-2023 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
    This file is part of the GNU Binutils.
@@ -309,6 +309,8 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 <WILD>"LONG"				{ RTOKEN(LONG); }
 <WILD>"SHORT"				{ RTOKEN(SHORT); }
 <WILD>"BYTE"				{ RTOKEN(BYTE); }
+<WILD>"ASCII"				{ RTOKEN(ASCII); }
+<WILD>"ASCIZ"				{ RTOKEN(ASCIZ); }
 <SCRIPT>"NOFLOAT"			{ RTOKEN(NOFLOAT); }
 <SCRIPT,EXPRESSION>"NOCROSSREFS"	{ RTOKEN(NOCROSSREFS); }
 <SCRIPT,EXPRESSION>"NOCROSSREFS_TO"	{ RTOKEN(NOCROSSREFS_TO); }

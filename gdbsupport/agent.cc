@@ -1,6 +1,6 @@
 /* Shared utility routines for GDB to interact with agent.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -179,14 +179,16 @@ gdb_connect_sync_socket (int pid)
 #endif
 }
 
-/* Execute an agent command in the inferior.  PID is the value of pid of the
-   inferior.  CMD is the buffer for command.  GDB or GDBserver will store the
-   command into it and fetch the return result from CMD.  The interaction
-   between GDB/GDBserver and the agent is synchronized by a synchronization
-   socket.  Return zero if success, otherwise return non-zero.  */
+/* Execute an agent command in the inferior.  PID is the value of pid
+   of the inferior.  CMD is the buffer for command.  It is assumed to
+   be at least IPA_CMD_BUF_SIZE bytes long.  GDB or GDBserver will
+   store the command into it and fetch the return result from CMD.
+   The interaction between GDB/GDBserver and the agent is synchronized
+   by a synchronization socket.  Return zero if success, otherwise
+   return non-zero.  */
 
 int
-agent_run_command (int pid, const char *cmd, int len)
+agent_run_command (int pid, char *cmd, int len)
 {
   int fd;
   int tid = agent_get_helper_thread_id ();

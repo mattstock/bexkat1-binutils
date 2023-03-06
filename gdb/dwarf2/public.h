@@ -1,6 +1,6 @@
 /* Public API for gdb DWARF reader
 
-   Copyright (C) 2021-2022 Free Software Foundation, Inc.
+   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,9 +20,9 @@
 #ifndef DWARF2_PUBLIC_H
 #define DWARF2_PUBLIC_H
 
-extern int dwarf2_has_info (struct objfile *,
-                            const struct dwarf2_debug_sections *,
-			    bool = false);
+extern bool dwarf2_has_info (struct objfile *,
+			     const struct dwarf2_debug_sections *,
+			     bool = false);
 
 /* A DWARF names index variant.  */
 enum class dw_index_kind
@@ -38,9 +38,6 @@ enum class dw_index_kind
    entry on the objfile's "qf" list.  */
 extern void dwarf2_initialize_objfile (struct objfile *objfile);
 
-struct psymbol_functions;
-extern void dwarf2_build_psymtabs (struct objfile *,
-				   bool already_attached = false);
 extern void dwarf2_build_frame_info (struct objfile *);
 
 #endif /* DWARF2_PUBLIC_H */

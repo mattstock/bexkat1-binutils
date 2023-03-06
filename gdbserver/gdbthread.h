@@ -1,5 +1,5 @@
 /* Multi-thread control defs for remote server for GDB.
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -252,6 +252,7 @@ public:
 
 private:
   bool m_dont_restore = false;
+  process_info *m_process;
   thread_info *m_thread;
 };
 

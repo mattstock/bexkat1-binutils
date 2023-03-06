@@ -1,4 +1,4 @@
-/* Copyright (C) 2021 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2023 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -407,7 +407,10 @@ Settings::read_rc (bool ipc_or_rdt_mode)
   free (rc_path);
 
   // Read system-wide file
-  rc_path = dbe_sprintf (NTXT ("%s/../etc/gprofng.rc"), app->get_run_dir ());
+  const char *sysconfdir = getenv("GPROFNG_SYSCONFDIR");
+  if (sysconfdir == NULL)
+    sysconfdir = SYSCONFDIR;
+  rc_path = dbe_sprintf (NTXT ("%s/gprofng.rc"), sysconfdir);
   if (access (rc_path, R_OK | F_OK) != 0)
     {
       StringBuilder sb;
@@ -1254,7 +1257,7 @@ Settings::set_name_format (char *arg)
     return CMD_BAD_ARG;
 
   bool soname_fmt = false;
-  if (colon && (colon + 1))
+  if (colon)
     {
       colon++;
       if (!strcasecmp (colon, NTXT ("soname")))

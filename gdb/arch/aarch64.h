@@ -1,6 +1,6 @@
 /* Common target-dependent functionality for AArch64.
 
-   Copyright (C) 2017-2022 Free Software Foundation, Inc.
+   Copyright (C) 2017-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -26,20 +26,61 @@
    used to select register sets.  */
 struct aarch64_features
 {
-  bool sve = false;
+  /* A non zero VQ value indicates both the presence of SVE and the
+     Vector Quotient - the number of 128bit chunks in an SVE Z
+     register.  */
+  uint64_t vq = 0;
+
   bool pauth = false;
   bool mte = false;
+
+  /* A positive TLS value indicates the number of TLS registers available.  */
+  uint8_t tls = 0;
 };
 
-/* Create the aarch64 target description.  A non zero VQ value indicates both
-   the presence of SVE and the Vector Quotient - the number of 128bit chunks in
-   an SVE Z register.  HAS_PAUTH_P indicates the presence of the PAUTH
-   feature.
+inline bool operator==(const aarch64_features &lhs, const aarch64_features &rhs)
+{
+  return lhs.vq == rhs.vq
+    && lhs.pauth == rhs.pauth
+    && lhs.mte == rhs.mte
+    && lhs.tls == rhs.tls;
+}
 
-   MTE_P indicates the presence of the Memory Tagging Extension feature.  */
+namespace std
+{
+  template<>
+  struct hash<aarch64_features>
+  {
+    std::size_t operator()(const aarch64_features &features) const noexcept
+    {
+      std::size_t h;
 
-target_desc *aarch64_create_target_description (uint64_t vq, bool has_pauth_p,
-						bool mte_p);
+      h = features.vq;
+      h = h << 1 | features.pauth;
+      h = h << 1 | features.mte;
+      /* Shift by two bits for now.  We may need to increase this in the future
+	 if more TLS registers get added.  */
+      h = h << 2 | features.tls;
+      return h;
+    }
+  };
+}
+
+/* Create the aarch64 target description.  */
+
+target_desc *
+  aarch64_create_target_description (const aarch64_features &features);
+
+/* Given a pointer value POINTER and a MASK of non-address bits, remove the
+   non-address bits from the pointer and sign-extend the result if required.
+   The sign-extension is required so we can handle kernel addresses
+   correctly.  */
+CORE_ADDR aarch64_remove_top_bits (CORE_ADDR pointer, CORE_ADDR mask);
+
+/* Given CMASK and DMASK the two PAC mask registers, return the correct PAC
+   mask to use for removing non-address bits from a pointer.  */
+CORE_ADDR
+aarch64_mask_from_pac_registers (const CORE_ADDR cmask, const CORE_ADDR dmask);
 
 /* Register numbers of various important registers.
    Note that on SVE, the Z registers reuse the V register numbers and the V
@@ -70,7 +111,16 @@ enum aarch64_regnum
   AARCH64_LAST_V_ARG_REGNUM = AARCH64_V0_REGNUM + 7
 };
 
-#define V_REGISTER_SIZE 16
+/* Sizes of various AArch64 registers.  */
+#define AARCH64_TLS_REGISTER_SIZE 8
+#define V_REGISTER_SIZE	  16
+
+/* PAC-related constants.  */
+/* Bit 55 is used to select between a kernel-space and user-space address.  */
+#define VA_RANGE_SELECT_BIT_MASK  0x80000000000000ULL
+/* Mask with 1's in bits 55~63, used to remove the top byte of pointers
+   (Top Byte Ignore).  */
+#define AARCH64_TOP_BITS_MASK	  0xff80000000000000ULL
 
 /* Pseudo register base numbers.  */
 #define AARCH64_Q0_REGNUM 0
@@ -82,6 +132,12 @@ enum aarch64_regnum
 
 #define AARCH64_PAUTH_DMASK_REGNUM(pauth_reg_base) (pauth_reg_base)
 #define AARCH64_PAUTH_CMASK_REGNUM(pauth_reg_base) (pauth_reg_base + 1)
+/* The high versions of these masks are used for bare metal/kernel-mode pointer
+   authentication support.  */
+#define AARCH64_PAUTH_DMASK_HIGH_REGNUM(pauth_reg_base) (pauth_reg_base + 2)
+#define AARCH64_PAUTH_CMASK_HIGH_REGNUM(pauth_reg_base) (pauth_reg_base + 3)
+
+/* This size is only meant for Linux, not bare metal.  QEMU exposes 4 masks.  */
 #define AARCH64_PAUTH_REGS_SIZE (16)
 
 #define AARCH64_X_REGS_NUM 31
@@ -90,7 +146,6 @@ enum aarch64_regnum
 #define AARCH64_SVE_P_REGS_NUM 16
 #define AARCH64_NUM_REGS AARCH64_FPCR_REGNUM + 1
 #define AARCH64_SVE_NUM_REGS AARCH64_SVE_VG_REGNUM + 1
-
 
 /* There are a number of ways of expressing the current SVE vector size:
 

@@ -1,5 +1,5 @@
 /* Stabs in sections linking support.
-   Copyright (C) 1996-2022 Free Software Foundation, Inc.
+   Copyright (C) 1996-2023 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -162,7 +162,9 @@ _bfd_link_section_stabs (bfd *abfd,
   bfd_size_type *pstridx;
 
   if (stabsec->size == 0
-      || stabstrsec->size == 0)
+      || stabstrsec->size == 0
+      || (stabsec->flags & SEC_HAS_CONTENTS) == 0
+      || (stabstrsec->flags & SEC_HAS_CONTENTS) == 0)
     /* This file does not contain stabs debugging information.  */
     return true;
 
@@ -520,7 +522,7 @@ _bfd_discard_section_stabs (bfd *abfd,
   bfd_size_type *pstridx;
   int deleting;
 
-  if (stabsec->size == 0)
+  if (stabsec->size == 0 || (stabsec->flags & SEC_HAS_CONTENTS) == 0)
     /* This file does not contain stabs debugging information.  */
     return false;
 

@@ -1,6 +1,6 @@
 /* DWARF CU data structure
 
-   Copyright (C) 2021-2022 Free Software Foundation, Inc.
+   Copyright (C) 2021-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,6 +21,8 @@
 #include "dwarf2/cu.h"
 #include "dwarf2/read.h"
 #include "objfiles.h"
+#include "filenames.h"
+#include "gdbsupport/pathstuff.h"
 
 /* Initialize dwarf2_cu to read PER_CU, in the context of PER_OBJFILE.  */
 
@@ -37,6 +39,7 @@ dwarf2_cu::dwarf2_cu (dwarf2_per_cu_data *per_cu,
     producer_is_icc (false),
     producer_is_icc_lt_14 (false),
     producer_is_codewarrior (false),
+    producer_is_clang (false),
     processing_has_namespace_info (false),
     load_all_dies (false)
 {
@@ -60,9 +63,22 @@ dwarf2_cu::start_compunit_symtab (const char *name, const char *comp_dir,
 {
   gdb_assert (m_builder == nullptr);
 
+  std::string name_for_id_holder;
+  const char *name_for_id = name;
+
+  /* Prepend the compilation directory to the filename if needed (if not
+     absolute already) to get the "name for id" for our main symtab.  The name
+     for the main file coming from the line table header will be generated using
+     the same logic, so will hopefully match what we pass here.  */
+  if (!IS_ABSOLUTE_PATH (name) && comp_dir != nullptr)
+    {
+      name_for_id_holder = path_join (comp_dir, name);
+      name_for_id = name_for_id_holder.c_str ();
+    }
+
   m_builder.reset (new struct buildsym_compunit
 		   (this->per_objfile->objfile,
-		    name, comp_dir, per_cu->lang, low_pc));
+		    name, comp_dir, name_for_id, lang (), low_pc));
 
   list_in_scope = get_builder ()->get_file_symbols ();
 
@@ -95,7 +111,7 @@ dwarf2_cu::addr_type () const
   struct type *addr_type = lookup_pointer_type (void_type);
   int addr_size = this->per_cu->addr_size ();
 
-  if (TYPE_LENGTH (addr_type) == addr_size)
+  if (addr_type->length () == addr_size)
     return addr_type;
 
   addr_type = addr_sized_int_type (addr_type->is_unsigned ());

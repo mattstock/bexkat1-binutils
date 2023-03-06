@@ -1,5 +1,5 @@
 /* Remote target callback routines.
-   Copyright 1995-2022 Free Software Foundation, Inc.
+   Copyright 1995-2023 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
    This file is part of GDB.
@@ -34,9 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -812,7 +810,7 @@ cb_read_target_syscall_maps (host_callback *cb, const char *file)
   if (cb->signal_map)
     free (cb->signal_map);
   if (cb->stat_map)
-    free ((PTR) cb->stat_map);
+    free ((void *) cb->stat_map);
 
   cb->syscall_map = syscall_map;
   cb->errno_map = errno_map;

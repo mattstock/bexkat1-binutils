@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2022 Free Software Foundation, Inc.
+/* Copyright (C) 2020-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -581,11 +581,9 @@ netbsd_read_auxv(pid_t pid, void *offs, void *addr, size_t len)
    to debugger memory starting at MYADDR.  */
 
 int
-netbsd_process_target::read_auxv (CORE_ADDR offset,
+netbsd_process_target::read_auxv (int pid, CORE_ADDR offset,
 				  unsigned char *myaddr, unsigned int len)
 {
-  pid_t pid = pid_of (current_thread);
-
   return netbsd_read_auxv (pid, (void *) (intptr_t) offset, myaddr, len);
 }
 
@@ -1086,7 +1084,7 @@ netbsd_qxfer_libraries_svr4 (const pid_t pid, const char *annex,
 		}
 
 	      string_appendf (document, "<library name=\"");
-	      xml_escape_text_append (&document, (char *) libname);
+	      xml_escape_text_append (document, (char *) libname);
 	      string_appendf (document, "\" lm=\"0x%lx\" "
 			      "l_addr=\"0x%lx\" l_ld=\"0x%lx\"/>",
 			      (unsigned long) lm_addr, (unsigned long) l_addr,

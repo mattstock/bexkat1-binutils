@@ -1,5 +1,5 @@
 /* Event loop machinery for GDB, the GNU debugger.
-   Copyright (C) 1999-2022 Free Software Foundation, Inc.
+   Copyright (C) 1999-2023 Free Software Foundation, Inc.
    Written by Elena Zannoni <ezannoni@cygnus.com> of Cygnus Solutions.
 
    This file is part of GDB.
@@ -33,6 +33,8 @@
 #include <sys/types.h>
 #include "gdbsupport/gdb_sys_time.h"
 #include "gdbsupport/gdb_select.h"
+#include "gdbsupport/gdb_optional.h"
+#include "gdbsupport/scope-exit.h"
 
 /* See event-loop.h.  */
 
@@ -78,14 +80,12 @@ struct file_handler
   struct file_handler *next_file;
 };
 
-/* Do we use poll or select ? */
 #ifdef HAVE_POLL
-#define USE_POLL 1
-#else
-#define USE_POLL 0
-#endif /* HAVE_POLL */
-
-static unsigned char use_poll = USE_POLL;
+/* Do we use poll or select?  Some systems have poll, but then it's
+   not useable with all kinds of files.  We probe that whenever a new
+   file handler is added.  */
+static bool use_poll = true;
+#endif
 
 #ifdef USE_WIN32API
 #include <windows.h>
@@ -177,12 +177,17 @@ static int update_wait_timeout (void);
 static int poll_timers (void);
 
 /* Process one high level event.  If nothing is ready at this time,
-   wait for something to happen (via gdb_wait_for_event), then process
-   it.  Returns >0 if something was done otherwise returns <0 (this
-   can happen if there are no event sources to wait for).  */
+   wait at most MSTIMEOUT milliseconds for something to happen (via
+   gdb_wait_for_event), then process it.  Returns >0 if something was
+   done, <0 if there are no event sources to wait for, =0 if timeout occurred.
+   A timeout of 0 allows to serve an already pending event, but does not
+   wait if none found.
+   Setting the timeout to a negative value disables it.
+   The timeout is never used by gdb itself, it is however needed to
+   integrate gdb event handling within Insight's GUI event loop. */
 
 int
-gdb_do_one_event (void)
+gdb_do_one_event (int mstimeout)
 {
   static int event_source_head = 0;
   const int number_of_sources = 3;
@@ -216,8 +221,7 @@ gdb_do_one_event (void)
 	  res = check_async_event_handlers ();
 	  break;
 	default:
-	  internal_error (__FILE__, __LINE__,
-			  "unexpected event_source_head %d",
+	  internal_error ("unexpected event_source_head %d",
 			  event_source_head);
 	}
 
@@ -229,17 +233,35 @@ gdb_do_one_event (void)
 	return 1;
     }
 
+  if (mstimeout == 0)
+    return 0;	/* 0ms timeout: do not wait for an event. */
+
   /* Block waiting for a new event.  If gdb_wait_for_event returns -1,
      we should get out because this means that there are no event
      sources left.  This will make the event loop stop, and the
-     application exit.  */
+     application exit.
+     If a timeout has been given, a new timer is set accordingly
+     to abort event wait.  It is deleted upon gdb_wait_for_event
+     termination and thus should never be triggered.
+     When the timeout is reached, events are not monitored again:
+     they already have been checked in the loop above. */
 
-  if (gdb_wait_for_event (1) < 0)
-    return -1;
+  gdb::optional<int> timer_id;
 
-  /* If gdb_wait_for_event has returned 1, it means that one event has
-     been handled.  We break out of the loop.  */
-  return 1;
+  SCOPE_EXIT 
+    {
+      if (timer_id.has_value ())
+	delete_timer (*timer_id);
+    };
+
+  if (mstimeout > 0)
+    timer_id = create_timer (mstimeout,
+			     [] (gdb_client_data arg)
+			     {
+			       ((gdb::optional<int> *) arg)->reset ();
+			     },
+			     &timer_id);
+  return gdb_wait_for_event (1);
 }
 
 /* See event-loop.h  */
@@ -249,12 +271,10 @@ add_file_handler (int fd, handler_func *proc, gdb_client_data client_data,
 		  std::string &&name, bool is_ui)
 {
 #ifdef HAVE_POLL
-  struct pollfd fds;
-#endif
-
   if (use_poll)
     {
-#ifdef HAVE_POLL
+      struct pollfd fds;
+
       /* Check to see if poll () is usable.  If not, we'll switch to
 	 use select.  This can happen on systems like
 	 m68k-motorola-sys, `poll' cannot be used to wait for `stdin'.
@@ -263,23 +283,15 @@ add_file_handler (int fd, handler_func *proc, gdb_client_data client_data,
       fds.fd = fd;
       fds.events = POLLIN;
       if (poll (&fds, 1, 0) == 1 && (fds.revents & POLLNVAL))
-	use_poll = 0;
-#else
-      internal_error (__FILE__, __LINE__,
-		      _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
+	use_poll = false;
     }
   if (use_poll)
     {
-#ifdef HAVE_POLL
       create_file_handler (fd, POLLIN, proc, client_data, std::move (name),
 			   is_ui);
-#else
-      internal_error (__FILE__, __LINE__,
-		      _("use_poll without HAVE_POLL"));
-#endif
     }
   else
+#endif /* HAVE_POLL */
     create_file_handler (fd, GDB_READABLE | GDB_EXCEPTION,
 			 proc, client_data, std::move (name), is_ui);
 }
@@ -321,9 +333,9 @@ create_file_handler (int fd, int mask, handler_func * proc,
       file_ptr->next_file = gdb_notifier.first_file_handler;
       gdb_notifier.first_file_handler = file_ptr;
 
+#ifdef HAVE_POLL
       if (use_poll)
 	{
-#ifdef HAVE_POLL
 	  gdb_notifier.num_fds++;
 	  if (gdb_notifier.poll_fds)
 	    gdb_notifier.poll_fds =
@@ -336,12 +348,9 @@ create_file_handler (int fd, int mask, handler_func * proc,
 	  (gdb_notifier.poll_fds + gdb_notifier.num_fds - 1)->fd = fd;
 	  (gdb_notifier.poll_fds + gdb_notifier.num_fds - 1)->events = mask;
 	  (gdb_notifier.poll_fds + gdb_notifier.num_fds - 1)->revents = 0;
-#else
-	  internal_error (__FILE__, __LINE__,
-			  _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
 	}
       else
+#endif /* HAVE_POLL */
 	{
 	  if (mask & GDB_READABLE)
 	    FD_SET (fd, &gdb_notifier.check_masks[0]);
@@ -402,10 +411,6 @@ delete_file_handler (int fd)
 {
   file_handler *file_ptr, *prev_ptr = NULL;
   int i;
-#ifdef HAVE_POLL
-  int j;
-  struct pollfd *new_poll_fds;
-#endif
 
   /* Find the entry for the given file.  */
 
@@ -419,9 +424,12 @@ delete_file_handler (int fd)
   if (file_ptr == NULL)
     return;
 
+#ifdef HAVE_POLL
   if (use_poll)
     {
-#ifdef HAVE_POLL
+      int j;
+      struct pollfd *new_poll_fds;
+
       /* Create a new poll_fds array by copying every fd's information
 	 but the one we want to get rid of.  */
 
@@ -442,12 +450,9 @@ delete_file_handler (int fd)
       xfree (gdb_notifier.poll_fds);
       gdb_notifier.poll_fds = new_poll_fds;
       gdb_notifier.num_fds--;
-#else
-      internal_error (__FILE__, __LINE__,
-		      _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
     }
   else
+#endif /* HAVE_POLL */
     {
       if (file_ptr->mask & GDB_READABLE)
 	FD_CLR (fd, &gdb_notifier.check_masks[0]);
@@ -510,70 +515,62 @@ static void
 handle_file_event (file_handler *file_ptr, int ready_mask)
 {
   int mask;
-#ifdef HAVE_POLL
-  int error_mask;
-#endif
 
+  /* See if the desired events (mask) match the received events
+     (ready_mask).  */
+
+#ifdef HAVE_POLL
+  if (use_poll)
     {
+      int error_mask;
+
+      /* With poll, the ready_mask could have any of three events set
+	 to 1: POLLHUP, POLLERR, POLLNVAL.  These events cannot be
+	 used in the requested event mask (events), but they can be
+	 returned in the return mask (revents).  We need to check for
+	 those event too, and add them to the mask which will be
+	 passed to the handler.  */
+
+      /* POLLHUP means EOF, but can be combined with POLLIN to
+	 signal more data to read.  */
+      error_mask = POLLHUP | POLLERR | POLLNVAL;
+      mask = ready_mask & (file_ptr->mask | error_mask);
+
+      if ((mask & (POLLERR | POLLNVAL)) != 0)
 	{
-	  /* With poll, the ready_mask could have any of three events
-	     set to 1: POLLHUP, POLLERR, POLLNVAL.  These events
-	     cannot be used in the requested event mask (events), but
-	     they can be returned in the return mask (revents).  We
-	     need to check for those event too, and add them to the
-	     mask which will be passed to the handler.  */
-
-	  /* See if the desired events (mask) match the received
-	     events (ready_mask).  */
-
-	  if (use_poll)
-	    {
-#ifdef HAVE_POLL
-	      /* POLLHUP means EOF, but can be combined with POLLIN to
-		 signal more data to read.  */
-	      error_mask = POLLHUP | POLLERR | POLLNVAL;
-	      mask = ready_mask & (file_ptr->mask | error_mask);
-
-	      if ((mask & (POLLERR | POLLNVAL)) != 0)
-		{
-		  /* Work in progress.  We may need to tell somebody
-		     what kind of error we had.  */
-		  if (mask & POLLERR)
-		    warning (_("Error detected on fd %d"), file_ptr->fd);
-		  if (mask & POLLNVAL)
-		    warning (_("Invalid or non-`poll'able fd %d"),
-			     file_ptr->fd);
-		  file_ptr->error = 1;
-		}
-	      else
-		file_ptr->error = 0;
-#else
-	      internal_error (__FILE__, __LINE__,
-			      _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
-	    }
-	  else
-	    {
-	      if (ready_mask & GDB_EXCEPTION)
-		{
-		  warning (_("Exception condition detected on fd %d"),
-			   file_ptr->fd);
-		  file_ptr->error = 1;
-		}
-	      else
-		file_ptr->error = 0;
-	      mask = ready_mask & file_ptr->mask;
-	    }
-
-	  /* If there was a match, then call the handler.  */
-	  if (mask != 0)
-	    {
-	      event_loop_ui_debug_printf (file_ptr->is_ui,
-					  "invoking fd file handler `%s`",
-					  file_ptr->name.c_str ());
-	      file_ptr->proc (file_ptr->error, file_ptr->client_data);
-	    }
+	  /* Work in progress.  We may need to tell somebody
+	     what kind of error we had.  */
+	  if (mask & POLLERR)
+	    warning (_("Error detected on fd %d"), file_ptr->fd);
+	  if (mask & POLLNVAL)
+	    warning (_("Invalid or non-`poll'able fd %d"),
+		     file_ptr->fd);
+	  file_ptr->error = 1;
 	}
+      else
+	file_ptr->error = 0;
+    }
+  else
+#endif /* HAVE_POLL */
+    {
+      if (ready_mask & GDB_EXCEPTION)
+	{
+	  warning (_("Exception condition detected on fd %d"),
+		   file_ptr->fd);
+	  file_ptr->error = 1;
+	}
+      else
+	file_ptr->error = 0;
+      mask = ready_mask & file_ptr->mask;
+    }
+
+  /* If there was a match, then call the handler.  */
+  if (mask != 0)
+    {
+      event_loop_ui_debug_printf (file_ptr->is_ui,
+				  "invoking fd file handler `%s`",
+				  file_ptr->name.c_str ());
+      file_ptr->proc (file_ptr->error, file_ptr->client_data);
     }
 }
 
@@ -599,9 +596,9 @@ gdb_wait_for_event (int block)
   if (block)
     update_wait_timeout ();
 
+#ifdef HAVE_POLL
   if (use_poll)
     {
-#ifdef HAVE_POLL
       int timeout;
 
       if (block)
@@ -616,12 +613,9 @@ gdb_wait_for_event (int block)
 	 signal.  */
       if (num_found == -1 && errno != EINTR)
 	perror_with_name (("poll"));
-#else
-      internal_error (__FILE__, __LINE__,
-		      _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
     }
   else
+#endif /* HAVE_POLL */
     {
       struct timeval select_timeout;
       struct timeval *timeout_p;
@@ -670,9 +664,9 @@ gdb_wait_for_event (int block)
   /* To level the fairness across event descriptors, we handle them in
      a round-robin-like fashion.  The number and order of descriptors
      may change between invocations, but this is good enough.  */
+#ifdef HAVE_POLL
   if (use_poll)
     {
-#ifdef HAVE_POLL
       int i;
       int mask;
 
@@ -699,12 +693,9 @@ gdb_wait_for_event (int block)
       mask = (gdb_notifier.poll_fds + i)->revents;
       handle_file_event (file_ptr, mask);
       return 1;
-#else
-      internal_error (__FILE__, __LINE__,
-		      _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
     }
   else
+#endif /* HAVE_POLL */
     {
       /* See comment about even source fairness above.  */
       int mask = 0;
@@ -856,16 +847,11 @@ update_wait_timeout (void)
 	}
 
       /* Update the timeout for select/ poll.  */
-      if (use_poll)
-	{
 #ifdef HAVE_POLL
-	  gdb_notifier.poll_timeout = timeout.tv_sec * 1000;
-#else
-	  internal_error (__FILE__, __LINE__,
-			  _("use_poll without HAVE_POLL"));
-#endif /* HAVE_POLL */
-	}
+      if (use_poll)
+	gdb_notifier.poll_timeout = timeout.tv_sec * 1000;
       else
+#endif /* HAVE_POLL */
 	{
 	  gdb_notifier.select_timeout.tv_sec = timeout.tv_sec;
 	  gdb_notifier.select_timeout.tv_usec = timeout.tv_usec;

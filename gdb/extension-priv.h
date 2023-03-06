@@ -1,7 +1,7 @@
 /* Private implementation details of interface between gdb and its
    extension languages.
 
-   Copyright (C) 2014-2022 Free Software Foundation, Inc.
+   Copyright (C) 2014-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -179,7 +179,7 @@ struct extension_language_ops
      or SCR_BT_COMPLETED on success.  */
   enum ext_lang_bt_status (*apply_frame_filter)
     (const struct extension_language_defn *,
-     struct frame_info *frame, frame_filter_flags flags,
+     frame_info_ptr frame, frame_filter_flags flags,
      enum ext_lang_frame_args args_type,
      struct ui_out *out, int frame_low, int frame_high);
 
@@ -263,6 +263,21 @@ struct extension_language_ops
      contents, or an empty optional.  */
   gdb::optional<std::string> (*colorize_disasm) (const std::string &content,
 						 gdbarch *gdbarch);
+
+  /* Print a single instruction from ADDRESS in architecture GDBARCH.  INFO
+     is the standard libopcodes disassembler_info structure.  Bytes for the
+     instruction being printed should be read using INFO->read_memory_func
+     as the actual instruction bytes might be in a buffer.
+
+     Use INFO->fprintf_func to print the results of the disassembly, and
+     return the length of the instruction.
+
+     If no instruction can be disassembled then return an empty value and
+     other extension languages will get a chance to perform the
+     disassembly.  */
+  gdb::optional<int> (*print_insn) (struct gdbarch *gdbarch,
+				    CORE_ADDR address,
+				    struct disassemble_info *info);
 };
 
 /* State necessary to restore a signal handler to its previous value.  */
@@ -287,8 +302,6 @@ struct active_ext_lang_state
   /* Its SIGINT handler.  */
   struct signal_handler sigint_handler;
 };
-
-extern const struct extension_language_defn *get_active_ext_lang (void);
 
 extern struct active_ext_lang_state *set_active_ext_lang
   (const struct extension_language_defn *);

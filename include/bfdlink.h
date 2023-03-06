@@ -1,5 +1,5 @@
 /* bfdlink.h -- header file for BFD link routines
-   Copyright (C) 1993-2022 Free Software Foundation, Inc.
+   Copyright (C) 1993-2023 Free Software Foundation, Inc.
    Written by Steve Chamberlain and Ian Lance Taylor, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -113,6 +113,9 @@ struct bfd_link_hash_entry
   /* Symbol is referenced in a normal dynamic object file,
      as distinct from a LTO IR object file.  */
   unsigned int non_ir_ref_dynamic : 1;
+
+  /* The symbol, SYM, is referenced by __real_SYM in an object file.  */
+  unsigned int ref_real : 1;
 
   /* Symbol is a built-in define.  These will be overridden by PROVIDE
      in a linker script.  */
@@ -489,6 +492,25 @@ struct bfd_link_info
      flags.  */
   unsigned int noexecstack: 1;
 
+  /* Tri-state variable:
+     0 => do not warn when creating an executable stack.
+     1 => always warn when creating an executable stack.
+     >1 => warn when creating an executable stack if execstack is 0.  */
+  unsigned int warn_execstack: 2;
+
+  /* TRUE if warnings should not be generated for TLS segments with eXecute
+     permission or LOAD segments with RWX permissions.  */
+  unsigned int no_warn_rwx_segments: 1;
+  /* TRUE if the user gave either --warn-rwx-segments or
+     --no-warn-rwx-segments.  */
+  unsigned int user_warn_rwx_segments: 1;
+
+  /* TRUE if the stack can be made executable because of the absence of a
+     .note.GNU-stack section in an input file.  Note - even if this field
+     is set, some targets may choose to ignore the setting and not create
+     an executable stack.  */
+  unsigned int default_execstack : 1;
+  
   /* TRUE if we want to produced optimized output files.  This might
      need much more time and therefore must be explicitly selected.  */
   unsigned int optimize: 1;
@@ -542,9 +564,6 @@ struct bfd_link_info
 
   /* Separator between archive and filename in linker script filespecs.  */
   char path_separator;
-
-  /* Compress DWARF debug sections.  */
-  enum compressed_debug_section_type compress_debug;
 
   /* Default stack size.  Zero means default (often zero itself), -1
      means explicitly zero-sized.  */

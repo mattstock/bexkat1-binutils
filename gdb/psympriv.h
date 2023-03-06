@@ -1,6 +1,6 @@
 /* Private partial symbol table definitions.
 
-   Copyright (C) 2009-2022 Free Software Foundation, Inc.
+   Copyright (C) 2009-2023 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -71,7 +71,7 @@ struct partial_symbol
 
   /* Name space code.  */
 
-  ENUM_BITFIELD(domain_enum_tag) domain : SYMBOL_DOMAIN_BITS;
+  ENUM_BITFIELD(domain_enum) domain : SYMBOL_DOMAIN_BITS;
 
   /* Address class (for info_symbols).  Note that we don't allow
      synthetic "aclass" values here at present, simply because there's
@@ -277,11 +277,11 @@ struct partial_symtab
   const char *dirname = nullptr;
 
   /* Range of text addresses covered by this file; texthigh is the
-     beginning of the next section.  Do not use if PSYMTABS_ADDRMAP_SUPPORTED
-     is set.  Do not refer directly to these fields.  Instead, use the
-     accessors.  The validity of these fields is determined by the
-     text_low_valid and text_high_valid fields; these are located later
-     in this structure for better packing.  */
+     beginning of the next section.  Do not refer directly to these
+     fields.  Instead, use the accessors.  The validity of these
+     fields is determined by the text_low_valid and text_high_valid
+     fields; these are located later in this structure for better
+     packing.  */
 
   CORE_ADDR m_text_low = 0;
   CORE_ADDR m_text_high = 0;
@@ -342,12 +342,6 @@ struct partial_symtab
      how long errors take).  */
 
   std::vector<partial_symbol *> static_psymbols;
-
-  /* True iff objfile->psymtabs_addrmap is properly populated for this
-     partial_symtab.  For discontiguous overlapping psymtabs is the only usable
-     info in PSYMTABS_ADDRMAP.  */
-
-  bool psymtabs_addrmap_supported = false;
 
   /* True if the name of this partial symtab is not a source file name.  */
 
@@ -542,20 +536,17 @@ struct psymbol_functions : public quick_symbol_functions
      CORE_ADDR pc, struct obj_section *section, int warn_if_readin) override;
 
   struct compunit_symtab *find_compunit_symtab_by_address
-    (struct objfile *objfile, CORE_ADDR address) override;
+    (struct objfile *objfile, CORE_ADDR address) override
+  {
+    return nullptr;
+  }
 
   void map_symbol_filenames (struct objfile *objfile,
 			     gdb::function_view<symbol_filename_ftype> fun,
 			     bool need_fullname) override;
 
-  void relocated () override
-  {
-    m_psymbol_map.clear ();
-  }
-
-  /* Ensure the partial symbols for OBJFILE have been loaded.  Return
-     a range adapter for the psymtabs.  */
-  psymtab_storage::partial_symtab_range require_partial_symbols
+  /* Return a range adapter for the psymtabs.  */
+  psymtab_storage::partial_symtab_range partial_symbols
        (struct objfile *objfile);
 
   /* Return the partial symbol storage associated with this
@@ -595,11 +586,6 @@ private:
 
   /* Storage for the partial symbols.  */
   std::shared_ptr<psymtab_storage> m_partial_symtabs;
-
-  /* Map symbol addresses to the partial symtab that defines the
-     object at that address.  */
-
-  std::vector<std::pair<CORE_ADDR, partial_symtab *>> m_psymbol_map;
 };
 
 #endif /* PSYMPRIV_H */

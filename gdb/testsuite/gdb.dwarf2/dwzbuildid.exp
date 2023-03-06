@@ -1,4 +1,4 @@
-# Copyright 2013-2022 Free Software Foundation, Inc.
+# Copyright 2013-2023 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,14 +16,10 @@
 load_lib dwarf.exp
 
 # This test can only be run on targets which support DWARF-2 and use gas.
-if {![dwarf2_support]} {
-    return 0
-}
+require dwarf2_support
 
 # No remote host testing either.
-if {[is_remote host]} {
-    return 0
-}
+require {!is_remote host}
 
 
 # Lots of source files since we test a few cases and make new files
@@ -150,9 +146,7 @@ if {[gdb_compile [list ${binfile}1.o ${binfile}6.o] ${binfile}-fallback \
 
 foreach testname {ok mismatch fallback} {
     with_test_prefix $testname {
-	gdb_exit
-	gdb_start
-	gdb_reinitialize_dir $srcdir/$subdir
+	clean_restart
 
 	gdb_test_no_output "set debug-file-directory $debugdir" \
 	    "set debug-file-directory"
