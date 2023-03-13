@@ -94,7 +94,7 @@ static reloc_howto_type bexkat1_elf_howto_table[] =
 	  true),                  /* pcrel_offset */
     HOWTO(R_BEXKAT1_32,           /* type */
 	  0,                      /* rightshift */
-	  2,                      /* size */
+	  4,                      /* size */
 	  32,                     /* bitsize */
 	  false,                  /* pc_relative */
 	  0,                      /* bitops */

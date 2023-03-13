@@ -258,6 +258,7 @@ mif_get_section_contents (bfd *abfd ATTRIBUTE_UNUSED,
 #define mif_bfd_is_local_label_name              _bfd_nosymbols_bfd_is_local_label_name
 #define mif_get_lineno                           _bfd_nosymbols_get_lineno
 #define mif_find_nearest_line                    _bfd_nosymbols_find_nearest_line
+#define mif_find_nearest_line_with_alt           _bfd_nosymbols_find_nearest_line_with_alt
 #define mif_find_line                            _bfd_nosymbols_find_line
 #define mif_find_inliner_info                    _bfd_nosymbols_find_inliner_info
 #define mif_bfd_make_debug_symbol                _bfd_nosymbols_bfd_make_debug_symbol
