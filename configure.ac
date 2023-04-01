@@ -1130,7 +1130,7 @@ case "${target}" in
     fi
     ;;
   bexkat1-*-*)
-    noconfigdirs="$noconfigdirs sim gprof"
+    noconfigdirs="$noconfigdirs"
     ;;
   c4x-*-* | tic4x-*-*)
     noconfigdirs="$noconfigdirs target-libgloss"

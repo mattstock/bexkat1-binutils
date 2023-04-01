@@ -3425,6 +3425,8 @@ esac
 
 # Disable libssp for some systems.
 case "${target}" in
+  bexkat1-*-*)
+    noconfigdirs="$noconfigdirs target-libssp"
   avr-*-*)
     # No hosted I/O support.
     noconfigdirs="$noconfigdirs target-libssp"
@@ -3895,7 +3897,7 @@ case "${target}" in
     fi
     ;;
   bexkat1-*-*)
-    noconfigdirs="$noconfigdirs sim gprof"
+    noconfigdirs="$noconfigdirs"
     ;;
   c4x-*-* | tic4x-*-*)
     noconfigdirs="$noconfigdirs target-libgloss"
