@@ -115,6 +115,9 @@ endif
 if SIM_ENABLE_ARCH_avr
 include avr/local.mk
 endif
+if SIM_ENABLE_ARCH_bexkat1
+include bexkat1/local.mk
+endif
 if SIM_ENABLE_ARCH_bfin
 include bfin/local.mk
 endif

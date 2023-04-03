@@ -666,6 +666,7 @@ esac
 case "${target}" in
   bexkat1-*-*)
     noconfigdirs="$noconfigdirs target-libssp"
+    ;;
   avr-*-*)
     # No hosted I/O support.
     noconfigdirs="$noconfigdirs target-libssp"
