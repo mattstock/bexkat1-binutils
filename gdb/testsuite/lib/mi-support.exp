@@ -1267,7 +1267,11 @@ proc mi_expect_stop { reason func args file line extra test } {
 
     set r ""
     if { $reason != "" } {
-	set r "reason=\"$reason\","
+	if { [regexp {"} $reason] } {
+	   set r "reason=$reason,"
+	} else {
+	   set r "reason=\"$reason\","
+	}	
     }
 
 
@@ -1422,11 +1426,11 @@ proc mi_create_varobj_checked { name expression type testname } {
 }
 
 # Same as mi_create_floating_varobj, but assumes the test is creating
-# a dynamic varobj that has children, so the value must be "{...}".
-# The "has_more" attribute is checked.
-proc mi_create_dynamic_varobj {name expression has_more testname} {
+# a dynamic varobj that has children.  The "value" and "has_more"
+# attributes are checked.
+proc mi_create_dynamic_varobj {name expression value has_more testname} {
     mi_gdb_test "-var-create $name @ $expression" \
-	"\\^done,name=\"$name\",numchild=\"0\",value=\"{\\.\\.\\.}\",type=.*,has_more=\"${has_more}\"" \
+	"\\^done,name=\"$name\",numchild=\"0\",value=\"$value\",type=.*,has_more=\"${has_more}\"" \
 	$testname
 }
 
@@ -2069,20 +2073,38 @@ proc check_mi_and_console_threads {name} {
   }
 }
 
+# Set solib-search-path to allow gdb to locate shlib FILE.
+proc mi_locate_shlib { file } {
+    global mi_spawn_id
+
+    if ![info exists mi_spawn_id] {
+	perror "mi_locate_shlib: GDB is not running"
+    }
+
+    # If the target is remote, we need to tell gdb where to find the
+    # libraries.
+    if { ![is_remote target] } {
+	return
+    }
+
+    # We could set this even when not testing remotely, but a user
+    # generally won't set it unless necessary.  In order to make the tests
+    # more like the real-life scenarios, we don't set it for local testing.
+    mi_gdb_test "set solib-search-path [file dirname $file]" "\^done" ""
+}
+
+# Copy shlib FILE to the target and set solib-search-path to allow gdb to
+# locate it.
+proc mi_load_shlib { file } {
+    set dest [gdb_download_shlib $file]
+    mi_locate_shlib $file
+    return $dest
+}
+
 # Download shared libraries to the target.
 proc mi_load_shlibs { args } {
     foreach file $args {
-	gdb_remote_download target [shlib_target_file $file]
-    }
-
-    if {[is_remote target]} {
-	# If the target is remote, we need to tell gdb where to find the
-	# libraries.
-	#
-	# We could set this even when not testing remotely, but a user
-	# generally won't set it unless necessary.  In order to make the tests
-	# more like the real-life scenarios, we don't set it for local testing.
-	mi_gdb_test "set solib-search-path [file dirname [lindex $args 0]]" "\^done" ""
+	mi_load_shlib $file
     }
 }
 

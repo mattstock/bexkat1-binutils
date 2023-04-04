@@ -305,6 +305,9 @@ COMMON int flag_keep_locals; /* -L */
 /* True if we are assembling in MRI mode.  */
 COMMON int flag_mri;
 
+/* True if alternate macro mode is in effect.  */
+COMMON bool flag_macro_alternate;
+
 /* Should the data section be made read-only and appended to the text
    section?  */
 COMMON unsigned char flag_readonly_data_in_text; /* -R */
@@ -538,6 +541,7 @@ int check_eh_frame (struct expressionS *, unsigned int *);
 int eh_frame_estimate_size_before_relax (fragS *);
 int eh_frame_relax_frag (fragS *);
 void eh_frame_convert_frag (fragS *);
+void eh_begin (void);
 int generic_force_reloc (struct fix *);
 
 /* SFrame FRE optimization.  */

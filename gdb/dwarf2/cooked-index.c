@@ -33,6 +33,7 @@
 #include "gdbsupport/selftest.h"
 #include <chrono>
 #include <unordered_set>
+#include "cli/cli-cmds.h"
 
 /* We don't want gdb to exit while it is in the process of writing to
    the index cache.  So, all live cooked index vectors are stored
@@ -377,6 +378,7 @@ cooked_index_shard::do_finalize ()
 		  entry->canonical = canon_name.get ();
 		  m_names.push_back (std::move (canon_name));
 		}
+	      *slot = entry;
 	    }
 	  else
 	    {
@@ -441,24 +443,30 @@ cooked_index_shard::wait (bool allow_quit) const
     m_future.wait ();
 }
 
-cooked_index::cooked_index (vec_type &&vec, dwarf2_per_bfd *per_bfd)
+cooked_index::cooked_index (vec_type &&vec)
   : m_vector (std::move (vec))
 {
   for (auto &idx : m_vector)
     idx->finalize ();
 
-  /* This must be set after all the finalization tasks have been
-     started, because it may call 'wait'.  */
-  m_write_future
-    = gdb::thread_pool::g_thread_pool->post_task ([this, per_bfd] ()
-      {
-	maybe_write_index (per_bfd);
-      });
-
   /* ACTIVE_VECTORS is not locked, and this assert ensures that this
      will be caught if ever moved to the background.  */
   gdb_assert (is_main_thread ());
   active_vectors.insert (this);
+}
+
+/* See cooked-index.h.  */
+
+void
+cooked_index::start_writing_index (dwarf2_per_bfd *per_bfd)
+{
+  /* This must be set after all the finalization tasks have been
+     started, because it may call 'wait'.  */
+  m_write_future
+    = gdb::thread_pool::g_thread_pool->post_task ([this, per_bfd] ()
+	{
+	  maybe_write_index (per_bfd);
+	});
 }
 
 cooked_index::~cooked_index ()
@@ -640,6 +648,14 @@ wait_for_index_cache (int)
     item->wait_completely ();
 }
 
+/* A maint command to wait for the cache.  */
+
+static void
+maintenance_wait_for_index_cache (const char *args, int from_tty)
+{
+  wait_for_index_cache (0);
+}
+
 void _initialize_cooked_index ();
 void
 _initialize_cooked_index ()
@@ -647,6 +663,12 @@ _initialize_cooked_index ()
 #if GDB_SELF_TEST
   selftests::register_test ("cooked_index_entry::compare", test_compare);
 #endif
+
+  add_cmd ("wait-for-index-cache", class_maintenance,
+	   maintenance_wait_for_index_cache, _("\
+Wait until all pending writes to the index cache have completed.\n\
+Usage: maintenance wait-for-index-cache"),
+	   &maintenancelist);
 
   gdb::observers::gdb_exiting.attach (wait_for_index_cache, "cooked-index");
 }

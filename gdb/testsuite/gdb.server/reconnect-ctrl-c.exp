@@ -21,10 +21,7 @@ load_lib gdbserver-support.exp
 
 require allow_gdbserver_tests
 
-if [target_info exists gdb,nointerrupts] {
-    verbose "Skipping reconnect-ctrl-c.exp because of nointerrupts."
-    return
-}
+require {!target_info exists gdb,nointerrupts}
 
 standard_testfile
 
@@ -39,6 +36,8 @@ save_vars { GDBFLAGS } {
 	return -1
     }
 }
+
+set target_binfile [gdb_remote_download target $binfile]
 
 # Make sure we're disconnected, in case we're testing with an
 # extended-remote board, therefore already connected.
@@ -70,7 +69,7 @@ proc connect_continue_ctrl_c {} {
 with_test_prefix "first" {
     # Start GDBserver.
     set gdbserver_reconnect_p 1
-    set res [gdbserver_start "" $binfile]
+    set res [gdbserver_start "" $target_binfile]
     set gdbserver_protocol [lindex $res 0]
     set gdbserver_gdbport [lindex $res 1]
 

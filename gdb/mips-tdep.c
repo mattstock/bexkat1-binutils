@@ -436,12 +436,14 @@ mips_elf_make_msymbol_special (asymbol * sym, struct minimal_symbol *msym)
   if (ELF_ST_IS_MICROMIPS (st_other))
     {
       SET_MSYMBOL_TARGET_FLAG_MICROMIPS (msym);
-      msym->set_value_address (msym->value_raw_address () | 1);
+      CORE_ADDR fixed = CORE_ADDR (msym->unrelocated_address ()) | 1;
+      msym->set_unrelocated_address (unrelocated_addr (fixed));
     }
   else if (ELF_ST_IS_MIPS16 (st_other))
     {
       SET_MSYMBOL_TARGET_FLAG_MIPS16 (msym);
-      msym->set_value_address (msym->value_raw_address () | 1);
+      CORE_ADDR fixed = CORE_ADDR (msym->unrelocated_address ()) | 1;
+      msym->set_unrelocated_address (unrelocated_addr (fixed));
     }
 }
 
@@ -5219,13 +5221,13 @@ mips_n32n64_return_value (struct gdbarch *gdbarch, struct value *function,
      From MIPSpro Assembly Language Programmer's Guide, Document Number:
      007-2418-004
 
-              Software
+	      Software
      Register Name(from
      Name     fgregdef.h) Use and Linkage
      -----------------------------------------------------------------
      $f0, $f2 fv0, fv1    Hold results of floating-point type function
-                          ($f0) and complex type function ($f0 has the
-                          real part, $f2 has the imaginary part.)  */
+			  ($f0) and complex type function ($f0 has the
+			  real part, $f2 has the imaginary part.)  */
 
   if (type->length () > 2 * MIPS64_REGSIZE)
     return RETURN_VALUE_STRUCT_CONVENTION;

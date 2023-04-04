@@ -570,7 +570,7 @@ add_data_symbol (SYMR *sh, union aux_ext *ax, int bigend,
   /* Type could be missing if file is compiled without debugging info.  */
   if (SC_IS_UNDEF (sh->sc)
       || sh->sc == scNil || sh->index == indexNil)
-    s->set_type (objfile_type (objfile)->nodebug_data_symbol);
+    s->set_type (builtin_type (objfile)->nodebug_data_symbol);
   else
     s->set_type (parse_type (cur_fd, ax, sh->index, 0, bigend, name));
   /* Value of a data symbol is its memory address.  */
@@ -715,7 +715,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       s->set_aclass_index (LOC_LABEL);	/* but not misused.  */
       s->set_section_index (section_index);
       s->set_value_address (sh->value);
-      s->set_type (objfile_type (objfile)->builtin_int);
+      s->set_type (builtin_type (objfile)->builtin_int);
       add_symbol (s, top_stack->cur_st, top_stack->cur_block);
       break;
 
@@ -758,7 +758,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
       s->set_section_index (section_index);
       /* Type of the return value.  */
       if (SC_IS_UNDEF (sh->sc) || sh->sc == scNil)
-	t = objfile_type (objfile)->builtin_int;
+	t = builtin_type (objfile)->builtin_int;
       else
 	{
 	  t = parse_type (cur_fd, ax, sh->index + 1, 0, bigend, name);
@@ -1167,7 +1167,7 @@ parse_symbol (SYMR *sh, union aux_ext *ax, char *ext_sh, int bigend,
 	  s = new_symbol (MDEBUG_EFI_SYMBOL_NAME);
 	  s->set_domain (LABEL_DOMAIN);
 	  s->set_aclass_index (LOC_CONST);
-	  s->set_type (objfile_type (mdebugread_objfile)->builtin_void);
+	  s->set_type (builtin_type (mdebugread_objfile)->builtin_void);
 	  e = OBSTACK_ZALLOC (&mdebugread_objfile->objfile_obstack,
 			      mdebug_extra_func_info);
 	  s->set_value_bytes ((gdb_byte *) e);
@@ -1386,57 +1386,59 @@ basic_type (int bt, struct objfile *objfile)
   if (map_bt[bt])
     return map_bt[bt];
 
+  type_allocator alloc (objfile);
+
   switch (bt)
     {
     case btNil:
-      tp = objfile_type (objfile)->builtin_void;
+      tp = builtin_type (objfile)->builtin_void;
       break;
 
     case btAdr:
-      tp = init_pointer_type (objfile, 32, "adr_32",
-			      objfile_type (objfile)->builtin_void);
+      tp = init_pointer_type (alloc, 32, "adr_32",
+			      builtin_type (objfile)->builtin_void);
       break;
 
     case btChar:
-      tp = init_integer_type (objfile, 8, 0, "char");
+      tp = init_integer_type (alloc, 8, 0, "char");
       tp->set_has_no_signedness (true);
       break;
 
     case btUChar:
-      tp = init_integer_type (objfile, 8, 1, "unsigned char");
+      tp = init_integer_type (alloc, 8, 1, "unsigned char");
       break;
 
     case btShort:
-      tp = init_integer_type (objfile, 16, 0, "short");
+      tp = init_integer_type (alloc, 16, 0, "short");
       break;
 
     case btUShort:
-      tp = init_integer_type (objfile, 16, 1, "unsigned short");
+      tp = init_integer_type (alloc, 16, 1, "unsigned short");
       break;
 
     case btInt:
-      tp = init_integer_type (objfile, 32, 0, "int");
+      tp = init_integer_type (alloc, 32, 0, "int");
       break;
 
    case btUInt:
-      tp = init_integer_type (objfile, 32, 1, "unsigned int");
+      tp = init_integer_type (alloc, 32, 1, "unsigned int");
       break;
 
     case btLong:
-      tp = init_integer_type (objfile, 32, 0, "long");
+      tp = init_integer_type (alloc, 32, 0, "long");
       break;
 
     case btULong:
-      tp = init_integer_type (objfile, 32, 1, "unsigned long");
+      tp = init_integer_type (alloc, 32, 1, "unsigned long");
       break;
 
     case btFloat:
-      tp = init_float_type (objfile, gdbarch_float_bit (gdbarch),
+      tp = init_float_type (alloc, gdbarch_float_bit (gdbarch),
 			    "float", gdbarch_float_format (gdbarch));
       break;
 
     case btDouble:
-      tp = init_float_type (objfile, gdbarch_double_bit (gdbarch),
+      tp = init_float_type (alloc, gdbarch_double_bit (gdbarch),
 			    "double", gdbarch_double_format (gdbarch));
       break;
 
@@ -1452,52 +1454,52 @@ basic_type (int bt, struct objfile *objfile)
       /* We use TYPE_CODE_INT to print these as integers.  Does this do any
 	 good?  Would we be better off with TYPE_CODE_ERROR?  Should
 	 TYPE_CODE_ERROR print things in hex if it knows the size?  */
-      tp = init_integer_type (objfile, gdbarch_int_bit (gdbarch), 0,
+      tp = init_integer_type (alloc, gdbarch_int_bit (gdbarch), 0,
 			      "fixed decimal");
       break;
 
     case btFloatDec:
-      tp = init_type (objfile, TYPE_CODE_ERROR,
-		      gdbarch_double_bit (gdbarch), "floating decimal");
+      tp = alloc.new_type (TYPE_CODE_ERROR,
+			   gdbarch_double_bit (gdbarch), "floating decimal");
       break;
 
     case btString:
       /* Is a "string" the way btString means it the same as TYPE_CODE_STRING?
 	 FIXME.  */
-      tp = init_type (objfile, TYPE_CODE_STRING, TARGET_CHAR_BIT, "string");
+      tp = alloc.new_type (TYPE_CODE_STRING, TARGET_CHAR_BIT, "string");
       break;
 
     case btVoid:
-      tp = objfile_type (objfile)->builtin_void;
+      tp = builtin_type (objfile)->builtin_void;
       break;
 
     case btLong64:
-      tp = init_integer_type (objfile, 64, 0, "long");
+      tp = init_integer_type (alloc, 64, 0, "long");
       break;
 
     case btULong64:
-      tp = init_integer_type (objfile, 64, 1, "unsigned long");
+      tp = init_integer_type (alloc, 64, 1, "unsigned long");
       break;
 
     case btLongLong64:
-      tp = init_integer_type (objfile, 64, 0, "long long");
+      tp = init_integer_type (alloc, 64, 0, "long long");
       break;
 
     case btULongLong64:
-      tp = init_integer_type (objfile, 64, 1, "unsigned long long");
+      tp = init_integer_type (alloc, 64, 1, "unsigned long long");
       break;
 
     case btAdr64:
-      tp = init_pointer_type (objfile, 64, "adr_64",
-			      objfile_type (objfile)->builtin_void);
+      tp = init_pointer_type (alloc, 64, "adr_64",
+			      builtin_type (objfile)->builtin_void);
       break;
 
     case btInt64:
-      tp = init_integer_type (objfile, 64, 0, "int");
+      tp = init_integer_type (alloc, 64, 0, "int");
       break;
 
     case btUInt64:
-      tp = init_integer_type (objfile, 64, 1, "unsigned int");
+      tp = init_integer_type (alloc, 64, 1, "unsigned int");
       break;
 
     default:
@@ -1573,6 +1575,8 @@ parse_type (int fd, union aux_ext *ax, unsigned int aux_index, int *bs,
 	}
     }
 
+  type_allocator alloc (mdebugread_objfile);
+
   /* Move on to next aux.  */
   ax++;
 
@@ -1647,7 +1651,7 @@ parse_type (int fd, union aux_ext *ax, unsigned int aux_index, int *bs,
       /* Try to cross reference this type, build new type on failure.  */
       ax += cross_ref (fd, ax, &tp, type_code, &name, bigend, sym_name);
       if (tp == NULL)
-	tp = init_type (mdebugread_objfile, type_code, 0, NULL);
+	tp = alloc.new_type (type_code, 0, NULL);
 
       /* DEC c89 produces cross references to qualified aggregate types,
 	 dereference them.  */
@@ -1705,7 +1709,7 @@ parse_type (int fd, union aux_ext *ax, unsigned int aux_index, int *bs,
       /* Try to cross reference this type, build new type on failure.  */
       ax += cross_ref (fd, ax, &tp, type_code, &name, bigend, sym_name);
       if (tp == NULL)
-	tp = init_type (mdebugread_objfile, type_code, 0, NULL);
+	tp = alloc.new_type (type_code, 0, NULL);
 
       /* Make sure that TYPE_CODE(tp) has an expected type code.
 	 Any type may be returned from cross_ref if file indirect entries
@@ -1847,7 +1851,7 @@ upgrade_type (int fd, struct type **tpp, int tq, union aux_ext *ax, int bigend,
 	{
 	  complaint (_("illegal array index type for %s, assuming int"),
 		     sym_name);
-	  indx = objfile_type (mdebugread_objfile)->builtin_int;
+	  indx = builtin_type (mdebugread_objfile)->builtin_int;
 	}
 
       /* Get the bounds, and create the array type.  */
@@ -1858,9 +1862,12 @@ upgrade_type (int fd, struct type **tpp, int tq, union aux_ext *ax, int bigend,
       ax++;
       rf = AUX_GET_WIDTH (bigend, ax);	/* bit size of array element */
 
-      range = create_static_range_type (NULL, indx, lower, upper);
+      {
+	type_allocator alloc (indx);
+	range = create_static_range_type (alloc, indx, lower, upper);
 
-      t = create_array_type (NULL, *tpp, range);
+	t = create_array_type (alloc, *tpp, range);
+      }
 
       /* We used to fill in the supplied array element bitsize
 	 here if the TYPE_LENGTH of the target type was zero.
@@ -1996,7 +2003,7 @@ parse_procedure (PDR *pr, struct compunit_symtab *search_symtab,
       SYMBOL_CLASS (s) = LOC_BLOCK;
       /* Don't know its type, hope int is ok.  */
       s->type ()
-	= lookup_function_type (objfile_type (pst->objfile)->builtin_int);
+	= lookup_function_type (builtin_type (pst->objfile)->builtin_int);
       add_symbol (s, top_stack->cur_st, top_stack->cur_block);
       /* Won't have symbols for this one.  */
       b = new_block (2);
@@ -2050,7 +2057,7 @@ parse_procedure (PDR *pr, struct compunit_symtab *search_symtab,
   if (processing_gcc_compilation == 0
       && found_ecoff_debugging_info == 0
       && s->type ()->target_type ()->code () == TYPE_CODE_VOID)
-    s->set_type (objfile_type (mdebugread_objfile)->nodebug_text_symbol);
+    s->set_type (builtin_type (mdebugread_objfile)->nodebug_text_symbol);
 }
 
 /* Parse the external symbol ES.  Just call parse_symbol() after
@@ -2152,7 +2159,7 @@ parse_external (EXTR *es, int bigend, const section_offsets &section_offsets,
 
 static void
 parse_lines (FDR *fh, PDR *pr, struct linetable *lt, int maxlines,
-	     CORE_ADDR textlow, CORE_ADDR lowest_pdr_addr)
+	     CORE_ADDR lowest_pdr_addr)
 {
   unsigned char *base;
   int j, k;
@@ -2183,7 +2190,7 @@ parse_lines (FDR *fh, PDR *pr, struct linetable *lt, int maxlines,
 	halt = base + fh->cbLine;
       base += pr->cbLineOffset;
 
-      adr = textlow + pr->adr - lowest_pdr_addr;
+      adr = pr->adr - lowest_pdr_addr;
 
       l = adr >> 2;		/* in words */
       for (lineno = pr->lnLow; base < halt;)
@@ -2228,7 +2235,7 @@ function_outside_compilation_unit_complaint (const char *arg1)
 
 static void
 record_minimal_symbol (minimal_symbol_reader &reader,
-		       const char *name, const CORE_ADDR address,
+		       const char *name, const unrelocated_addr address,
 		       enum minimal_symbol_type ms_type, int storage_class,
 		       struct objfile *objfile)
 {
@@ -2454,7 +2461,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
   for (; ext_in < ext_in_end; ext_in++)
     {
       enum minimal_symbol_type ms_type = mst_text;
-      CORE_ADDR svalue = ext_in->asym.value;
+      unrelocated_addr svalue = unrelocated_addr (ext_in->asym.value);
 
       /* The Irix 5 native tools seem to sometimes generate bogus
 	 external symbols.  */
@@ -2594,7 +2601,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
     {
       legacy_psymtab *save_pst;
       EXTR *ext_ptr;
-      CORE_ADDR textlow;
+      unrelocated_addr textlow;
 
       cur_fdr = fh = debug_info->fdr + f_idx;
 
@@ -2607,9 +2614,9 @@ parse_partial_symbols (minimal_symbol_reader &reader,
       /* Determine the start address for this object file from the
 	 file header and relocate it, except for Irix 5.2 zero fh->adr.  */
       if (fh->cpd)
-	textlow = fh->adr;
+	textlow = unrelocated_addr (fh->adr);
       else
-	textlow = 0;
+	textlow = unrelocated_addr (0);
       pst = new legacy_psymtab (fdr_name (fh), partial_symtabs,
 				objfile->per_bfd, textlow);
       pst->read_symtab_private = XOBNEW (&objfile->objfile_obstack, md_symloc);
@@ -2652,7 +2659,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 	psymtab_language = prev_language;
       PST_PRIVATE (pst)->pst_language = psymtab_language;
 
-      pst->set_text_high (pst->raw_text_low ());
+      pst->set_text_high (pst->unrelocated_text_low ());
 
       /* For stabs-in-ecoff files, the second symbol must be @stab.
 	 This symbol is emitted by mips-tfile to signal that the
@@ -2688,17 +2695,18 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 		{
 		  if (sh.st == stProc || sh.st == stStaticProc)
 		    {
-		      CORE_ADDR procaddr;
+		      unrelocated_addr procaddr;
 		      long isym;
 
 		      if (sh.st == stStaticProc)
 			{
 			  namestring = debug_info->ss + fh->issBase + sh.iss;
-			  record_minimal_symbol (reader, namestring, sh.value,
+			  record_minimal_symbol (reader, namestring,
+						 unrelocated_addr (sh.value),
 						 mst_file_text, sh.sc,
 						 objfile);
 			}
-		      procaddr = sh.value;
+		      procaddr = unrelocated_addr (sh.value);
 
 		      isym = AUX_GET_ISYM (fh->fBigendian,
 					   (debug_info->external_aux
@@ -2711,14 +2719,16 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 				      &sh);
 		      if (sh.st == stEnd)
 			{
-			  CORE_ADDR high = procaddr + sh.value;
+			  unrelocated_addr high
+			    = unrelocated_addr (CORE_ADDR (procaddr)
+						+ sh.value);
 
 			  /* Kludge for Irix 5.2 zero fh->adr.  */
 			  if (!relocatable
 			      && (!pst->text_low_valid
-				  || procaddr < pst->raw_text_low ()))
+				  || procaddr < pst->unrelocated_text_low ()))
 			    pst->set_text_low (procaddr);
-			  if (high > pst->raw_text_high ())
+			  if (high > pst->unrelocated_text_high ())
 			    pst->set_text_high (high);
 			}
 		    }
@@ -2738,7 +2748,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 			case scPData:
 			case scXData:
 			  namestring = debug_info->ss + fh->issBase + sh.iss;
-			  record_minimal_symbol (reader, namestring, sh.value,
+			  record_minimal_symbol (reader, namestring,
+						 unrelocated_addr (sh.value),
 						 mst_file_data, sh.sc,
 						 objfile);
 			  break;
@@ -2747,7 +2758,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 			  /* FIXME!  Shouldn't this use cases for bss, 
 			     then have the default be abs?  */
 			  namestring = debug_info->ss + fh->issBase + sh.iss;
-			  record_minimal_symbol (reader, namestring, sh.value,
+			  record_minimal_symbol (reader, namestring,
+						 unrelocated_addr (sh.value),
 						 mst_file_bss, sh.sc,
 						 objfile);
 			  break;
@@ -3047,7 +3059,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 					  true, VAR_DOMAIN, LOC_STATIC,
 					  SECT_OFF_DATA (objfile),
 					  psymbol_placement::STATIC,
-					  sh.value,
+					  unrelocated_addr (sh.value),
 					  psymtab_language,
 					  partial_symtabs, objfile);
 			continue;
@@ -3060,7 +3072,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 					  true, VAR_DOMAIN, LOC_STATIC,
 					  SECT_OFF_DATA (objfile),
 					  psymbol_placement::GLOBAL,
-					  sh.value,
+					  unrelocated_addr (sh.value),
 					  psymtab_language,
 					  partial_symtabs, objfile);
 			continue;
@@ -3079,7 +3091,9 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 			    pst->add_psymbol
 			      (gdb::string_view (namestring, p - namestring),
 			       true, STRUCT_DOMAIN, LOC_TYPEDEF, -1,
-			       psymbol_placement::STATIC, 0, psymtab_language,
+			       psymbol_placement::STATIC,
+			       unrelocated_addr (0),
+			       psymtab_language,
 			       partial_symtabs, objfile);
 			    if (p[2] == 't')
 			      {
@@ -3088,7 +3102,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 				  (gdb::string_view (namestring,
 						     p - namestring),
 				   true, VAR_DOMAIN, LOC_TYPEDEF, -1,
-				   psymbol_placement::STATIC, 0,
+				   psymbol_placement::STATIC,
+				   unrelocated_addr (0),
 				   psymtab_language,
 				   partial_symtabs, objfile);
 				p += 1;
@@ -3103,7 +3118,9 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 			      (gdb::string_view (namestring,
 						 p - namestring),
 			       true, VAR_DOMAIN, LOC_TYPEDEF, -1,
-			       psymbol_placement::STATIC, 0, psymtab_language,
+			       psymbol_placement::STATIC,
+			       unrelocated_addr (0),
+			       psymtab_language,
 			       partial_symtabs, objfile);
 			  }
 		      check_enum:
@@ -3170,7 +3187,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 						  true, VAR_DOMAIN,
 						  LOC_CONST, -1,
 						  psymbol_placement::STATIC,
-						  0, psymtab_language,
+						  unrelocated_addr (0),
+						  psymtab_language,
 						  partial_symtabs, objfile);
 				/* Point past the name.  */
 				p = q;
@@ -3189,7 +3207,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 							    p - namestring),
 					  true, VAR_DOMAIN, LOC_CONST, -1,
 					  psymbol_placement::STATIC,
-					  0, psymtab_language,
+					  unrelocated_addr (0),
+					  psymtab_language,
 					  partial_symtabs, objfile);
 			continue;
 
@@ -3205,7 +3224,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 					  true, VAR_DOMAIN, LOC_BLOCK,
 					  SECT_OFF_TEXT (objfile),
 					  psymbol_placement::STATIC,
-					  sh.value,
+					  unrelocated_addr (sh.value),
 					  psymtab_language,
 					  partial_symtabs, objfile);
 			continue;
@@ -3226,7 +3245,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 					  true, VAR_DOMAIN, LOC_BLOCK,
 					  SECT_OFF_TEXT (objfile),
 					  psymbol_placement::GLOBAL,
-					  sh.value,
+					  unrelocated_addr (sh.value),
 					  psymtab_language,
 					  partial_symtabs, objfile);
 			continue;
@@ -3297,8 +3316,12 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 		    continue;
 
 		  case N_RBRAC:
-		    if (sh.value > save_pst->raw_text_high ())
-		      save_pst->set_text_high (sh.value);
+		    {
+		      unrelocated_addr unrel_value
+			= unrelocated_addr (sh.value);
+		      if (unrel_value > save_pst->unrelocated_text_high ())
+			save_pst->set_text_high (unrel_value);
+		    }
 		    continue;
 		  case N_EINCL:
 		  case N_DSLINE:
@@ -3349,7 +3372,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 	    {
 	      char *sym_name;
 	      enum address_class theclass;
-	      CORE_ADDR minsym_value;
+	      unrelocated_addr minsym_value;
 	      short section = -1;
 
 	      (*swap_sym_in) (cur_bfd,
@@ -3376,7 +3399,7 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 
 	      sym_name = debug_info->ss + fh->issBase + sh.iss;
 
-	      minsym_value = sh.value;
+	      minsym_value = unrelocated_addr (sh.value);
 
 	      switch (sh.sc)
 		{
@@ -3402,8 +3425,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 
 	      switch (sh.st)
 		{
-		  CORE_ADDR high;
-		  CORE_ADDR procaddr;
+		  unrelocated_addr high;
+		  unrelocated_addr procaddr;
 		  int new_sdx;
 
 		case stStaticProc:
@@ -3462,17 +3485,19 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 				      VAR_DOMAIN, LOC_BLOCK,
 				      section,
 				      psymbol_placement::GLOBAL,
-				      sh.value, psymtab_language,
+				      unrelocated_addr (sh.value),
+				      psymtab_language,
 				      partial_symtabs, objfile);
 		  else
 		    pst->add_psymbol (sym_name, true,
 				      VAR_DOMAIN, LOC_BLOCK,
 				      section,
 				      psymbol_placement::STATIC,
-				      sh.value, psymtab_language,
+				      unrelocated_addr (sh.value),
+				      psymtab_language,
 				      partial_symtabs, objfile);
 
-		  procaddr = sh.value;
+		  procaddr = unrelocated_addr (sh.value);
 
 		  cur_sdx = new_sdx;
 		  (*swap_sym_in) (cur_bfd,
@@ -3486,11 +3511,11 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 		  /* Kludge for Irix 5.2 zero fh->adr.  */
 		  if (!relocatable
 		      && (!pst->text_low_valid
-			  || procaddr < pst->raw_text_low ()))
+			  || procaddr < pst->unrelocated_text_low ()))
 		    pst->set_text_low (procaddr);
 
-		  high = procaddr + sh.value;
-		  if (high > pst->raw_text_high ())
+		  high = unrelocated_addr (CORE_ADDR (procaddr) + sh.value);
+		  if (high > pst->unrelocated_text_high ())
 		    pst->set_text_high (high);
 		  continue;
 
@@ -3536,7 +3561,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 		      pst->add_psymbol (sym_name, true,
 					STRUCT_DOMAIN, LOC_TYPEDEF, -1,
 					psymbol_placement::STATIC,
-					0, psymtab_language,
+					unrelocated_addr (0),
+					psymtab_language,
 					partial_symtabs, objfile);
 		    }
 		  handle_psymbol_enumerators (objfile, partial_symtabs,
@@ -3578,7 +3604,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 	      pst->add_psymbol (sym_name, true,
 				VAR_DOMAIN, theclass, section,
 				psymbol_placement::STATIC,
-				sh.value, psymtab_language,
+				unrelocated_addr (sh.value),
+				psymtab_language,
 				partial_symtabs, objfile);
 	    skip:
 	      cur_sdx++;	/* Go to next file symbol.  */
@@ -3658,7 +3685,8 @@ parse_partial_symbols (minimal_symbol_reader &reader,
 				VAR_DOMAIN, theclass,
 				section,
 				psymbol_placement::GLOBAL,
-				svalue, psymtab_language,
+				unrelocated_addr (svalue),
+				psymtab_language,
 				partial_symtabs, objfile);
 	    }
 	}
@@ -3668,40 +3696,11 @@ parse_partial_symbols (minimal_symbol_reader &reader,
       fdr_to_pst[f_idx].pst
 	= dbx_end_psymtab (objfile, partial_symtabs, save_pst,
 			   psymtab_include_list, includes_used,
-			   -1, save_pst->raw_text_high (),
+			   -1, save_pst->unrelocated_text_high (),
 			   dependency_list, dependencies_used,
 			   textlow_not_set);
       includes_used = 0;
       dependencies_used = 0;
-
-      /* The objfile has its functions reordered if this partial symbol
-	 table overlaps any other partial symbol table.
-	 We cannot assume a reordered objfile if a partial symbol table
-	 is contained within another partial symbol table, as partial symbol
-	 tables for include files with executable code are contained
-	 within the partial symbol table for the including source file,
-	 and we do not want to flag the objfile reordered for these cases.
-
-	 This strategy works well for Irix-5.2 shared libraries, but we
-	 might have to use a more elaborate (and slower) algorithm for
-	 other cases.  */
-      save_pst = fdr_to_pst[f_idx].pst;
-      if (save_pst != NULL
-	  && save_pst->text_low_valid
-	  && !(objfile->flags & OBJF_REORDERED))
-	{
-	  for (partial_symtab *iter : partial_symtabs->range ())
-	    {
-	      if (save_pst != iter
-		  && save_pst->raw_text_low () >= iter->raw_text_low ()
-		  && save_pst->raw_text_low () < iter->raw_text_high ()
-		  && save_pst->raw_text_high () > iter->raw_text_high ())
-		{
-		  objfile->flags |= OBJF_REORDERED;
-		  break;
-		}
-	    }
-	}
     }
 
   /* Now scan the FDRs for dependencies.  */
@@ -3821,7 +3820,8 @@ handle_psymbol_enumerators (struct objfile *objfile,
 	 in psymtabs, just in symtabs.  */
       pst->add_psymbol (name, true,
 			VAR_DOMAIN, LOC_CONST, -1,
-			psymbol_placement::STATIC, 0,
+			psymbol_placement::STATIC,
+			unrelocated_addr (0),
 			psymtab_language, partial_symtabs, objfile);
       ext_sym += external_sym_size;
     }
@@ -3994,7 +3994,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 
 		  s->set_domain (LABEL_DOMAIN);
 		  s->set_aclass_index (LOC_CONST);
-		  s->set_type (objfile_type (objfile)->builtin_void);
+		  s->set_type (builtin_type (objfile)->builtin_void);
 		  s->set_value_bytes ((gdb_byte *) e);
 		  e->pdr.framereg = -1;
 		  add_symbol_to_list (s, get_local_symbols ());
@@ -4011,9 +4011,10 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 	      else
 		{
 		  /* Handle encoded stab line number.  */
-		  valu += section_offsets[SECT_OFF_TEXT (objfile)];
-		  record_line (get_current_subfile (), sh.index,
-			       gdbarch_addr_bits_remove (gdbarch, valu));
+		  record_line
+		    (get_current_subfile (), sh.index,
+		     unrelocated_addr (gdbarch_addr_bits_remove (gdbarch,
+								 valu)));
 		}
 	    }
 	  else if (sh.st == stProc || sh.st == stStaticProc
@@ -4026,7 +4027,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 
       if (! last_symtab_ended)
 	{
-	  cust = end_compunit_symtab (pst->raw_text_high ());
+	  cust = end_compunit_symtab (pst->text_high (objfile));
 	  end_stabs ();
 	}
 
@@ -4095,7 +4096,10 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 
       psymtab_language = cust->primary_filetab ()->language ();
 
-      lines = cust->primary_filetab ()->linetable ();
+      /* This code allocates the line table on the heap and then later
+	 copies it to the obstack.  So, while casting away const here
+	 is ugly, it's not incorrect.  */
+      lines = const_cast<linetable *> (cust->primary_filetab ()->linetable ());
 
       /* Get a new lexical context.  */
 
@@ -4163,7 +4167,7 @@ mdebug_expand_psymtab (legacy_psymtab *pst, struct objfile *objfile)
 		}
 
 	      parse_lines (fh, pr_block.data (), lines, maxlines,
-			   pst->text_low (objfile), lowest_pdr_addr);
+			   lowest_pdr_addr);
 	      if (lines->nitems < fh->cline)
 		lines = shrink_linetable (lines);
 
@@ -4291,13 +4295,15 @@ cross_ref (int fd, union aux_ext *ax, struct type **tpp,
       rf = rn->rfd;
     }
 
+  type_allocator alloc (mdebugread_objfile);
+
   /* mips cc uses a rf of -1 for opaque struct definitions.
      Set TYPE_STUB for these types so that check_typedef will
      resolve them if the struct gets defined in another compilation unit.  */
   if (rf == -1)
     {
       *pname = "<undefined>";
-      *tpp = init_type (mdebugread_objfile, type_code, 0, NULL);
+      *tpp = alloc.new_type (type_code, 0, NULL);
       (*tpp)->set_is_stub (true);
       return result;
     }
@@ -4383,7 +4389,7 @@ cross_ref (int fd, union aux_ext *ax, struct type **tpp,
 	  switch (tir.bt)
 	    {
 	    case btVoid:
-	      *tpp = init_type (mdebugread_objfile, type_code, 0, NULL);
+	      *tpp = alloc.new_type (type_code, 0, NULL);
 	      *pname = "<undefined>";
 	      break;
 
@@ -4417,7 +4423,7 @@ cross_ref (int fd, union aux_ext *ax, struct type **tpp,
 	    default:
 	      complaint (_("illegal bt %d in forward typedef for %s"), tir.bt,
 			 sym_name);
-	      *tpp = init_type (mdebugread_objfile, type_code, 0, NULL);
+	      *tpp = alloc.new_type (type_code, 0, NULL);
 	      break;
 	    }
 	  return result;
@@ -4445,7 +4451,7 @@ cross_ref (int fd, union aux_ext *ax, struct type **tpp,
 	     has not been parsed yet.
 	     Initialize the type only, it will be filled in when
 	     it's definition is parsed.  */
-	  *tpp = init_type (mdebugread_objfile, type_code, 0, NULL);
+	  *tpp = alloc.new_type (type_code, 0, NULL);
 	}
       add_pending (fh, esh, *tpp);
     }
@@ -4540,7 +4546,7 @@ add_line (struct linetable *lt, int lineno, CORE_ADDR adr, int last)
     return lineno;
 
   lt->item[lt->nitems].line = lineno;
-  lt->item[lt->nitems++].pc = adr << 2;
+  lt->item[lt->nitems++].set_raw_pc (unrelocated_addr (adr << 2));
   return lineno;
 }
 
@@ -4752,7 +4758,7 @@ new_type (char *name)
 {
   struct type *t;
 
-  t = alloc_type (mdebugread_objfile);
+  t = type_allocator (mdebugread_objfile).new_type ();
   t->set_name (name);
   INIT_CPLUS_SPECIFIC (t);
   return t;

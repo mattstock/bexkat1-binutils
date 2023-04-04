@@ -48,9 +48,6 @@
 #include "parser-defs.h"
 #include "language.h"
 #include "f-lang.h"
-#include "bfd.h" /* Required by objfiles.h.  */
-#include "symfile.h" /* Required by objfiles.h.  */
-#include "objfiles.h" /* For have_full_symbols and have_partial_symbols */
 #include "block.h"
 #include <ctype.h>
 #include <algorithm>
@@ -669,14 +666,15 @@ ptype	:	typebase
 			array_size = type_stack->pop_int ();
 			if (array_size != -1)
 			  {
+			    struct type *idx_type
+			      = parse_f_type (pstate)->builtin_integer;
+			    type_allocator alloc (idx_type);
 			    range_type =
-			      create_static_range_type ((struct type *) NULL,
-							parse_f_type (pstate)
-							->builtin_integer,
+			      create_static_range_type (alloc, idx_type,
 							0, array_size - 1);
-			    follow_type =
-			      create_array_type ((struct type *) NULL,
-						 follow_type, range_type);
+			    follow_type = create_array_type (alloc,
+							     follow_type,
+							     range_type);
 			  }
 			else
 			  follow_type = lookup_pointer_type (follow_type);

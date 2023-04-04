@@ -579,6 +579,10 @@ extern bool _bfd_dwarf1_find_nearest_line
   (bfd *, asymbol **, asection *, bfd_vma,
    const char **, const char **, unsigned int *) ATTRIBUTE_HIDDEN;
 
+/* Clean up the data used to handle DWARF 1 debugging information. */
+extern void _bfd_dwarf1_cleanup_debug_info
+  (bfd *, void **) ATTRIBUTE_HIDDEN;
+
 struct dwarf_debug_section
 {
   const char * uncompressed_name;
@@ -931,10 +935,10 @@ extern bool _bfd_link_keep_memory (struct bfd_link_info *)
 #define _bfd_constant_p(v) 0
 #endif
 
-static inline bfd_byte *
+static inline void *
 _bfd_alloc_and_read (bfd *abfd, bfd_size_type asize, bfd_size_type rsize)
 {
-  bfd_byte *mem;
+  void *mem;
   if (!_bfd_constant_p (rsize))
     {
       ufile_ptr filesize = bfd_get_file_size (abfd);
@@ -954,10 +958,10 @@ _bfd_alloc_and_read (bfd *abfd, bfd_size_type asize, bfd_size_type rsize)
   return NULL;
 }
 
-static inline bfd_byte *
+static inline void *
 _bfd_malloc_and_read (bfd *abfd, bfd_size_type asize, bfd_size_type rsize)
 {
-  bfd_byte *mem;
+  void *mem;
   if (!_bfd_constant_p (rsize))
     {
       ufile_ptr filesize = bfd_get_file_size (abfd);
@@ -3343,9 +3347,6 @@ static const char *const bfd_reloc_code_real_names[] = { "@@uninitialized@@",
   "BFD_RELOC_TILEGX_IMM8_Y0_TLS_ADD",
   "BFD_RELOC_TILEGX_IMM8_Y1_TLS_ADD",
   "BFD_RELOC_BPF_64",
-  "BFD_RELOC_BPF_32",
-  "BFD_RELOC_BPF_16",
-  "BFD_RELOC_BPF_DISP16",
   "BFD_RELOC_BPF_DISP32",
   "BFD_RELOC_EPIPHANY_SIMM8",
   "BFD_RELOC_EPIPHANY_SIMM24",

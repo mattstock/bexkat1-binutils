@@ -1526,7 +1526,7 @@ amd64_displaced_step_copy_insn (struct gdbarch *gdbarch,
 
   displaced_debug_printf ("copy %s->%s: %s",
 			  paddress (gdbarch, from), paddress (gdbarch, to),
-			  displaced_step_dump_bytes (buf, len).c_str ());
+			  bytes_to_string (buf, len).c_str ());
 
   /* This is a work around for a problem with g++ 4.8.  */
   return displaced_step_copy_insn_closure_up (dsc.release ());
@@ -2549,7 +2549,7 @@ amd64_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 	      && cust->producer () != nullptr
 	      && (producer_is_llvm (cust->producer ())
 	      || producer_is_icc_ge_19 (cust->producer ()))))
-        return std::max (start_pc, post_prologue_pc);
+	return std::max (start_pc, post_prologue_pc);
     }
 
   amd64_init_frame_cache (&cache);

@@ -125,8 +125,8 @@ static int error_index;
 %right UNARY
 %token END
 %left <token> '('
-%token <token> ALIGN_K BLOCK BIND QUAD SQUAD LONG SHORT BYTE ASCII ASCIZ
-%token SECTIONS PHDRS INSERT_K AFTER BEFORE
+%token <token> ALIGN_K BLOCK BIND QUAD SQUAD LONG SHORT BYTE ASCIZ
+%token SECTIONS PHDRS INSERT_K AFTER BEFORE LINKER_VERSION
 %token DATA_SEGMENT_ALIGN DATA_SEGMENT_RELRO_END DATA_SEGMENT_END
 %token SORT_BY_NAME SORT_BY_ALIGNMENT SORT_NONE
 %token SORT_BY_INIT_PRIORITY
@@ -668,22 +668,17 @@ statement:
 		{
 		  lang_add_data ((int) $1, $3);
 		}
-        | ASCII '(' mustbe_exp ')' NAME
-		{
-		  /* 'value' is a memory leak, do we care?  */
-		  etree_type *value = $3;
-		  if (value->type.node_code == INT)
-		    lang_add_string (value->value.value, $5);
-		  else
-		    einfo (_("%X%P:%pS: ASCII expression must be an integer\n"), NULL);
-		}
 	| ASCIZ NAME
 		{
-		  lang_add_string (0, $2);
+		  lang_add_string ($2);
 		}
 	| FILL '(' fill_exp ')'
 		{
 		  lang_add_fill ($3);
+		}
+	| LINKER_VERSION
+		{
+		  lang_add_version_string ();
 		}
 	| ASSERT_K
 		{ ldlex_expression (); }

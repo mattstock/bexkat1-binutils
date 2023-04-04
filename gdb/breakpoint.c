@@ -5534,6 +5534,7 @@ bpstat_check_breakpoint_conditions (bpstat *bs, thread_info *thread)
 	  else
 	    within_current_scope = false;
 	}
+      CORE_ADDR pc_before_check = get_frame_pc (get_selected_frame (nullptr));
       if (within_current_scope)
 	{
 	  try
@@ -5543,7 +5544,19 @@ bpstat_check_breakpoint_conditions (bpstat *bs, thread_info *thread)
 	  catch (const gdb_exception_error &ex)
 	    {
 	      exception_fprintf (gdb_stderr, ex,
-				 "Error in testing breakpoint condition:\n");
+				 "Error in testing condition for breakpoint %d:\n",
+				 b->number);
+
+	      /* If the pc value changed as a result of evaluating the
+		 condition then we probably stopped within an inferior
+		 function call due to some unexpected stop, e.g. the thread
+		 hit another breakpoint, or the thread received an
+		 unexpected signal.  In this case we don't want to also
+		 print the information about this breakpoint.  */
+	      CORE_ADDR pc_after_check
+		= get_frame_pc (get_selected_frame (nullptr));
+	      if (pc_before_check != pc_after_check)
+		bs->print = 0;
 	    }
 	}
       else
@@ -6376,7 +6389,7 @@ print_one_breakpoint_location (struct breakpoint *b,
 	 without a footnote.  On the CLI, for enabled locations whose
 	 breakpoint is disabled, display "y-".  */
       auto get_enable_state = [uiout, loc] () -> const char *
-        {
+	{
 	  if (uiout->is_mi_like_p ())
 	    {
 	      if (loc->disabled_by_cond)
@@ -6613,7 +6626,7 @@ print_one_breakpoint_location (struct breakpoint *b,
 
       bool use_fixed_output =
 	(uiout->test_flags (fix_breakpoint_script_output)
-         || fix_breakpoint_script_output_globally);
+	 || fix_breakpoint_script_output_globally);
 
       gdb::optional<ui_out_emit_tuple> tuple_emitter;
       gdb::optional<ui_out_emit_list> list_emitter;
@@ -7359,20 +7372,27 @@ bp_location_from_bp_type (bptype type)
     case bp_gnu_ifunc_resolver_return:
     case bp_dprintf:
       return bp_loc_software_breakpoint;
+
     case bp_hardware_breakpoint:
       return bp_loc_hardware_breakpoint;
+
     case bp_hardware_watchpoint:
     case bp_read_watchpoint:
     case bp_access_watchpoint:
       return bp_loc_hardware_watchpoint;
+
     case bp_watchpoint:
       return bp_loc_software_watchpoint;
-    case bp_catchpoint:
+
     case bp_tracepoint:
     case bp_fast_tracepoint:
     case bp_static_tracepoint:
     case bp_static_marker_tracepoint:
+      return bp_loc_tracepoint;
+
+    case bp_catchpoint:
       return bp_loc_other;
+
     default:
       internal_error (_("unknown breakpoint type"));
     }
@@ -14135,7 +14155,10 @@ void
 breakpoint::print_recreate_thread (struct ui_file *fp) const
 {
   if (thread != -1)
-    gdb_printf (fp, " thread %d", thread);
+    {
+      struct thread_info *thr = find_thread_global_id (thread);
+      gdb_printf (fp, " thread %s", print_full_thread_id (thr));
+    }
 
   if (task != -1)
     gdb_printf (fp, " task %d", task);

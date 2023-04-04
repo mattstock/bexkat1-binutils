@@ -204,11 +204,11 @@ set_thread_exited (thread_info *tp, bool silent)
       process_stratum_target *proc_target = tp->inf->process_target ();
 
       /* Some targets unpush themselves from the inferior's target stack before
-         clearing the inferior's thread list (which marks all threads as exited,
-         and therefore leads to this function).  In this case, the inferior's
-         process target will be nullptr when we arrive here.
+	 clearing the inferior's thread list (which marks all threads as exited,
+	 and therefore leads to this function).  In this case, the inferior's
+	 process target will be nullptr when we arrive here.
 
-         See also the comment in inferior::unpush_target.  */
+	 See also the comment in inferior::unpush_target.  */
       if (proc_target != nullptr)
 	proc_target->maybe_remove_resumed_with_pending_wait_status (tp);
 
@@ -1083,16 +1083,13 @@ print_thread_info_1 (struct ui_out *uiout, const char *requested_threads,
 				      global_ids, pid, tp))
 	      continue;
 
-	    if (!uiout->is_mi_like_p ())
-	      {
-		/* Switch inferiors so we're looking at the right
-		   target stack.  */
-		switch_to_inferior_no_thread (tp->inf);
+	    /* Switch inferiors so we're looking at the right
+	       target stack.  */
+	    switch_to_inferior_no_thread (tp->inf);
 
-		target_id_col_width
-		  = std::max (target_id_col_width,
-			      thread_target_id_str (tp).size ());
-	      }
+	    target_id_col_width
+	      = std::max (target_id_col_width,
+			  thread_target_id_str (tp).size ());
 
 	    ++n_threads;
 	  }
@@ -1431,14 +1428,25 @@ show_inferior_qualified_tids (void)
 const char *
 print_thread_id (struct thread_info *thr)
 {
-  gdb_assert (thr != nullptr);
+  if (show_inferior_qualified_tids ())
+    return print_full_thread_id (thr);
 
   char *s = get_print_cell ();
 
-  if (show_inferior_qualified_tids ())
-    xsnprintf (s, PRINT_CELL_SIZE, "%d.%d", thr->inf->num, thr->per_inf_num);
-  else
-    xsnprintf (s, PRINT_CELL_SIZE, "%d", thr->per_inf_num);
+  gdb_assert (thr != nullptr);
+  xsnprintf (s, PRINT_CELL_SIZE, "%d", thr->per_inf_num);
+  return s;
+}
+
+/* See gdbthread.h.  */
+
+const char *
+print_full_thread_id (struct thread_info *thr)
+{
+  char *s = get_print_cell ();
+
+  gdb_assert (thr != nullptr);
+  xsnprintf (s, PRINT_CELL_SIZE, "%d.%d", thr->inf->num, thr->per_inf_num);
   return s;
 }
 

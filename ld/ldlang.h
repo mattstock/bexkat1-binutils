@@ -530,6 +530,7 @@ extern bool lang_has_input_file;
 extern lang_statement_list_type statement_list;
 extern lang_statement_list_type *stat_ptr;
 extern bool delete_output_file_on_failure;
+extern bool enable_linker_version;
 
 extern struct bfd_sym_chain entry_symbol;
 extern const char *entry_section;
@@ -646,9 +647,8 @@ extern void pop_stat_ptr
   (void);
 extern void lang_add_data
   (int, union etree_union *);
-extern bfd_vma charcount(const char *s);
 extern void lang_add_string
-  (size_t, const char *s);
+  (const char *);
 extern void lang_add_reloc
   (bfd_reloc_code_real_type, reloc_howto_type *, asection *, const char *,
    union etree_union *);
@@ -736,6 +736,8 @@ extern void
 lang_add_gc_name (const char *);
 
 extern bool
-print_one_symbol (struct bfd_link_hash_entry *hash_entry, void *ptr);
+print_one_symbol (struct bfd_link_hash_entry *, void *);
 
+extern void lang_add_version_string
+  (void);
 #endif

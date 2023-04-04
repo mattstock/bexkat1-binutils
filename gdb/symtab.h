@@ -58,6 +58,12 @@ class probe;
 struct lookup_name_info;
 struct code_breakpoint;
 
+/* Like a CORE_ADDR, but not directly convertible.  This is used to
+   represent an unrelocated CORE_ADDR.  DEFINE_OFFSET_TYPE is not used
+   here because there's no need to add or subtract values of this
+   type.  */
+enum class unrelocated_addr : CORE_ADDR { };
+
 /* How to match a lookup name against a symbol search name.  */
 enum class symbol_name_match_type
 {
@@ -524,6 +530,18 @@ struct general_symbol_info
     m_value.address = address;
   }
 
+  /* Return the unrelocated address of this symbol.  */
+  unrelocated_addr unrelocated_address () const
+  {
+    return m_value.unrel_addr;
+  }
+
+  /* Set the unrelocated address of this symbol.  */
+  void set_unrelocated_address (unrelocated_addr addr)
+  {
+    m_value.unrel_addr = addr;
+  }
+
   /* Name of the symbol.  This is a required field.  Storage for the
      name is allocated on the objfile_obstack for the associated
      objfile.  For languages like C++ that make a distinction between
@@ -547,6 +565,10 @@ struct general_symbol_info
     const gdb_byte *bytes;
 
     CORE_ADDR address;
+
+    /* The address, if unrelocated.  An unrelocated symbol does not
+       have the runtime section offset applied.  */
+    unrelocated_addr unrel_addr;
 
     /* A common block.  Used with LOC_COMMON_BLOCK.  */
 
@@ -732,10 +754,21 @@ struct minimal_symbol : public general_symbol_info
      offsets from OBJFILE.  */
   CORE_ADDR value_address (objfile *objfile) const;
 
+  /* It does not make sense to call this for minimal symbols, as they
+     are stored unrelocated.  */
+  CORE_ADDR value_address () const = delete;
+
   /* The unrelocated address of the minimal symbol.  */
-  CORE_ADDR value_raw_address () const
+  unrelocated_addr unrelocated_address () const
   {
-    return m_value.address;
+    return m_value.unrel_addr;
+  }
+
+  /* The unrelocated address just after the end of the the minimal
+     symbol.  */
+  unrelocated_addr unrelocated_end_address () const
+  {
+    return unrelocated_addr (CORE_ADDR (unrelocated_address ()) + size ());
   }
 
   /* Return this minimal symbol's type.  */
@@ -1293,12 +1326,12 @@ struct symbol : public general_symbol_info, public allocate_on_obstack
     m_type = type;
   }
 
-  unsigned short line () const
+  unsigned int line () const
   {
     return m_line;
   }
 
-  void set_line (unsigned short line)
+  void set_line (unsigned int line)
   {
     m_line = line;
   }
@@ -1461,13 +1494,9 @@ struct symbol : public general_symbol_info, public allocate_on_obstack
      SYMBOL_INLINED set) this is the line number of the function's call
      site.  Inlined function symbols are not definitions, and they are
      never found by symbol table lookup.
-     If this symbol is arch-owned, LINE shall be zero.
+     If this symbol is arch-owned, LINE shall be zero.  */
 
-     FIXME: Should we really make the assumption that nobody will try
-     to debug files longer than 64K lines?  What about machine
-     generated programs?  */
-
-  unsigned short m_line = 0;
+  unsigned int m_line = 0;
 
   /* An arbitrary data pointer, allowing symbol readers to record
      additional information on a per-symbol basis.  Note that this data
@@ -1547,18 +1576,42 @@ struct rust_vtable_symbol : public symbol
 
 struct linetable_entry
 {
+  /* Set the (unrelocated) PC for this entry.  */
+  void set_raw_pc (unrelocated_addr pc)
+  { m_pc = pc; }
+
+  /* Return the unrelocated PC for this entry.  */
+  unrelocated_addr raw_pc () const
+  { return m_pc; }
+
+  /* Return the relocated PC for this entry.  */
+  CORE_ADDR pc (const struct objfile *objfile) const;
+
+  bool operator< (const linetable_entry &other) const
+  {
+    if (m_pc == other.m_pc
+	&& (line != 0) != (other.line != 0))
+      return line == 0;
+    return m_pc < other.m_pc;
+  }
+
+  /* Two entries are equal if they have the same line and PC.  The
+     other members are ignored.  */
+  bool operator== (const linetable_entry &other) const
+  { return line == other.line && m_pc == other.m_pc; }
+
   /* The line number for this entry.  */
   int line;
 
   /* True if this PC is a good location to place a breakpoint for LINE.  */
-  unsigned is_stmt : 1;
+  bool is_stmt : 1;
 
   /* True if this location is a good location to place a breakpoint after a
      function prologue.  */
   bool prologue_end : 1;
 
   /* The address for this entry.  */
-  CORE_ADDR pc;
+  unrelocated_addr m_pc;
 };
 
 /* The order of entries in the linetable is significant.  They should
@@ -1611,12 +1664,12 @@ struct symtab
     m_compunit = compunit;
   }
 
-  struct linetable *linetable () const
+  const struct linetable *linetable () const
   {
     return m_linetable;
   }
 
-  void set_linetable (struct linetable *linetable)
+  void set_linetable (const struct linetable *linetable)
   {
     m_linetable = linetable;
   }
@@ -1643,7 +1696,7 @@ struct symtab
   /* Table mapping core addresses to line numbers for this file.
      Can be NULL if none.  Never shared between different symtabs.  */
 
-  struct linetable *m_linetable;
+  const struct linetable *m_linetable;
 
   /* Name of this source file, in a form appropriate to print to the user.
 
@@ -2674,7 +2727,7 @@ void iterate_over_symtabs (const char *name,
 
 
 std::vector<CORE_ADDR> find_pcs_for_symtab_line
-    (struct symtab *symtab, int line, struct linetable_entry **best_entry);
+    (struct symtab *symtab, int line, const linetable_entry **best_entry);
 
 /* Prototype for callbacks for LA_ITERATE_OVER_SYMBOLS.  The callback
    is called once per matching symbol SYM.  The callback should return

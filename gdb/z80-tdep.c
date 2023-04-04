@@ -98,11 +98,11 @@ struct z80_unwind_cache
 
   struct
   {
-    int called:1;	/* there is return address on stack */
-    int load_args:1;	/* prologues loads args using POPs */
-    int fp_sdcc:1;	/* prologue saves and adjusts frame pointer IX */
-    int interrupt:1;	/* __interrupt handler */
-    int critical:1;	/* __critical function */
+    unsigned int called : 1;    /* there is return address on stack */
+    unsigned int load_args : 1; /* prologues loads args using POPs */
+    unsigned int fp_sdcc : 1;   /* prologue saves and adjusts frame pointer IX */
+    unsigned int interrupt : 1; /* __interrupt handler */
+    unsigned int critical : 1;  /* __critical function */
   } prologue_type;
 
   /* Table indicating the location of each and every register.  */
@@ -928,7 +928,7 @@ z80_read_overlay_region_table ()
   byte_order = gdbarch_byte_order (gdbarch);
 
   cache_novly_regions = read_memory_integer (novly_regions_msym.value_address (),
-                                             4, byte_order);
+					     4, byte_order);
   cache_ovly_region_table
     = (unsigned int (*)[3]) xmalloc (cache_novly_regions *
 					sizeof (*cache_ovly_region_table));
@@ -1139,10 +1139,11 @@ z80_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   /* Create a type for PC.  We can't use builtin types here, as they may not
      be defined.  */
-  tdep->void_type = arch_type (gdbarch, TYPE_CODE_VOID, TARGET_CHAR_BIT,
-			       "void");
+  type_allocator alloc (gdbarch);
+  tdep->void_type = alloc.new_type (TYPE_CODE_VOID, TARGET_CHAR_BIT,
+				    "void");
   tdep->func_void_type = make_function_type (tdep->void_type, NULL);
-  tdep->pc_type = arch_pointer_type (gdbarch,
+  tdep->pc_type = init_pointer_type (alloc,
 				     tdep->addr_length * TARGET_CHAR_BIT,
 				     NULL, tdep->func_void_type);
 

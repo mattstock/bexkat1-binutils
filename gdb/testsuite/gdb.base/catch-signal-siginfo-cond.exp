@@ -18,17 +18,14 @@
 #
 # (gdb) continue
 # Continuing.
-# Error in testing breakpoint condition:
+# Error in testing condition for breakpoint NUM:
 # Selected thread is running.
 #
 # Catchpoint 3 (signal SIGUSR1), 0x0000003615e35877 in __GI_raise (sig=10) at raise.c:56
 # 56        return INLINE_SYSCALL (tgkill, 3, pid, selftid, sig);
 # (gdb) FAIL: gdb.base/catch-signal-siginfo-cond.exp: continue
 
-if [target_info exists gdb,nosignals] {
-    verbose "Skipping catch-signal-siginfo-cond.exp because of nosignals."
-    return -1
-}
+require {!target_info exists gdb,nosignals}
 
 require supports_get_siginfo_type
 

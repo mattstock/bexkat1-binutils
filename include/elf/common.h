@@ -495,6 +495,7 @@
 #define PT_GNU_SFRAME	(PT_LOOS + 0x474e554) /* SFrame stack trace information */
 
 /* OpenBSD segment types.  */
+#define PT_OPENBSD_MUTABLE   (PT_LOOS + 0x5a3dbe5)  /* Like bss, but not immutable.  */
 #define PT_OPENBSD_RANDOMIZE (PT_LOOS + 0x5a3dbe6)  /* Fill with random data.  */
 #define PT_OPENBSD_WXNEEDED  (PT_LOOS + 0x5a3dbe7)  /* Program does W^X violations.  */
 #define PT_OPENBSD_BOOTDATA  (PT_LOOS + 0x5a41be6)  /* Section for boot arguments.  */
@@ -771,6 +772,19 @@
 #define NT_OPENBSD_XFPREGS	22
 #define NT_OPENBSD_WCOOKIE	23
 
+/* Note segments for core files on QNX systems.  Note name
+   must start with "QNX".  */
+#define QNT_DEBUG_FULLPATH 1
+#define QNT_DEBUG_RELOC    2
+#define QNT_STACK          3
+#define QNT_GENERATOR      4
+#define QNT_DEFAULT_LIB    5
+#define QNT_CORE_SYSINFO   6
+#define QNT_CORE_INFO      7
+#define QNT_CORE_STATUS    8
+#define QNT_CORE_GREG      9
+#define QNT_CORE_FPREG     10
+#define QNT_LINK_MAP       11
 
 /* Note segments for core files on Solaris systems.  Note name
    must start with "CORE".  */

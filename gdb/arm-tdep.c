@@ -3115,26 +3115,34 @@ arm_exidx_unwind_sniffer (const struct frame_unwind *self,
 	  && get_frame_type (get_next_frame (this_frame)) == NORMAL_FRAME)
 	exc_valid = 1;
 
-      /* We also assume exception information is valid if we're currently
-	 blocked in a system call.  The system library is supposed to
-	 ensure this, so that e.g. pthread cancellation works.  */
-      if (arm_frame_is_thumb (this_frame))
+      /* Some syscalls keep PC pointing to the SVC instruction itself.  */
+      for (int shift = 0; shift <= 1 && !exc_valid; ++shift)
 	{
-	  ULONGEST insn;
+	  /* We also assume exception information is valid if we're currently
+	     blocked in a system call.  The system library is supposed to
+	     ensure this, so that e.g. pthread cancellation works.  */
+	  if (arm_frame_is_thumb (this_frame))
+	    {
+	      ULONGEST insn;
 
-	  if (safe_read_memory_unsigned_integer (get_frame_pc (this_frame) - 2,
-						 2, byte_order_for_code, &insn)
-	      && (insn & 0xff00) == 0xdf00 /* svc */)
-	    exc_valid = 1;
-	}
-      else
-	{
-	  ULONGEST insn;
+	      if (safe_read_memory_unsigned_integer ((get_frame_pc (this_frame)
+						      - (shift ? 2 : 0)),
+						     2, byte_order_for_code,
+						     &insn)
+		  && (insn & 0xff00) == 0xdf00 /* svc */)
+		exc_valid = 1;
+	    }
+	  else
+	    {
+	      ULONGEST insn;
 
-	  if (safe_read_memory_unsigned_integer (get_frame_pc (this_frame) - 4,
-						 4, byte_order_for_code, &insn)
-	      && (insn & 0x0f000000) == 0x0f000000 /* svc */)
-	    exc_valid = 1;
+	      if (safe_read_memory_unsigned_integer ((get_frame_pc (this_frame)
+						      - (shift ? 4 : 0)),
+						     4, byte_order_for_code,
+						     &insn)
+		  && (insn & 0x0f000000) == 0x0f000000 /* svc */)
+		exc_valid = 1;
+	    }
 	}
 	
       /* Bail out if we don't know that exception information is valid.  */
@@ -3876,7 +3884,7 @@ arm_m_exception_prev_register (frame_info_ptr this_frame,
 							  prev_regnum);
       CORE_ADDR pc = value_as_address (value);
       return frame_unwind_got_constant (this_frame, prev_regnum,
-				        UNMAKE_THUMB_ADDR (pc));
+					UNMAKE_THUMB_ADDR (pc));
     }
 
   /* The value might be one of the alternative SP, if so, use the
@@ -4904,9 +4912,12 @@ arm_ext_type (struct gdbarch *gdbarch)
   arm_gdbarch_tdep *tdep = gdbarch_tdep<arm_gdbarch_tdep> (gdbarch);
 
   if (!tdep->arm_ext_type)
-    tdep->arm_ext_type
-      = arch_float_type (gdbarch, -1, "builtin_type_arm_ext",
-			 floatformats_arm_ext);
+    {
+      type_allocator alloc (gdbarch);
+      tdep->arm_ext_type
+	= init_float_type (alloc, -1, "builtin_type_arm_ext",
+			   floatformats_arm_ext);
+    }
 
   return tdep->arm_ext_type;
 }
@@ -10662,7 +10673,9 @@ arm_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   /* Note: for displaced stepping, this includes the breakpoint, and one word
      of additional scratch space.  This setting isn't used for anything beside
      displaced stepping at present.  */
-  set_gdbarch_max_insn_length (gdbarch, 4 * ARM_DISPLACED_MODIFIED_INSNS);
+  set_gdbarch_displaced_step_buffer_length
+    (gdbarch, 4 * ARM_DISPLACED_MODIFIED_INSNS);
+  set_gdbarch_max_insn_length (gdbarch, 4);
 
   /* This should be low enough for everything.  */
   tdep->lowest_pc = 0x20;

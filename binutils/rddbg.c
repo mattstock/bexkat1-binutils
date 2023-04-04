@@ -117,39 +117,39 @@ read_section_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 
       sec = bfd_get_section_by_name (abfd, names[i].secname);
       strsec = bfd_get_section_by_name (abfd, names[i].strsecname);
-      if (sec != NULL && strsec != NULL)
+      if (sec != NULL
+	  && (bfd_section_flags (sec) & SEC_HAS_CONTENTS) != 0
+	  && bfd_section_size (sec) >= 12
+	  && strsec != NULL
+	  && (bfd_section_flags (strsec) & SEC_HAS_CONTENTS) != 0)
 	{
 	  bfd_size_type stabsize, strsize;
 	  bfd_byte *stabs, *strings;
 	  bfd_byte *stab;
 	  bfd_size_type stroff, next_stroff;
 
-	  stabsize = bfd_section_size (sec);
-	  stabs = (bfd_byte *) xmalloc (stabsize);
-	  if (! bfd_get_section_contents (abfd, sec, stabs, 0, stabsize))
+	  if (!bfd_malloc_and_get_section (abfd, sec, &stabs))
 	    {
 	      fprintf (stderr, "%s: %s: %s\n",
 		       bfd_get_filename (abfd), names[i].secname,
 		       bfd_errmsg (bfd_get_error ()));
 	      free (shandle);
-	      free (stabs);
 	      return false;
 	    }
 
-	  strsize = bfd_section_size (strsec);
-	  strings = (bfd_byte *) xmalloc (strsize + 1);
-	  if (! bfd_get_section_contents (abfd, strsec, strings, 0, strsize))
+	  if (!bfd_malloc_and_get_section (abfd, strsec, &strings))
 	    {
 	      fprintf (stderr, "%s: %s: %s\n",
 		       bfd_get_filename (abfd), names[i].strsecname,
 		       bfd_errmsg (bfd_get_error ()));
 	      free (shandle);
-	      free (strings);
 	      free (stabs);
 	      return false;
 	    }
 	  /* Zero terminate the strings table, just in case.  */
-	  strings [strsize] = 0;
+	  strsize = bfd_section_size (strsec);
+	  if (strsize != 0)
+	    strings [strsize - 1] = 0;
 	  if (shandle == NULL)
 	    {
 	      shandle = start_stab (dhandle, abfd, true, syms, symcount);
@@ -165,6 +165,7 @@ read_section_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 
 	  stroff = 0;
 	  next_stroff = 0;
+	  stabsize = bfd_section_size (sec);
 	  /* PR 17512: file: 078-60391-0.001:0.1.  */
 	  for (stab = stabs; stab <= (stabs + stabsize) - 12; stab += 12)
 	    {
@@ -193,6 +194,7 @@ read_section_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 		{
 		  size_t len;
 		  char *f, *s;
+		  bool f_used;
 
 		  if (stroff + strx >= strsize)
 		    {
@@ -237,10 +239,13 @@ read_section_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 		      free (f);
 		      f = s;
 		    }
+		  if (!f)
+		    f = xstrdup (s);
 
 		  save_stab (type, desc, value, s);
 
-		  if (! parse_stab (dhandle, shandle, type, desc, value, s))
+		  if (! parse_stab (dhandle, shandle, type, desc, value,
+				    f, &f_used))
 		    {
 		      stab_context ();
 		      free_saved_stabs ();
@@ -251,18 +256,14 @@ read_section_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 		      return false;
 		    }
 
-		  /* Don't free f, since I think the stabs code
-		     expects strings to hang around.  This should be
-		     straightened out.  FIXME.  */
+		  if (!f_used)
+		    free (f);
 		}
 	    }
 
 	  free_saved_stabs ();
 	  free (stabs);
-
-	  /* Don't free strings, since I think the stabs code expects
-	     the strings to hang around.  This should be straightened
-	     out.  FIXME.  */
+	  free (strings);
 	}
     }
 
@@ -296,6 +297,7 @@ read_symbol_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 	{
 	  const char *s;
 	  char *f;
+	  bool f_used;
 
 	  if (shandle == NULL)
 	    {
@@ -326,20 +328,22 @@ read_symbol_stabs_debugging_info (bfd *abfd, asymbol **syms, long symcount,
 	      f = n;
 	      s = n;
 	    }
+	  if (!f)
+	    f = xstrdup (s);
 
 	  save_stab (i.stab_type, i.stab_desc, i.value, s);
 
 	  if (! parse_stab (dhandle, shandle, i.stab_type, i.stab_desc,
-			    i.value, s))
+			    i.value, f, &f_used))
 	    {
 	      stab_context ();
+	      free (f);
 	      free_saved_stabs ();
 	      return false;
 	    }
 
-	  /* Don't free f, since I think the stabs code expects
-	     strings to hang around.  This should be straightened out.
-	     FIXME.  */
+	  if (!f_used)
+	    free (f);
 	}
     }
 

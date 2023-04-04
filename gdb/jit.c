@@ -491,9 +491,9 @@ jit_symtab_line_mapping_add_impl (struct gdb_symbol_callbacks *cb,
   stab->linetable->nitems = nlines;
   for (i = 0; i < nlines; i++)
     {
-      stab->linetable->item[i].pc = (CORE_ADDR) map[i].pc;
+      stab->linetable->item[i].set_raw_pc (unrelocated_addr (map[i].pc));
       stab->linetable->item[i].line = map[i].line;
-      stab->linetable->item[i].is_stmt = 1;
+      stab->linetable->item[i].is_stmt = true;
     }
 }
 
@@ -543,9 +543,11 @@ finalize_symtab (struct gdb_symtab *stab, struct objfile *objfile)
       size_t size = ((stab->linetable->nitems - 1)
 		     * sizeof (struct linetable_entry)
 		     + sizeof (struct linetable));
-      filetab->set_linetable ((struct linetable *)
-			      obstack_alloc (&objfile->objfile_obstack, size));
-      memcpy (filetab->linetable (), stab->linetable.get (), size);
+      struct linetable *new_table
+	= (struct linetable *) obstack_alloc (&objfile->objfile_obstack,
+					      size);
+      memcpy (new_table, stab->linetable.get (), size);
+      filetab->set_linetable (new_table);
     }
 
   blockvector_size = (sizeof (struct blockvector)
@@ -569,10 +571,7 @@ finalize_symtab (struct gdb_symtab *stab, struct objfile *objfile)
     {
       struct block *new_block = new (&objfile->objfile_obstack) block;
       struct symbol *block_name = new (&objfile->objfile_obstack) symbol;
-      struct type *block_type = arch_type (objfile->arch (),
-					   TYPE_CODE_VOID,
-					   TARGET_CHAR_BIT,
-					   "void");
+      struct type *block_type = builtin_type (objfile->arch ())->builtin_void;
 
       new_block->set_multidict
 	(mdict_create_linear (&objfile->objfile_obstack, NULL));

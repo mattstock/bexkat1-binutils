@@ -275,13 +275,15 @@ linux_get_siginfo_type_with_fields (struct gdbarch *gdbarch,
   if (linux_gdbarch_data->siginfo_type != NULL)
     return linux_gdbarch_data->siginfo_type;
 
-  int_type = arch_integer_type (gdbarch, gdbarch_int_bit (gdbarch),
+  type_allocator alloc (gdbarch);
+
+  int_type = init_integer_type (alloc, gdbarch_int_bit (gdbarch),
 			 	0, "int");
-  uint_type = arch_integer_type (gdbarch, gdbarch_int_bit (gdbarch),
+  uint_type = init_integer_type (alloc, gdbarch_int_bit (gdbarch),
 				 1, "unsigned int");
-  long_type = arch_integer_type (gdbarch, gdbarch_long_bit (gdbarch),
+  long_type = init_integer_type (alloc, gdbarch_long_bit (gdbarch),
 				 0, "long");
-  short_type = arch_integer_type (gdbarch, gdbarch_long_bit (gdbarch),
+  short_type = init_integer_type (alloc, gdbarch_long_bit (gdbarch),
 				 0, "short");
   void_ptr_type = lookup_pointer_type (builtin_type (gdbarch)->builtin_void);
 
@@ -292,21 +294,23 @@ linux_get_siginfo_type_with_fields (struct gdbarch *gdbarch,
   append_composite_type_field (sigval_type, "sival_ptr", void_ptr_type);
 
   /* __pid_t */
-  pid_type = arch_type (gdbarch, TYPE_CODE_TYPEDEF,
-			int_type->length () * TARGET_CHAR_BIT, "__pid_t");
+  pid_type = alloc.new_type (TYPE_CODE_TYPEDEF,
+			     int_type->length () * TARGET_CHAR_BIT,
+			     "__pid_t");
   pid_type->set_target_type (int_type);
   pid_type->set_target_is_stub (true);
 
   /* __uid_t */
-  uid_type = arch_type (gdbarch, TYPE_CODE_TYPEDEF,
-			uint_type->length () * TARGET_CHAR_BIT, "__uid_t");
+  uid_type = alloc.new_type (TYPE_CODE_TYPEDEF,
+			     uint_type->length () * TARGET_CHAR_BIT,
+			     "__uid_t");
   uid_type->set_target_type (uint_type);
   uid_type->set_target_is_stub (true);
 
   /* __clock_t */
-  clock_type = arch_type (gdbarch, TYPE_CODE_TYPEDEF,
-			  long_type->length () * TARGET_CHAR_BIT,
-			  "__clock_t");
+  clock_type = alloc.new_type (TYPE_CODE_TYPEDEF,
+			       long_type->length () * TARGET_CHAR_BIT,
+			       "__clock_t");
   clock_type->set_target_type (long_type);
   clock_type->set_target_is_stub (true);
 
@@ -1738,8 +1742,9 @@ linux_make_mappings_corefile_notes (struct gdbarch *gdbarch, bfd *obfd,
 				    int *note_size)
 {
   struct linux_make_mappings_data mapping_data;
+  type_allocator alloc (gdbarch);
   struct type *long_type
-    = arch_integer_type (gdbarch, gdbarch_long_bit (gdbarch), 0, "long");
+    = init_integer_type (alloc, gdbarch_long_bit (gdbarch), 0, "long");
   gdb_byte buf[sizeof (ULONGEST)];
 
   auto_obstack data_obstack, filename_obstack;
@@ -2603,7 +2608,7 @@ linux_displaced_step_prepare (gdbarch *arch, thread_info *thread,
 	 at DISP_STEP_BUF_ADDR.  They are all of size BUF_LEN.  */
       CORE_ADDR disp_step_buf_addr
 	= linux_displaced_step_location (thread->inf->gdbarch);
-      int buf_len = gdbarch_max_insn_length (arch);
+      int buf_len = gdbarch_displaced_step_buffer_length (arch);
 
       linux_gdbarch_data *gdbarch_data = get_linux_gdbarch_data (arch);
       gdb_assert (gdbarch_data->num_disp_step_buffers > 0);
@@ -2621,13 +2626,14 @@ linux_displaced_step_prepare (gdbarch *arch, thread_info *thread,
 /* See linux-tdep.h.  */
 
 displaced_step_finish_status
-linux_displaced_step_finish (gdbarch *arch, thread_info *thread, gdb_signal sig)
+linux_displaced_step_finish (gdbarch *arch, thread_info *thread,
+			     const target_waitstatus &status)
 {
   linux_info *per_inferior = get_linux_inferior_data (thread->inf);
 
   gdb_assert (per_inferior->disp_step_bufs.has_value ());
 
-  return per_inferior->disp_step_bufs->finish (arch, thread, sig);
+  return per_inferior->disp_step_bufs->finish (arch, thread, status);
 }
 
 /* See linux-tdep.h.  */

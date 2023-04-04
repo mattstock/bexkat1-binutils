@@ -534,7 +534,7 @@ objfile::~objfile ()
 
   /* It still may reference data modules have associated with the objfile and
      the symbol file data.  */
-  forget_cached_source_info_for_objfile (this);
+  forget_cached_source_info ();
 
   breakpoint_free_objfile (this);
   btrace_free_objfile (this);
@@ -615,69 +615,43 @@ objfile_relocate1 (struct objfile *objfile,
     return 0;
 
   /* OK, get all the symtabs.  */
-  {
-    for (compunit_symtab *cust : objfile->compunits ())
-      {
-	for (symtab *s : cust->filetabs ())
-	  {
-	    struct linetable *l;
+  for (compunit_symtab *cust : objfile->compunits ())
+    {
+      struct blockvector *bv = cust->blockvector ();
+      int block_line_section = SECT_OFF_TEXT (objfile);
 
-	    /* First the line table.  */
-	    l = s->linetable ();
-	    if (l)
-	      {
-		for (int i = 0; i < l->nitems; ++i)
-		  l->item[i].pc += delta[SECT_OFF_TEXT (objfile)];
-	      }
-	  }
-      }
+      if (bv->map () != nullptr)
+	bv->map ()->relocate (delta[block_line_section]);
 
-    for (compunit_symtab *cust : objfile->compunits ())
-      {
-	struct blockvector *bv = cust->blockvector ();
-	int block_line_section = SECT_OFF_TEXT (objfile);
+      for (block *b : bv->blocks ())
+	{
+	  struct symbol *sym;
+	  struct mdict_iterator miter;
 
-	if (bv->map () != nullptr)
-	  bv->map ()->relocate (delta[block_line_section]);
+	  b->set_start (b->start () + delta[block_line_section]);
+	  b->set_end (b->end () + delta[block_line_section]);
 
-	for (block *b : bv->blocks ())
-	  {
-	    struct symbol *sym;
-	    struct mdict_iterator miter;
+	  for (blockrange &r : b->ranges ())
+	    {
+	      r.set_start (r.start () + delta[block_line_section]);
+	      r.set_end (r.end () + delta[block_line_section]);
+	    }
 
-	    b->set_start (b->start () + delta[block_line_section]);
-	    b->set_end (b->end () + delta[block_line_section]);
-
-	    for (blockrange &r : b->ranges ())
-	      {
-		r.set_start (r.start () + delta[block_line_section]);
-		r.set_end (r.end () + delta[block_line_section]);
-	      }
-
-	    /* We only want to iterate over the local symbols, not any
-	       symbols in included symtabs.  */
-	    ALL_DICT_SYMBOLS (b->multidict (), miter, sym)
-	      {
-		relocate_one_symbol (sym, objfile, delta);
-	      }
-	  }
-      }
-  }
+	  /* We only want to iterate over the local symbols, not any
+	     symbols in included symtabs.  */
+	  ALL_DICT_SYMBOLS (b->multidict (), miter, sym)
+	    {
+	      relocate_one_symbol (sym, objfile, delta);
+	    }
+	}
+    }
 
   /* Relocate isolated symbols.  */
-  {
-    struct symbol *iter;
+  for (symbol *iter = objfile->template_symbols; iter; iter = iter->hash_next)
+    relocate_one_symbol (iter, objfile, delta);
 
-    for (iter = objfile->template_symbols; iter; iter = iter->hash_next)
-      relocate_one_symbol (iter, objfile, delta);
-  }
-
-  {
-    int i;
-
-    for (i = 0; i < objfile->section_offsets.size (); ++i)
-      objfile->section_offsets[i] = new_offsets[i];
-  }
+  for (int i = 0; i < objfile->section_offsets.size (); ++i)
+    objfile->section_offsets[i] = new_offsets[i];
 
   /* Rebuild section map next time we need it.  */
   get_objfile_pspace_data (objfile->pspace)->section_map_dirty = 1;
@@ -1340,8 +1314,8 @@ objfile_int_type (struct objfile *of, int size_in_bytes, bool unsigned_p)
   /* Helper macro to examine the various builtin types.  */
 #define TRY_TYPE(F)							\
   int_type = (unsigned_p						\
-	      ? objfile_type (of)->builtin_unsigned_ ## F		\
-	      : objfile_type (of)->builtin_ ## F);			\
+	      ? builtin_type (of)->builtin_unsigned_ ## F		\
+	      : builtin_type (of)->builtin_ ## F);			\
   if (int_type != NULL && int_type->length () == size_in_bytes)	\
     return int_type
 

@@ -1039,8 +1039,8 @@ extern void set_gdbarch_max_insn_length (struct gdbarch *gdbarch, ULONGEST max_i
    see the comments in infrun.c.
 
    The TO area is only guaranteed to have space for
-   gdbarch_max_insn_length (arch) bytes, so this function must not
-   write more bytes than that to that area.
+   gdbarch_displaced_step_buffer_length (arch) octets, so this
+   function must not write more octets than that to this area.
 
    If you do not provide this function, GDB assumes that the
    architecture does not support displaced stepping.
@@ -1085,8 +1085,6 @@ extern void set_gdbarch_displaced_step_hw_singlestep (struct gdbarch *gdbarch, g
    For a general explanation of displaced stepping and how GDB uses it,
    see the comments in infrun.c. */
 
-extern bool gdbarch_displaced_step_fixup_p (struct gdbarch *gdbarch);
-
 typedef void (gdbarch_displaced_step_fixup_ftype) (struct gdbarch *gdbarch, struct displaced_step_copy_insn_closure *closure, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
 extern void gdbarch_displaced_step_fixup (struct gdbarch *gdbarch, struct displaced_step_copy_insn_closure *closure, CORE_ADDR from, CORE_ADDR to, struct regcache *regs);
 extern void set_gdbarch_displaced_step_fixup (struct gdbarch *gdbarch, gdbarch_displaced_step_fixup_ftype *displaced_step_fixup);
@@ -1103,8 +1101,8 @@ extern void set_gdbarch_displaced_step_prepare (struct gdbarch *gdbarch, gdbarch
 
 /* Clean up after a displaced step of THREAD. */
 
-typedef displaced_step_finish_status (gdbarch_displaced_step_finish_ftype) (struct gdbarch *gdbarch, thread_info *thread, gdb_signal sig);
-extern displaced_step_finish_status gdbarch_displaced_step_finish (struct gdbarch *gdbarch, thread_info *thread, gdb_signal sig);
+typedef displaced_step_finish_status (gdbarch_displaced_step_finish_ftype) (struct gdbarch *gdbarch, thread_info *thread, const target_waitstatus &ws);
+extern displaced_step_finish_status gdbarch_displaced_step_finish (struct gdbarch *gdbarch, thread_info *thread, const target_waitstatus &ws);
 extern void set_gdbarch_displaced_step_finish (struct gdbarch *gdbarch, gdbarch_displaced_step_finish_ftype *displaced_step_finish);
 
 /* Return the closure associated to the displaced step buffer that is at ADDR. */
@@ -1121,6 +1119,14 @@ extern void set_gdbarch_displaced_step_copy_insn_closure_by_addr (struct gdbarch
 typedef void (gdbarch_displaced_step_restore_all_in_ptid_ftype) (inferior *parent_inf, ptid_t child_ptid);
 extern void gdbarch_displaced_step_restore_all_in_ptid (struct gdbarch *gdbarch, inferior *parent_inf, ptid_t child_ptid);
 extern void set_gdbarch_displaced_step_restore_all_in_ptid (struct gdbarch *gdbarch, gdbarch_displaced_step_restore_all_in_ptid_ftype *displaced_step_restore_all_in_ptid);
+
+/* The maximum length in octets required for a displaced-step instruction
+   buffer.  By default this will be the same as gdbarch::max_insn_length,
+   but should be overridden for architectures that might expand a
+   displaced-step instruction to multiple replacement instructions. */
+
+extern ULONGEST gdbarch_displaced_step_buffer_length (struct gdbarch *gdbarch);
+extern void set_gdbarch_displaced_step_buffer_length (struct gdbarch *gdbarch, ULONGEST displaced_step_buffer_length);
 
 /* Relocate an instruction to execute at a different address.  OLDLOC
    is the address in the inferior memory where the instruction to

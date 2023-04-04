@@ -422,7 +422,7 @@ arrange_linetable (std::vector<linetable_entry> &old_linetable)
 
   for (int ii = 0; ii < old_linetable.size (); ++ii)
     {
-      if (old_linetable[ii].is_stmt == 0)
+      if (!old_linetable[ii].is_stmt)
 	continue;
 
       if (old_linetable[ii].line == 0)
@@ -431,17 +431,15 @@ arrange_linetable (std::vector<linetable_entry> &old_linetable)
 	  fentries.emplace_back ();
 	  linetable_entry &e = fentries.back ();
 	  e.line = ii;
-	  e.is_stmt = 1;
-	  e.pc = old_linetable[ii].pc;
+	  e.is_stmt = true;
+	  e.set_raw_pc (old_linetable[ii].raw_pc ());
 	}
     }
 
   if (fentries.empty ())
     return;
 
-  std::sort (fentries.begin (), fentries.end (),
-	     [] (const linetable_entry &lte1, const linetable_entry& lte2)
-	     { return lte1.pc < lte2.pc; });
+  std::sort (fentries.begin (), fentries.end ());
 
   /* Allocate a new line table.  */
   std::vector<linetable_entry> new_linetable;
@@ -459,7 +457,7 @@ arrange_linetable (std::vector<linetable_entry> &old_linetable)
 	 extra line to cover the function prologue.  */
       int jj = entry.line;
       if (jj + 1 < old_linetable.size ()
-	  && old_linetable[jj].pc != old_linetable[jj + 1].pc)
+	  && old_linetable[jj].raw_pc () != old_linetable[jj + 1].raw_pc ())
 	{
 	  new_linetable.push_back (old_linetable[jj]);
 	  new_linetable.back ().line = old_linetable[jj + 1].line;
@@ -792,15 +790,17 @@ enter_line_range (struct subfile *subfile, unsigned beginoffset,
       if (addr < startaddr || (endaddr && addr >= endaddr))
 	return;
 
+      CORE_ADDR record_addr = (gdbarch_addr_bits_remove (gdbarch, addr)
+			       - objfile->text_section_offset ());
       if (int_lnno.l_lnno == 0)
 	{
 	  *firstLine = read_symbol_lineno (int_lnno.l_addr.l_symndx);
-	  record_line (subfile, 0, gdbarch_addr_bits_remove (gdbarch, addr));
+	  record_line (subfile, 0, unrelocated_addr (record_addr));
 	  --(*firstLine);
 	}
       else
 	record_line (subfile, *firstLine + int_lnno.l_lnno,
-		     gdbarch_addr_bits_remove (gdbarch, addr));
+		     unrelocated_addr (record_addr));
       curoffset += linesz;
     }
 }
@@ -840,7 +840,7 @@ enter_line_range (struct subfile *subfile, unsigned beginoffset,
 
 static void
 record_minimal_symbol (minimal_symbol_reader &reader,
-		       const char *name, CORE_ADDR address,
+		       const char *name, unrelocated_addr address,
 		       enum minimal_symbol_type ms_type,
 		       int n_scnum,
 		       struct objfile *objfile)
@@ -1062,7 +1062,7 @@ read_xcoff_symtab (struct objfile *objfile, legacy_psymtab *pst)
 	  /* Dealing with a symbol with a csect entry.  */
 
 #define	CSECT(PP) ((PP)->x_csect)
-#define	CSECT_LEN(PP) (CSECT(PP).x_scnlen.l)
+#define	CSECT_LEN(PP) (CSECT(PP).x_scnlen.u64)
 #define	CSECT_ALIGN(PP) (SMTYP_ALIGN(CSECT(PP).x_smtyp))
 #define	CSECT_SMTYP(PP) (SMTYP_SMTYP(CSECT(PP).x_smtyp))
 #define	CSECT_SCLAS(PP) (CSECT(PP).x_smclas)
@@ -1486,7 +1486,7 @@ process_xcoff_symbol (struct xcoff_symbol *cs, struct objfile *objfile)
 	 patch_block_stabs (), unless the file was compiled without -g.  */
 
       sym->set_linkage_name (SYMNAME_ALLOC (name, symname_alloced));
-      sym->set_type (objfile_type (objfile)->nodebug_text_symbol);
+      sym->set_type (builtin_type (objfile)->nodebug_text_symbol);
 
       sym->set_aclass_index (LOC_BLOCK);
       sym2 = new (&objfile->objfile_obstack) symbol (*sym);
@@ -1499,7 +1499,7 @@ process_xcoff_symbol (struct xcoff_symbol *cs, struct objfile *objfile)
   else
     {
       /* In case we can't figure out the type, provide default.  */
-      sym->set_type (objfile_type (objfile)->nodebug_data_symbol);
+      sym->set_type (builtin_type (objfile)->nodebug_data_symbol);
 
       switch (cs->c_sclass)
 	{
@@ -1788,11 +1788,6 @@ xcoff_symfile_init (struct objfile *objfile)
 {
   /* Allocate struct to keep track of the symfile.  */
   xcoff_objfile_data_key.emplace (objfile);
-
-  /* XCOFF objects may be reordered, so set OBJF_REORDERED.  If we
-     find this causes a significant slowdown in gdb then we could
-     set it in the debug symbol readers only when necessary.  */
-  objfile->flags |= OBJF_REORDERED;
 }
 
 /* Perform any local cleanups required when we are done with a particular
@@ -1880,7 +1875,8 @@ xcoff_start_psymtab (psymtab_storage *partial_symtabs,
 {
   /* We fill in textlow later.  */
   legacy_psymtab *result = new legacy_psymtab (filename, partial_symtabs,
-					       objfile->per_bfd, 0);
+					       objfile->per_bfd,
+					       unrelocated_addr (0));
 
   result->read_symtab_private =
     XOBNEW (&objfile->objfile_obstack, struct xcoff_symloc);
@@ -2059,7 +2055,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
   unsigned int ssymnum;
 
   const char *last_csect_name = NULL; /* Last seen csect's name and value.  */
-  CORE_ADDR last_csect_val = 0;
+  unrelocated_addr last_csect_val = unrelocated_addr (0);
   int last_csect_sec = 0;
   int misc_func_recorded = 0;	/* true if any misc. function.  */
   int textlow_not_set = 1;
@@ -2172,19 +2168,22 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 				       || namestring[0] == '@'))
 		      {
 			last_csect_name = namestring;
-			last_csect_val = symbol.n_value;
+			last_csect_val = unrelocated_addr (symbol.n_value);
 			last_csect_sec = symbol.n_scnum;
 		      }
 		    if (pst != NULL)
 		      {
-			CORE_ADDR highval =
-			  symbol.n_value + csect_aux.x_csect.x_scnlen.l;
+			unrelocated_addr highval
+			  = unrelocated_addr (symbol.n_value
+					      + CSECT_LEN (&csect_aux));
 
-			if (highval > pst->raw_text_high ())
+			if (highval > pst->unrelocated_text_high ())
 			  pst->set_text_high (highval);
+			unrelocated_addr loval
+			  = unrelocated_addr (symbol.n_value);
 			if (!pst->text_low_valid
-			    || symbol.n_value < pst->raw_text_low ())
-			  pst->set_text_low (symbol.n_value);
+			    || loval < pst->unrelocated_text_low ())
+			  pst->set_text_low (loval);
 		      }
 		    misc_func_recorded = 0;
 		    break;
@@ -2195,7 +2194,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 		       table, except for section symbols.  */
 		    if (*namestring != '.')
 		      record_minimal_symbol
-			(reader, namestring, symbol.n_value,
+			(reader, namestring, unrelocated_addr (symbol.n_value),
 			 sclass == C_HIDEXT ? mst_file_data : mst_data,
 			 symbol.n_scnum, objfile);
 		    break;
@@ -2233,7 +2232,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 			main_aux[0].x_sym.x_fcnary.x_fcn.x_lnnoptr;
 
 		    record_minimal_symbol
-		      (reader, namestring, symbol.n_value,
+		      (reader, namestring, unrelocated_addr (symbol.n_value),
 		       sclass == C_HIDEXT ? mst_file_text : mst_text,
 		       symbol.n_scnum, objfile);
 		    misc_func_recorded = 1;
@@ -2248,7 +2247,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 		       symbols, we will choose mst_text over
 		       mst_solib_trampoline.  */
 		    record_minimal_symbol
-		      (reader, namestring, symbol.n_value,
+		      (reader, namestring, unrelocated_addr (symbol.n_value),
 		       mst_solib_trampoline, symbol.n_scnum, objfile);
 		    misc_func_recorded = 1;
 		    break;
@@ -2270,7 +2269,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 		       XMC_BS might be possible too.  */
 		    if (*namestring != '.')
 		      record_minimal_symbol
-			(reader, namestring, symbol.n_value,
+			(reader, namestring, unrelocated_addr (symbol.n_value),
 			 sclass == C_HIDEXT ? mst_file_data : mst_data,
 			 symbol.n_scnum, objfile);
 		    break;
@@ -2286,7 +2285,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 		       table, except for section symbols.  */
 		    if (*namestring != '.')
 		      record_minimal_symbol
-			(reader, namestring, symbol.n_value,
+			(reader, namestring, unrelocated_addr (symbol.n_value),
 			 sclass == C_HIDEXT ? mst_file_bss : mst_bss,
 			 symbol.n_scnum, objfile);
 		    break;
@@ -2501,7 +2500,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 				  true, VAR_DOMAIN, LOC_STATIC,
 				  SECT_OFF_DATA (objfile),
 				  psymbol_placement::STATIC,
-				  symbol.n_value,
+				  unrelocated_addr (symbol.n_value),
 				  psymtab_language,
 				  partial_symtabs, objfile);
 		continue;
@@ -2514,7 +2513,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 				  true, VAR_DOMAIN, LOC_STATIC,
 				  SECT_OFF_DATA (objfile),
 				  psymbol_placement::GLOBAL,
-				  symbol.n_value,
+				  unrelocated_addr (symbol.n_value),
 				  psymtab_language,
 				  partial_symtabs, objfile);
 		continue;
@@ -2534,7 +2533,8 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 							p - namestring),
 				      true, STRUCT_DOMAIN, LOC_TYPEDEF, -1,
 				      psymbol_placement::STATIC,
-				      0, psymtab_language,
+				      unrelocated_addr (0),
+				      psymtab_language,
 				      partial_symtabs, objfile);
 		    if (p[2] == 't')
 		      {
@@ -2543,7 +2543,8 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 							    p - namestring),
 					  true, VAR_DOMAIN, LOC_TYPEDEF, -1,
 					  psymbol_placement::STATIC,
-					  0, psymtab_language,
+					  unrelocated_addr (0),
+					  psymtab_language,
 					  partial_symtabs, objfile);
 			p += 1;
 		      }
@@ -2557,7 +2558,8 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 							p - namestring),
 				      true, VAR_DOMAIN, LOC_TYPEDEF, -1,
 				      psymbol_placement::STATIC,
-				      0, psymtab_language,
+				      unrelocated_addr (0),
+				      psymtab_language,
 				      partial_symtabs, objfile);
 		  }
 	      check_enum:
@@ -2620,7 +2622,8 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 			pst->add_psymbol (gdb::string_view (p, q - p), true,
 					  VAR_DOMAIN, LOC_CONST, -1,
 					  psymbol_placement::STATIC,
-					  0, psymtab_language,
+					  unrelocated_addr (0),
+					  psymtab_language,
 					  partial_symtabs, objfile);
 			/* Point past the name.  */
 			p = q;
@@ -2640,7 +2643,8 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 						    p - namestring),
 				  true, VAR_DOMAIN, LOC_CONST, -1,
 				  psymbol_placement::STATIC,
-				  0, psymtab_language,
+				  unrelocated_addr (0),
+				  psymtab_language,
 				  partial_symtabs, objfile);
 		continue;
 
@@ -2655,7 +2659,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 				  true, VAR_DOMAIN, LOC_BLOCK,
 				  SECT_OFF_TEXT (objfile),
 				  psymbol_placement::STATIC,
-				  symbol.n_value,
+				  unrelocated_addr (symbol.n_value),
 				  psymtab_language,
 				  partial_symtabs, objfile);
 		continue;
@@ -2682,7 +2686,7 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 				  true, VAR_DOMAIN, LOC_BLOCK,
 				  SECT_OFF_TEXT (objfile),
 				  psymbol_placement::GLOBAL,
-				  symbol.n_value,
+				  unrelocated_addr (symbol.n_value),
 				  psymtab_language,
 				  partial_symtabs, objfile);
 		continue;

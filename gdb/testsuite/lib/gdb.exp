@@ -176,7 +176,7 @@ verbose "using GDB = $GDB" 2
 # we're testing a non-installed GDB in the build directory.  Users may
 # also explictly override the -data-directory from the command line.
 if ![info exists GDB_DATA_DIRECTORY] {
-    set GDB_DATA_DIRECTORY "[pwd]/../data-directory"
+    set GDB_DATA_DIRECTORY [file normalize "[pwd]/../data-directory"]
 }
 verbose "using GDB_DATA_DIRECTORY = $GDB_DATA_DIRECTORY" 2
 
@@ -218,6 +218,17 @@ if ![info exists INTERNAL_GDBFLAGS] {
 		   "-nx" \
 		   {-iex "set height 0"} \
 		   {-iex "set width 0"}]]
+
+    # If DEBUGINFOD_URLS is set, gdb will try to download sources and
+    # debug info for f.i. system libraries.  Prevent this.
+    if { [is_remote host] } {
+	# Setting environment variables on build has no effect on remote host,
+	# so handle this using "set debuginfod enabled off" instead.
+	set INTERNAL_GDBFLAGS \
+	    "$INTERNAL_GDBFLAGS -iex \"set debuginfod enabled off\""
+    } else {
+	# See default_gdb_init.
+    }
 
     set INTERNAL_GDBFLAGS [append_gdb_data_directory_option $INTERNAL_GDBFLAGS]
 }
@@ -385,10 +396,30 @@ proc delete_breakpoints {} {
 
 # Returns true iff the target supports using the "run" command.
 
-proc target_can_use_run_cmd {} {
+proc target_can_use_run_cmd { {target_description ""} } {
+    if { $target_description == "" } {
+	set have_core 0
+    } elseif { $target_description == "core" } {
+	# We could try to figure this out by issuing an "info target" and
+	# checking for "Local core dump file:", but it would mean the proc
+	# would start requiring a current target. Also, uses while gdb
+	# produces non-standard output due to, say annotations would
+	# have to be moved around or eliminated, which would further limit
+	# usability.
+	set have_core 1
+    } else {
+	error "invalid argument: $target_description"
+    }
+
     if [target_info exists use_gdb_stub] {
 	# In this case, when we connect, the inferior is already
 	# running.
+	return 0
+    }
+
+    if { $have_core && [target_info gdb_protocol] == "extended-remote" } {
+	# In this case, when we connect, the inferior is not running but
+	# cannot be made to run.
 	return 0
     }
 
@@ -1458,25 +1489,13 @@ proc gdb_test { args } {
     return [gdb_test_multiple $command $message {*}$opts $user_code]
 }
 
-# Return 1 if version MAJOR.MINOR is at least AT_LEAST_MAJOR.AT_LEAST_MINOR.
-proc version_at_least { major minor at_least_major at_least_minor} {
-    if { $major > $at_least_major } {
-        return 1
-    } elseif { $major == $at_least_major \
-		   && $minor >= $at_least_minor } {
-        return 1
-    } else {
-        return 0
-    }
-}
-
 # Return 1 if tcl version used is at least MAJOR.MINOR
 proc tcl_version_at_least { major minor } {
     global tcl_version
     regexp {^([0-9]+)\.([0-9]+)$} $tcl_version \
 	dummy tcl_version_major tcl_version_minor
-    return [version_at_least $tcl_version_major $tcl_version_minor \
-		$major $minor]
+    return [version_compare [list $major $minor] \
+		<= [list $tcl_version_major $tcl_version_minor]]
 }
 
 if { [tcl_version_at_least 8 5] == 0 } {
@@ -2411,6 +2430,10 @@ proc allow_fortran_tests {} {
 # Return a 1 if I want to try to test ada.
 
 proc allow_ada_tests {} {
+    if { [is_remote host] } {
+	# Currently gdb_ada_compile doesn't support remote host.
+	return 0
+    }
     return 1
 }
 
@@ -2426,23 +2449,48 @@ proc allow_d_tests {} {
     return 1
 }
 
-# Return 1 to try Rust tests, 0 to skip them.
-proc allow_rust_tests {} {
-    if { ![isnative] } {
-	return 0
+# Return a 1 if we can compile source files in LANG.
+
+gdb_caching_proc can_compile { lang } {
+
+    if { $lang == "d" } {
+	set src { void main() {} }
+	return [gdb_can_simple_compile can_compile_$lang $src executable {d}]
     }
 
-    # The rust compiler does not support "-m32", skip.
-    global board board_info
-    set board [target_info name]
-    if {[board_info $board exists multilib_flags]} {
-	foreach flag [board_info $board multilib_flags] {
-	    if { $flag == "-m32" } {
-		return 0
+    if { $lang == "rust" } {
+	if { ![isnative] } {
+	    return 0
+	}
+
+	if { [is_remote host] } {
+	    # Proc find_rustc returns "" for remote host.
+	    return 0
+	}
+
+	# The rust compiler does not support "-m32", skip.
+	global board board_info
+	set board [target_info name]
+	if {[board_info $board exists multilib_flags]} {
+	    foreach flag [board_info $board multilib_flags] {
+		if { $flag == "-m32" } {
+		    return 0
+		}
 	    }
 	}
+
+	set src { fn main() {} }
+	# Drop nowarnings in default_compile_flags, it translates to -w which
+	# rustc doesn't support.
+	return [gdb_can_simple_compile can_compile_$lang $src executable \
+		    {rust} {debug quiet}]
     }
 
+    error "can_compile doesn't support lang: $lang"
+}
+
+# Return 1 to try Rust tests, 0 to skip them.
+proc allow_rust_tests {} {
     return 1
 }
 
@@ -2451,6 +2499,21 @@ proc allow_rust_tests {} {
 gdb_caching_proc allow_python_tests {} {
     set output [remote_exec host $::GDB "$::INTERNAL_GDBFLAGS --configuration"]
     return [expr {[string first "--with-python" $output] != -1}]
+}
+
+gdb_caching_proc allow_dap_tests {} {
+    if { ![allow_python_tests] } {
+	return 0
+    }
+
+    # With set auto-connect-native-target off, we run into:
+    # +++ run
+    # Traceback (most recent call last):
+    #   File "startup.py", line <n>, in exec_and_log
+    #     output = gdb.execute(cmd, from_tty=True, to_string=True)
+    # gdb.error: Don't know how to run.  Try "help target".
+    set gdb_flags [join $::GDBFLAGS $::INTERNAL_GDBFLAGS]
+    return [expr {[string first "set auto-connect-native-target off" $gdb_flags] == -1}]
 }
 
 # Return a 1 if we should run shared library tests.
@@ -4529,8 +4592,8 @@ gdb_caching_proc universal_compile_options {} {
     set me "universal_compile_options"
     set options {}
 
-    set src [standard_temp_file ccopts[pid].c]
-    set obj [standard_temp_file ccopts[pid].o]
+    set src [standard_temp_file ccopts.c]
+    set obj [standard_temp_file ccopts.o]
 
     gdb_produce_source $src {
 	int foo(void) { return 0; }
@@ -4553,11 +4616,12 @@ gdb_caching_proc universal_compile_options {} {
 }
 
 # Compile the code in $code to a file based on $name, using the flags
-# $compile_flag as well as debug, nowarning and quiet.
+# $compile_flag as well as debug, nowarning and quiet  (unless otherwise
+# specified in default_compile_flags).
 # Return 1 if code can be compiled
 # Leave the file name of the resulting object in the upvar object.
 
-proc gdb_simple_compile {name code {type object} {compile_flags {}} {object obj}} {
+proc gdb_simple_compile {name code {type object} {compile_flags {}} {object obj} {default_compile_flags {}}} {
     upvar $object obj
 
     switch -regexp -- $type {
@@ -4584,10 +4648,18 @@ proc gdb_simple_compile {name code {type object} {compile_flags {}} {object obj}
 	    set ext "cpp"
 	    break
 	}
+	if { "$flag" eq "d" } {
+	    set ext "d"
+	    break
+	}
     }
-    set src [standard_temp_file $name-[pid].$ext]
-    set obj [standard_temp_file $name-[pid].$postfix]
-    set compile_flags [concat $compile_flags {debug nowarnings quiet}]
+    set src [standard_temp_file $name.$ext]
+    set obj [standard_temp_file $name.$postfix]
+    if { $default_compile_flags == "" } {
+	set compile_flags [concat $compile_flags {debug nowarnings quiet}]
+    } else {
+	set compile_flags [concat $compile_flags $default_compile_flags]
+    }
 
     gdb_produce_source $src $code
 
@@ -4604,12 +4676,14 @@ proc gdb_simple_compile {name code {type object} {compile_flags {}} {object obj}
 }
 
 # Compile the code in $code to a file based on $name, using the flags
-# $compile_flag as well as debug, nowarning and quiet.
+# $compile_flag as well as debug, nowarning and quiet (unless otherwise
+# specified in default_compile_flags).
 # Return 1 if code can be compiled
 # Delete all created files and objects.
 
-proc gdb_can_simple_compile {name code {type object} {compile_flags ""}} {
-    set ret [gdb_simple_compile $name $code $type $compile_flags temp_obj]
+proc gdb_can_simple_compile {name code {type object} {compile_flags ""} {default_compile_flags ""}} {
+    set ret [gdb_simple_compile $name $code $type $compile_flags temp_obj \
+		 $default_compile_flags]
     file delete $temp_obj
     return $ret
 }
@@ -4617,6 +4691,35 @@ proc gdb_can_simple_compile {name code {type object} {compile_flags ""}} {
 # Some targets need to always link a special object in.  Save its path here.
 global gdb_saved_set_unbuffered_mode_obj
 set gdb_saved_set_unbuffered_mode_obj ""
+
+# Escape STR sufficiently for use on host commandline.
+
+proc escape_for_host { str } {
+    if { [is_remote host] } {
+	set map {
+	    {$} {\\$}
+       }
+    } else {
+	set map {
+	    {$} {\$}
+	}
+    }
+
+    return [string map $map $str]
+}
+
+# Add double quotes around ARGS, sufficiently escaped for use on host
+# commandline.
+
+proc quote_for_host { args } {
+    set str [join $args]
+    if { [is_remote host] } {
+	set str [join [list {\"} $str {\"}] ""]
+    } else {
+	set str [join [list {"} $str {"}] ""]
+    }
+    return $str
+}
 
 # Compile source files specified by SOURCE into a binary of type TYPE at path
 # DEST.  gdb_compile is implemented using DejaGnu's target_compile, so the type
@@ -4891,7 +4994,7 @@ proc gdb_compile {source dest type options} {
 	    if { $shlib_load } {
 		lappend new_options "libs=-ldl"
 	    }
-	    lappend new_options "ldflags=-Wl,-rpath,\\\$ORIGIN"
+	    lappend new_options [escape_for_host {ldflags=-Wl,-rpath,$ORIGIN}]
 	}
     }
     set options $new_options
@@ -5866,6 +5969,21 @@ proc gdb_touch_execfile { binfile } {
     }
 }
 
+# Override of dejagnu's remote_upload, which doesn't handle remotedir.
+
+rename remote_upload dejagnu_remote_upload
+proc remote_upload { dest srcfile args } {
+    if { [is_remote $dest] && [board_info $dest exists remotedir] } {
+	set remotedir [board_info $dest remotedir]
+	if { ![string match "$remotedir*" $srcfile] } {
+	    # Use hardcoded '/' as separator, as in dejagnu's remote_download.
+	    set srcfile $remotedir/$srcfile
+	}
+    }
+
+    return [dejagnu_remote_upload $dest $srcfile {*}$args]
+}
+
 # Like remote_download but provides a gdb-specific behavior.
 #
 # If the destination board is remote, the local file FROMFILE is transferred as
@@ -5916,7 +6034,11 @@ proc gdb_remote_download {dest fromfile {tofile {}}} {
 # Copy shlib FILE to the target.
 
 proc gdb_download_shlib { file } {
-    return [gdb_remote_download target [shlib_target_file $file]]
+    set target_file [shlib_target_file $file]
+    if { [is_remote host] } {
+	remote_download host $target_file
+    }
+    return [gdb_remote_download target $target_file]
 }
 
 # Set solib-search-path to allow gdb to locate shlib FILE.
@@ -5928,16 +6050,26 @@ proc gdb_locate_shlib { file } {
 	perror "gdb_load_shlib: GDB is not running"
     }
 
-    # If the target is remote, we need to tell gdb where to find the
-    # libraries.
-    if { ![is_remote target] } {
+    if { [is_remote target] || [is_remote host] } {
+	# If the target or host is remote, we need to tell gdb where to find
+	# the libraries.
+    } else {
 	return
     }
 
     # We could set this even when not testing remotely, but a user
     # generally won't set it unless necessary.  In order to make the tests
     # more like the real-life scenarios, we don't set it for local testing.
-    gdb_test "set solib-search-path [file dirname $file]" "" \
+    if { [is_remote host] } {
+	set solib_search_path [board_info host remotedir]
+	if { $solib_search_path == "" } {
+	    set solib_search_path .
+	}
+    } else {
+	set solib_search_path [file dirname $file]
+    }
+
+    gdb_test_no_output "set solib-search-path $solib_search_path" \
 	"set solib-search-path for [file tail $file]"
 }
 
@@ -6153,7 +6285,14 @@ proc default_gdb_init { test_file_name } {
 
     # If DEBUGINFOD_URLS is set, gdb will try to download sources and
     # debug info for f.i. system libraries.  Prevent this.
-    unset -nocomplain ::env(DEBUGINFOD_URLS)
+    if { [is_remote host] } {
+	# See initialization of INTERNAL_GDBFLAGS.
+    } else {
+	# Using "set debuginfod enabled off" in INTERNAL_GDBFLAGS interferes
+	# with the gdb.debuginfod test-cases, so use the unsetenv method for
+	# non-remote host.
+	unset -nocomplain ::env(DEBUGINFOD_URLS)
+    }
 
     # Ensure that GDBHISTFILE and GDBHISTSIZE are removed from the
     # environment, we don't want these modifications to the history
@@ -6275,6 +6414,24 @@ proc standard_output_file {basename} {
         set dir [exec sh -c "cd ${dir} && pwd -W"]
     }
     return [file join $dir $basename]
+}
+
+# Turn BASENAME into a file name on host.
+
+proc host_standard_output_file { basename } {
+    if { [is_remote host] } {
+	set remotedir [board_info host remotedir]
+	if { $remotedir == "" } {
+	    if { $basename == "" } {
+		return "."
+	    }
+	    return $basename
+	} else {
+	    return [join [list $remotedir $basename] "/"]
+	}
+    } else {
+	return [standard_output_file $basename]
+    }
 }
 
 # Turn BASENAME into a full file name in the standard output directory.  If
@@ -6849,7 +7006,7 @@ proc readelf_prints_pie { } {
     # flag is printed by readelf, but we cannot reliably construct a PIE
     # executable if the multilib_flags dictate otherwise
     # (--target_board=unix/-no-pie/-fno-PIE).
-    return [version_at_least $major $minor 2 26]
+    return [version_compare {2 26} <= [list $major $minor]]
 }
 
 # Return 1 if EXECUTABLE is a Position Independent Executable, 0 if it is not,
@@ -6899,8 +7056,8 @@ gdb_caching_proc allow_float_test {} {
 
 	# Set up, compile, and execute a test program having VFP
 	# operations.
-	set src [standard_temp_file arm_vfp[pid].c]
-	set exe [standard_temp_file arm_vfp[pid].x]
+	set src [standard_temp_file arm_vfp.c]
+	set exe [standard_temp_file arm_vfp.x]
 
 	gdb_produce_source $src {
 	    int main() {
@@ -8333,7 +8490,7 @@ proc gdb_define_cmd {command command_list} {
     set test "define $command"
 
     gdb_test_multiple "define $command" $test {
-	-re "End with"  {
+	-re "End with \[^\r\n\]*\r\n *>$"  {
 	    gdb_test_multiple $input $test {
 		-re "\r\n$gdb_prompt " {
 		}
@@ -8612,6 +8769,10 @@ proc readnow { } {
 # Otherwise, return "".
 
 proc have_index { objfile } {
+    # This proc is mostly used with $binfile, but that gives problems with
+    # remote host, while using $testfile would work.
+    # Fix this by reducing $binfile to $testfile.
+    set objfile [file tail $objfile]
 
     set res ""
     set cmd "maint print objfiles $objfile"
@@ -8775,7 +8936,7 @@ proc is_stmt_addresses { file } {
     set is_stmt [list]
 
     gdb_test_multiple "maint info line-table $file" "" {
-	-re "\r\n$decimal\[ \t\]+$decimal\[ \t\]+($hex)\[ \t\]+Y\[^\r\n\]*" {
+	-re "\r\n$decimal\[ \t\]+$decimal\[ \t\]+($hex)\[ \t\]+$hex\[ \t\]+Y\[^\r\n\]*" {
 	    lappend is_stmt $expect_out(1,string)
 	    exp_continue
 	}
@@ -8929,7 +9090,8 @@ gdb_caching_proc supports_scalar_storage_order_attribute {} {
 	return 0
     }
 
-    set result [remote_exec target $obj]
+    set target_obj [gdb_remote_download target $obj]
+    set result [remote_exec target $target_obj]
     set status [lindex $result 0]
     set output [lindex $result 1]
     if { $output != "" } {
@@ -8989,7 +9151,8 @@ gdb_caching_proc have_mpx {} {
         return 0
     }
 
-    set result [remote_exec target $obj]
+    set target_obj [gdb_remote_download target $obj]
+    set result [remote_exec target $target_obj]
     set status [lindex $result 0]
     set output [lindex $result 1]
     if { $output != "" } {
@@ -9013,7 +9176,8 @@ gdb_caching_proc have_mpx {} {
         return 0
     }
 
-    set result [remote_exec target $obj]
+    set target_obj [gdb_remote_download target $obj]
+    set result [remote_exec target $target_obj]
     set status [lindex $result 0]
     set output [lindex $result 1]
     set status [expr ($status == 0) \
@@ -9056,7 +9220,8 @@ gdb_caching_proc have_avx {} {
         return 0
     }
 
-    set result [remote_exec target $obj]
+    set target_obj [gdb_remote_download target $obj]
+    set result [remote_exec target $target_obj]
     set status [lindex $result 0]
     set output [lindex $result 1]
     if { $output != "" } {
@@ -9074,22 +9239,43 @@ gdb_caching_proc have_avx {} {
 #
 # ARG can either be a name, or of the form !NAME.
 #
-# Each name is a proc to evaluate in the caller's context.  It returns
-# a boolean, and a "!" means to invert the result.  If this is
-# nonzero, all is well.  If it is zero, an "untested" is emitted and
-# this proc causes the caller to return.
+# Each name is a proc to evaluate in the caller's context.  It can return a
+# boolean or a two element list with a boolean and a reason string.
+# A "!" means to invert the result.  If this is true, all is well.  If it is
+# false, an "unsupported" is emitted and this proc causes the caller to return.
+#
+# The reason string is used to provide some context about a require failure,
+# and is included in the "unsupported" message.
 
 proc require { args } {
     foreach arg $args {
 	if {[string index $arg 0] == "!"} {
-	    set ok 0
+	    set required_val 0
 	    set fn [string range $arg 1 end]
 	} else {
-	    set ok 1
+	    set required_val 1
 	    set fn $arg
 	}
-	if {$ok != !![uplevel 1 $fn]} {
-	    unsupported "require failed: $arg"
+
+	set result [uplevel 1 $fn]
+	set len [llength $result]
+	if { $len == 2 } {
+	    set actual_val [lindex $result 0]
+	    set msg [lindex $result 1]
+	} elseif { $len == 1 } {
+	    set actual_val $result
+	    set msg ""
+	} else {
+	    error "proc $fn returned a list of unexpected length $len"
+	}
+
+	if {$required_val != !!$actual_val} {
+	    if { [string length $msg] > 0 } {
+		unsupported "require failed: $arg ($msg)"
+	    } else {
+		unsupported "require failed: $arg"
+	    }
+
 	    return -code return 0
 	}
     }
@@ -9253,7 +9439,8 @@ gdb_caching_proc arm_cc_for_target {} {
 		 $src \
 		 executable [list compiler=$compiler]]} {
 
-	    set result [remote_exec target $obj]
+	    set target_obj [gdb_remote_download target $obj]
+	    set result [remote_exec target $target_obj]
 	    set status [lindex $result 0]
 	    set output [lindex $result 1]
 
@@ -9270,30 +9457,49 @@ gdb_caching_proc arm_cc_for_target {} {
 
 # Step until the pattern REGEXP is found.  Step at most
 # MAX_STEPS times, but stop stepping once REGEXP is found.
-#
+# CURRENT matches current location
 # If REGEXP is found then a single pass is emitted, otherwise, after
 # MAX_STEPS steps, a single fail is emitted.
 #
 # TEST_NAME is the name used in the pass/fail calls.
 
-proc gdb_step_until { regexp {test_name ""} {max_steps 10} } {
-    if { $test_name == "" } {
-	set test_name "stepping until regexp"
-    }
+proc gdb_step_until { regexp {test_name "stepping until regexp"} \
+			  {current "\}"} { max_steps 10 } } {
+    repeat_cmd_until "step" $current  $regexp  $test_name "10"
+}
+
+# Do repeated stepping COMMANDs in order to reach TARGET from CURRENT
+#
+#  COMMAND   is a stepping command
+#  CURRENT   is a string matching the current location
+#  TARGET    is a string matching the target location
+#  TEST_NAME is the test name
+#  MAX_STEPS is number of steps attempted before fail is emitted
+#
+# The function issues repeated COMMANDs as long as the location matches
+# CURRENT up to a maximum of MAX_STEPS.
+#
+# TEST_NAME passes if the resulting location matches TARGET and fails
+# otherwise.
+
+proc repeat_cmd_until { command current target \
+			    {test_name "stepping until regexp"} \
+			    {max_steps 100} } {
+    global gdb_prompt
 
     set count 0
-    gdb_test_multiple "step" "$test_name" {
-	-re "$regexp\r\n$::gdb_prompt $" {
-	    pass $test_name
-	}
-	-re ".*$::gdb_prompt $" {
-	    if {$count < $max_steps} {
-		incr count
-		send_gdb "step\n"
+    gdb_test_multiple "$command" "$test_name" {
+	-re "$current.*$gdb_prompt $" {
+	    incr count
+	    if { $count < $max_steps } {
+		send_gdb "$command\n"
 		exp_continue
 	    } else {
-		fail $test_name
+		fail "$test_name"
 	    }
+	}
+	-re "$target.*$gdb_prompt $" {
+	    pass "$test_name"
 	}
     }
 }
@@ -9431,6 +9637,34 @@ gdb_caching_proc have_compile_flag { flag } {
     set src { void foo () {} }
     return [gdb_can_simple_compile have_compile_flag_$flag $src object \
 		additional_flags=$flag]
+}
+
+# Handle include file $srcdir/$subdir/FILE.
+
+proc include_file { file } {
+    set file [file join $::srcdir $::subdir $file]
+    if { [is_remote host] } {
+	set res [remote_download host $file]
+    } else {
+	set res $file
+    }
+
+    return $res
+}
+
+# Handle include file FILE, and if necessary update compiler flags variable
+# FLAGS.
+
+proc lappend_include_file { flags file } {
+    upvar $flags up_flags
+    if { [is_remote host] } {
+	gdb_remote_download host $file
+    } else {
+	set dir [file dirname $file]
+	if { $dir != [file join $::srcdir $::subdir] } {
+	    lappend up_flags "additional_flags=-I$dir"
+	}
+    }
 }
 
 # Always load compatibility stuff.

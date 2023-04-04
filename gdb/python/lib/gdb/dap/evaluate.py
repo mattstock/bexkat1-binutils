@@ -14,10 +14,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import gdb
+import gdb.printing
 
 from .frames import frame_for_id
 from .server import request
 from .startup import send_gdb_with_response, in_gdb_thread
+from .varref import find_variable, VariableReference
+
+
+class EvaluateResult(VariableReference):
+    def __init__(self, value):
+        super().__init__(None, value, "result")
 
 
 # Helper function to evaluate an expression in a certain frame.
@@ -26,17 +33,50 @@ def _evaluate(expr, frame_id):
     if frame_id is not None:
         frame = frame_for_id(frame_id)
         frame.select()
-    return str(gdb.parse_and_eval(expr))
+    val = gdb.parse_and_eval(expr)
+    ref = EvaluateResult(val)
+    return ref.to_object()
+
+
+# Helper function to evaluate a gdb command in a certain frame.
+@in_gdb_thread
+def _repl(command, frame_id):
+    if frame_id is not None:
+        frame = frame_for_id(frame_id)
+        frame.select()
+    val = gdb.execute(command, from_tty=True, to_string=True)
+    return {
+        "result": val,
+        "variablesReference": 0,
+    }
 
 
 # FIXME 'format' & hex
-# FIXME return a structured response using pretty-printers / varobj
 # FIXME supportsVariableType handling
 @request("evaluate")
-def eval_request(*, expression, frameId=None, **args):
-    result = send_gdb_with_response(lambda: _evaluate(expression, frameId))
-    return {
-        "result": result,
-        # FIXME
-        "variablesReference": -1,
-    }
+def eval_request(*, expression, frameId=None, context="variables", **args):
+    if context in ("watch", "variables"):
+        # These seem to be expression-like.
+        return send_gdb_with_response(lambda: _evaluate(expression, frameId))
+    elif context == "repl":
+        return send_gdb_with_response(lambda: _repl(expression, frameId))
+    else:
+        raise Exception(f'unknown evaluate context "{context}"')
+
+
+@in_gdb_thread
+def _variables(ref, start, count):
+    var = find_variable(ref)
+    children = var.fetch_children(start, count)
+    return [x.to_object() for x in children]
+
+
+@request("variables")
+# Note that we ignore the 'filter' field.  That seems to be
+# specific to javascript.
+# FIXME: implement format
+def variables(*, variablesReference, start=0, count=0, **args):
+    result = send_gdb_with_response(
+        lambda: _variables(variablesReference, start, count)
+    )
+    return {"variables": result}

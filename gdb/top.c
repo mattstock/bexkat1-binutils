@@ -667,7 +667,7 @@ execute_command (const char *p, int from_tty)
 	   subcommands.  */
 	{
 	  std::string prefixname = c->prefixname ();
-          std::string prefixname_no_space
+	  std::string prefixname_no_space
 	    = prefixname.substr (0, prefixname.length () - 1);
 	  gdb_printf
 	    ("\"%s\" must be followed by the name of a subcommand.\n",
@@ -1823,6 +1823,14 @@ void
 quit_force (int *exit_arg, int from_tty)
 {
   int exit_code = 0;
+
+  /* Clear the quit flag and sync_quit_force_run so that a
+     gdb_exception_forced_quit isn't inadvertently triggered by a QUIT
+     check while running the various cleanup/exit code below.  Note
+     that the call to 'check_quit_flag' clears the quit flag as a side
+     effect.  */
+  check_quit_flag ();
+  sync_quit_force_run = false;
 
   /* An optional expression may be used to cause gdb to terminate with the
      value of that expression.  */

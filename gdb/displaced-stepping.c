@@ -55,7 +55,7 @@ displaced_step_buffers::prepare (thread_info *thread, CORE_ADDR &displaced_pc)
   regcache *regcache = get_thread_regcache (thread);
   const address_space *aspace = regcache->aspace ();
   gdbarch *arch = regcache->arch ();
-  ULONGEST len = gdbarch_max_insn_length (arch);
+  ULONGEST len = gdbarch_displaced_step_buffer_length (arch);
 
   /* Search for an unused buffer.  */
   displaced_step_buffer *buffer = nullptr;
@@ -122,8 +122,7 @@ displaced_step_buffers::prepare (thread_info *thread, CORE_ADDR &displaced_pc)
 
   displaced_debug_printf ("saved %s: %s",
 			  paddress (arch, buffer->addr),
-			  displaced_step_dump_bytes
-			  (buffer->saved_copy.data (), len).c_str ());
+			  bytes_to_string (buffer->saved_copy).c_str ());
 
   /* Save this in a local variable first, so it's released if code below
      throws.  */
@@ -192,11 +191,17 @@ write_memory_ptid (ptid_t ptid, CORE_ADDR memaddr,
 }
 
 static bool
-displaced_step_instruction_executed_successfully (gdbarch *arch,
-						  gdb_signal signal)
+displaced_step_instruction_executed_successfully
+  (gdbarch *arch, const target_waitstatus &status)
 {
-  if (signal != GDB_SIGNAL_TRAP)
+  if (status.kind () == TARGET_WAITKIND_STOPPED
+      && status.sig () != GDB_SIGNAL_TRAP)
     return false;
+
+  /* All other (thread event) waitkinds can only happen if the
+     instruction fully executed.  For example, a fork, or a syscall
+     entry can only happen if the syscall instruction actually
+     executed.  */
 
   if (target_stopped_by_watchpoint ())
     {
@@ -210,7 +215,7 @@ displaced_step_instruction_executed_successfully (gdbarch *arch,
 
 displaced_step_finish_status
 displaced_step_buffers::finish (gdbarch *arch, thread_info *thread,
-				gdb_signal sig)
+				const target_waitstatus &status)
 {
   gdb_assert (thread->displaced_step_state.in_progress ());
 
@@ -243,7 +248,7 @@ displaced_step_buffers::finish (gdbarch *arch, thread_info *thread,
      below.  */
   thread->inf->displaced_step_state.unavailable = false;
 
-  ULONGEST len = gdbarch_max_insn_length (arch);
+  ULONGEST len = gdbarch_displaced_step_buffer_length (arch);
 
   /* Restore memory of the buffer.  */
   write_memory_ptid (thread->ptid, buffer->addr,
@@ -256,7 +261,7 @@ displaced_step_buffers::finish (gdbarch *arch, thread_info *thread,
   regcache *rc = get_thread_regcache (thread);
 
   bool instruction_executed_successfully
-    = displaced_step_instruction_executed_successfully (arch, sig);
+    = displaced_step_instruction_executed_successfully (arch, status);
 
   if (instruction_executed_successfully)
     {
@@ -302,7 +307,7 @@ displaced_step_buffers::restore_in_ptid (ptid_t ptid)
 
       regcache *regcache = get_thread_regcache (buffer.current_thread);
       gdbarch *arch = regcache->arch ();
-      ULONGEST len = gdbarch_max_insn_length (arch);
+      ULONGEST len = gdbarch_displaced_step_buffer_length (arch);
 
       write_memory_ptid (ptid, buffer.addr, buffer.saved_copy.data (), len);
 

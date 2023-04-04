@@ -23,15 +23,16 @@ standard_testfile
 
 # Some targets can't call functions, so don't even bother with this
 # test.
-if [target_info exists gdb,cannot_call_functions] {
-    unsupported "cannot call functions"
-    return
-}
+require {!target_info exists gdb,cannot_call_functions}
 
 set dp_location [gdb_get_line_number "set dprintf here"]
 set bp_location [gdb_get_line_number "set breakpoint here"]
 
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile debug]} {
+set flags {}
+lappend flags debug
+lappend_include_file flags $srcdir/lib/unbuffer_output.c
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $flags]} {
     return -1
 }
 

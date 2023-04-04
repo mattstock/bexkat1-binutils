@@ -255,6 +255,19 @@ is_leader (lwp_info *lp)
   return lp->ptid.pid () == lp->ptid.lwp ();
 }
 
+/* Convert an LWP's pending status to a std::string.  */
+
+static std::string
+pending_status_str (lwp_info *lp)
+{
+  gdb_assert (lwp_status_pending_p (lp));
+
+  if (lp->waitstatus.kind () != TARGET_WAITKIND_IGNORE)
+    return lp->waitstatus.to_string ();
+  else
+    return status_to_str (lp->status);
+}
+
 
 /* LWP accessors.  */
 
@@ -1226,7 +1239,7 @@ get_detach_signal (struct lwp_info *lp)
 	  if (tp->has_pending_waitstatus ())
 	    {
 	      /* If the thread has a pending event, and it was stopped with a
-	         signal, use that signal to resume it.  If it has a pending
+		 signal, use that signal to resume it.  If it has a pending
 		 event of another kind, it was not stopped with a signal, so
 		 resume it without a signal.  */
 	      if (tp->pending_waitstatus ().kind () == TARGET_WAITKIND_STOPPED)
@@ -1647,8 +1660,8 @@ linux_nat_target::resume (ptid_t scope_ptid, int step, enum gdb_signal signo)
 	 this thread with a signal?  */
       gdb_assert (signo == GDB_SIGNAL_0);
 
-      linux_nat_debug_printf ("Short circuiting for status 0x%x",
-			      lp->status);
+      linux_nat_debug_printf ("Short circuiting for status %s",
+			      pending_status_str (lp).c_str ());
 
       if (target_can_async_p ())
 	{
@@ -3137,7 +3150,7 @@ linux_nat_wait_1 (ptid_t ptid, struct target_waitstatus *ourstatus,
   if (lp != NULL)
     {
       linux_nat_debug_printf ("Using pending wait status %s for %s.",
-			      status_to_str (lp->status).c_str (),
+			      pending_status_str (lp).c_str (),
 			      lp->ptid.to_string ().c_str ());
     }
 

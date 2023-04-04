@@ -507,7 +507,7 @@ _bfd_xcoff_swap_aux_in (bfd *abfd, void * ext1, int type ATTRIBUTE_UNUSED,
     case C_HIDEXT:
       if (indx + 1 == numaux)
 	{
-	  in->x_csect.x_scnlen.l = H_GET_32 (abfd, ext->x_csect.x_scnlen);
+	  in->x_csect.x_scnlen.u64 = H_GET_32 (abfd, ext->x_csect.x_scnlen);
 	  in->x_csect.x_parmhash = H_GET_32 (abfd, ext->x_csect.x_parmhash);
 	  in->x_csect.x_snhash   = H_GET_16 (abfd, ext->x_csect.x_snhash);
 	  /* We don't have to hack bitfields in x_smtyp because it's
@@ -525,7 +525,7 @@ _bfd_xcoff_swap_aux_in (bfd *abfd, void * ext1, int type ATTRIBUTE_UNUSED,
 	    = H_GET_32 (abfd, ext->x_fcn.x_fsize);
 	  in->x_sym.x_fcnary.x_fcn.x_lnnoptr
 	    = H_GET_32 (abfd, ext->x_fcn.x_lnnoptr);
-	  in->x_sym.x_fcnary.x_fcn.x_endndx.l
+	  in->x_sym.x_fcnary.x_fcn.x_endndx.u32
 	    = H_GET_32 (abfd, ext->x_fcn.x_endndx);
 	}
       break;
@@ -591,7 +591,7 @@ _bfd_xcoff_swap_aux_out (bfd *abfd, void * inp, int type ATTRIBUTE_UNUSED,
     case C_HIDEXT:
       if (indx + 1 == numaux)
 	{
-	  H_PUT_32 (abfd, in->x_csect.x_scnlen.l, ext->x_csect.x_scnlen);
+	  H_PUT_32 (abfd, in->x_csect.x_scnlen.u64, ext->x_csect.x_scnlen);
 	  H_PUT_32 (abfd, in->x_csect.x_parmhash, ext->x_csect.x_parmhash);
 	  H_PUT_16 (abfd, in->x_csect.x_snhash, ext->x_csect.x_snhash);
 	  /* We don't have to hack bitfields in x_smtyp because it's
@@ -607,7 +607,7 @@ _bfd_xcoff_swap_aux_out (bfd *abfd, void * inp, int type ATTRIBUTE_UNUSED,
 	  H_PUT_32 (abfd, in->x_sym.x_misc.x_fsize, ext->x_fcn.x_fsize);
 	  H_PUT_32 (abfd, in->x_sym.x_fcnary.x_fcn.x_lnnoptr,
 		    ext->x_fcn.x_lnnoptr);
-	  H_PUT_32 (abfd, in->x_sym.x_fcnary.x_fcn.x_endndx.l,
+	  H_PUT_32 (abfd, in->x_sym.x_fcnary.x_fcn.x_endndx.u32,
 		    ext->x_fcn.x_endndx);
 	}
       break;
@@ -1714,8 +1714,11 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 	  laststart -= SIZEOF_AR_HDR + arel->extra_size;
 	}
 
-      /* Sanity check that we aren't pointing into the previous element.  */
-      if (filestart != 0 && filestart >= laststart && filestart < lastend)
+      /* Sanity check that we aren't pointing into the previous element,
+	 or into the header.  */
+      if (filestart != 0
+	  && (filestart < SIZEOF_AR_FILE_HDR
+	      || (filestart >= laststart && filestart < lastend)))
 	{
 	  bfd_set_error (bfd_error_malformed_archive);
 	  return NULL;
@@ -1747,8 +1750,11 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)
 	  laststart -= SIZEOF_AR_HDR_BIG + arel->extra_size;
 	}
 
-      /* Sanity check that we aren't pointing into the previous element.  */
-      if (filestart != 0 && filestart >= laststart && filestart < lastend)
+      /* Sanity check that we aren't pointing into the previous element
+	 or into the header.  */
+      if (filestart != 0
+	  && (filestart < SIZEOF_AR_FILE_HDR_BIG
+	      || (filestart >= laststart && filestart < lastend)))
 	{
 	  bfd_set_error (bfd_error_malformed_archive);
 	  return NULL;
@@ -4140,7 +4146,7 @@ xcoff_generate_rtinit  (bfd *abfd, const char *init, const char *fini,
   syment.n_scnum = 1;
   syment.n_sclass = C_HIDEXT;
   syment.n_numaux = 1;
-  auxent.x_csect.x_scnlen.l = data_buffer_size;
+  auxent.x_csect.x_scnlen.u64 = data_buffer_size;
   auxent.x_csect.x_smtyp = 3 << 3 | XTY_SD;
   auxent.x_csect.x_smclas = XMC_RW;
   bfd_coff_swap_sym_out (abfd, &syment,
@@ -4362,7 +4368,7 @@ const struct xcoff_dwsect_name xcoff_dwsect_names[] = {
 };
 
 /* For generic entry points.  */
-#define _bfd_xcoff_close_and_cleanup _bfd_archive_close_and_cleanup
+#define _bfd_xcoff_close_and_cleanup _bfd_coff_close_and_cleanup
 #define _bfd_xcoff_bfd_free_cached_info _bfd_bool_bfd_true
 #define _bfd_xcoff_new_section_hook coff_new_section_hook
 #define _bfd_xcoff_get_section_contents _bfd_generic_get_section_contents

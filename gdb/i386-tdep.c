@@ -830,7 +830,7 @@ i386_displaced_step_copy_insn (struct gdbarch *gdbarch,
 
   displaced_debug_printf ("%s->%s: %s",
 			  paddress (gdbarch, from), paddress (gdbarch, to),
-			  displaced_step_dump_bytes (buf, len).c_str ());
+			  bytes_to_string (buf, len).c_str ());
 
   /* This is a work around for a problem with g++ 4.8.  */
   return displaced_step_copy_insn_closure_up (closure.release ());
@@ -1856,7 +1856,7 @@ i386_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 	      && cust->producer () != NULL
 	      && (producer_is_llvm (cust->producer ())
 	      || producer_is_icc_ge_19 (cust->producer ()))))
-        return std::max (start_pc, post_prologue_pc);
+	return std::max (start_pc, post_prologue_pc);
     }
  
   cache.locals = -1;

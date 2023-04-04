@@ -63,34 +63,29 @@
 # * "predefault", "postdefault", and "invalid" - These are used for
 # the initialization and verification steps:
 #
-# A gdbarch is zero-initialized.  Then, if a field has a pre-default,
-# the field is set to that value.  After initialization is complete
-# (that is, after the tdep code has a chance to change the settings),
-# the post-initialization step is done.
+# A gdbarch is zero-initialized.  Then, if a field has a "predefault",
+# the field is set to that value.  This becomes the field's initial
+# value.
 #
-# There is a generic algorithm to generate a "validation function" for
-# all fields.  If the field has an "invalid" attribute with a string
-# value, then this string is the expression (note that a string-valued
-# "invalid" and "predicate" are mutually exclusive; and the case where
-# invalid is True means to ignore this field and instead use the
-# default checking that is about to be described).  Otherwise, if
-# there is a "predefault", then the field is valid if it differs from
-# the predefault.  Otherwise, the check is done against 0 (really NULL
-# for function pointers, but same idea).
-#
-# In post-initialization / validation, there are several cases.
-#
-# * If "invalid" is False, or if the field specifies "predicate",
-# validation is skipped.  Otherwise, a validation step is emitted.
-#
-# * Otherwise, the validity is checked using the usual validation
-# function (see above).  If the field is considered valid, nothing is
+# After initialization is complete (that is, after the tdep code has a
+# chance to change the settings), the post-initialization step is
 # done.
 #
-# * Otherwise, the field's value is invalid.  If there is a
-# "postdefault", then the field is assigned that value.
+# If the field still has its initial value (see above), and the field
+# has a "postdefault", then the field is set to this value.
 #
-# * Otherwise, the gdbarch will fail validation and gdb will crash.
+# After the possible "postdefault" assignment, validation is
+# performed for fields that don't have a "predicate".
+#
+# If the field has an "invalid" attribute with a string value, then
+# this string is the expression that should evaluate to true when the
+# field is invalid.
+#
+# Otherwise, if "invalid" is True (the default), then the generic
+# validation function is used: the field is considered invalid it
+# still contains its default value.  This validation is what is used
+# within the _p predicate function if the field has "predicate" set to
+# True.
 #
 # Function and Method share:
 #
@@ -205,9 +200,9 @@ useful).
 Value(
     type="const struct floatformat **",
     name="bfloat16_format",
-    postdefault="floatformats_bfloat16",
-    invalid=True,
+    predefault="floatformats_bfloat16",
     printer="pformat (gdbarch, gdbarch->bfloat16_format)",
+    invalid=False,
 )
 
 Value(
@@ -220,9 +215,9 @@ Value(
 Value(
     type="const struct floatformat **",
     name="half_format",
-    postdefault="floatformats_ieee_half",
-    invalid=True,
+    predefault="floatformats_ieee_half",
     printer="pformat (gdbarch, gdbarch->half_format)",
+    invalid=False,
 )
 
 Value(
@@ -235,9 +230,9 @@ Value(
 Value(
     type="const struct floatformat **",
     name="float_format",
-    postdefault="floatformats_ieee_single",
-    invalid=True,
+    predefault="floatformats_ieee_single",
     printer="pformat (gdbarch, gdbarch->float_format)",
+    invalid=False,
 )
 
 Value(
@@ -250,9 +245,9 @@ Value(
 Value(
     type="const struct floatformat **",
     name="double_format",
-    postdefault="floatformats_ieee_double",
-    invalid=True,
+    predefault="floatformats_ieee_double",
     printer="pformat (gdbarch, gdbarch->double_format)",
+    invalid=False,
 )
 
 Value(
@@ -265,9 +260,9 @@ Value(
 Value(
     type="const struct floatformat **",
     name="long_double_format",
-    postdefault="floatformats_ieee_double",
-    invalid=True,
+    predefault="floatformats_ieee_double",
     printer="pformat (gdbarch, gdbarch->long_double_format)",
+    invalid=False,
 )
 
 Value(
@@ -289,7 +284,7 @@ One if `wchar_t' is signed, zero if unsigned.
     name="wchar_signed",
     predefault="-1",
     postdefault="1",
-    invalid=True,
+    invalid=False,
 )
 
 Method(
@@ -332,7 +327,7 @@ addr_bit is the size of a target address as represented in gdb
     name="addr_bit",
     predefault="0",
     postdefault="gdbarch_ptr_bit (gdbarch)",
-    invalid=True,
+    invalid=False,
 )
 
 Value(
@@ -353,9 +348,8 @@ and if Dwarf versions < 4 need to be supported.
 """,
     type="int",
     name="dwarf2_addr_size",
-    predefault="0",
     postdefault="gdbarch_ptr_bit (gdbarch) / TARGET_CHAR_BIT",
-    invalid=True,
+    invalid=False,
 )
 
 Value(
@@ -366,7 +360,7 @@ One if `char' acts like `signed char', zero if `unsigned char'.
     name="char_signed",
     predefault="-1",
     postdefault="1",
-    invalid=True,
+    invalid=False,
 )
 
 Function(
@@ -374,7 +368,6 @@ Function(
     name="read_pc",
     params=[("readable_regcache *", "regcache")],
     predicate=True,
-    invalid=True,
 )
 
 Function(
@@ -382,7 +375,6 @@ Function(
     name="write_pc",
     params=[("struct regcache *", "regcache"), ("CORE_ADDR", "val")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -411,7 +403,6 @@ Method(
         ("gdb_byte *", "buf"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -425,7 +416,6 @@ never be called.
     name="pseudo_register_read_value",
     params=[("readable_regcache *", "regcache"), ("int", "cookednum")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -437,14 +427,12 @@ Method(
         ("const gdb_byte *", "buf"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Value(
     type="int",
     name="num_regs",
     predefault="-1",
-    invalid=True,
 )
 
 Value(
@@ -469,7 +457,6 @@ Return -1 if something goes wrong, 0 otherwise.
     name="ax_pseudo_register_collect",
     params=[("struct agent_expr *", "ax"), ("int", "reg")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -482,7 +469,6 @@ Return -1 if something goes wrong, 0 otherwise.
     name="ax_pseudo_register_push_stack",
     params=[("struct agent_expr *", "ax"), ("int", "reg")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -495,7 +481,6 @@ UIOUT is the output stream where the handler will place information.
     name="report_signal_info",
     params=[("struct ui_out *", "uiout"), ("enum gdb_signal", "siggnal")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -590,8 +575,6 @@ should never return nullptr.
     params=[("int", "regnr")],
     param_checks=["regnr >= 0", "regnr < gdbarch_num_cooked_regs (gdbarch)"],
     result_checks=["result != nullptr"],
-    predefault="0",
-    invalid=True,
 )
 
 Method(
@@ -603,7 +586,6 @@ use "register_type".
     type="struct type *",
     name="register_type",
     params=[("int", "reg_nr")],
-    invalid=True,
 )
 
 Method(
@@ -649,7 +631,6 @@ Method(
         ("CORE_ADDR", "struct_addr"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -673,7 +654,6 @@ Method(
         ("struct regcache *", "regcache"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -721,7 +701,6 @@ Method(
         ("const char *", "args"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -763,7 +742,6 @@ FRAME corresponds to the longjmp frame.
     name="get_longjmp_target",
     params=[("frame_info_ptr", "frame"), ("CORE_ADDR *", "pc")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -845,7 +823,6 @@ Method(
     name="integer_to_address",
     params=[("struct type *", "type"), ("const gdb_byte *", "buf")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -943,8 +920,6 @@ Method(
     type="CORE_ADDR",
     name="skip_prologue",
     params=[("CORE_ADDR", "ip")],
-    predefault="0",
-    invalid=True,
 )
 
 Method(
@@ -952,7 +927,6 @@ Method(
     name="skip_main_prologue",
     params=[("CORE_ADDR", "ip")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -973,15 +947,12 @@ is not used.
     name="skip_entrypoint",
     params=[("CORE_ADDR", "ip")],
     predicate=True,
-    invalid=True,
 )
 
 Function(
     type="int",
     name="inner_than",
     params=[("CORE_ADDR", "lhs"), ("CORE_ADDR", "rhs")],
-    predefault="0",
-    invalid=True,
 )
 
 Method(
@@ -999,8 +970,6 @@ Return the breakpoint kind for this target based on *PCPTR.
     type="int",
     name="breakpoint_kind_from_pc",
     params=[("CORE_ADDR *", "pcptr")],
-    predefault="0",
-    invalid=True,
 )
 
 Method(
@@ -1034,7 +1003,6 @@ Method(
     name="adjust_breakpoint_address",
     params=[("CORE_ADDR", "bpaddr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1094,7 +1062,6 @@ Fetch the target specific address used to represent a load module.
     name="fetch_tls_load_module_address",
     params=[("struct objfile *", "objfile")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1109,7 +1076,6 @@ be zero for statically linked multithreaded inferiors.
     name="get_thread_local_address",
     params=[("ptid_t", "ptid"), ("CORE_ADDR", "lm_addr"), ("CORE_ADDR", "offset")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -1143,7 +1109,6 @@ frame-base.  Enable frame-base before frame-unwind.
     name="frame_num_args",
     params=[("frame_info_ptr", "frame")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1151,7 +1116,6 @@ Method(
     name="frame_align",
     params=[("CORE_ADDR", "address")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1314,7 +1278,6 @@ past a conditional branch to self.
     name="software_single_step",
     params=[("struct regcache *", "regcache")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1326,7 +1289,6 @@ further single-step is needed before the instruction finishes.
     name="single_step_through_delay",
     params=[("frame_info_ptr", "frame")],
     predicate=True,
-    invalid=True,
 )
 
 Function(
@@ -1353,8 +1315,9 @@ Value(
     comment="Vtable of solib operations functions.",
     type="const struct target_so_ops *",
     name="so_ops",
-    postdefault="&solib_target_so_ops",
+    predefault="&solib_target_so_ops",
     printer="host_address_to_string (gdbarch->so_ops)",
+    invalid=False,
 )
 
 Method(
@@ -1425,7 +1388,6 @@ the main symbol table and DWARF-2 records.
     name="elf_make_msymbol_special",
     params=[("asymbol *", "sym"), ("struct minimal_symbol *", "msym")],
     predicate=True,
-    invalid=True,
 )
 
 Function(
@@ -1513,7 +1475,6 @@ Function(
     name="address_class_type_flags",
     params=[("int", "byte_size"), ("int", "dwarf2_addr_class")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1521,7 +1482,6 @@ Method(
     name="address_class_type_flags_to_name",
     params=[("type_instance_flags", "type_flags")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1546,7 +1506,6 @@ type_flags was set, false otherwise.
     name="address_class_name_to_type_flags",
     params=[("const char *", "name"), ("type_instance_flags *", "type_flags_ptr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1572,7 +1531,6 @@ Fetch the pointer to the ith function argument.
         ("struct type *", "type"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1592,7 +1550,6 @@ sections.
         ("const struct regcache *", "regcache"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1603,7 +1560,6 @@ Create core file notes
     name="make_corefile_notes",
     params=[("bfd *", "obfd"), ("int *", "note_size")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1614,7 +1570,6 @@ Find core file memory regions
     name="find_memory_regions",
     params=[("find_memory_region_ftype", "func"), ("void *", "data")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1625,7 +1580,6 @@ Given a bfd OBFD, segment ADDRESS and SIZE, create a memory tag section to be du
     name="create_memtag_section",
     params=[("bfd *", "obfd"), ("CORE_ADDR", "address"), ("size_t", "size")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1636,7 +1590,6 @@ Given a memory tag section OSEC, fill OSEC's contents with the appropriate tag d
     name="fill_memtag_section",
     params=[("asection *", "osec")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1654,7 +1607,6 @@ If no tags were found, return an empty vector.
         ("size_t", "length"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1668,7 +1620,6 @@ failed, otherwise, return the red length of READBUF.
     name="core_xfer_shared_libraries",
     params=[("gdb_byte *", "readbuf"), ("ULONGEST", "offset"), ("ULONGEST", "len")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1681,7 +1632,6 @@ Return the number of bytes read (zero indicates failure).
     name="core_xfer_shared_libraries_aix",
     params=[("gdb_byte *", "readbuf"), ("ULONGEST", "offset"), ("ULONGEST", "len")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1692,7 +1642,6 @@ How the core target converts a PTID from a core file to a string.
     name="core_pid_to_str",
     params=[("ptid_t", "ptid")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1703,7 +1652,6 @@ How the core target extracts the name of a thread from a core file.
     name="core_thread_name",
     params=[("struct thread_info *", "thr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1716,7 +1664,6 @@ of bytes read (zero indicates EOF, a negative value indicates failure).
     name="core_xfer_siginfo",
     params=[("gdb_byte *", "readbuf"), ("ULONGEST", "offset"), ("ULONGEST", "len")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -1726,8 +1673,6 @@ BFD target to use when generating a core file.
     type="const char *",
     name="gcore_bfd_target",
     predicate=True,
-    predefault="0",
-    invalid=True,
     printer="pstring (gdbarch->gcore_bfd_target)",
 )
 
@@ -1750,7 +1695,6 @@ significant bit of the pfn for pointers to virtual member functions.
 """,
     type="int",
     name="vbit_in_delta",
-    predefault="0",
     invalid=False,
 )
 
@@ -1771,9 +1715,8 @@ The maximum length of an instruction on this architecture in bytes.
 """,
     type="ULONGEST",
     name="max_insn_length",
-    predicate=True,
     predefault="0",
-    invalid=True,
+    predicate=True,
 )
 
 Method(
@@ -1792,8 +1735,8 @@ For a general explanation of displaced stepping and how GDB uses it,
 see the comments in infrun.c.
 
 The TO area is only guaranteed to have space for
-gdbarch_max_insn_length (arch) bytes, so this function must not
-write more bytes than that to that area.
+gdbarch_displaced_step_buffer_length (arch) octets, so this
+function must not write more octets than that to this area.
 
 If you do not provide this function, GDB assumes that the
 architecture does not support displaced stepping.
@@ -1806,7 +1749,6 @@ that case.
     name="displaced_step_copy_insn",
     params=[("CORE_ADDR", "from"), ("CORE_ADDR", "to"), ("struct regcache *", "regs")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1854,9 +1796,9 @@ see the comments in infrun.c.
         ("CORE_ADDR", "to"),
         ("struct regcache *", "regs"),
     ],
-    predicate=True,
+    predicate=False,
     predefault="NULL",
-    invalid=True,
+    invalid="(gdbarch->displaced_step_copy_insn == nullptr) != (gdbarch->displaced_step_fixup == nullptr)",
 )
 
 Method(
@@ -1869,7 +1811,6 @@ Throw an exception if any unexpected error happens.
     name="displaced_step_prepare",
     params=[("thread_info *", "thread"), ("CORE_ADDR &", "displaced_pc")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1878,7 +1819,7 @@ Clean up after a displaced step of THREAD.
 """,
     type="displaced_step_finish_status",
     name="displaced_step_finish",
-    params=[("thread_info *", "thread"), ("gdb_signal", "sig")],
+    params=[("thread_info *", "thread"), ("const target_waitstatus &", "ws")],
     predefault="NULL",
     invalid="(! gdbarch->displaced_step_finish) != (! gdbarch->displaced_step_prepare)",
 )
@@ -1891,7 +1832,6 @@ Return the closure associated to the displaced step buffer that is at ADDR.
     name="displaced_step_copy_insn_closure_by_addr",
     params=[("inferior *", "inf"), ("CORE_ADDR", "addr")],
     predicate=True,
-    invalid=True,
 )
 
 Function(
@@ -1903,6 +1843,20 @@ contents of all displaced step buffers in the child's address space.
     name="displaced_step_restore_all_in_ptid",
     params=[("inferior *", "parent_inf"), ("ptid_t", "child_ptid")],
     invalid=False,
+)
+
+Value(
+    comment="""
+The maximum length in octets required for a displaced-step instruction
+buffer.  By default this will be the same as gdbarch::max_insn_length,
+but should be overridden for architectures that might expand a
+displaced-step instruction to multiple replacement instructions.
+""",
+    type="ULONGEST",
+    name="displaced_step_buffer_length",
+    predefault="0",
+    postdefault="gdbarch->max_insn_length",
+    invalid="gdbarch->displaced_step_buffer_length < gdbarch->max_insn_length",
 )
 
 Method(
@@ -1924,7 +1878,6 @@ offset adjusted; etc.
     params=[("CORE_ADDR *", "to"), ("CORE_ADDR", "from")],
     predicate=True,
     predefault="NULL",
-    invalid=True,
 )
 
 Function(
@@ -1935,7 +1888,6 @@ Refresh overlay mapped state for section OSECT.
     name="overlay_update",
     params=[("struct obj_section *", "osect")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1943,7 +1895,6 @@ Method(
     name="core_read_description",
     params=[("struct target_ops *", "target"), ("bfd *", "abfd")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -1967,7 +1918,6 @@ Return -1 if something goes wrong, 0 otherwise.
     name="process_record",
     params=[("struct regcache *", "regcache"), ("CORE_ADDR", "addr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1979,7 +1929,6 @@ Return -1 if something goes wrong, 0 otherwise.
     name="process_record_signal",
     params=[("struct regcache *", "regcache"), ("enum gdb_signal", "signal")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -1996,7 +1945,6 @@ headers.  This is mainly used when cross-debugging core files ---
     name="gdb_signal_from_target",
     params=[("int", "signo")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2013,7 +1961,6 @@ signal number is invalid.
     name="gdb_signal_to_target",
     params=[("enum gdb_signal", "signal")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2026,7 +1973,6 @@ Return a type suitable to inspect extra signal information.
     name="get_siginfo_type",
     params=[],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2037,7 +1983,6 @@ Record architecture-specific information from the symbol table.
     name="record_special_symbol",
     params=[("struct objfile *", "objfile"), ("asymbol *", "sym")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2049,7 +1994,6 @@ Get architecture-specific system calls information from registers.
     name="get_syscall_number",
     params=[("thread_info *", "thread")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -2058,7 +2002,6 @@ The filename of the XML syscall for this architecture.
 """,
     type="const char *",
     name="xml_syscall_file",
-    predefault="0",
     invalid=False,
     printer="pstring (gdbarch->xml_syscall_file)",
 )
@@ -2069,7 +2012,6 @@ Information about system calls from this architecture
 """,
     type="struct syscalls_info *",
     name="syscalls_info",
-    predefault="0",
     invalid=False,
     printer="host_address_to_string (gdbarch->syscalls_info)",
 )
@@ -2087,7 +2029,6 @@ in this case, this prefix would be the character `$'.
 """,
     type="const char *const *",
     name="stap_integer_prefixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_integer_prefixes)",
 )
@@ -2099,7 +2040,6 @@ on the architecture's assembly.
 """,
     type="const char *const *",
     name="stap_integer_suffixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_integer_suffixes)",
 )
@@ -2116,7 +2056,6 @@ in this case, this prefix would be the character `%'.
 """,
     type="const char *const *",
     name="stap_register_prefixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_register_prefixes)",
 )
@@ -2128,7 +2067,6 @@ the architecture's assembly.
 """,
     type="const char *const *",
     name="stap_register_suffixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_register_suffixes)",
 )
@@ -2148,7 +2086,6 @@ displacement, e.g., `4(%eax)' on x86.
 """,
     type="const char *const *",
     name="stap_register_indirection_prefixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_register_indirection_prefixes)",
 )
@@ -2168,7 +2105,6 @@ displacement, e.g., `4(%eax)' on x86.
 """,
     type="const char *const *",
     name="stap_register_indirection_suffixes",
-    predefault="0",
     invalid=False,
     printer="pstring_list (gdbarch->stap_register_indirection_suffixes)",
 )
@@ -2184,7 +2120,6 @@ register would be represented as `r10' internally.
 """,
     type="const char *",
     name="stap_gdb_register_prefix",
-    predefault="0",
     invalid=False,
     printer="pstring (gdbarch->stap_gdb_register_prefix)",
 )
@@ -2195,7 +2130,6 @@ Suffix used to name a register using GDB's nomenclature.
 """,
     type="const char *",
     name="stap_gdb_register_suffix",
-    predefault="0",
     invalid=False,
     printer="pstring (gdbarch->stap_gdb_register_suffix)",
 )
@@ -2219,7 +2153,6 @@ something like `(%', do not match just the `('.
     name="stap_is_single_operand",
     params=[("const char *", "s")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2250,7 +2183,6 @@ parser), and should advance the buffer pointer (p->arg).
     name="stap_parse_special_token",
     params=[("struct stap_parse_info *", "p")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2287,7 +2219,6 @@ The rationale for this can be found at PR breakpoints/24541.
         ("int", "regnum"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2300,7 +2231,6 @@ NARG must be >= 0.
     name="dtrace_parse_probe_argument",
     params=[("int", "narg")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2312,7 +2242,6 @@ corresponding to a disabled DTrace is-enabled probe.
     name="dtrace_probe_is_enabled",
     params=[("CORE_ADDR", "addr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2323,7 +2252,6 @@ Enable a DTrace is-enabled probe at ADDR.
     name="dtrace_enable_probe",
     params=[("CORE_ADDR", "addr")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2334,7 +2262,6 @@ Disable a DTrace is-enabled probe at ADDR.
     name="dtrace_disable_probe",
     params=[("CORE_ADDR", "addr")],
     predicate=True,
-    invalid=True,
 )
 
 Value(
@@ -2476,7 +2403,6 @@ Implement the "info proc" command.
     name="info_proc",
     params=[("const char *", "args"), ("enum info_proc_what", "what")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2489,7 +2415,6 @@ one for live targets.
     name="core_info_proc",
     params=[("const char *", "args"), ("enum info_proc_what", "what")],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2585,7 +2510,6 @@ Return 1 if an entry was read into *TYPEP and *VALP.
         ("CORE_ADDR *", "valp"),
     ],
     predicate=True,
-    invalid=True,
 )
 
 Method(
@@ -2687,7 +2611,6 @@ Functions for allowing a target to modify its disassembler options.
 """,
     type="const char *",
     name="disassembler_options_implicit",
-    predefault="0",
     invalid=False,
     printer="pstring (gdbarch->disassembler_options_implicit)",
 )
@@ -2695,7 +2618,6 @@ Functions for allowing a target to modify its disassembler options.
 Value(
     type="char **",
     name="disassembler_options",
-    predefault="0",
     invalid=False,
     printer="pstring_ptr (gdbarch->disassembler_options)",
 )
@@ -2703,7 +2625,6 @@ Value(
 Value(
     type="const disasm_options_and_args_t *",
     name="valid_disassembler_options",
-    predefault="0",
     invalid=False,
     printer="host_address_to_string (gdbarch->valid_disassembler_options)",
 )

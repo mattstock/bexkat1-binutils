@@ -3870,21 +3870,23 @@ assign_section_numbers (bfd *abfd, struct bfd_link_info *link_info)
 	{
 	case SHT_REL:
 	case SHT_RELA:
-	  /* A reloc section which we are treating as a normal BFD
-	     section.  sh_link is the section index of the symbol
-	     table.  sh_info is the section index of the section to
-	     which the relocation entries apply.  We assume that an
-	     allocated reloc section uses the dynamic symbol table
-	     if there is one.  Otherwise we guess the normal symbol
-	     table.  FIXME: How can we be sure?  */
-	  if (d->this_hdr.sh_link == 0 && (sec->flags & SEC_ALLOC) != 0)
-	    {
-	      s = bfd_get_section_by_name (abfd, ".dynsym");
-	      if (s != NULL)
-		d->this_hdr.sh_link = elf_section_data (s)->this_idx;
-	    }
+	  /* sh_link is the section index of the symbol table.
+	     sh_info is the section index of the section to which the
+	     relocation entries apply.  */
 	  if (d->this_hdr.sh_link == 0)
-	    d->this_hdr.sh_link = elf_onesymtab (abfd);
+	    {
+	      /* FIXME maybe: If this is a reloc section which we are
+		 treating as a normal section then we likely should
+		 not be assuming its sh_link is .dynsym or .symtab.  */
+	      if ((sec->flags & SEC_ALLOC) != 0)
+		{
+		  s = bfd_get_section_by_name (abfd, ".dynsym");
+		  if (s != NULL)
+		    d->this_hdr.sh_link = elf_section_data (s)->this_idx;
+		}
+	      else
+		d->this_hdr.sh_link = elf_onesymtab (abfd);
+	    }
 
 	  s = elf_get_reloc_section (sec);
 	  if (s != NULL)
@@ -6893,14 +6895,14 @@ section_size (asection *section, Elf_Internal_Phdr *segment)
 
 /* Returns TRUE if the given section is contained within the given
    segment.  LMA addresses are compared against PADDR when
-   bed->want_p_paddr_set_to_zero is false, VMA against VADDR when true.  */
+   USE_VADDR is false, VMA against VADDR when true.  */
 static bool
 is_contained_by (asection *section, Elf_Internal_Phdr *segment,
 		 bfd_vma paddr, bfd_vma vaddr, unsigned int opb,
-		 const struct elf_backend_data *bed)
+		 bool use_vaddr)
 {
-  bfd_vma seg_addr = !bed->want_p_paddr_set_to_zero ? paddr : vaddr;
-  bfd_vma addr = !bed->want_p_paddr_set_to_zero ? section->lma : section->vma;
+  bfd_vma seg_addr = !use_vaddr ? paddr : vaddr;
+  bfd_vma addr = !use_vaddr ? section->lma : section->vma;
   bfd_vma octet;
   if (_bfd_mul_overflow (addr, opb, &octet))
     return false;
@@ -6982,7 +6984,8 @@ rewrite_elf_program_header (bfd *ibfd, bfd *obfd, bfd_vma maxpagesize)
 	  (with the possible exception of .dynamic).  */
 #define IS_SECTION_IN_INPUT_SEGMENT(section, segment, bed, opb)		\
   (((is_contained_by (section, segment, segment->p_paddr,		\
-		      segment->p_vaddr, opb, bed)			\
+		      segment->p_vaddr, opb,				\
+		      bed->want_p_paddr_set_to_zero)			\
      && (section->flags & SEC_ALLOC) != 0)				\
     || is_note (section, segment))					\
    && segment->p_type != PT_GNU_STACK					\
@@ -7309,7 +7312,7 @@ rewrite_elf_program_header (bfd *ibfd, bfd *obfd, bfd_vma maxpagesize)
 	      /* Match up the physical address of the segment with the
 		 LMA address of the output section.  */
 	      if (is_contained_by (output_section, segment, map->p_paddr,
-				   map->p_paddr + map->p_vaddr_offset, opb, bed)
+				   0, opb, false)
 		  || is_note (section, segment))
 		{
 		  if (matching_lma == NULL
@@ -7427,7 +7430,7 @@ rewrite_elf_program_header (bfd *ibfd, bfd *obfd, bfd_vma maxpagesize)
 	      BFD_ASSERT (output_section != NULL);
 
 	      if (is_contained_by (output_section, segment, map->p_paddr,
-				   map->p_paddr + map->p_vaddr_offset, opb, bed)
+				   0, opb, false)
 		  || is_note (section, segment))
 		{
 		  if (map->count == 0)
@@ -9027,6 +9030,9 @@ _bfd_elf_slurp_version_tables (bfd *abfd, bool default_imported_symver)
 	  bfd_set_error (bfd_error_file_too_big);
 	  goto error_return_verdef;
 	}
+
+      if (amt == 0)
+	goto error_return_verdef;
       elf_tdata (abfd)->verdef = (Elf_Internal_Verdef *) bfd_zalloc (abfd, amt);
       if (elf_tdata (abfd)->verdef == NULL)
 	goto error_return_verdef;
@@ -9130,6 +9136,8 @@ _bfd_elf_slurp_version_tables (bfd *abfd, bool default_imported_symver)
 	  bfd_set_error (bfd_error_file_too_big);
 	  goto error_return;
 	}
+      if (amt == 0)
+	goto error_return;
       elf_tdata (abfd)->verdef = (Elf_Internal_Verdef *) bfd_zalloc (abfd, amt);
       if (elf_tdata (abfd)->verdef == NULL)
 	goto error_return;
@@ -9591,6 +9599,7 @@ _bfd_elf_close_and_cleanup (bfd *abfd)
       if (elf_tdata (abfd)->o != NULL && elf_shstrtab (abfd) != NULL)
 	_bfd_elf_strtab_free (elf_shstrtab (abfd));
       _bfd_dwarf2_cleanup_debug_info (abfd, &tdata->dwarf2_find_line_info);
+      _bfd_dwarf1_cleanup_debug_info (abfd, &tdata->dwarf1_find_line_info);
       _bfd_stab_cleanup (abfd, &tdata->line_info);
     }
 
@@ -11543,11 +11552,6 @@ elfcore_grok_nto_regs (bfd *abfd,
   return true;
 }
 
-#define BFD_QNT_CORE_INFO	7
-#define BFD_QNT_CORE_STATUS	8
-#define BFD_QNT_CORE_GREG	9
-#define BFD_QNT_CORE_FPREG	10
-
 static bool
 elfcore_grok_nto_note (bfd *abfd, Elf_Internal_Note *note)
 {
@@ -11558,13 +11562,13 @@ elfcore_grok_nto_note (bfd *abfd, Elf_Internal_Note *note)
 
   switch (note->type)
     {
-    case BFD_QNT_CORE_INFO:
+    case QNT_CORE_INFO:
       return elfcore_make_note_pseudosection (abfd, ".qnx_core_info", note);
-    case BFD_QNT_CORE_STATUS:
+    case QNT_CORE_STATUS:
       return elfcore_grok_nto_status (abfd, note, &tid);
-    case BFD_QNT_CORE_GREG:
+    case QNT_CORE_GREG:
       return elfcore_grok_nto_regs (abfd, note, tid, ".reg");
-    case BFD_QNT_CORE_FPREG:
+    case QNT_CORE_FPREG:
       return elfcore_grok_nto_regs (abfd, note, tid, ".reg2");
     default:
       return true;

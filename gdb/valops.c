@@ -341,11 +341,7 @@ value_to_gdb_mpq (struct value *value)
 
   gdb_mpq result;
   if (is_floating_type (type))
-    {
-      double d = target_float_to_host_double (value->contents ().data (),
-					      type);
-      mpq_set_d (result.val, d);
-    }
+    result = target_float_to_host_double (value->contents ().data (), type);
   else
     {
       gdb_assert (is_integral_type (type)
@@ -354,11 +350,10 @@ value_to_gdb_mpq (struct value *value)
       gdb_mpz vz;
       vz.read (value->contents (), type_byte_order (type),
 	       type->is_unsigned ());
-      mpq_set_z (result.val, vz.val);
+      result = vz;
 
       if (is_fixed_point_type (type))
-	mpq_mul (result.val, result.val,
-		 type->fixed_point_scaling_factor ().val);
+	result *= type->fixed_point_scaling_factor ();
     }
 
   return result;
@@ -386,7 +381,7 @@ value_cast_to_fixed_point (struct type *to_type, struct value *from_val)
   /* Divide that value by the scaling factor to obtain the unscaled
      value, first in rational form, and then in integer form.  */
 
-  mpq_div (vq.val, vq.val, to_type->fixed_point_scaling_factor ().val);
+  vq /= to_type->fixed_point_scaling_factor ();
   gdb_mpz unscaled = vq.get_rounded ();
 
   /* Finally, create the result value, and pack the unscaled value
@@ -490,11 +485,12 @@ value_cast (struct type *type, struct value *arg2)
 		       "divide object size in cast"));
 	  /* FIXME-type-allocation: need a way to free this type when
 	     we are done with it.  */
-	  range_type = create_static_range_type (NULL,
+	  type_allocator alloc (range_type->target_type ());
+	  range_type = create_static_range_type (alloc,
 						 range_type->target_type (),
 						 low_bound,
 						 new_length + low_bound - 1);
-	  arg2->deprecated_set_type (create_array_type (NULL,
+	  arg2->deprecated_set_type (create_array_type (alloc,
 							element_type, 
 							range_type));
 	  return arg2;
@@ -559,7 +555,7 @@ value_cast (struct type *type, struct value *arg2)
 
 	  struct value *v = value::allocate (to_type);
 	  target_float_from_host_double (v->contents_raw ().data (),
-					 to_type, mpq_get_d (fp_val.val));
+					 to_type, fp_val.as_double ());
 	  return v;
 	}
 
@@ -574,7 +570,7 @@ value_cast (struct type *type, struct value *arg2)
 	   && (scalar || code2 == TYPE_CODE_PTR
 	       || code2 == TYPE_CODE_MEMBERPTR))
     {
-      LONGEST longest;
+      gdb_mpz longest;
 
       /* When we cast pointers to integers, we mustn't use
 	 gdbarch_pointer_to_address to find the address the pointer
@@ -583,12 +579,14 @@ value_cast (struct type *type, struct value *arg2)
 	 sees a cast as a simple reinterpretation of the pointer's
 	 bits.  */
       if (code2 == TYPE_CODE_PTR)
-	longest = extract_unsigned_integer
-	  (arg2->contents (), type_byte_order (type2));
+	longest = extract_unsigned_integer (arg2->contents (),
+					    type_byte_order (type2));
       else
-	longest = value_as_long (arg2);
-      return value_from_longest (to_type, convert_to_boolean ?
-				 (LONGEST) (longest ? 1 : 0) : longest);
+	longest = value_as_mpz (arg2);
+      if (convert_to_boolean)
+	longest = bool (longest);
+
+      return value_from_mpz (to_type, longest);
     }
   else if (code1 == TYPE_CODE_PTR && (code2 == TYPE_CODE_INT  
 				      || code2 == TYPE_CODE_ENUM 
@@ -982,14 +980,15 @@ value_one (struct type *type)
    e.g. in case the type is a variable length array.  */
 
 static struct value *
-get_value_at (struct type *type, CORE_ADDR addr, int lazy)
+get_value_at (struct type *type, CORE_ADDR addr, frame_info_ptr frame,
+	      int lazy)
 {
   struct value *val;
 
   if (check_typedef (type)->code () == TYPE_CODE_VOID)
     error (_("Attempt to dereference a generic pointer."));
 
-  val = value_from_contents_and_address (type, NULL, addr);
+  val = value_from_contents_and_address (type, NULL, addr, frame);
 
   if (!lazy)
     val->fetch_lazy ();
@@ -1015,7 +1014,7 @@ get_value_at (struct type *type, CORE_ADDR addr, int lazy)
 struct value *
 value_at (struct type *type, CORE_ADDR addr)
 {
-  return get_value_at (type, addr, 0);
+  return get_value_at (type, addr, nullptr, 0);
 }
 
 /* See value.h.  */
@@ -1034,9 +1033,9 @@ value_at_non_lval (struct type *type, CORE_ADDR addr)
    e.g. in case the type is a variable length array.  */
 
 struct value *
-value_at_lazy (struct type *type, CORE_ADDR addr)
+value_at_lazy (struct type *type, CORE_ADDR addr, frame_info_ptr frame)
 {
-  return get_value_at (type, addr, 1);
+  return get_value_at (type, addr, frame, 1);
 }
 
 void
@@ -4062,7 +4061,8 @@ value_slice (struct value *array, int lowbound, int length)
 
   /* FIXME-type-allocation: need a way to free this type when we are
      done with it.  */
-  slice_range_type = create_static_range_type (NULL,
+  type_allocator alloc (range_type->target_type ());
+  slice_range_type = create_static_range_type (alloc,
 					       range_type->target_type (),
 					       lowbound,
 					       lowbound + length - 1);
@@ -4072,7 +4072,7 @@ value_slice (struct value *array, int lowbound, int length)
     LONGEST offset
       = (lowbound - lowerbound) * check_typedef (element_type)->length ();
 
-    slice_type = create_array_type (NULL,
+    slice_type = create_array_type (alloc,
 				    element_type,
 				    slice_range_type);
     slice_type->set_code (array_type->code ());

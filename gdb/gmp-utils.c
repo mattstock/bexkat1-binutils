@@ -15,6 +15,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#include "defs.h"
 #include "gmp-utils.h"
 
 /* See gmp-utils.h.  */
@@ -45,7 +46,7 @@ void
 gdb_mpz::read (gdb::array_view<const gdb_byte> buf, enum bfd_endian byte_order,
 	       bool unsigned_p)
 {
-  mpz_import (val, 1 /* count */, -1 /* order */, buf.size () /* size */,
+  mpz_import (m_val, 1 /* count */, -1 /* order */, buf.size () /* size */,
 	      byte_order == BFD_ENDIAN_BIG ? 1 : -1 /* endian */,
 	      0 /* nails */, buf.data () /* op */);
 
@@ -56,31 +57,22 @@ gdb_mpz::read (gdb::array_view<const gdb_byte> buf, enum bfd_endian byte_order,
 	 was in fact negative, we need to adjust VAL accordingly.  */
       gdb_mpz max;
 
-      mpz_ui_pow_ui (max.val, 2, buf.size () * HOST_CHAR_BIT - 1);
-      if (mpz_cmp (val, max.val) >= 0)
-	mpz_submul_ui (val, max.val, 2);
+      mpz_ui_pow_ui (max.m_val, 2, buf.size () * HOST_CHAR_BIT - 1);
+      if (mpz_cmp (m_val, max.m_val) >= 0)
+	mpz_submul_ui (m_val, max.m_val, 2);
     }
 }
 
 /* See gmp-utils.h.  */
 
 void
-gdb_mpz::write (gdb::array_view<gdb_byte> buf, enum bfd_endian byte_order,
-		bool unsigned_p) const
-{
-  this->safe_export
-    (buf, byte_order == BFD_ENDIAN_BIG ? 1 : -1 /* endian */, unsigned_p);
-}
-
-/* See gmp-utils.h.  */
-
-void
-gdb_mpz::safe_export (gdb::array_view<gdb_byte> buf,
-		      int endian, bool unsigned_p) const
+gdb_mpz::export_bits (gdb::array_view<gdb_byte> buf, int endian, bool unsigned_p,
+		      bool safe) const
 {
   gdb_assert (buf.size () > 0);
 
-  if (mpz_sgn (val) == 0)
+  int sign = mpz_sgn (m_val);
+  if (sign == 0)
     {
       /* Our value is zero, so no need to call mpz_export to do the work,
 	 especially since mpz_export's documentation explicitly says
@@ -90,47 +82,71 @@ gdb_mpz::safe_export (gdb::array_view<gdb_byte> buf,
       return;
     }
 
-  /* Determine the maximum range of values that our buffer can hold,
-     and verify that VAL is within that range.  */
-
-  gdb_mpz lo, hi;
-  const size_t max_usable_bits = buf.size () * HOST_CHAR_BIT;
-  if (unsigned_p)
+  if (safe)
     {
-      lo = 0;
+      /* Determine the maximum range of values that our buffer can
+	 hold, and verify that VAL is within that range.  */
 
-      mpz_ui_pow_ui (hi.val, 2, max_usable_bits);
-      mpz_sub_ui (hi.val, hi.val, 1);
+      gdb_mpz lo, hi;
+      const size_t max_usable_bits = buf.size () * HOST_CHAR_BIT;
+      if (unsigned_p)
+	{
+	  lo = 0;
+
+	  mpz_ui_pow_ui (hi.m_val, 2, max_usable_bits);
+	  mpz_sub_ui (hi.m_val, hi.m_val, 1);
+	}
+      else
+	{
+	  mpz_ui_pow_ui (lo.m_val, 2, max_usable_bits - 1);
+	  mpz_neg (lo.m_val, lo.m_val);
+
+	  mpz_ui_pow_ui (hi.m_val, 2, max_usable_bits - 1);
+	  mpz_sub_ui (hi.m_val, hi.m_val, 1);
+	}
+
+      if (mpz_cmp (m_val, lo.m_val) < 0 || mpz_cmp (m_val, hi.m_val) > 0)
+	error (_("Cannot export value %s as %zu-bits %s integer"
+		 " (must be between %s and %s)"),
+	       this->str ().c_str (),
+	       max_usable_bits,
+	       unsigned_p ? _("unsigned") : _("signed"),
+	       lo.str ().c_str (),
+	       hi.str ().c_str ());
     }
-  else
-    {
-      mpz_ui_pow_ui (lo.val, 2, max_usable_bits - 1);
-      mpz_neg (lo.val, lo.val);
 
-      mpz_ui_pow_ui (hi.val, 2, max_usable_bits - 1);
-      mpz_sub_ui (hi.val, hi.val, 1);
-    }
-
-  if (mpz_cmp (val, lo.val) < 0 || mpz_cmp (val, hi.val) > 0)
-    error (_("Cannot export value %s as %zu-bits %s integer"
-	     " (must be between %s and %s)"),
-	   this->str ().c_str (),
-	   max_usable_bits,
-	   unsigned_p ? _("unsigned") : _("signed"),
-	   lo.str ().c_str (),
-	   hi.str ().c_str ());
-
-  gdb_mpz exported_val (val);
-
-  if (mpz_cmp_ui (exported_val.val, 0) < 0)
+  const gdb_mpz *exported_val = this;
+  gdb_mpz un_signed;
+  if (sign < 0)
     {
       /* mpz_export does not handle signed values, so create a positive
 	 value whose bit representation as an unsigned of the same length
 	 would be the same as our negative value.  */
-      gdb_mpz neg_offset;
+      gdb_mpz neg_offset = gdb_mpz::pow (2, buf.size () * HOST_CHAR_BIT);
+      un_signed = *exported_val + neg_offset;
+      exported_val = &un_signed;
+    }
 
-      mpz_ui_pow_ui (neg_offset.val, 2, buf.size () * HOST_CHAR_BIT);
-      mpz_add (exported_val.val, exported_val.val, neg_offset.val);
+  /* If the value is too large, truncate it.  */
+  if (!safe
+      && mpz_sizeinbase (exported_val->m_val, 2) > buf.size () * HOST_CHAR_BIT)
+    {
+      /* If we don't already have a copy, make it now.  */
+      if (exported_val != &un_signed)
+	{
+	  un_signed = *exported_val;
+	  exported_val = &un_signed;
+	}
+
+      un_signed.mask (buf.size () * HOST_CHAR_BIT);
+    }
+
+  /* It's possible that one of the above results in zero, which has to
+     be handled specially.  */
+  if (exported_val->sgn () == 0)
+    {
+      memset (buf.data (), 0, buf.size ());
+      return;
     }
 
   /* Do the export into a buffer allocated by GMP itself; that way,
@@ -146,7 +162,7 @@ gdb_mpz::safe_export (gdb::array_view<gdb_byte> buf,
   size_t word_countp;
   gdb::unique_xmalloc_ptr<void> exported
     (mpz_export (NULL, &word_countp, -1 /* order */, buf.size () /* size */,
-		 endian, 0 /* nails */, exported_val.val));
+		 endian, 0 /* nails */, exported_val->m_val));
 
   gdb_assert (word_countp == 1);
 
@@ -161,27 +177,27 @@ gdb_mpq::get_rounded () const
   /* Work with a positive number so as to make the "floor" rounding
      always round towards zero.  */
 
-  gdb_mpq abs_val (val);
-  mpq_abs (abs_val.val, abs_val.val);
+  gdb_mpq abs_val (m_val);
+  mpq_abs (abs_val.m_val, abs_val.m_val);
 
   /* Convert our rational number into a quotient and remainder,
      with "floor" rounding, which in our case means rounding
      towards zero.  */
 
   gdb_mpz quotient, remainder;
-  mpz_fdiv_qr (quotient.val, remainder.val,
-	       mpq_numref (abs_val.val), mpq_denref (abs_val.val));
+  mpz_fdiv_qr (quotient.m_val, remainder.m_val,
+	       mpq_numref (abs_val.m_val), mpq_denref (abs_val.m_val));
 
   /* Multiply the remainder by 2, and see if it is greater or equal
      to abs_val's denominator.  If yes, round to the next integer.  */
 
-  mpz_mul_ui (remainder.val, remainder.val, 2);
-  if (mpz_cmp (remainder.val, mpq_denref (abs_val.val)) >= 0)
-    mpz_add_ui (quotient.val, quotient.val, 1);
+  mpz_mul_ui (remainder.m_val, remainder.m_val, 2);
+  if (mpz_cmp (remainder.m_val, mpq_denref (abs_val.m_val)) >= 0)
+    mpz_add_ui (quotient.m_val, quotient.m_val, 1);
 
   /* Re-apply the sign if needed.  */
-  if (mpq_sgn (val) < 0)
-    mpz_neg (quotient.val, quotient.val);
+  if (mpq_sgn (m_val) < 0)
+    mpz_neg (quotient.m_val, quotient.m_val);
 
   return quotient;
 }
@@ -196,8 +212,8 @@ gdb_mpq::read_fixed_point (gdb::array_view<const gdb_byte> buf,
   gdb_mpz vz;
   vz.read (buf, byte_order, unsigned_p);
 
-  mpq_set_z (val, vz.val);
-  mpq_mul (val, val, scaling_factor.val);
+  mpq_set_z (m_val, vz.m_val);
+  mpq_mul (m_val, m_val, scaling_factor.m_val);
 }
 
 /* See gmp-utils.h.  */
@@ -207,9 +223,9 @@ gdb_mpq::write_fixed_point (gdb::array_view<gdb_byte> buf,
 			    enum bfd_endian byte_order, bool unsigned_p,
 			    const gdb_mpq &scaling_factor) const
 {
-  gdb_mpq unscaled (val);
+  gdb_mpq unscaled (m_val);
 
-  mpq_div (unscaled.val, unscaled.val, scaling_factor.val);
+  mpq_div (unscaled.m_val, unscaled.m_val, scaling_factor.m_val);
 
   gdb_mpz unscaled_z = unscaled.get_rounded ();
   unscaled_z.write (buf, byte_order, unsigned_p);
