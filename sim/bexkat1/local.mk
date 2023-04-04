@@ -27,4 +27,4 @@ noinst_LIBRARIES += %D%/libsim.a
 
 noinst_PROGRAMS += %D%/run
 
-%C%_SIM_EXTRA_HW_DEVICES = serial
+%C%_SIM_EXTRA_HW_DEVICES = bexkat1_serial

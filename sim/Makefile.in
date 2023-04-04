@@ -2157,7 +2157,7 @@ testsuite_common_CPPFLAGS = \
 @SIM_ENABLE_ARCH_bexkat1_TRUE@	bexkat1/libsim.a \
 @SIM_ENABLE_ARCH_bexkat1_TRUE@	$(SIM_COMMON_LIBS)
 
-@SIM_ENABLE_ARCH_bexkat1_TRUE@bexkat1_SIM_EXTRA_HW_DEVICES = serial
+@SIM_ENABLE_ARCH_bexkat1_TRUE@bexkat1_SIM_EXTRA_HW_DEVICES = bexkat1_serial
 @SIM_ENABLE_ARCH_bfin_TRUE@AM_CPPFLAGS_bfin = $(SDL_CFLAGS)
 @SIM_ENABLE_ARCH_bfin_TRUE@nodist_bfin_libsim_a_SOURCES = \
 @SIM_ENABLE_ARCH_bfin_TRUE@	bfin/modules.c
