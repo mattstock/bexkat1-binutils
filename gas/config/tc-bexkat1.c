@@ -7,6 +7,8 @@
 #include "subsegs.h"
 #include "opcode/bexkat1.h"
 
+#include "dwarf2dbg.h"
+
 const char comment_chars[] = "#";
 const char line_comment_chars[] = "#";
 const char line_separator_chars[] = ";";
@@ -153,6 +155,7 @@ md_assemble(char *str)
 
   iword = (opcode->type << 28) | (opcode->opcode << 24) | opcode->size;
 
+  dwarf2_emit_insn(opcode->size);
   p = frag_more(4);
 
   switch (opcode->type) {
