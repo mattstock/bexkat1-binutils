@@ -14284,6 +14284,8 @@ is_32bit_abs_reloc (Filedata * filedata, unsigned int reloc_type)
     case EM_AVR_OLD:
     case EM_AVR:
       return reloc_type == 1;
+    case EM_BEXKAT1:
+      return reloc_type == 3; /* R_BEXKAT1_32 */
     case EM_BLACKFIN:
       return reloc_type == 0x12; /* R_byte4_data.  */
     case EM_CRIS:
