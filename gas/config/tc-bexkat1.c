@@ -545,34 +545,7 @@ branch:
 const char *
 md_atof(int type, char *litP, int *sizeP)
 {
-  int prec;
-  LITTLENUM_TYPE words[4];
-  char *t;
-  int i;
-
-  switch (type) {
-  case 'f':
-    prec = 2;
-    break;
-  case 'd':
-    prec = 4;
-    __attribute__((fallthrough));
-  default:
-    *sizeP = 0;
-    return _("bad call to md_atof");
-  }
-
-  t = atof_ieee(input_line_pointer, type, words);
-  if (t)
-    input_line_pointer = t;
-
-  *sizeP = prec * 2;
-
-  for (i = prec-1; i >= 0; i--) {
-    md_number_to_chars(litP, (valueT) words[i], 2);
-    litP += 2;
-  }
-  return NULL;
+  return ieee_md_atof (type, litP, sizeP, false);
 }
 
 const char *md_shortopts = "";
@@ -680,8 +653,14 @@ md_apply_fix(fixS *fixP, valueT *valP, segT segment)
       | (((val >> 2) & 0x7fff) << 1);
     md_number_to_chars(buf, val, fixP->fx_size);
     break;
+  case BFD_RELOC_8:
+    ((bfd_byte *)buf)[0] = (bfd_byte)val;
+    break;
+  case BFD_RELOC_16:
+    bfd_putb16(val, buf);
+    break;
   case BFD_RELOC_32:
-    md_number_to_chars(buf, val, fixP->fx_size);
+    bfd_putb32(val, buf);
     break;
   default:
     as_fatal (_("Line %d: unknown relocation type: 0x%x."),
