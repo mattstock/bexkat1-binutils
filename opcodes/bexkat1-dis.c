@@ -90,8 +90,10 @@ int print_insn_bexkat1 (bfd_vma memaddr, struct disassemble_info* info) {
     iword = bfd_getl32(buffer);    
 
   opcode = find_opcode(iword);
-  if (opcode == NULL)
-    abort();
+  if (opcode == NULL) {
+    fpr(stream, "<UNDEFINED> instruction: %08x", iword);
+    return 4;
+  }
 
   offset = get_offset(iword);
 
