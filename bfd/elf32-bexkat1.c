@@ -624,6 +624,7 @@ bexkat1_elf_relax_section (bfd *abfd ATTRIBUTE_UNUSED,
 #define elf_backend_may_use_rel_p       0
 #define elf_backend_may_use_rela_p      1
 #define elf_backend_default_use_rela_p  1
+#define elf_backend_can_gc_sections     1
 
 #define elf_info_to_howto_rel           NULL
 #define elf_info_to_howto	        bexkat1_elf_info_to_howto_rela
