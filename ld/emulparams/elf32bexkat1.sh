@@ -1,6 +1,6 @@
 SCRIPT_NAME=elf
-TEMPLATE_NAME=generic
-EXTRA_EM_FILE=genelf
+#EXTRA_EM_FILE=genelf
+TEMPLATE_NAME=elf
 OUTPUT_FORMAT="elf32-bexkat1-be"
 BIG_OUTPUT_FORMAT="elf32-bexkat1-be"
 LITTLE_OUTPUT_FORMAT="elf32-bexkat1-le"
